@@ -25,7 +25,7 @@ export async function runCLI(args: string[]): Promise<void> {
   }
 
   if (cmd === 'start') {
-    await startCommand();
+    await startCommand(sub);
     return;
   }
 

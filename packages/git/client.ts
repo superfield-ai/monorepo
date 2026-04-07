@@ -60,4 +60,22 @@ export class GitClient {
     const dir = this.repoDir(owner, repo);
     return git.resolveRef({ fs, dir, ref });
   }
+
+  /** Read the GitHub owner/repo from the `origin` remote of a local git directory. */
+  async readRemoteOwnerRepo(dir: string): Promise<{ owner: string; repo: string }> {
+    const remotes = await git.listRemotes({ fs, dir });
+    const origin = remotes.find((r) => r.remote === 'origin');
+    if (!origin) throw new Error(`No origin remote found in ${dir}`);
+    return parseGitHubRemote(origin.url);
+  }
+}
+
+/** Parse a GitHub remote URL (https or ssh) into owner and repo. */
+export function parseGitHubRemote(url: string): { owner: string; repo: string } {
+  // https://github.com/owner/repo.git  or  git@github.com:owner/repo.git
+  const match =
+    url.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/) ??
+    url.match(/github\.com\/([^/]+)\/([^/.]+)/);
+  if (!match) throw new Error(`Cannot parse GitHub remote URL: ${url}`);
+  return { owner: match[1], repo: match[2] };
 }
