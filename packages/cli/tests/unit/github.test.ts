@@ -62,7 +62,7 @@ describe('runGithubAdd', () => {
     await runGithubAdd(undefined, deps);
 
     expect(deps.log).toHaveBeenCalledWith(
-      '\n  Open https://github.com/settings/installations/12345678 to grant access.',
+      '\n  Open https://github.com/apps/superfield-cli/installations/select_target to grant access.',
     );
     expect(deps.log).toHaveBeenCalledWith('Waiting for access...');
     expect(config.repositories).toEqual([{ owner: 'org', repo: 'new-repo', assignedUser: 'octocat' }]);

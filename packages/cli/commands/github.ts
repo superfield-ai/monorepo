@@ -139,7 +139,7 @@ export async function runGithubAdd(repoPath: string | undefined, deps: GithubDep
   deps.log('');
   let installedRepos = await deps.checkAppInstalled(user.token, appSlug);
   if (installedRepos === null) {
-    deps.log(`  Open https://github.com/apps/${appSlug}/installations/new`);
+    deps.log(`  Open https://github.com/apps/${appSlug}/installations/select_target`);
     deps.log('  Select the repositories you want Superfield to access, then click Install.\n');
     deps.log('Waiting for installation...');
     installedRepos = await pollUntilInstalled(user.token, appSlug, deps, targetRepo);
@@ -148,11 +148,10 @@ export async function runGithubAdd(repoPath: string | undefined, deps: GithubDep
   } else if (installedRepos !== 'all' && !repoAccessible(installedRepos, targetRepo)) {
     deps.log('✓ GitHub App installed');
     logRepos(installedRepos, deps);
-    const installation = await deps.getInstallation(user.token, appSlug);
-    deps.log(`\n  Open ${installationManageUrl(installation)} to grant access.`);
+    deps.log(`\n  Open https://github.com/apps/${appSlug}/installations/select_target to grant access.`);
     deps.log('');
     deps.log('Waiting for access...');
-    installedRepos = await pollUntilRepoAccessible(user.token, appSlug, targetRepo, deps);
+    installedRepos = await pollUntilRepoAccessible(user.token, appSlug, installedRepos, deps);
     logRepos(installedRepos, deps);
   } else {
     deps.log(installedRepos === 'all' ? '✓ GitHub App installed (all repositories)' : '✓ GitHub App installed');
@@ -233,12 +232,8 @@ async function pollUntilInstalled(
       deps.error(`  poll error: ${e instanceof Error ? e.message : String(e)}`);
       continue;
     }
-    if (repos === null) {
-      deps.log('  (no installation detected yet)');
-      continue;
-    }
+    if (repos === null) continue;
     if (repos === 'all' || repoAccessible(repos, targetRepo)) return repos;
-    deps.log(`  installation found but ${targetRepo} not yet accessible — repos: ${repos.join(', ') || '(none)'}`);
   }
 
   throw new Error(
@@ -250,12 +245,13 @@ async function pollUntilInstalled(
 async function pollUntilRepoAccessible(
   token: string,
   appSlug: string,
-  targetRepo: string,
+  previousRepos: string[],
   deps: GithubDeps,
 ): Promise<string[]> {
   const POLL_INTERVAL_MS = 3000;
   const TIMEOUT_MS = 5 * 60 * 1000;
   const start = Date.now();
+  const previousSet = new Set(previousRepos.map((r) => r.toLowerCase()));
 
   while (Date.now() - start < TIMEOUT_MS) {
     await sleep(POLL_INTERVAL_MS);
@@ -267,8 +263,7 @@ async function pollUntilRepoAccessible(
       continue;
     }
     if (repos === 'all') return [];
-    if (repos !== null && repoAccessible(repos, targetRepo)) return repos;
-    deps.log(`  accessible repos: ${repos === null ? '(no installation)' : repos.join(', ') || '(none)'}`);
+    if (repos !== null && repos.some((r) => !previousSet.has(r.toLowerCase()))) return repos;
   }
 
   throw new Error(
