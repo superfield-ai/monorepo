@@ -1,0 +1,11 @@
+{
+  "number": 42,
+  "title": "fix(test-repo): test:unit failed on main @ a1b2c3d",
+  "body": "## Issue type\nci-failure\n\n## Phase\nwatchdog\n\n## Motivation\ntest:unit failed on commit a1b2c3d4e5f6a1b2c3d4e5f6a1b2c3d4e5f6a1b2, blocking main\n\n## Canonical docs\n- https://github.com/test-org/test-repo/runs/1002\n\n## Deliverables\n- [ ] Investigate and resolve test:unit\n\n## Acceptance Criteria\n- [ ] test:unit passes on main\n- [ ] No related regressions introduced\n\n## Test Plan\n- [ ] CI green on main",
+  "html_url": "https://github.com/test-org/test-repo/issues/42",
+  "state": "open",
+  "labels": [
+    { "name": "ci-failure" },
+    { "name": "watchdog" }
+  ]
+}

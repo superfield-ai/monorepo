@@ -5,5 +5,6 @@
 - Implement config read/write (`~/.superfield/config.yaml`)
 - Add `@octokit/rest` client wrapper in `packages/github` with MSW test harness
 - Add `isomorphic-git` wrapper in `packages/git` with MSW test harness
+- Add GitHub Actions CI: build (tsc), unit tests, integration/API tests (separate jobs)
 - Record golden fixtures for GitHub Check Runs and Issues endpoints
 - Implement outer loop: CI watchdog → create `ci-failure` issue → update Plan

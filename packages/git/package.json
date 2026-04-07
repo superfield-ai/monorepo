@@ -1,0 +1,16 @@
+{
+  "name": "@superfield/git",
+  "private": true,
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "isomorphic-git": "^1.37.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "msw": "^2.0.0"
+  }
+}

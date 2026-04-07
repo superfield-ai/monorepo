@@ -1,0 +1,13 @@
+{
+  "name": "@superfield/core",
+  "private": true,
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "yaml": "^2.8.3"
+  }
+}

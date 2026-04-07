@@ -1,0 +1,20 @@
+{
+  "name": "@superfield/cli",
+  "private": true,
+  "main": "index.ts",
+  "type": "module",
+  "bin": {
+    "superfield": "./bin/superfield.ts"
+  },
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@superfield/core": "workspace:*",
+    "@superfield/github": "workspace:*",
+    "@superfield/git": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0"
+  }
+}

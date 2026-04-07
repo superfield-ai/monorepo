@@ -1,0 +1,12 @@
+[
+  {
+    "number": 1,
+    "title": "Plan",
+    "body": "- #42 — fix(test-repo): test:unit failed on main @ a1b2c3d (2026-04-07T14:00:00.000Z)\n",
+    "html_url": "https://github.com/test-org/test-repo/issues/1",
+    "state": "open",
+    "labels": [
+      { "name": "plan" }
+    ]
+  }
+]
