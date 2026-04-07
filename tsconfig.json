@@ -7,7 +7,15 @@
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
-    "noEmit": true
+    "noEmit": true,
+    "allowImportingTsExtensions": true,
+    "baseUrl": ".",
+    "paths": {
+      "@superfield/core": ["packages/core/index.ts"],
+      "@superfield/github": ["packages/github/index.ts"],
+      "@superfield/git": ["packages/git/index.ts"],
+      "@superfield/cli": ["packages/cli/index.ts"]
+    }
   },
   "exclude": ["node_modules"]
 }
