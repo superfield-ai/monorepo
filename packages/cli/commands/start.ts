@@ -5,20 +5,16 @@ import { GitClient } from '@superfield/git';
 import type { Config } from '@superfield/core';
 
 export async function startCommand(repoPath?: string): Promise<void> {
-  const config = await loadConfig();
-  const effectiveConfig = repoPath ? await configFromPath(config, repoPath) : config;
-
-  if (effectiveConfig.repositories.length === 0) {
-    console.error('No repositories configured. Run `superfield repo add` first, or pass a repo path.');
+  if (!repoPath) {
+    console.error('Usage: superfield start <path-to-repo>');
     process.exit(1);
   }
 
-  const { owner, repo } = effectiveConfig.repositories[0];
-  const label = effectiveConfig.repositories.length === 1
-    ? `${owner}/${repo}`
-    : `${effectiveConfig.repositories.length} repositories`;
+  const config = await loadConfig();
+  const effectiveConfig = await configFromPath(config, repoPath);
 
-  console.log(`Starting superfield for ${label}. Ctrl-C to stop.\n`);
+  const { owner, repo } = effectiveConfig.repositories[0];
+  console.log(`Starting superfield for ${owner}/${repo}. Ctrl-C to stop.\n`);
   await runOuterLoop(effectiveConfig);
 }
 

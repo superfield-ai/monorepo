@@ -5,7 +5,7 @@
     "packages/*"
   ],
   "scripts": {
-    "start": "bun packages/cli/bin/superfield.ts start",
+    "start": "bun packages/cli/bin/superfield.ts start --",
     "build": "bun run --filter '*' build",
     "test": "bun run test:unit && bun run test:integration",
     "test:unit": "bun --bun vitest run --reporter=verbose packages/*/tests/unit",

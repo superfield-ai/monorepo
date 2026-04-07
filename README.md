@@ -34,8 +34,10 @@ Config is saved to `~/.superfield/config.yaml`.
 Start the continuous loop — polls every 5 seconds, creates CI failure issues, and keeps the Plan issue up to date:
 
 ```bash
-bun run packages/cli/bin/superfield.ts start
+bun run start /path/to/repo
 ```
+
+The path is required. Superfield reads the `origin` remote from the local git checkout to resolve `owner/repo`, then uses the matching user token from config.
 
 Stop with Ctrl-C. The loop is stateless — restarting picks up where GitHub left off.
 
