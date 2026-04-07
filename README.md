@@ -5,7 +5,7 @@ GitOps AI orchestrator. Git and GitHub are the control plane — issues are the 
 ## Requirements
 
 - [Bun](https://bun.sh) v1.3+
-- A GitHub Personal Access Token with `repo` and `workflow` scopes
+- A GitHub App authorization for the target user
 
 ## Install
 
@@ -13,18 +13,30 @@ GitOps AI orchestrator. Git and GitHub are the control plane — issues are the 
 bun install
 ```
 
-## Setup
-
-Add a GitHub user:
+Build and install the local CLI binary into `~/.bun/bin`:
 
 ```bash
-bun run packages/cli/bin/superfield.ts setup
+bun run local-install
 ```
 
-Register a repository and assign it to a user:
+Make sure `~/.bun/bin` is on your `PATH`:
 
 ```bash
-bun run packages/cli/bin/superfield.ts repo add
+export PATH="$HOME/.bun/bin:$PATH"
+```
+
+## Setup
+
+Sign in, then open the GitHub App install page:
+
+```bash
+bun run packages/cli/bin/superfield.ts setup gh-login
+```
+
+Remove a stored GitHub user:
+
+```bash
+bun run packages/cli/bin/superfield.ts setup gh-logout <handle>
 ```
 
 Config is saved to `~/.superfield/config.yaml`.
@@ -61,7 +73,7 @@ bun run test
 
 ```
 packages/
-  cli/      Commands: setup, repo add, start
+  cli/      Commands: setup gh-login, setup gh-logout, start
   core/     Config, outer loop, CI watchdog
   github/   Octokit wrapper (GitHub API client)
   git/      isomorphic-git wrapper (no git binary)

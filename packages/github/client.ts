@@ -40,6 +40,11 @@ export class GitHubClient {
     this.octokit = new Octokit({ auth: token });
   }
 
+  async getAuthenticatedUser(): Promise<{ login: string }> {
+    const { data } = await this.octokit.users.getAuthenticated();
+    return { login: data.login };
+  }
+
   async getHeadSha(owner: string, repo: string, branch = 'main'): Promise<string> {
     const { data } = await this.octokit.repos.getBranch({ owner, repo, branch });
     return data.commit.sha;
@@ -104,5 +109,50 @@ export class GitHubClient {
       issue_number: params.issue_number,
       body: params.body,
     });
+  }
+
+  async listAppInstallations(appSlug: string): Promise<{ id: number; accountLogin: string; accountType: 'User' | 'Organization'; repositorySelection: 'all' | 'selected' }[]> {
+    const all = await this.listAllInstallations();
+    return all
+      .filter((inst) => inst.appSlug.toLowerCase() === appSlug.toLowerCase())
+      .map((inst) => ({ id: inst.id, accountLogin: inst.accountLogin, accountType: inst.accountType, repositorySelection: inst.repositorySelection }));
+  }
+
+  async listAllInstallations(): Promise<{ id: number; appSlug: string; accountLogin: string; accountType: 'User' | 'Organization'; repositorySelection: 'all' | 'selected' }[]> {
+    const result = [];
+    let page = 1;
+    while (true) {
+      const { data } = await this.octokit.apps.listInstallationsForAuthenticatedUser({ per_page: 100, page });
+      for (const inst of data.installations) {
+        result.push({
+          id: inst.id,
+          appSlug: inst.app_slug ?? '',
+          accountLogin: inst.account && 'login' in inst.account ? inst.account.login : '',
+          accountType: (inst.account && 'type' in inst.account ? inst.account.type : 'User') as 'User' | 'Organization',
+          repositorySelection: inst.repository_selection as 'all' | 'selected',
+        });
+      }
+      if (data.installations.length < 100) break;
+      page++;
+    }
+    return result;
+  }
+
+  async listInstallationRepos(installationId: number): Promise<string[]> {
+    const all: string[] = [];
+    let page = 1;
+    while (true) {
+      const { data } = await this.octokit.apps.listInstallationReposForAuthenticatedUser({
+        installation_id: installationId,
+        per_page: 100,
+        page,
+      });
+      for (const repo of data.repositories) {
+        all.push(repo.full_name);
+      }
+      if (data.repositories.length < 100) break;
+      page++;
+    }
+    return all;
   }
 }

@@ -7,6 +7,8 @@
   "scripts": {
     "start": "bun packages/cli/bin/superfield.ts start",
     "build": "bun run --filter '*' build",
+    "local-install": "bun run --filter @superfield/cli local-install",
+    "release": "bun run --filter @superfield/cli release",
     "test": "bun run test:unit && bun run test:integration",
     "test:unit": "bun --bun vitest run --reporter=verbose packages/*/tests/unit",
     "test:integration": "bun --bun vitest run --reporter=verbose packages/*/tests/integration",

@@ -1,0 +1,17 @@
+{
+  "total_count": 1,
+  "installations": [
+    {
+      "id": 11111111,
+      "app_id": 999999,
+      "app_slug": "superfield-cli",
+      "repository_selection": "selected",
+      "account": {
+        "login": "octocat",
+        "type": "User"
+      },
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  ]
+}

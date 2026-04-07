@@ -54,19 +54,42 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 | Git operations | `isomorphic-git` — pure JS/TS git, no binary dependency |
 | HTTP interception (tests) | `msw` — intercepts at the `fetch` level, covers both libraries |
 
+## GitHub Authentication
+
+Superfield uses a GitHub App for user authorization, not manual PAT entry, as the default onboarding path.
+
+Why:
+- The CLI needs a smooth sign-in flow that does not require users to generate and paste a PAT.
+- GitHub App authorization gives us explicit, repo-scoped permissions that fit the control-plane model.
+- The app can authenticate on behalf of a user after they authorize it, while still keeping access narrowly scoped.
+
+Superfield is designed to run on remote VM instances, not developer machines. There is no local browser; the user must visit URLs on their own machine. This rules out OAuth callback flows that require a local HTTP server to receive redirects. GitHub's device flow is the correct primitive — the user enters a code on github.com from any browser, the CLI polls for the token.
+
+GitHub's device flow and GitHub App installation are separate steps with no native API to combine them. The CLI sequences them as a guided flow:
+
+1. **Device flow** — CLI prints a URL and a short code. User opens the URL on their own browser and enters the code. CLI polls until the token arrives.
+2. **App installation** — CLI checks if the app is already installed (`GET /user/installations`). If not, it prints the direct install URL and polls every 3 seconds until an installation appears.
+3. **Repo registration** — CLI resolves the git remote of the current directory, registers `owner/repo` in local config assigned to the authenticated user.
+
+Subsequent runs of `superfield github add` skip any step that is already satisfied (valid token, app already installed, repo already registered).
+
+There is no API to uninstall a GitHub App using a user-to-server token — it requires either a browser visit or the app's RSA private key (which is never embedded in the CLI binary). `superfield github forget` clears local credentials and prints the direct `https://github.com/settings/installations/{id}` URL for the user to complete the uninstall.
+
+The app itself is part of the product infrastructure and must be created and configured before the CLI onboarding flow can be considered complete.
+
 ---
 
 ## CLI Commands
 
-Superfield has exactly three operational commands plus setup. There are no flags to modify their behavior.
+Superfield has exactly three operational commands plus github subcommands. There are no flags to modify their behavior.
 
 ```
-superfield setup         # add a GitHub user (handle + PAT)
-superfield repo add      # register a repository and assign it to a user
+superfield github add       # authenticate, install app, and register the current repo
+superfield github forget    # remove credentials and print the app uninstall link
 
-superfield start         # begin the continuous development loop (foreground)
-superfield plan          # sync all open issues into the Plan tracking issue
-superfield feature       # ticket a new feature issue and update the Plan
+superfield start            # begin the continuous development loop (foreground)
+superfield plan             # sync all open issues into the Plan tracking issue
+superfield feature          # ticket a new feature issue and update the Plan
 ```
 
 ### Concurrency model
@@ -340,7 +363,7 @@ No tests against real GitHub in Phase 1.
 | `feature`: new issue created and appended to Plan | Integration |
 | Plan absent — created on first write | Unit |
 | Multiple repos, each with own assigned user | Unit |
-| `superfield setup` writes config correctly | Unit |
+| `superfield github add` writes config correctly | Unit |
 | Octokit: endpoint, auth header, request shape | Unit |
 | `isomorphic-git`: fetch, HEAD resolution, branch lookup | Unit |
 
@@ -350,7 +373,7 @@ No tests against real GitHub in Phase 1.
 
 | Phase | Scope |
 |---|---|
-| 1 | `setup`, `repo add`, `start` outer loop only (CI watchdog + issue audit + plan coverage) |
+| 1 | `github add`, `github forget`, `start` outer loop only (CI watchdog + issue audit + plan coverage) |
 | 2 | `plan` command; `start` inner loop (development agent, calypso-auto equivalent) |
 | 3 | `feature` command |
 | 4 | Full LLM agent integration within the inner loop |

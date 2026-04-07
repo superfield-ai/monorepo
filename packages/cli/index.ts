@@ -1,26 +1,32 @@
-import { setupCommand } from './commands/setup.ts';
-import { repoAddCommand } from './commands/repo-add.ts';
+import { githubCommand } from './commands/github.ts';
 import { startCommand } from './commands/start.ts';
+import { BUILD_COMMIT, BUILD_DATE, BUILD_VERSION } from './build-info.ts';
 
-const USAGE = `
+function usage(): string {
+  return `
 superfield — GitOps AI orchestrator
 
+Version: ${BUILD_VERSION}
+Commit: ${BUILD_COMMIT}
+Build date: ${BUILD_DATE}
+
 Commands:
-  setup          Add a GitHub user (handle + PAT)
-  repo add       Register a repository and assign it to a user
-  start          Begin the continuous development loop
+  github add    Authenticate and register a repository
+  github forget Remove credentials and print app uninstall link
+  start         Begin the continuous development loop
 `.trim();
+}
 
 export async function runCLI(args: string[]): Promise<void> {
-  const [cmd, sub] = args;
+  const [cmd, sub, third] = args;
 
-  if (cmd === 'setup') {
-    await setupCommand();
+  if (cmd === '--help' || cmd === '-h' || cmd === 'help') {
+    console.log(usage());
     return;
   }
 
-  if (cmd === 'repo' && sub === 'add') {
-    await repoAddCommand();
+  if (cmd === 'github') {
+    await githubCommand(sub, third);
     return;
   }
 
@@ -29,6 +35,6 @@ export async function runCLI(args: string[]): Promise<void> {
     return;
   }
 
-  console.log(USAGE);
+  console.log(usage());
   process.exit(cmd ? 1 : 0);
 }

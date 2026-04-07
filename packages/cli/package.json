@@ -7,7 +7,11 @@
     "superfield": "./bin/superfield.ts"
   },
   "scripts": {
-    "build": "tsc"
+    "build": "tsc",
+    "build:bin": "bun build --compile ./bin/superfield.ts --outfile \"$HOME/.bun/bin/superfield\"",
+    "write-build-info": "bun ./scripts/write-build-info.ts",
+    "local-install": "mkdir -p \"$HOME/.bun/bin\" && bun run write-build-info && bun run build:bin",
+    "release": "bun run write-build-info && bun run build:bin"
   },
   "dependencies": {
     "@superfield/core": "workspace:*",

@@ -1,0 +1,15 @@
+{
+  "total_count": 2,
+  "repositories": [
+    {
+      "id": 1,
+      "full_name": "dot-matrix-labs/superfield-ts",
+      "private": true
+    },
+    {
+      "id": 2,
+      "full_name": "dot-matrix-labs/other-repo",
+      "private": false
+    }
+  ]
+}

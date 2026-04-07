@@ -1,0 +1,48 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Build and publish release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Build local binary
+        run: |
+          SUPERFIELD_BUILD_VERSION="${GITHUB_REF_NAME#v}" \
+          SUPERFIELD_BUILD_COMMIT="${GITHUB_SHA}" \
+          SUPERFIELD_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          bun run --filter @superfield/cli release
+
+      - name: Stage release asset
+        run: |
+          mkdir -p release
+          cp "$HOME/.bun/bin/superfield" release/superfield
+
+      - name: Smoke test help output
+        run: |
+          export PATH="$HOME/.bun/bin:$PATH"
+          help_output="$(superfield --help)"
+          printf '%s\n' "$help_output"
+          printf '%s\n' "$help_output" | grep -F "Version: ${GITHUB_REF_NAME#v}"
+          printf '%s\n' "$help_output" | grep -F "Commit: ${GITHUB_SHA}"
+          printf '%s\n' "$help_output" | grep -F "Build date:"
+
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release/superfield
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

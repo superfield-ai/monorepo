@@ -1,7 +1,7 @@
 # Implementation Plan — Initial Scaffold
 
 - Init TypeScript monorepo: `packages/cli`, `packages/core`, `packages/github`, `packages/git`
-- Wire CLI entrypoint (`superfield setup`, `superfield repo add`, `superfield start` stub)
+- Wire CLI entrypoint (`superfield setup gh-login`, `superfield setup gh-logout`, `superfield start` stub)
 - Implement config read/write (`~/.superfield/config.yaml`)
 - Add `@octokit/rest` client wrapper in `packages/github` with MSW test harness
 - Add `isomorphic-git` wrapper in `packages/git` with MSW test harness
