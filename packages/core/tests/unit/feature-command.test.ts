@@ -135,6 +135,41 @@ Scout gate: #5
     ).rejects.toThrow(/missing/);
   });
 
+  it('uses LLM-supplied risk score in the Plan entry', async () => {
+    const client = makeClient();
+    await runFeatureCommand({
+      client,
+      owner: 'o',
+      repo: 'r',
+      request: 'add a logout button',
+      spawn: fakeSpawn({ ...validEvaluation, risk: 7 }),
+    });
+
+    // The Plan issue body should contain risk: 7
+    const planBody = (client.createIssue as ReturnType<typeof vi.fn>).mock.calls
+      .find((c) => c[0].labels?.includes('plan'))?.[0].body as string;
+    expect(planBody).toContain('"risk":7');
+  });
+
+  it('defaults risk to 3 when LLM omits the field', async () => {
+    const evaluationNoRisk = { ...validEvaluation };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete (evaluationNoRisk as any).risk;
+
+    const client = makeClient();
+    await runFeatureCommand({
+      client,
+      owner: 'o',
+      repo: 'r',
+      request: 'add a logout button',
+      spawn: fakeSpawn(evaluationNoRisk),
+    });
+
+    const planBody = (client.createIssue as ReturnType<typeof vi.fn>).mock.calls
+      .find((c) => c[0].labels?.includes('plan'))?.[0].body as string;
+    expect(planBody).toContain('"risk":3');
+  });
+
   it('passes open issue titles to the prompt for duplicate detection', async () => {
     let receivedPrompt = '';
     const client = makeClient({
