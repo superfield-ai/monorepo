@@ -233,7 +233,9 @@ export async function runGithubAdd(
   // Sync all accessible repos into local config
   if (installedRepos === "all") {
     // Can't enumerate; ensure target is present
-    if (!config.repositories.find((r) => r.owner === owner && r.repo === repo)) {
+    if (
+      !config.repositories.find((r) => r.owner === owner && r.repo === repo)
+    ) {
       config.repositories.push({ owner, repo, assignedUser: user.handle });
       deps.log(`\n✓ Added ${targetRepo} to config`);
     } else {
@@ -246,8 +248,16 @@ export async function runGithubAdd(
       if (slash < 0) continue;
       const repoOwner = fullName.slice(0, slash);
       const repoName = fullName.slice(slash + 1);
-      if (!config.repositories.find((r) => r.owner === repoOwner && r.repo === repoName)) {
-        config.repositories.push({ owner: repoOwner, repo: repoName, assignedUser: user.handle });
+      if (
+        !config.repositories.find(
+          (r) => r.owner === repoOwner && r.repo === repoName,
+        )
+      ) {
+        config.repositories.push({
+          owner: repoOwner,
+          repo: repoName,
+          assignedUser: user.handle,
+        });
         added++;
       }
     }
