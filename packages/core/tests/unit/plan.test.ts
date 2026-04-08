@@ -562,5 +562,7 @@ describe("validatePlan", () => {
 
   it.todo("detects a cyclic phase dependency (A dependsOn B, B dependsOn A)");
 
-  it.todo("returns errors that include the offending issue number or phase name");
+  it.todo(
+    "returns errors that include the offending issue number or phase name",
+  );
 });
