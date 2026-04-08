@@ -50,16 +50,18 @@ describe('buildCIFailureIssueTitle', () => {
 });
 
 describe('buildCIFailureIssueBody', () => {
-  it('includes all required Calypso issue sections', () => {
+  it('renders the Superfield Blueprint issue sections', () => {
     const body = buildCIFailureIssueBody('test:unit', 'abc1234', 'https://github.com/runs/1');
-    expect(body).toContain('## Issue type\nci-failure');
     expect(body).toContain('## Phase\nwatchdog');
     expect(body).toContain('## Motivation');
     expect(body).toContain('## Canonical docs');
-    expect(body).toContain('## Deliverables');
-    expect(body).toContain('## Acceptance Criteria');
+    expect(body).toContain('## Features');
     expect(body).toContain('## Test Plan');
     expect(body).toContain('https://github.com/runs/1');
+    // Old sections should not appear — superseded by Features
+    expect(body).not.toContain('## Issue type');
+    expect(body).not.toContain('## Deliverables');
+    expect(body).not.toContain('## Acceptance Criteria');
   });
 });
 

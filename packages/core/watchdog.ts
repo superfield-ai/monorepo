@@ -17,9 +17,6 @@ export function buildCIFailureIssueTitle(repoName: string, checkName: string, sh
 
 export function buildCIFailureIssueBody(checkName: string, sha: string, checkRunUrl: string): string {
   return [
-    '## Issue type',
-    'ci-failure',
-    '',
     '## Phase',
     'watchdog',
     '',
@@ -29,15 +26,14 @@ export function buildCIFailureIssueBody(checkName: string, sha: string, checkRun
     '## Canonical docs',
     `- ${checkRunUrl}`,
     '',
-    '## Deliverables',
-    `- [ ] Investigate and resolve ${checkName}`,
-    '',
-    '## Acceptance Criteria',
-    `- [ ] ${checkName} passes on main`,
-    '- [ ] No related regressions introduced',
+    '## Features',
+    `- [ ] Investigate root cause of ${checkName} failure`,
+    `- [ ] Apply minimal targeted fix`,
+    `- [ ] Verify ${checkName} passes locally`,
     '',
     '## Test Plan',
-    '- [ ] CI green on main',
+    `- [ ] ${checkName} passes on main`,
+    '- [ ] No related regressions introduced',
   ].join('\n');
 }
 

@@ -4,11 +4,11 @@
 
 Superfield is an opinionated GitOps AI orchestrator. Git and the forge (GitHub initially) are the control plane — not a side effect. Issues are the task queue. The Plan issue is orchestration state. PRs are change proposals. Superfield reads from and writes to this control plane to drive autonomous development loops.
 
-It replaces calypso-agents entirely, re-encoding every skill and workflow as TypeScript. Hard type contracts and deterministic code replace the soft guardrails of LLM-interpreted markdown prompts. The result is a self-contained, testable runtime that treats the forge as the single source of truth for all agent state.
+It replaces calypso-agents entirely, re-encoding every skill and workflow as TypeScript. Hard type contracts and deterministic code replace the soft guardrails of hand-authored markdown skill files and shell scripts. Prompts to the LLM still exist, but they are generated from typed TypeScript builders, not loose markdown on disk. The result is a self-contained, testable runtime that treats the forge as the single source of truth for all agent state.
 
 ## GitOps Control Plane
 
-All orchestration state lives in the forge, not on disk or in memory:
+All orchestration state lives in the forge. The only local state is `~/.superfield/config.yaml` (credentials and repo assignments) — everything else is in the forge:
 
 | Control plane primitive | Role |
 |---|---|
@@ -48,7 +48,7 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 
 ## Superfield Blueprint
 
-The Superfield Blueprint is a compiled knowledge graph of design rules that ships bundled inside the `superfield` executable. It is the authoritative source of architectural constraints, security principles, design patterns, checklists, and antipatterns that all issues, proposed designs, and agent-generated code must conform to.
+The Superfield Blueprint is a compiled knowledge graph of design rules that ships bundled inside the `superfield` executable. It is the canonical reference for architectural constraints, security principles, design patterns, checklists, and antipatterns. Issues, proposed designs, and agent-generated code are checked against the blueprint and violations are surfaced as advisory comments — the blueprint informs but does not block.
 
 The blueprint is sourced from `dot-matrix-labs/calypso-blueprint` (tracked as a git subtree at `blueprint/`; kept in sync via bidirectional GitHub Actions workflows). The compiled graph lives at `blueprint/rules/graph.yaml` — 1 231 nodes across domains including ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, and WORKER, with TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
 
@@ -162,13 +162,15 @@ interface PlanIssue {
   number: number;
   title: string;
   phase: string;
-  kind: "dev-scout" | "feature" | "ci-failure";
+  kind: "dev-scout" | "feature" | "ci-failure"; // drives dev-loop behaviour; stored in Plan metadata
   risk: number;           // 1–6
   dependencies: number[]; // issue numbers that must be CLOSED first
   dependents: number[];
   parallel_safe: boolean; // true if all dependencies are CLOSED
 }
 ```
+
+`kind` lives only in the Plan metadata comment, not on the issue body itself — the issue body uses a single unified schema (see Issue Schema).
 
 Validation rules (enforced at plan-write time, not runtime):
 - All dependency references exist in the ordered issue list
@@ -224,7 +226,7 @@ Each Plan issue moves through these stages in order:
 #### Primary vs speculative agents
 
 - **Primary (slot 1)** — drives the highest-priority issue through all seven stages. Does not exit until the issue is CLOSED.
-- **Speculative (slots 2 to N)** — drives feature issues through stages 1–3 only, but only if the phase's dev-scout is already merged on `main`. Pushes frequently; does not open a PR. Exits once the checklist is complete.
+- **Speculative (slots 2..N)** — drives feature issues through stages 1–3 only, but only if the phase's dev-scout is already merged on `main`. Pushes frequently; does not open a PR. Exits once the checklist is complete.
 
 When an issue that was completed speculatively later becomes the primary, the primary agent picks up at stage 4 (PR open) rather than re-doing the development work.
 
@@ -306,7 +308,7 @@ Tickets a new feature issue and registers it in the Plan.
 
 1. Prompt the user for a feature description (stdin or argument).
 2. Load current Plan and open issues as context.
-3. Run the feature-evaluate skill (LLM call): assess PRD fit, detect duplicates, determine phase and dependencies, emit a typed `FeatureIssue` object.
+3. Run the feature-evaluate skill (LLM call): assess PRD fit, detect duplicates, determine phase and dependencies, emit a typed `IssueBody` object.
 4. Render the issue body from the typed object.
 5. Create the GitHub issue.
 6. Append the new issue to the Plan in the correct phase position.
@@ -317,27 +319,24 @@ Tickets a new feature issue and registers it in the Plan.
 
 ## Issue Schema
 
-All issues created by Superfield are constructed from typed objects, never raw template strings. The `IssueBody` type is the TypeScript equivalent of calypso-agents' `feature-evaluate` JSON output contract.
+All issues created by Superfield are constructed from typed objects, never raw template strings. The schema follows the section names prescribed by the Superfield Blueprint (see `blueprint/rules/blueprints/process.yaml`): **Motivation, Features, Test Plan, Stage**.
+
+There is one unified `IssueBody` type for all issues — feature, scout, and ci-failure issues all share the same shape. Their classification lives on the issue's labels (and in the `PlanIssue.kind` Plan metadata), not in the body. "Feature" and "issue" are interchangeable terms.
 
 ```typescript
 interface IssueBody {
   title: string;
-  phase: string;
-  issue_kind: "feature" | "dev-scout" | "ci-failure";
-  canonical_docs: string[];
-  motivation: string;
-  scope: { in: string[]; out: string[] }; // explicit for dev-scout; prose for feature
-  acceptance_criteria: string[];
-  test_plan: string[];
+  phase: string;            // which phase this issue belongs to
+  motivation: string;       // why this work exists
+  features: string[];       // checklist items — what must be built/changed
+  test_plan: string[];      // checklist items — how it will be verified
+  canonical_docs: string[]; // links to relevant blueprint rules, PRD sections, prior art
 }
 ```
 
 Rendered issue body:
 
 ```markdown
-## Issue type
-<issue_kind>
-
 ## Phase
 <phase>
 
@@ -347,10 +346,7 @@ Rendered issue body:
 ## Canonical docs
 - <url>
 
-## Deliverables
-- [ ] ...
-
-## Acceptance Criteria
+## Features
 - [ ] ...
 
 ## Test Plan
@@ -468,6 +464,16 @@ No tests against real GitHub in Phase 1.
 | `superfield github add` writes config correctly | Unit |
 | Octokit: endpoint, auth header, request shape | Unit |
 | `isomorphic-git`: fetch, HEAD resolution, branch lookup | Unit |
+| Planning loop: blueprint violation — comment posted with rule ID | Unit |
+| Dev loop: primary selected from top of Plan | Unit |
+| Dev loop: speculative slots stay empty until scout merged | Unit |
+| Dev loop: agent spawned with correct prompt per role | Unit |
+| Agent session: upsert creates comment on first claim | Unit |
+| Agent session: upsert updates existing comment on resume | Unit |
+| Agent session: delete removes comment on issue close | Unit |
+| Agent session: stale session detected via deadman timeout | Unit |
+| Scout merge qualification: compile + existing tests + todo stubs | Integration |
+| Documentation loop: doc-only change does not trigger CI | Unit |
 
 ---
 
@@ -475,24 +481,30 @@ No tests against real GitHub in Phase 1.
 
 | Phase | Scope |
 |---|---|
-| 1 | `github add`, `github forget`, `start` planning loop only (CI watchdog + issue audit + plan coverage + blueprint conformance) |
-| 2 | `plan` command; `start` dev loop (development agent, calypso-auto equivalent) |
-| 3 | `feature` command |
-| 4 | Full LLM agent integration within the dev loop |
+| 1 | Foundation: config, GitHub client, git client, MSW test harness, golden fixtures, `github add`, `github forget` |
+| 2 | Planning loop — CI watchdog: detect failed checks on `main`, create deduplicated `ci-failure` issues, insert at top of Plan |
+| 3 | Planning loop — issue audit and Plan coverage: schema conformance scan, append missing issues to Plan |
+| 4 | Planning loop — blueprint conformance: load `blueprint/rules/graph.yaml`, evaluate open issues against active rules, post advisory comments |
+| 5 | Agent infrastructure: `claude` CLI spawner, prompt builders (dev-scout, feature, ci-failure), forge-stored sessions with deadman switch |
+| 6 | `plan` command — LLM-driven phase grouping, scout creation, Plan rendering with `<!-- superfield: -->` metadata |
+| 7 | Dev loop — primary agent only: select top of Plan, prep worktree, run agent through 7-stage lifecycle to merge |
+| 8 | Dev loop — speculative slots: scout-gated parallel feature work (slots 2..N) |
+| 9 | `feature` command — interactive issue creation with PRD/duplicate evaluation |
+| 10 | Documentation loop — coverage scan, canonical sync, consistency check, doc PR creation |
 
-Phase 1 establishes the foundation — config, GitHub client, git client, issue rendering, Plan management — that all later phases build on.
+Phases describe build order. Each phase delivers a working slice and is testable in isolation.
 
 ---
 
-## Out of Scope (Phase 1)
+## Out of Scope (entire roadmap)
 
-- `superfield plan` and `superfield feature` commands
 - Slack / webhook notifications
 - Web UI
+- Forges other than GitHub
+- Self-hosted LLM backends (only the `claude` CLI is supported)
 
 ---
 
 ## Open Questions
 
-1. **Deduplication scope for CI failures**: by (SHA + check name) — one issue per failing commit — or by (check name on current HEAD) — one open issue per flaky check regardless of how many commits it has failed on?
-2. **Plan issue ownership**: always created under `assignedUser`'s token, or is there ever a separate service account concept?
+1. **Plan issue ownership**: always created under `assignedUser`'s token, or is there ever a separate service account concept?
