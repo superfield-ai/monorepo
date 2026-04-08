@@ -1,4 +1,4 @@
-import { describe, expect } from "vitest";
+import { expect } from "vitest";
 import { runLLMTask } from "../../llm-task.ts";
 import { liveBackends, liveDescribe, liveIt } from "../helpers/live.ts";
 
