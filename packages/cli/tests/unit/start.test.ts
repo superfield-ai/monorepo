@@ -18,6 +18,7 @@ function makeDeps(overrides: Partial<StartDeps> = {}): StartDeps {
     runPlanningLoop: vi.fn().mockResolvedValue(undefined),
     runDevLoop: vi.fn().mockResolvedValue(undefined),
     runDocLoop: vi.fn().mockResolvedValue(undefined),
+    env: {},
     log: vi.fn(),
     error: vi.fn(),
     exit: vi.fn() as unknown as StartDeps["exit"],
@@ -71,6 +72,30 @@ describe("startCommand", () => {
       .calls[0][0];
     expect(devArg.slotCount).toBe(2);
   });
+
+  it("passes SUPERFIELD_SLOT_COUNT through to the dev loop", async () => {
+    const deps = makeDeps({ env: { SUPERFIELD_SLOT_COUNT: "2" } });
+    await startCommand("/home/user/project", deps);
+
+    const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(devArg.slotCount).toBe(2);
+  });
+
+  it.each(["abc", "0"])(
+    "warns and falls back when SUPERFIELD_SLOT_COUNT=%s",
+    async (raw) => {
+      const deps = makeDeps({ env: { SUPERFIELD_SLOT_COUNT: raw } });
+      await startCommand("/home/user/project", deps);
+
+      expect(deps.error).toHaveBeenCalledWith(
+        `Ignoring invalid SUPERFIELD_SLOT_COUNT=${JSON.stringify(raw)}; using the default slot count`,
+      );
+      const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
+        .calls[0][0];
+      expect(devArg.slotCount).toBeUndefined();
+    },
+  );
 
   it("omits slotCount when none is configured", async () => {
     const deps = makeDeps();
