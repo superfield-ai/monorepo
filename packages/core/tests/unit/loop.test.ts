@@ -8,8 +8,12 @@
  * Issue #2: wire runIssueAudit + runBlueprintConformance into tickRepository.
  */
 import { describe, it, expect, vi } from "vitest";
-import { tickRepositoryForTesting } from "../../loop.ts";
+import {
+  tickConfiguredRepositoriesForTesting,
+  tickRepositoryForTesting,
+} from "../../loop.ts";
 import type { GitHubClient, Issue } from "@superfield/github";
+import type { Config } from "../../config.ts";
 import type { IssueAuditResult } from "../../steps/issue-audit.ts";
 import type { BlueprintConformanceResult } from "../../steps/blueprint-conformance.ts";
 import type { PlanCoverageResult } from "../../steps/plan-coverage.ts";
@@ -46,6 +50,16 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
     deleteIssueComment: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as GitHubClient;
+}
+
+function makeConfig(): Config {
+  return {
+    users: [{ handle: "alice", token: "ghp-alice" }],
+    repositories: [
+      { owner: "org", repo: "repo-a", assignedUser: "alice" },
+      { owner: "org", repo: "repo-b", assignedUser: "alice" },
+    ],
+  };
 }
 
 const noOpAudit = vi.fn(
@@ -159,6 +173,7 @@ describe("tickRepository — all four planning-loop steps are wired", () => {
       blueprintConformance: noOpBlueprint,
       planCoverage: noOpCoverage,
     });
+    expect(result.watchdog.ok).toBe(true);
     expect(result.issueAudit.ok).toBe(true);
     expect(result.planCoverage.ok).toBe(true);
     expect(result.blueprintConformance.ok).toBe(true);
@@ -198,9 +213,87 @@ describe("tickRepository — all four planning-loop steps are wired", () => {
     expect(blueprint).toHaveBeenCalled();
   });
 
-  it.todo(
-    "watchdog getHeadSha/getCheckRuns failures are isolated so later planning steps still run",
-  );
+  it("watchdog getHeadSha failure does not abort later planning steps", async () => {
+    const coverage = vi.fn(noOpCoverage);
+    const blueprint = vi.fn(noOpBlueprint);
+    const client = makeClient({
+      getHeadSha: vi.fn().mockRejectedValue(new Error("sha boom")),
+    });
 
-  it.todo("one repository tick failure does not abort the other repositories");
+    const result = await tickRepositoryForTesting(client, "org", "repo", {
+      issueAudit: noOpAudit,
+      blueprintConformance: blueprint,
+      planCoverage: coverage,
+    });
+
+    expect(result.watchdog.ok).toBe(false);
+    if (!result.watchdog.ok) {
+      expect(result.watchdog.error).toContain("sha boom");
+    }
+    expect(coverage).toHaveBeenCalled();
+    expect(blueprint).toHaveBeenCalled();
+  });
+
+  it("watchdog getCheckRuns failure does not abort later planning steps", async () => {
+    const coverage = vi.fn(noOpCoverage);
+    const blueprint = vi.fn(noOpBlueprint);
+    const client = makeClient({
+      getCheckRuns: vi.fn().mockRejectedValue(new Error("checks boom")),
+    });
+
+    const result = await tickRepositoryForTesting(client, "org", "repo", {
+      issueAudit: noOpAudit,
+      blueprintConformance: blueprint,
+      planCoverage: coverage,
+    });
+
+    expect(result.watchdog.ok).toBe(false);
+    if (!result.watchdog.ok) {
+      expect(result.watchdog.error).toContain("checks boom");
+    }
+    expect(coverage).toHaveBeenCalled();
+    expect(blueprint).toHaveBeenCalled();
+  });
+
+  it("one repository tick failure does not abort the other repositories", async () => {
+    const config = makeConfig();
+    const createClient = vi
+      .fn()
+      .mockReturnValueOnce(makeClient())
+      .mockReturnValueOnce(makeClient());
+    const tickRepository = vi
+      .fn()
+      .mockRejectedValueOnce(new Error("repo-a boom"))
+      .mockResolvedValueOnce({
+        watchdogIssuesCreated: [],
+        watchdog: { ok: true as const, issuesCreated: [] },
+        issueAudit: { ok: true as const, nonConformant: [] },
+        planCoverage: { ok: true as const, appended: [], planCreated: false },
+        blueprintConformance: {
+          ok: true as const,
+          issuesWithViolations: [],
+        },
+      });
+
+    await expect(
+      tickConfiguredRepositoriesForTesting(config, {
+        createClient,
+        tickRepository,
+      }),
+    ).resolves.toBeUndefined();
+
+    expect(tickRepository).toHaveBeenCalledTimes(2);
+    expect(tickRepository).toHaveBeenNthCalledWith(
+      1,
+      expect.any(Object),
+      "org",
+      "repo-a",
+    );
+    expect(tickRepository).toHaveBeenNthCalledWith(
+      2,
+      expect.any(Object),
+      "org",
+      "repo-b",
+    );
+  });
 });

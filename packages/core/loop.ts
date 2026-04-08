@@ -28,21 +28,7 @@ const POLL_INTERVAL_MS = 5_000;
  */
 export async function runPlanningLoop(config: Config): Promise<void> {
   while (true) {
-    await Promise.all(
-      config.repositories.map((repoConfig) => {
-        const user = config.users.find(
-          (u) => u.handle === repoConfig.assignedUser,
-        );
-        if (!user) {
-          console.error(
-            `No user configured for ${repoConfig.owner}/${repoConfig.repo}`,
-          );
-          return Promise.resolve();
-        }
-        const client = new GitHubClient(user.token);
-        return tickRepository(client, repoConfig.owner, repoConfig.repo);
-      }),
-    );
+    await tickConfiguredRepositories(config);
     await sleep(POLL_INTERVAL_MS);
   }
 }
@@ -51,6 +37,9 @@ export async function runPlanningLoop(config: Config): Promise<void> {
 export interface TickRepositoryResult {
   /** Issues created by the CI watchdog in this tick. */
   watchdogIssuesCreated: number[];
+  watchdog:
+    | { ok: true; issuesCreated: number[] }
+    | { ok: false; error: string; issuesCreated: number[] };
   issueAudit:
     | { ok: true; nonConformant: number[] }
     | { ok: false; error: string };
@@ -83,6 +72,15 @@ export interface TickRepositoryOpts {
   ) => Promise<PlanCoverageResult>;
 }
 
+export interface PlanningLoopTickOpts {
+  createClient?: (token: string) => GitHubClientPort;
+  tickRepository?: (
+    client: GitHubClientPort,
+    owner: string,
+    repo: string,
+  ) => Promise<TickRepositoryResult>;
+}
+
 async function tickRepository(
   client: GitHubClientPort,
   owner: string,
@@ -94,7 +92,16 @@ async function tickRepository(
   const coverageFn = opts.planCoverage ?? runPlanCoverage;
 
   // Step 1: CI watchdog
-  const watchdogIssuesCreated = await runWatchdogStep(client, owner, repo);
+  let watchdogOutcome: TickRepositoryResult["watchdog"];
+  let watchdogIssuesCreated: number[] = [];
+  try {
+    watchdogIssuesCreated = await runWatchdogStep(client, owner, repo);
+    watchdogOutcome = { ok: true, issuesCreated: watchdogIssuesCreated };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    watchdogOutcome = { ok: false, error: msg, issuesCreated: [] };
+    console.error(`[${owner}/${repo}] watchdog failed:`, err);
+  }
 
   // Step 2: Issue audit — validate open issues against the IssueBody schema
   let issueAuditOutcome: TickRepositoryResult["issueAudit"];
@@ -158,6 +165,7 @@ async function tickRepository(
 
   return {
     watchdogIssuesCreated,
+    watchdog: watchdogOutcome,
     issueAudit: issueAuditOutcome!,
     planCoverage: planCoverageOutcome!,
     blueprintConformance: blueprintConformanceOutcome!,
@@ -169,6 +177,43 @@ async function tickRepository(
  * @internal
  */
 export { tickRepository as tickRepositoryForTesting };
+
+async function tickConfiguredRepositories(
+  config: Config,
+  opts: PlanningLoopTickOpts = {},
+): Promise<void> {
+  const createClient = opts.createClient ?? ((token) => new GitHubClient(token));
+  const tickRepositoryFn = opts.tickRepository ?? tickRepository;
+
+  await Promise.all(
+    config.repositories.map(async (repoConfig) => {
+      const user = config.users.find(
+        (candidate) => candidate.handle === repoConfig.assignedUser,
+      );
+      if (!user) {
+        console.error(
+          `No user configured for ${repoConfig.owner}/${repoConfig.repo}`,
+        );
+        return;
+      }
+
+      try {
+        await tickRepositoryFn(
+          createClient(user.token),
+          repoConfig.owner,
+          repoConfig.repo,
+        );
+      } catch (err) {
+        console.error(
+          `[${repoConfig.owner}/${repoConfig.repo}] planning tick failed:`,
+          err,
+        );
+      }
+    }),
+  );
+}
+
+export { tickConfiguredRepositories as tickConfiguredRepositoriesForTesting };
 
 async function runWatchdogStep(
   client: GitHubClientPort,
