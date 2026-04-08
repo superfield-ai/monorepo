@@ -361,7 +361,7 @@ Scout gate: #5
   it("resumes existing session when session comment exists", async () => {
     await preCreateWorktree(10, "build-the-thing");
     const existingSession = {
-      sessionId: "sess-existing",
+      sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
       role: "primary" as const,
       slot: 1,
       startedAt: "2026-04-08T01:00:00.000Z",
@@ -397,6 +397,6 @@ Scout gate: #5
     });
     expect(spawn).toHaveBeenCalledTimes(1);
     const spawnArgs = spawn.mock.calls[0]![0];
-    expect(spawnArgs.sessionId).toBe("sess-existing");
+    expect(spawnArgs.sessionId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
   });
 });
