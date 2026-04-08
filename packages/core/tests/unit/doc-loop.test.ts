@@ -206,6 +206,57 @@ describe('tickDocLoop', () => {
     expect(result.consistencyFindings).toEqual([]);
   });
 
+  it('skips canonical sync and consistency when neither prd.md nor README exists', async () => {
+    // Remove both docs from the temp repo
+    await fs.rm(path.join(tmpRepo, 'docs/prd.md'));
+    await fs.rm(path.join(tmpRepo, 'README.md'));
+
+    const client = makeClient({
+      listMergedPullRequests: vi.fn().mockResolvedValue([makePR()]),
+      listPullRequestFiles: vi.fn().mockResolvedValue(['packages/core/foo.ts']),
+    });
+    const spawn = vi.fn().mockImplementation(multiSpawn([
+      { missing_docs: [] }, // only coverage scan
+    ]));
+    const result = await tickDocLoop({
+      client,
+      owner: 'o',
+      repo: 'r',
+      repoPath: tmpRepo,
+      lastProcessedAt: '2026-04-08T01:00:00Z',
+      spawn,
+    });
+    // Only coverage scan fires — no LLM call for canonical sync or consistency
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(result.canonicalSync).toBeNull();
+    expect(result.consistencyFindings).toEqual([]);
+    expect(result.pr).toBe(42);
+  });
+
+  it('runs canonical sync when README exists even if prd.md is absent', async () => {
+    await fs.rm(path.join(tmpRepo, 'docs/prd.md'));
+
+    const client = makeClient({
+      listMergedPullRequests: vi.fn().mockResolvedValue([makePR()]),
+      listPullRequestFiles: vi.fn().mockResolvedValue(['packages/core/foo.ts']),
+    });
+    const spawn = vi.fn().mockImplementation(multiSpawn([
+      { missing_docs: [] },
+      { significant: false, prd_patches: [], readme_patches: [] },
+      { inconsistencies: [] },
+    ]));
+    await tickDocLoop({
+      client,
+      owner: 'o',
+      repo: 'r',
+      repoPath: tmpRepo,
+      lastProcessedAt: '2026-04-08T01:00:00Z',
+      spawn,
+    });
+    // All 3 tasks still run since README.md exists
+    expect(spawn).toHaveBeenCalledTimes(3);
+  });
+
   it('filters out test files from source-file analysis', async () => {
     const client = makeClient({
       listMergedPullRequests: vi.fn().mockResolvedValue([makePR()]),

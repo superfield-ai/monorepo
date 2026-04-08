@@ -118,20 +118,27 @@ export async function tickDocLoop(opts: DocLoopTickOpts): Promise<DocLoopTickRes
     (f) => /\.tsx?$/.test(f) && !f.includes('/tests/') && !f.endsWith('.test.ts'),
   );
 
-  // 3. Run the three doc tasks in parallel
+  // 3. Run the three doc tasks in parallel.
+  //    Canonical sync and consistency require at least one canonical doc
+  //    (docs/prd.md or README.md) to be present. Skip both gracefully when
+  //    neither exists — an LLM call with zero canonical content is useless.
+  const hasPrd = await fileExists(opts.repoPath, 'docs/prd.md');
+  const hasReadme = await fileExists(opts.repoPath, 'README.md');
+  const hasCanonicalDocs = hasPrd || hasReadme;
+
   const [coverageResult, canonicalResult, consistencyResult] = await Promise.all([
     runCoverageScan(opts, candidate.number, sourceFiles),
-    runCanonicalSync(opts, candidate, changedFiles),
-    runConsistencyCheck(opts, sourceFiles),
+    hasCanonicalDocs ? runCanonicalSync(opts, candidate, changedFiles) : Promise.resolve(null),
+    hasCanonicalDocs ? runConsistencyCheck(opts, sourceFiles) : Promise.resolve([]),
   ]);
 
   const hasChanges =
-    canonicalResult.prd_patches.length > 0 ||
-    canonicalResult.readme_patches.length > 0 ||
+    (canonicalResult?.prd_patches.length ?? 0) > 0 ||
+    (canonicalResult?.readme_patches.length ?? 0) > 0 ||
     consistencyResult.length > 0;
 
   let docPrNumber: number | null = null;
-  if (hasChanges) {
+  if (hasChanges && canonicalResult) {
     docPrNumber = await openDocPR(opts, candidate, canonicalResult, consistencyResult);
   }
 
@@ -222,6 +229,15 @@ async function readIfExists(repoPath: string, relPath: string): Promise<string |
     return await fs.readFile(path.join(repoPath, relPath), 'utf8');
   } catch {
     return null;
+  }
+}
+
+async function fileExists(repoPath: string, relPath: string): Promise<boolean> {
+  try {
+    await fs.access(path.join(repoPath, relPath));
+    return true;
+  } catch {
+    return false;
   }
 }
 
