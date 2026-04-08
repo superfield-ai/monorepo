@@ -62,6 +62,20 @@ export class GitHubClient {
     }));
   }
 
+  async getIssue(owner: string, repo: string, issue_number: number): Promise<Issue> {
+    const { data } = await this.octokit.issues.get({ owner, repo, issue_number });
+    return {
+      number: data.number,
+      title: data.title,
+      body: data.body ?? null,
+      html_url: data.html_url,
+      state: data.state,
+      labels: data.labels
+        .map((l) => (typeof l === 'string' ? l : l.name ?? ''))
+        .filter(Boolean),
+    };
+  }
+
   async listIssues(owner: string, repo: string, labels?: string[]): Promise<Issue[]> {
     const { data } = await this.octokit.issues.listForRepo({
       owner,
