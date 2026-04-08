@@ -145,6 +145,8 @@ describe("runPrunePass — worktree cleanup", () => {
     });
     expect(result.prunedWorktrees).toEqual([]);
   });
+
+  it.todo("ignores worktrees owned by other repositories during prune scans");
 });
 
 describe("runPrunePass — stale session reaping", () => {

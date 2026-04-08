@@ -141,32 +141,17 @@ export class WorktreeManager {
     const result: IssueWorktree[] = [];
     const repoDirs = await fsp.readdir(this.root);
     for (const repoDir of repoDirs) {
-      const fullRepoDir = path.join(this.root, repoDir);
-      let entries: string[];
-      try {
-        entries = await fsp.readdir(fullRepoDir);
-      } catch {
-        continue;
-      }
-      for (const entry of entries) {
-        const match = /^issue-(\d+)-(.+)$/.exec(entry);
-        if (!match) continue;
-        const dir = path.join(fullRepoDir, entry);
-        let branch = "";
-        try {
-          branch =
-            (await git.currentBranch({ fs, dir, fullname: false })) ?? "";
-        } catch {
-          // Not a valid git repo — still count it as a worktree dir
-        }
-        result.push({
-          issueNumber: Number(match[1]!),
-          branch,
-          path: dir,
-        });
-      }
+      result.push(...(await this.listRepoDir(path.join(this.root, repoDir))));
     }
     return result;
+  }
+
+  /** Lists only worktrees for a single repository under root. */
+  async listForRepository(
+    owner: string,
+    repo: string,
+  ): Promise<IssueWorktree[]> {
+    return this.listRepoDir(path.join(this.root, `${owner}__${repo}`));
   }
 
   /** Deletes a single worktree directory. */
@@ -201,5 +186,33 @@ export class WorktreeManager {
       }
     }
     return pruned;
+  }
+
+  private async listRepoDir(fullRepoDir: string): Promise<IssueWorktree[]> {
+    let entries: string[];
+    try {
+      entries = await fsp.readdir(fullRepoDir);
+    } catch {
+      return [];
+    }
+
+    const result: IssueWorktree[] = [];
+    for (const entry of entries) {
+      const match = /^issue-(\d+)-(.+)$/.exec(entry);
+      if (!match) continue;
+      const dir = path.join(fullRepoDir, entry);
+      let branch = "";
+      try {
+        branch = (await git.currentBranch({ fs, dir, fullname: false })) ?? "";
+      } catch {
+        // Not a valid git repo — still count it as a worktree dir
+      }
+      result.push({
+        issueNumber: Number(match[1]!),
+        branch,
+        path: dir,
+      });
+    }
+    return result;
   }
 }
