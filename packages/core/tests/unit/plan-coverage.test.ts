@@ -155,4 +155,8 @@ Scout gate: pending
     expect(result.alreadyCovered).toEqual([10]);
     expect(client.updateIssueBody).not.toHaveBeenCalled();
   });
+
+  it.todo(
+    "preserves phase placement, ordering, and dependency metadata when appending uncovered issues",
+  );
 });

@@ -351,4 +351,6 @@ describe("runPlanCommand", () => {
     });
     expect(result.validationErrors.join(" ")).toContain("cycle");
   });
+
+  it.todo("runs the documented audit stage before applying plan coverage");
 });

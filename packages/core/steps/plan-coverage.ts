@@ -17,6 +17,12 @@ export interface PlanCoverageResult {
   planCreated: boolean;
 }
 
+export interface PlanCoverageSourceIssue {
+  number: number;
+  title: string;
+  labels: string[];
+}
+
 /**
  * Planning loop step: verify every open issue is referenced in the Plan.
  * Append any missing issue to the "Backlog" phase in dependency order.
@@ -59,7 +65,7 @@ export async function runPlanCoverage(
       alreadyCovered.push(issue.number);
       continue;
     }
-    const entry = issueToPlanEntry(issue);
+    const entry = buildPlanCoverageEntry(issue);
     plan = appendToPhase(plan, entry.phase, entry);
     appended.push(issue.number);
   }
@@ -87,11 +93,9 @@ export async function runPlanCoverage(
   return { appended, alreadyCovered, planCreated };
 }
 
-function issueToPlanEntry(issue: {
-  number: number;
-  title: string;
-  labels: string[];
-}): PlanIssueMetadata {
+export function buildPlanCoverageEntry(
+  issue: PlanCoverageSourceIssue,
+): PlanIssueMetadata {
   const isScout = issue.labels.includes("dev-scout");
   return {
     number: issue.number,

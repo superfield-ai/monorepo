@@ -139,4 +139,6 @@ describe("runIssueAudit", () => {
       }),
     ).rejects.toThrow(/missing issue_number/);
   });
+
+  it.todo("applies the non-conformant label when audit finds violations");
 });
