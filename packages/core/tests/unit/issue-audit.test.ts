@@ -23,6 +23,7 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
     updateIssueComment: vi.fn().mockResolvedValue(undefined),
     addIssueLabel: vi.fn().mockResolvedValue(undefined),
     removeIssueLabel: vi.fn().mockResolvedValue(undefined),
+    deleteIssueComment: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as GitHubClient;
 }
@@ -99,7 +100,7 @@ describe("runIssueAudit", () => {
     });
   });
 
-  it("updates existing audit comment and removes stale label when conformant", async () => {
+  it("deletes stale audit findings and removes stale label when conformant", async () => {
     const client = makeClient({
       listIssues: vi
         .fn()
@@ -121,7 +122,9 @@ describe("runIssueAudit", () => {
       issue_number: 10,
       label: "non-conformant",
     });
+    expect(client.deleteIssueComment).toHaveBeenCalledWith("org", "repo", 500);
     expect(client.updateIssueComment).not.toHaveBeenCalled();
+    expect(client.createIssueComment).not.toHaveBeenCalled();
   });
 
   it("skips plan and ci-failure labelled issues", async () => {

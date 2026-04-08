@@ -116,13 +116,16 @@ async function auditOne(
         label: NON_CONFORMANT_LABEL,
       });
     }
-  } else if (issue.labels.includes(NON_CONFORMANT_LABEL)) {
-    await client.removeIssueLabel({
-      owner,
-      repo,
-      issue_number: issue.number,
-      label: NON_CONFORMANT_LABEL,
-    });
+  } else {
+    await clearAuditFindings(client, owner, repo, issue.number);
+    if (issue.labels.includes(NON_CONFORMANT_LABEL)) {
+      await client.removeIssueLabel({
+        owner,
+        repo,
+        issue_number: issue.number,
+        label: NON_CONFORMANT_LABEL,
+      });
+    }
   }
 
   return result;
@@ -141,17 +144,34 @@ async function postAuditFindings(
   report: IssueAuditReport,
 ): Promise<void> {
   const body = buildIssueAuditCommentBody(report);
-
-  const marker = "<!-- superfield-audit -->";
-
-  // Dedupe: find existing audit comment by marker, update rather than duplicate
-  const comments = await client.listIssueComments(owner, repo, issueNumber);
-  const existing = comments.find((c) => c.body.startsWith(marker));
+  const existing = await findAuditComment(client, owner, repo, issueNumber);
   if (existing) {
     await client.updateIssueComment(owner, repo, existing.id, body);
   } else {
     await client.createIssueComment(owner, repo, issueNumber, body);
   }
+}
+
+async function clearAuditFindings(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+): Promise<void> {
+  const existing = await findAuditComment(client, owner, repo, issueNumber);
+  if (existing) {
+    await client.deleteIssueComment(owner, repo, existing.id);
+  }
+}
+
+async function findAuditComment(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+): Promise<{ id: number; body: string } | undefined> {
+  const comments = await client.listIssueComments(owner, repo, issueNumber);
+  return comments.find((c) => c.body.startsWith("<!-- superfield-audit -->"));
 }
 
 export function buildIssueAuditCommentBody(report: IssueAuditReport): string {
