@@ -16,7 +16,8 @@
     "lint": "bunx eslint .",
     "format": "bunx prettier --write .",
     "format:check": "bunx prettier --check .",
-    "record-fixtures": "bun scripts/record-github-fixtures.ts"
+    "record-fixtures": "bun scripts/record-github-fixtures.ts",
+    "record-claude-fixtures": "bun scripts/record-claude-fixtures.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

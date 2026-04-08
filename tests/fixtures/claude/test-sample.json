@@ -1,0 +1,13 @@
+{
+  "type": "result",
+  "subtype": "success",
+  "is_error": false,
+  "sessionId": "01JNEXAMPLESESSIONID000",
+  "output": "{\"issue_number\":42,\"conformant\":true,\"missing_sections\":[],\"forbidden_sections\":[],\"empty_sections\":[],\"fix_suggestions\":[]}",
+  "costUsd": 0.012,
+  "_metadata": {
+    "captured_at": "2026-04-08T03:00:00Z",
+    "prompt_builder": "buildIssueAuditPrompt",
+    "input_summary": "synthetic test fixture used by helpers/replay tests"
+  }
+}
