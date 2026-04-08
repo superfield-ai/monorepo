@@ -1,13 +1,13 @@
-import type { GitHubClientPort as GitHubClient } from '@superfield/github';
-import { buildReplanEvaluatePrompt } from '../prompts/index.ts';
-import { runLLMTask, type LLMTaskOpts } from '../llm-task.ts';
+import type { GitHubClientPort as GitHubClient } from "@superfield/github";
+import { buildReplanEvaluatePrompt } from "../prompts/index.ts";
+import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
 import {
   serializePlan,
   type Plan,
   type PlanIssueMetadata,
   type PlanPhase,
-} from '../plan.ts';
-import { renderIssueBody, type IssueBody } from '../issue-body.ts';
+} from "../plan.ts";
+import { renderIssueBody, type IssueBody } from "../issue-body.ts";
 
 /** Shape emitted by the LLM `replan-evaluate` task. */
 export interface PlanProposal {
@@ -22,7 +22,7 @@ export interface PlanProposal {
     number: number | null;
     title: string;
     phase: string;
-    kind: 'dev-scout' | 'feature' | 'ci-failure';
+    kind: "dev-scout" | "feature" | "ci-failure";
     risk: number;
     dependencies: number[];
     dependents?: number[];
@@ -44,7 +44,7 @@ export interface PlanCommandOpts {
   client: GitHubClient;
   owner: string;
   repo: string;
-  spawn?: LLMTaskOpts['spawn'];
+  spawn?: LLMTaskOpts["spawn"];
   cwd?: string;
 }
 
@@ -55,8 +55,8 @@ export interface PlanCommandResult {
   validationErrors: string[];
 }
 
-const PLAN_LABEL = 'plan';
-const SCOUT_LABEL = 'dev-scout';
+const PLAN_LABEL = "plan";
+const SCOUT_LABEL = "dev-scout";
 
 /**
  * One-shot replan command. See PRD §Command: plan.
@@ -68,18 +68,25 @@ const SCOUT_LABEL = 'dev-scout';
  *   4. Validate — strict total order, scout-first, acyclic phase deps
  *   5. Apply — render Plan body, update tracking issue
  */
-export async function runPlanCommand(opts: PlanCommandOpts): Promise<PlanCommandResult> {
+export async function runPlanCommand(
+  opts: PlanCommandOpts,
+): Promise<PlanCommandResult> {
   const { client, owner, repo } = opts;
 
   // 1. Collect
   const allIssues = await client.listIssues(owner, repo);
   const planIssues = allIssues.filter((i) => i.labels.includes(PLAN_LABEL));
   const candidates = allIssues.filter(
-    (i) => !i.labels.includes(PLAN_LABEL) && !i.labels.includes('ci-failure'),
+    (i) => !i.labels.includes(PLAN_LABEL) && !i.labels.includes("ci-failure"),
   );
 
   if (candidates.length === 0) {
-    return { scoutsCreated: [], planUpdated: false, planCreated: false, validationErrors: [] };
+    return {
+      scoutsCreated: [],
+      planUpdated: false,
+      planCreated: false,
+      validationErrors: [],
+    };
   }
 
   // 2. Evaluate (LLM)
@@ -128,7 +135,12 @@ export async function runPlanCommand(opts: PlanCommandOpts): Promise<PlanCommand
   // 4. Validate
   const validationErrors = validateProposal(proposal);
   if (validationErrors.length > 0) {
-    return { scoutsCreated, planUpdated: false, planCreated: false, validationErrors };
+    return {
+      scoutsCreated,
+      planUpdated: false,
+      planCreated: false,
+      validationErrors,
+    };
   }
 
   // 5. Apply: render Plan body and write
@@ -140,7 +152,7 @@ export async function runPlanCommand(opts: PlanCommandOpts): Promise<PlanCommand
     await client.createIssue({
       owner,
       repo,
-      title: 'Plan',
+      title: "Plan",
       body,
       labels: [PLAN_LABEL],
     });
@@ -154,13 +166,19 @@ export async function runPlanCommand(opts: PlanCommandOpts): Promise<PlanCommand
     });
   }
 
-  return { scoutsCreated, planUpdated: !planCreated, planCreated, validationErrors: [] };
+  return {
+    scoutsCreated,
+    planUpdated: !planCreated,
+    planCreated,
+    validationErrors: [],
+  };
 }
 
 function parseProposal(json: string): PlanProposal {
   const parsed = JSON.parse(json) as Partial<PlanProposal>;
-  if (!Array.isArray(parsed.phases)) throw new Error('missing phases array');
-  if (!Array.isArray(parsed.ordered_issues)) throw new Error('missing ordered_issues array');
+  if (!Array.isArray(parsed.phases)) throw new Error("missing phases array");
+  if (!Array.isArray(parsed.ordered_issues))
+    throw new Error("missing ordered_issues array");
   return {
     phases: parsed.phases,
     ordered_issues: parsed.ordered_issues,
@@ -168,18 +186,25 @@ function parseProposal(json: string): PlanProposal {
   };
 }
 
-function patchScoutNumber(proposal: PlanProposal, specIdx: number, realNumber: number): void {
+function patchScoutNumber(
+  proposal: PlanProposal,
+  specIdx: number,
+  realNumber: number,
+): void {
   // The scout slot is the one with number === null and matching scout_spec_index,
   // OR (legacy) the first null-numbered scout in a phase whose scout_issue_number is null
   for (const issue of proposal.ordered_issues) {
-    if (issue.number === null && issue.kind === 'dev-scout') {
-      if (issue.scout_spec_index === specIdx || issue.scout_spec_index === undefined) {
+    if (issue.number === null && issue.kind === "dev-scout") {
+      if (
+        issue.scout_spec_index === specIdx ||
+        issue.scout_spec_index === undefined
+      ) {
         issue.number = realNumber;
         // Add it to dependencies of any feature in the same phase that doesn't have it
         for (const other of proposal.ordered_issues) {
           if (
             other.phase === issue.phase &&
-            other.kind === 'feature' &&
+            other.kind === "feature" &&
             !other.dependencies.includes(realNumber)
           ) {
             other.dependencies.push(realNumber);
@@ -219,17 +244,21 @@ function validateProposal(proposal: PlanProposal): string[] {
 
   // Each phase has exactly one scout, placed first
   for (const phase of proposal.phases) {
-    const phaseIssues = proposal.ordered_issues.filter((i) => i.phase === phase.name);
+    const phaseIssues = proposal.ordered_issues.filter(
+      (i) => i.phase === phase.name,
+    );
     if (phaseIssues.length === 0) {
       errors.push(`phase "${phase.name}" has no issues`);
       continue;
     }
-    const scouts = phaseIssues.filter((i) => i.kind === 'dev-scout');
+    const scouts = phaseIssues.filter((i) => i.kind === "dev-scout");
     if (scouts.length === 0) {
       errors.push(`phase "${phase.name}" has no dev-scout`);
     } else if (scouts.length > 1) {
-      errors.push(`phase "${phase.name}" has ${scouts.length} dev-scouts (must be exactly 1)`);
-    } else if (phaseIssues[0]!.kind !== 'dev-scout') {
+      errors.push(
+        `phase "${phase.name}" has ${scouts.length} dev-scouts (must be exactly 1)`,
+      );
+    } else if (phaseIssues[0]!.kind !== "dev-scout") {
       errors.push(`phase "${phase.name}" scout is not first`);
     }
   }
@@ -244,7 +273,7 @@ function validateProposal(proposal: PlanProposal): string[] {
     );
   }
   if (hasCycle(adj)) {
-    errors.push('phase dependency graph has a cycle');
+    errors.push("phase dependency graph has a cycle");
   }
 
   return errors;

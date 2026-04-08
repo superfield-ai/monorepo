@@ -3,41 +3,41 @@
  *
  * Issue #8: retry/backoff with circuit breaker for transient agent failures.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { withRetry, CircuitBreaker } from '../../retry.ts';
+import { describe, it, expect, vi } from "vitest";
+import { withRetry, CircuitBreaker } from "../../retry.ts";
 
 // --- withRetry ---
 
-describe('withRetry', () => {
-  it('returns immediately when the function succeeds on the first try', async () => {
-    const fn = vi.fn().mockResolvedValue('ok');
+describe("withRetry", () => {
+  it("returns immediately when the function succeeds on the first try", async () => {
+    const fn = vi.fn().mockResolvedValue("ok");
     const result = await withRetry(fn, { initialDelayMs: 0 });
-    expect(result).toBe('ok');
+    expect(result).toBe("ok");
     expect(fn).toHaveBeenCalledTimes(1);
   });
 
-  it('retries on failure and returns when a later attempt succeeds', async () => {
+  it("retries on failure and returns when a later attempt succeeds", async () => {
     let calls = 0;
     const fn = vi.fn(async () => {
       calls++;
-      if (calls < 3) throw new Error('transient');
-      return 'success';
+      if (calls < 3) throw new Error("transient");
+      return "success";
     });
 
     const result = await withRetry(fn, { maxAttempts: 5, initialDelayMs: 0 });
-    expect(result).toBe('success');
+    expect(result).toBe("success");
     expect(fn).toHaveBeenCalledTimes(3);
   });
 
-  it('throws the last error after exhausting all attempts', async () => {
-    const fn = vi.fn().mockRejectedValue(new Error('always fails'));
+  it("throws the last error after exhausting all attempts", async () => {
+    const fn = vi.fn().mockRejectedValue(new Error("always fails"));
     await expect(
       withRetry(fn, { maxAttempts: 3, initialDelayMs: 0 }),
-    ).rejects.toThrow('always fails');
+    ).rejects.toThrow("always fails");
     expect(fn).toHaveBeenCalledTimes(3);
   });
 
-  it('applies exponential backoff between retries', async () => {
+  it("applies exponential backoff between retries", async () => {
     const delays: number[] = [];
     const sleepSpy = vi.fn().mockImplementation(async (ms: number) => {
       delays.push(ms);
@@ -46,8 +46,8 @@ describe('withRetry', () => {
     let calls = 0;
     const fn = vi.fn(async () => {
       calls++;
-      if (calls < 3) throw new Error('fail');
-      return 'ok';
+      if (calls < 3) throw new Error("fail");
+      return "ok";
     });
 
     await withRetry(fn, {
@@ -60,7 +60,7 @@ describe('withRetry', () => {
     expect(delays).toEqual([100, 200]);
   });
 
-  it('defaults to 3 attempts, 1000ms initial delay, factor 2', async () => {
+  it("defaults to 3 attempts, 1000ms initial delay, factor 2", async () => {
     // Just verify defaults don't throw for a succeeding fn
     const fn = vi.fn().mockResolvedValue(42);
     const result = await withRetry(fn, { initialDelayMs: 0 });
@@ -70,18 +70,18 @@ describe('withRetry', () => {
 
 // --- CircuitBreaker ---
 
-describe('CircuitBreaker', () => {
-  it('passes through when the circuit is closed', async () => {
+describe("CircuitBreaker", () => {
+  it("passes through when the circuit is closed", async () => {
     const cb = new CircuitBreaker({ tripAt: 3, resetMs: 10_000 });
-    const fn = vi.fn().mockResolvedValue('ok');
+    const fn = vi.fn().mockResolvedValue("ok");
     const result = await cb.call(fn);
-    expect(result).toBe('ok');
+    expect(result).toBe("ok");
   });
 
-  it('resets failure count on success', async () => {
+  it("resets failure count on success", async () => {
     const cb = new CircuitBreaker({ tripAt: 3, resetMs: 10_000 });
-    const failing = vi.fn().mockRejectedValue(new Error('err'));
-    const passing = vi.fn().mockResolvedValue('ok');
+    const failing = vi.fn().mockRejectedValue(new Error("err"));
+    const passing = vi.fn().mockResolvedValue("ok");
 
     await expect(cb.call(failing)).rejects.toThrow();
     await expect(cb.call(failing)).rejects.toThrow();
@@ -90,20 +90,20 @@ describe('CircuitBreaker', () => {
     expect(cb.isOpen).toBe(false);
   });
 
-  it('opens the circuit after tripAt consecutive failures', async () => {
+  it("opens the circuit after tripAt consecutive failures", async () => {
     const cb = new CircuitBreaker({ tripAt: 3, resetMs: 10_000 });
-    const fn = vi.fn().mockRejectedValue(new Error('err'));
+    const fn = vi.fn().mockRejectedValue(new Error("err"));
 
-    await expect(cb.call(fn)).rejects.toThrow('err');
-    await expect(cb.call(fn)).rejects.toThrow('err');
-    await expect(cb.call(fn)).rejects.toThrow('err');
+    await expect(cb.call(fn)).rejects.toThrow("err");
+    await expect(cb.call(fn)).rejects.toThrow("err");
+    await expect(cb.call(fn)).rejects.toThrow("err");
 
     expect(cb.isOpen).toBe(true);
   });
 
-  it('rejects immediately when the circuit is open', async () => {
+  it("rejects immediately when the circuit is open", async () => {
     const cb = new CircuitBreaker({ tripAt: 2, resetMs: 10_000 });
-    const fn = vi.fn().mockRejectedValue(new Error('err'));
+    const fn = vi.fn().mockRejectedValue(new Error("err"));
 
     await expect(cb.call(fn)).rejects.toThrow();
     await expect(cb.call(fn)).rejects.toThrow();
@@ -113,9 +113,9 @@ describe('CircuitBreaker', () => {
     expect(fn.mock.calls.length).toBe(callsBefore); // fn not called again
   });
 
-  it('allows calls through after the reset window', async () => {
+  it("allows calls through after the reset window", async () => {
     const cb = new CircuitBreaker({ tripAt: 2, resetMs: 50 });
-    const fn = vi.fn().mockRejectedValue(new Error('err'));
+    const fn = vi.fn().mockRejectedValue(new Error("err"));
 
     await expect(cb.call(fn)).rejects.toThrow();
     await expect(cb.call(fn)).rejects.toThrow();
@@ -125,8 +125,8 @@ describe('CircuitBreaker', () => {
     await new Promise((resolve) => setTimeout(resolve, 60));
     expect(cb.isOpen).toBe(false);
 
-    const passing = vi.fn().mockResolvedValue('ok');
+    const passing = vi.fn().mockResolvedValue("ok");
     const result = await cb.call(passing);
-    expect(result).toBe('ok');
+    expect(result).toBe("ok");
   });
 });

@@ -1,8 +1,8 @@
-import git from 'isomorphic-git';
-import http from 'isomorphic-git/http/web';
-import * as fs from 'node:fs';
-import * as fsp from 'node:fs/promises';
-import * as path from 'node:path';
+import git from "isomorphic-git";
+import http from "isomorphic-git/http/web";
+import * as fs from "node:fs";
+import * as fsp from "node:fs/promises";
+import * as path from "node:path";
 
 /**
  * Per-issue worktree manager.
@@ -31,18 +31,31 @@ export class WorktreeManager {
   private root: string;
 
   constructor(options: WorktreeManagerOptions = {}) {
-    this.root = options.root ?? '/tmp/superfield-worktrees';
+    this.root = options.root ?? "/tmp/superfield-worktrees";
   }
 
   /** Returns the directory a worktree would live at, without creating it. */
-  worktreePath(owner: string, repo: string, issueNumber: number, slug: string): string {
+  worktreePath(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    slug: string,
+  ): string {
     const repoDir = `${owner}__${repo}`;
-    const safeSlug = slug.toLowerCase().replace(/[^a-z0-9-]+/g, '-').slice(0, 40);
+    const safeSlug = slug
+      .toLowerCase()
+      .replace(/[^a-z0-9-]+/g, "-")
+      .slice(0, 40);
     return path.join(this.root, repoDir, `issue-${issueNumber}-${safeSlug}`);
   }
 
   /** True if a worktree directory exists for the given issue. */
-  async exists(owner: string, repo: string, issueNumber: number, slug: string): Promise<boolean> {
+  async exists(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    slug: string,
+  ): Promise<boolean> {
     const dir = this.worktreePath(owner, repo, issueNumber, slug);
     try {
       const stat = await fsp.stat(dir);
@@ -69,7 +82,12 @@ export class WorktreeManager {
     /** Source branch to base from. Defaults to 'main'. */
     base?: string;
   }): Promise<IssueWorktree> {
-    const dir = this.worktreePath(opts.owner, opts.repo, opts.issueNumber, opts.slug);
+    const dir = this.worktreePath(
+      opts.owner,
+      opts.repo,
+      opts.issueNumber,
+      opts.slug,
+    );
     if (await this.exists(opts.owner, opts.repo, opts.issueNumber, opts.slug)) {
       return { issueNumber: opts.issueNumber, branch: opts.branch, path: dir };
     }
@@ -79,7 +97,7 @@ export class WorktreeManager {
     // Try to clone the issue branch directly. If it doesn't exist remotely
     // yet, fall back to base (main) and let the agent create the branch.
     const url = `https://github.com/${opts.owner}/${opts.repo}.git`;
-    const base = opts.base ?? 'main';
+    const base = opts.base ?? "main";
 
     let ref = opts.branch;
     try {
@@ -91,7 +109,7 @@ export class WorktreeManager {
         ref,
         singleBranch: true,
         depth: 1,
-        onAuth: () => ({ username: 'x-access-token', password: opts.token }),
+        onAuth: () => ({ username: "x-access-token", password: opts.token }),
       });
     } catch {
       // Branch doesn't exist remotely yet — clone base and create the branch locally
@@ -104,7 +122,7 @@ export class WorktreeManager {
         ref,
         singleBranch: true,
         depth: 1,
-        onAuth: () => ({ username: 'x-access-token', password: opts.token }),
+        onAuth: () => ({ username: "x-access-token", password: opts.token }),
       });
       await git.branch({ fs, dir, ref: opts.branch, checkout: true });
     }
@@ -134,9 +152,10 @@ export class WorktreeManager {
         const match = /^issue-(\d+)-(.+)$/.exec(entry);
         if (!match) continue;
         const dir = path.join(fullRepoDir, entry);
-        let branch = '';
+        let branch = "";
         try {
-          branch = await git.currentBranch({ fs, dir, fullname: false }) ?? '';
+          branch =
+            (await git.currentBranch({ fs, dir, fullname: false })) ?? "";
         } catch {
           // Not a valid git repo — still count it as a worktree dir
         }
@@ -151,7 +170,12 @@ export class WorktreeManager {
   }
 
   /** Deletes a single worktree directory. */
-  async prune(owner: string, repo: string, issueNumber: number, slug: string): Promise<boolean> {
+  async prune(
+    owner: string,
+    repo: string,
+    issueNumber: number,
+    slug: string,
+  ): Promise<boolean> {
     const dir = this.worktreePath(owner, repo, issueNumber, slug);
     try {
       await fsp.rm(dir, { recursive: true, force: true });

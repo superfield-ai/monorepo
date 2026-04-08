@@ -1,4 +1,8 @@
-import { projectContextFragment, blueprintReferenceFragment, joinSections } from './fragments/index.ts';
+import {
+  projectContextFragment,
+  blueprintReferenceFragment,
+  joinSections,
+} from "./fragments/index.ts";
 
 export interface FeatureEvaluateContext {
   /** The raw natural-language feature request from the user. */
@@ -17,10 +21,12 @@ export interface FeatureEvaluateContext {
  * Replaces calypso-agents `feature-evaluate` SKILL.md, adapted to Superfield's
  * unified `IssueBody` schema (no more `behaviour`, `scope`, `issue_kind`).
  */
-export function buildFeatureEvaluatePrompt(ctx: FeatureEvaluateContext): string {
+export function buildFeatureEvaluatePrompt(
+  ctx: FeatureEvaluateContext,
+): string {
   const issueList = ctx.openIssueTitles.length
-    ? ctx.openIssueTitles.map((i) => `- #${i.number}: ${i.title}`).join('\n')
-    : '(none)';
+    ? ctx.openIssueTitles.map((i) => `- #${i.number}: ${i.title}`).join("\n")
+    : "(none)";
 
   return joinSections(
     projectContextFragment(),
@@ -35,7 +41,7 @@ ${ctx.request}
 
 ### Current Plan
 
-${ctx.planBody ?? '(no Plan issue exists yet)'}
+${ctx.planBody ?? "(no Plan issue exists yet)"}
 
 ### Open issues
 

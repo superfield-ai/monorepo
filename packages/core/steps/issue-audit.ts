@@ -1,6 +1,9 @@
-import type { GitHubClientPort as GitHubClient, Issue } from '@superfield/github';
-import { buildIssueAuditPrompt } from '../prompts/index.ts';
-import { runLLMTask, type LLMTaskOpts } from '../llm-task.ts';
+import type {
+  GitHubClientPort as GitHubClient,
+  Issue,
+} from "@superfield/github";
+import { buildIssueAuditPrompt } from "../prompts/index.ts";
+import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
 
 export interface IssueAuditReport {
   issue_number: number;
@@ -20,7 +23,7 @@ export interface IssueAuditResult {
 
 export interface IssueAuditOpts {
   /** Override the spawn function for testing. */
-  spawn?: LLMTaskOpts['spawn'];
+  spawn?: LLMTaskOpts["spawn"];
   /** cwd passed to the LLM subprocess. */
   cwd?: string;
   /** Max concurrent audit calls (default: 3). */
@@ -47,9 +50,9 @@ export async function runIssueAudit(
   // watchdog-owned body we don't want to audit against the feature schema)
   const candidates = allIssues.filter(
     (i) =>
-      !i.labels.includes('plan') &&
-      !i.labels.includes('ci-failure') &&
-      !i.labels.includes('non-conformant'),
+      !i.labels.includes("plan") &&
+      !i.labels.includes("ci-failure") &&
+      !i.labels.includes("non-conformant"),
   );
 
   const concurrency = Math.max(1, opts.concurrency ?? 3);
@@ -83,11 +86,11 @@ async function auditOne(
     { prompt, spawn: opts.spawn, cwd: opts.cwd },
     (json) => {
       const parsed = JSON.parse(json) as Partial<IssueAuditReport>;
-      if (typeof parsed.issue_number !== 'number') {
-        throw new Error('missing issue_number');
+      if (typeof parsed.issue_number !== "number") {
+        throw new Error("missing issue_number");
       }
-      if (typeof parsed.conformant !== 'boolean') {
-        throw new Error('missing conformant');
+      if (typeof parsed.conformant !== "boolean") {
+        throw new Error("missing conformant");
       }
       return {
         issue_number: parsed.issue_number,
@@ -115,36 +118,36 @@ async function postAuditFindings(
   report: IssueAuditReport,
 ): Promise<void> {
   const lines: string[] = [
-    '## Schema audit — non-conformant',
-    '',
-    'This issue does not conform to the Superfield `IssueBody` schema. \
-See `docs/prd.md` §Issue Schema.',
-    '',
+    "## Schema audit — non-conformant",
+    "",
+    "This issue does not conform to the Superfield `IssueBody` schema. \
+See `docs/prd.md` §Issue Schema.",
+    "",
   ];
 
   if (report.missing_sections.length > 0) {
-    lines.push('**Missing required sections:**');
+    lines.push("**Missing required sections:**");
     lines.push(...report.missing_sections.map((s) => `- ${s}`));
-    lines.push('');
+    lines.push("");
   }
   if (report.forbidden_sections.length > 0) {
-    lines.push('**Forbidden sections present:**');
+    lines.push("**Forbidden sections present:**");
     lines.push(...report.forbidden_sections.map((s) => `- ${s}`));
-    lines.push('');
+    lines.push("");
   }
   if (report.empty_sections.length > 0) {
-    lines.push('**Empty sections:**');
+    lines.push("**Empty sections:**");
     lines.push(...report.empty_sections.map((s) => `- ${s}`));
-    lines.push('');
+    lines.push("");
   }
   if (report.fix_suggestions.length > 0) {
-    lines.push('**Suggested fixes:**');
+    lines.push("**Suggested fixes:**");
     lines.push(...report.fix_suggestions.map((s) => `- ${s}`));
-    lines.push('');
+    lines.push("");
   }
 
-  const marker = '<!-- superfield-audit -->';
-  const body = `${marker}\n${lines.join('\n')}`;
+  const marker = "<!-- superfield-audit -->";
+  const body = `${marker}\n${lines.join("\n")}`;
 
   // Dedupe: find existing audit comment by marker, update rather than duplicate
   const comments = await client.listIssueComments(owner, repo, issueNumber);

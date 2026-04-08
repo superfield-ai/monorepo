@@ -1,4 +1,4 @@
-export { GitHubClient } from './client.ts';
+export { GitHubClient } from "./client.ts";
 export type {
   CheckRun,
   Issue,
@@ -6,13 +6,13 @@ export type {
   CreateIssueParams,
   UpdateIssueParams,
   GitHubClientPort,
-} from './client.ts';
+} from "./client.ts";
 export {
   pollGitHubAppAccessToken,
   requestGitHubAppDeviceCode,
-} from './auth.ts';
+} from "./auth.ts";
 export type {
   AccessTokenResponse,
   DeviceCodeResponse,
   DeviceFlowError,
-} from './auth.ts';
+} from "./auth.ts";

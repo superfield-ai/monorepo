@@ -1,9 +1,12 @@
-import * as path from 'node:path';
-import { loadConfig, runFeatureCommand } from '@superfield/core';
-import { GitClient } from '@superfield/git';
-import { GitHubClient } from '@superfield/github';
+import * as path from "node:path";
+import { loadConfig, runFeatureCommand } from "@superfield/core";
+import { GitClient } from "@superfield/git";
+import { GitHubClient } from "@superfield/github";
 
-export async function featureCommand(request?: string, repoPath?: string): Promise<void> {
+export async function featureCommand(
+  request?: string,
+  repoPath?: string,
+): Promise<void> {
   if (!request) {
     console.error('Usage: superfield feature "<description>" [<path>]');
     process.exit(1);
@@ -15,10 +18,14 @@ export async function featureCommand(request?: string, repoPath?: string): Promi
   const gitClient = new GitClient();
   const { owner, repo } = await gitClient.readRemoteOwnerRepo(resolvedPath);
 
-  const repoConfig = config.repositories.find((r) => r.owner === owner && r.repo === repo);
+  const repoConfig = config.repositories.find(
+    (r) => r.owner === owner && r.repo === repo,
+  );
   const userHandle = repoConfig?.assignedUser ?? config.users[0]?.handle;
   if (!userHandle) {
-    console.error('No GitHub users configured. Run `superfield github add` first.');
+    console.error(
+      "No GitHub users configured. Run `superfield github add` first.",
+    );
     process.exit(1);
   }
 
@@ -41,14 +48,18 @@ export async function featureCommand(request?: string, repoPath?: string): Promi
   });
 
   if (result.duplicateOf !== null) {
-    console.log(`✗ Duplicate of #${result.duplicateOf} — no new issue created.`);
+    console.log(
+      `✗ Duplicate of #${result.duplicateOf} — no new issue created.`,
+    );
     return;
   }
 
   console.log(`✓ Created issue #${result.issueCreated}`);
-  if (result.planCreated) console.log('✓ Created Plan tracking issue');
-  else if (result.planUpdated) console.log('✓ Appended to Plan');
+  if (result.planCreated) console.log("✓ Created Plan tracking issue");
+  else if (result.planUpdated) console.log("✓ Appended to Plan");
   if (result.blueprintRulesCited.length > 0) {
-    console.log(`  Blueprint rules cited: ${result.blueprintRulesCited.join(', ')}`);
+    console.log(
+      `  Blueprint rules cited: ${result.blueprintRulesCited.join(", ")}`,
+    );
   }
 }

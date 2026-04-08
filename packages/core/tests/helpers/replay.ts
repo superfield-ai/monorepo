@@ -1,6 +1,6 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import type { AgentOpts, AgentResult } from '../../agent.ts';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import type { AgentOpts, AgentResult } from "../../agent.ts";
 
 /**
  * Layer 2 helper: load a recorded `claude` JSON response and replay it as a
@@ -12,7 +12,7 @@ import type { AgentOpts, AgentResult } from '../../agent.ts';
 
 const DEFAULT_FIXTURES_DIR = path.resolve(
   import.meta.dirname,
-  '../../../../tests/fixtures/claude',
+  "../../../../tests/fixtures/claude",
 );
 
 export interface ClaudeFixture {
@@ -35,8 +35,8 @@ export async function loadClaudeFixture(
   const filePath = path.join(fixturesDir, `${name}.json`);
   let raw: string;
   try {
-    raw = await fs.readFile(filePath, 'utf8');
-  } catch (err) {
+    raw = await fs.readFile(filePath, "utf8");
+  } catch {
     throw new Error(
       `Claude fixture not found: ${name} (looked in ${filePath}). ` +
         `Record it with: bun record-claude-fixtures ${name}`,

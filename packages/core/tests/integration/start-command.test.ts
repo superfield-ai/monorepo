@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it } from "vitest";
 
 /**
  * Integration test for the not-yet-wired `superfield start` orchestration.
@@ -13,9 +13,11 @@ import { describe, it } from 'vitest';
  *
  * See docs/testing.md §Layer 2 and docs/plan.md §Remaining cross-cutting work.
  */
-describe('start command — wires all three loops', () => {
-  it.todo('runs planning loop, dev loop, and doc loop concurrently');
-  it.todo('exits cleanly when SIGINT is received');
-  it.todo('logs each loop tick to stdout');
-  it.todo('survives a single tick failure in one loop without killing the others');
+describe("start command — wires all three loops", () => {
+  it.todo("runs planning loop, dev loop, and doc loop concurrently");
+  it.todo("exits cleanly when SIGINT is received");
+  it.todo("logs each loop tick to stdout");
+  it.todo(
+    "survives a single tick failure in one loop without killing the others",
+  );
 });

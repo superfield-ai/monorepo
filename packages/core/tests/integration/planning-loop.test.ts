@@ -10,22 +10,22 @@
  *
  * Issue #3: planning loop integration test composing all four steps.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { tickRepositoryForTesting } from '../../loop.ts';
-import type { GitHubClient, Issue, CheckRun } from '@superfield/github';
-import type { IssueAuditResult } from '../../steps/issue-audit.ts';
-import type { BlueprintConformanceResult } from '../../steps/blueprint-conformance.ts';
-import type { PlanCoverageResult } from '../../steps/plan-coverage.ts';
+import { describe, it, expect, vi } from "vitest";
+import { tickRepositoryForTesting } from "../../loop.ts";
+import type { GitHubClient, Issue, CheckRun } from "@superfield/github";
+import type { IssueAuditResult } from "../../steps/issue-audit.ts";
+import type { BlueprintConformanceResult } from "../../steps/blueprint-conformance.ts";
+import type { PlanCoverageResult } from "../../steps/plan-coverage.ts";
 
 // ── helpers ──────────────────────────────────────────────────────────────────
 
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     number: 1,
-    title: 'feat: example',
+    title: "feat: example",
     body: null,
-    html_url: 'https://github.com/org/repo/issues/1',
-    state: 'open',
+    html_url: "https://github.com/org/repo/issues/1",
+    state: "open",
     labels: [],
     ...overrides,
   };
@@ -44,26 +44,37 @@ Scout gate: none
 function makeCheckRun(overrides: Partial<CheckRun> = {}): CheckRun {
   return {
     id: 1,
-    name: 'test:unit',
-    status: 'completed',
-    conclusion: 'failure',
-    html_url: 'https://github.com/org/repo/runs/1',
-    head_sha: 'abc123',
+    name: "test:unit",
+    status: "completed",
+    conclusion: "failure",
+    html_url: "https://github.com/org/repo/runs/1",
+    head_sha: "abc123",
     ...overrides,
   };
 }
 
 function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
   return {
-    getHeadSha: vi.fn().mockResolvedValue('abc123'),
+    getHeadSha: vi.fn().mockResolvedValue("abc123"),
     getCheckRuns: vi.fn().mockResolvedValue([]),
     listIssues: vi.fn().mockResolvedValue([
-      makeIssue({ number: 99, labels: ['plan'], body: conformantPlanBody, title: 'Plan' }),
+      makeIssue({
+        number: 99,
+        labels: ["plan"],
+        body: conformantPlanBody,
+        title: "Plan",
+      }),
       makeIssue({ number: 1 }),
     ]),
     getIssue: vi.fn().mockResolvedValue(makeIssue()),
     listIssueComments: vi.fn().mockResolvedValue([]),
-    createIssue: vi.fn().mockResolvedValue({ number: 100, title: 'CI failure', labels: [], body: '', html_url: '' }),
+    createIssue: vi.fn().mockResolvedValue({
+      number: 100,
+      title: "CI failure",
+      labels: [],
+      body: "",
+      html_url: "",
+    }),
     updateIssueBody: vi.fn().mockResolvedValue(undefined),
     createIssueComment: vi.fn().mockResolvedValue({ id: 1 }),
     updateIssueComment: vi.fn().mockResolvedValue(undefined),
@@ -74,50 +85,63 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
 
 // Fake step implementations
 function fakeAudit(result: Partial<IssueAuditResult> = {}) {
-  return vi.fn(async (): Promise<IssueAuditResult> => ({
-    audited: 0,
-    nonConformant: [],
-    reports: {},
-    ...result,
-  }));
+  return vi.fn(
+    async (): Promise<IssueAuditResult> => ({
+      audited: 0,
+      nonConformant: [],
+      reports: {},
+      ...result,
+    }),
+  );
 }
 
 function fakeBlueprint(result: Partial<BlueprintConformanceResult> = {}) {
-  return vi.fn(async (): Promise<BlueprintConformanceResult> => ({
-    checked: 0,
-    issuesWithViolations: [],
-    reports: {},
-    ...result,
-  }));
+  return vi.fn(
+    async (): Promise<BlueprintConformanceResult> => ({
+      checked: 0,
+      issuesWithViolations: [],
+      reports: {},
+      ...result,
+    }),
+  );
 }
 
 function fakeCoverage(result: Partial<PlanCoverageResult> = {}) {
-  return vi.fn(async (): Promise<PlanCoverageResult> => ({
-    planCreated: false,
-    appended: [],
-    alreadyCovered: [],
-    ...result,
-  }));
+  return vi.fn(
+    async (): Promise<PlanCoverageResult> => ({
+      planCreated: false,
+      appended: [],
+      alreadyCovered: [],
+      ...result,
+    }),
+  );
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
-describe('planning loop — end to end', () => {
-  it('CI watchdog detects failed check and inserts ci-failure at top of Plan', async () => {
+describe("planning loop — end to end", () => {
+  it("CI watchdog detects failed check and inserts ci-failure at top of Plan", async () => {
     const client = makeClient({
       getCheckRuns: vi.fn().mockResolvedValue([makeCheckRun()]),
       // Plan issue exists
       listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes('plan')) {
-          return [makeIssue({ number: 99, title: 'Plan', labels: ['plan'], body: conformantPlanBody })];
+        if (labels?.includes("plan")) {
+          return [
+            makeIssue({
+              number: 99,
+              title: "Plan",
+              labels: ["plan"],
+              body: conformantPlanBody,
+            }),
+          ];
         }
         return [makeIssue()];
-      }) as unknown as GitHubClient['listIssues'],
+      }) as unknown as GitHubClient["listIssues"],
       // planContainsIssue check and plan update
       updateIssueBody: vi.fn().mockResolvedValue(undefined),
     });
 
-    const result = await tickRepositoryForTesting(client, 'org', 'repo', {
+    const result = await tickRepositoryForTesting(client, "org", "repo", {
       issueAudit: fakeAudit(),
       blueprintConformance: fakeBlueprint(),
       planCoverage: fakeCoverage(),
@@ -126,17 +150,17 @@ describe('planning loop — end to end', () => {
     // Watchdog should have found the failure and created a ci-failure issue
     expect(client.createIssue).toHaveBeenCalledWith(
       expect.objectContaining({
-        labels: expect.arrayContaining(['ci-failure']),
+        labels: expect.arrayContaining(["ci-failure"]),
       }),
     );
     expect(result.watchdogIssuesCreated.length).toBeGreaterThan(0);
   });
 
-  it('plan-coverage appends new open issue to the Plan', async () => {
+  it("plan-coverage appends new open issue to the Plan", async () => {
     const client = makeClient();
     const coverage = fakeCoverage({ appended: [1], planCreated: false });
 
-    const result = await tickRepositoryForTesting(client, 'org', 'repo', {
+    const result = await tickRepositoryForTesting(client, "org", "repo", {
       issueAudit: fakeAudit(),
       blueprintConformance: fakeBlueprint(),
       planCoverage: coverage,
@@ -149,11 +173,11 @@ describe('planning loop — end to end', () => {
     expect(coverage).toHaveBeenCalledOnce();
   });
 
-  it('issue-audit reports non-conformant issues in structured result', async () => {
+  it("issue-audit reports non-conformant issues in structured result", async () => {
     const client = makeClient();
     const audit = fakeAudit({ audited: 2, nonConformant: [7, 8] });
 
-    const result = await tickRepositoryForTesting(client, 'org', 'repo', {
+    const result = await tickRepositoryForTesting(client, "org", "repo", {
       issueAudit: audit,
       blueprintConformance: fakeBlueprint(),
       planCoverage: fakeCoverage(),
@@ -165,11 +189,11 @@ describe('planning loop — end to end', () => {
     }
   });
 
-  it('blueprint-conformance reports violations in structured result', async () => {
+  it("blueprint-conformance reports violations in structured result", async () => {
     const client = makeClient();
     const blueprint = fakeBlueprint({ checked: 1, issuesWithViolations: [5] });
 
-    const result = await tickRepositoryForTesting(client, 'org', 'repo', {
+    const result = await tickRepositoryForTesting(client, "org", "repo", {
       issueAudit: fakeAudit(),
       blueprintConformance: blueprint,
       planCoverage: fakeCoverage(),
@@ -181,13 +205,13 @@ describe('planning loop — end to end', () => {
     }
   });
 
-  it('multiple steps composing one tick produce the expected forge state', async () => {
+  it("multiple steps composing one tick produce the expected forge state", async () => {
     const client = makeClient();
     const coverage = fakeCoverage({ appended: [42], planCreated: true });
     const audit = fakeAudit({ nonConformant: [3] });
     const blueprint = fakeBlueprint({ issuesWithViolations: [3] });
 
-    const result = await tickRepositoryForTesting(client, 'org', 'repo', {
+    const result = await tickRepositoryForTesting(client, "org", "repo", {
       issueAudit: audit,
       blueprintConformance: blueprint,
       planCoverage: coverage,

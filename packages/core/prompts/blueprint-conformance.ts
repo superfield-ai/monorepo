@@ -1,5 +1,5 @@
-import type { Issue } from '@superfield/github';
-import { blueprintReferenceFragment, joinSections } from './fragments/index.ts';
+import type { Issue } from "@superfield/github";
+import { blueprintReferenceFragment, joinSections } from "./fragments/index.ts";
 
 export interface BlueprintConformanceContext {
   issue: Issue;
@@ -13,7 +13,9 @@ export interface BlueprintConformanceContext {
  * of advisory violations. Does not block — just informs the agent that will
  * pick up the issue.
  */
-export function buildBlueprintConformancePrompt(ctx: BlueprintConformanceContext): string {
+export function buildBlueprintConformancePrompt(
+  ctx: BlueprintConformanceContext,
+): string {
   return joinSections(
     `## Task: blueprint-conformance
 
@@ -24,11 +26,11 @@ agent picking up the issue knows what to watch out for.
 
 ### Issue #${ctx.issue.number} — ${ctx.issue.title}
 
-${ctx.issue.body ?? '(no body)'}
+${ctx.issue.body ?? "(no body)"}
 
 ### Candidate blueprint domains
 
-${ctx.candidateDomains.map((d) => `- \`blueprint/rules/blueprints/${d}.yaml\``).join('\n')}`,
+${ctx.candidateDomains.map((d) => `- \`blueprint/rules/blueprints/${d}.yaml\``).join("\n")}`,
     blueprintReferenceFragment(),
     `## What you do
 

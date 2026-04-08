@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it } from "vitest";
 
 /**
  * End-to-end documentation loop integration test.
@@ -16,11 +16,13 @@ import { describe, it } from 'vitest';
  *
  * See docs/testing.md §Layer 2.
  */
-describe('doc loop — end to end', () => {
-  it.todo('detects newly merged PR after the watermark');
-  it.todo('runs all three doc tasks in parallel');
-  it.todo('opens a doc PR when canonical sync produces patches');
-  it.todo('skips PR when no patches matched the file content');
-  it.todo('skips coverage and consistency tasks when PR has no source files');
-  it.todo('respects CI gating: doc-only changes do not trigger build/test workflows');
+describe("doc loop — end to end", () => {
+  it.todo("detects newly merged PR after the watermark");
+  it.todo("runs all three doc tasks in parallel");
+  it.todo("opens a doc PR when canonical sync produces patches");
+  it.todo("skips PR when no patches matched the file content");
+  it.todo("skips coverage and consistency tasks when PR has no source files");
+  it.todo(
+    "respects CI gating: doc-only changes do not trigger build/test workflows",
+  );
 });

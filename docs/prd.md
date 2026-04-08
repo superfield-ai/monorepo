@@ -10,14 +10,14 @@ It replaces calypso-agents entirely, re-encoding every skill and workflow as Typ
 
 All orchestration state lives in the forge. The only local state is `~/.superfield/config.yaml` (credentials and repo assignments) — everything else is in the forge:
 
-| Control plane primitive | Role |
-|---|---|
-| Plan issue | Ordered work queue; the orchestrator's view of what to do next |
-| Feature / fix issues | Units of work; each issue is one agent assignment |
-| Pull requests | Change proposals; merge = issue closed = work done |
-| Check runs | CI signal; failure = new work item enters the queue |
-| Issue labels | State machine transitions (e.g. `ci-failure`, `watchdog`) |
-| Issue comments | Agent-to-agent and agent-to-human communication |
+| Control plane primitive | Role                                                           |
+| ----------------------- | -------------------------------------------------------------- |
+| Plan issue              | Ordered work queue; the orchestrator's view of what to do next |
+| Feature / fix issues    | Units of work; each issue is one agent assignment              |
+| Pull requests           | Change proposals; merge = issue closed = work done             |
+| Check runs              | CI signal; failure = new work item enters the queue            |
+| Issue labels            | State machine transitions (e.g. `ci-failure`, `watchdog`)      |
+| Issue comments          | Agent-to-agent and agent-to-human communication                |
 
 Superfield is stateless at the process level. Any instance can resume from the forge alone. Killing and restarting the process loses nothing. The sole local exception is `~/.superfield/config.yaml` (credentials and repo assignments). All orchestration state — including active agent sessions — lives in the forge.
 
@@ -29,14 +29,14 @@ The calypso-agents skill system requires a human (or LLM session) to interpret a
 
 Superfield is a direct replacement for the calypso-agents + shell script stack:
 
-| calypso-agents concept | Superfield equivalent |
-|---|---|
-| Markdown skill (`SKILL.md`) | TypeScript skill module with typed I/O |
-| Shell script (`.agents/scripts/`) | TypeScript function; agent vendor CLIs (e.g. `claude`) spawned as subprocesses |
-| `calypso-auto` orchestrator loop | `superfield start` |
-| `calypso-feature` + `feature-evaluate` | `superfield feature` |
-| Plan rebuild / replan | `superfield plan` |
-| Plan issue (GitHub) | Plan issue (GitHub, same format) |
+| calypso-agents concept                 | Superfield equivalent                                                          |
+| -------------------------------------- | ------------------------------------------------------------------------------ |
+| Markdown skill (`SKILL.md`)            | TypeScript skill module with typed I/O                                         |
+| Shell script (`.agents/scripts/`)      | TypeScript function; agent vendor CLIs (e.g. `claude`) spawned as subprocesses |
+| `calypso-auto` orchestrator loop       | `superfield start`                                                             |
+| `calypso-feature` + `feature-evaluate` | `superfield feature`                                                           |
+| Plan rebuild / replan                  | `superfield plan`                                                              |
+| Plan issue (GitHub)                    | Plan issue (GitHub, same format)                                               |
 
 ## Guiding Principles
 
@@ -54,22 +54,22 @@ The blueprint is sourced from `dot-matrix-labs/calypso-blueprint` (tracked as a 
 
 Each node in the graph carries:
 
-| Field | Values |
-|---|---|
-| `number` | Unique rule ID, e.g. `ARCH-P-001` |
-| `type` | `threat`, `principle`, `design_pattern`, `architecture`, `checklist`, `antipattern` |
-| `description` | Prose statement of the rule |
-| `links` | Typed edges to related nodes (`depends_on`, `mitigates`, `implements`, etc.) |
-| `deprecated` | Whether the rule is still active |
+| Field         | Values                                                                              |
+| ------------- | ----------------------------------------------------------------------------------- |
+| `number`      | Unique rule ID, e.g. `ARCH-P-001`                                                   |
+| `type`        | `threat`, `principle`, `design_pattern`, `architecture`, `checklist`, `antipattern` |
+| `description` | Prose statement of the rule                                                         |
+| `links`       | Typed edges to related nodes (`depends_on`, `mitigates`, `implements`, etc.)        |
+| `deprecated`  | Whether the rule is still active                                                    |
 
 The planning loop uses the blueprint to flag issues and proposed designs that violate active rules. Violations are posted as issue comments referencing the rule ID and description.
 
 ## Libraries
 
-| Concern | Library |
-|---|---|
-| GitHub API | `@octokit/rest` — typed REST client, first-class TS support |
-| Git operations | `isomorphic-git` — pure JS/TS git, no binary dependency |
+| Concern                   | Library                                                        |
+| ------------------------- | -------------------------------------------------------------- |
+| GitHub API                | `@octokit/rest` — typed REST client, first-class TS support    |
+| Git operations            | `isomorphic-git` — pure JS/TS git, no binary dependency        |
 | HTTP interception (tests) | `msw` — intercepts at the `fetch` level, covers both libraries |
 
 ## GitHub Authentication
@@ -77,6 +77,7 @@ The planning loop uses the blueprint to flag issues and proposed designs that vi
 Superfield uses a GitHub App for user authorization, not manual PAT entry, as the default onboarding path.
 
 Why:
+
 - The CLI needs a smooth sign-in flow that does not require users to generate and paste a PAT.
 - GitHub App authorization gives us explicit, repo-scoped permissions that fit the control-plane model.
 - The app can authenticate on behalf of a user after they authorize it, while still keeping access narrowly scoped.
@@ -126,6 +127,7 @@ Understanding the planning model is prerequisite to understanding `start` and `p
 ### Phases
 
 Work is chunked into **phases** — logical groupings of issues that share a delivery goal. A phase has:
+
 - A human-readable name and goal
 - Zero or more prerequisite phases (`depends_on`)
 - Exactly one **dev-scout** issue placed first
@@ -136,6 +138,7 @@ All issues in prerequisite phases must close before the scout of a dependent pha
 ### Dev-scout
 
 The first issue in every phase is a **dev-scout** — a stub-only integration pass. The scout does not implement real behavior. It:
+
 - Creates no-op stubs for all planned entrypoints, seams, and interfaces
 - Compiles and passes tests without changing runtime behavior
 - Documents integration points and risks discovered during the pass
@@ -144,6 +147,7 @@ The first issue in every phase is a **dev-scout** — a stub-only integration pa
 **The scout gates the entire phase.** No non-scout issue in a phase may begin until the scout PR is merged. This is enforced by explicit dependencies in the Plan, not by convention.
 
 **Scout merge qualification.** A scout PR qualifies for merge when:
+
 1. TypeScript compiles with zero errors across the entire monorepo
 2. All pre-existing tests pass (CI green on the existing suite)
 3. New integration test stubs are committed using `it.todo()` / `describe.todo()` — declared but not implemented; CI passes because todo tests do not fail
@@ -163,7 +167,7 @@ interface PlanIssue {
   title: string;
   phase: string;
   kind: "dev-scout" | "feature" | "ci-failure"; // drives dev-loop behaviour; stored in Plan metadata
-  risk: number;           // 1–6
+  risk: number; // 1–6
   dependencies: number[]; // issue numbers that must be CLOSED first
   dependents: number[];
   parallel_safe: boolean; // true if all dependencies are CLOSED
@@ -173,6 +177,7 @@ interface PlanIssue {
 `kind` lives only in the Plan metadata comment, not on the issue body itself — the issue body uses a single unified schema (see Issue Schema).
 
 Validation rules (enforced at plan-write time, not runtime):
+
 - All dependency references exist in the ordered issue list
 - All dependencies appear strictly earlier in the list than the issue depending on them
 - Every non-scout issue in a phase depends on its phase's scout
@@ -183,6 +188,7 @@ Validation rules (enforced at plan-write time, not runtime):
 Development runs in parallel within a phase; merging is strictly sequential.
 
 **Slots:**
+
 - **Slot 1 — primary**: always the highest-priority unmerged Plan issue. The primary agent drives develop → checklist complete → PR open → CI pass → merge without stopping. It does not exit until the PR is merged and the issue is CLOSED.
 - **Slots 2..N — speculative**: feature issues within the current phase whose phase scout is already CLOSED on `main`. Speculative agents drive implementation and checklist to completion then exit without opening a PR. They do not run CI and do not merge.
 
@@ -242,12 +248,12 @@ Each slot spawns one `claude` subprocess. With the default `slotCount: 3` (1 pri
 
 **Recommendations:**
 
-| Scenario | Suggested `slotCount` |
-|---|---|
-| Single repo, developer laptop | 2 (primary only, 1 speculative) |
-| Single repo, CI machine (8+ cores) | 3 (default) |
-| Multi-repo, any machine | 2 per repo; cap total at 4-6 agents |
-| Rate-limit sensitive accounts | 1 (primary only) |
+| Scenario                           | Suggested `slotCount`               |
+| ---------------------------------- | ----------------------------------- |
+| Single repo, developer laptop      | 2 (primary only, 1 speculative)     |
+| Single repo, CI machine (8+ cores) | 3 (default)                         |
+| Multi-repo, any machine            | 2 per repo; cap total at 4-6 agents |
+| Rate-limit sensitive accounts      | 1 (primary only)                    |
 
 **How to configure:**
 
@@ -278,11 +284,11 @@ The documentation loop runs concurrently with the other two loops. It is trigger
 
 Documentation is maintained at three levels, each reflecting the others:
 
-| Level | Artifacts |
-|---|---|
-| Canonical | PRD, architecture docs, top-level README |
-| Module | Package READMEs, public API doc comments |
-| Inline | Function and type doc comments in source files |
+| Level     | Artifacts                                      |
+| --------- | ---------------------------------------------- |
+| Canonical | PRD, architecture docs, top-level README       |
+| Module    | Package READMEs, public API doc comments       |
+| Inline    | Function and type doc comments in source files |
 
 A change at any level can create inconsistencies at the others. The loop detects and resolves those inconsistencies.
 
@@ -355,10 +361,10 @@ There is one unified `IssueBody` type for all issues — feature, scout, and ci-
 ```typescript
 interface IssueBody {
   title: string;
-  phase: string;            // which phase this issue belongs to
-  motivation: string;       // why this work exists
-  features: string[];       // checklist items — what must be built/changed
-  test_plan: string[];      // checklist items — how it will be verified
+  phase: string; // which phase this issue belongs to
+  motivation: string; // why this work exists
+  features: string[]; // checklist items — what must be built/changed
+  test_plan: string[]; // checklist items — how it will be verified
   canonical_docs: string[]; // links to relevant blueprint rules, PRD sections, prior art
 }
 ```
@@ -367,18 +373,23 @@ Rendered issue body:
 
 ```markdown
 ## Phase
+
 <phase>
 
 ## Motivation
+
 <motivation>
 
 ## Canonical docs
+
 - <url>
 
 ## Features
+
 - [ ] ...
 
 ## Test Plan
+
 - [ ] ...
 ```
 
@@ -425,7 +436,9 @@ packages/core/prompts/
 Every prompt builder is a function with this shape:
 
 ```typescript
-export interface XxxContext { /* typed inputs */ }
+export interface XxxContext {
+  /* typed inputs */
+}
 export function buildXxxPrompt(ctx: XxxContext): string;
 ```
 
@@ -433,18 +446,18 @@ The returned string is the complete prompt passed to `claude` via `spawnAgent`. 
 
 ### Mapping to workflow
 
-| Trigger | Prompt builder | Loop |
-|---|---|---|
-| Issue audit (schema check) | `buildIssueAuditPrompt` | Planning |
-| Blueprint conformance check | `buildBlueprintConformancePrompt` | Planning |
-| Dev-scout claimed | `buildDevScoutPrompt` | Dev |
-| Feature issue claimed | `buildDevelopIssuePrompt` (role: primary or speculative) | Dev |
-| `ci-failure` issue claimed | `buildCIFailurePrompt` | Dev |
-| Doc coverage scan | `buildDocCoveragePrompt` | Doc |
-| Canonical doc sync | `buildDocCanonicalSyncPrompt` | Doc |
-| Doc consistency check | `buildDocConsistencyPrompt` | Doc |
-| `feature` command | `buildFeatureEvaluatePrompt` | (one-shot) |
-| `plan` command | `buildReplanEvaluatePrompt` | (one-shot) |
+| Trigger                     | Prompt builder                                           | Loop       |
+| --------------------------- | -------------------------------------------------------- | ---------- |
+| Issue audit (schema check)  | `buildIssueAuditPrompt`                                  | Planning   |
+| Blueprint conformance check | `buildBlueprintConformancePrompt`                        | Planning   |
+| Dev-scout claimed           | `buildDevScoutPrompt`                                    | Dev        |
+| Feature issue claimed       | `buildDevelopIssuePrompt` (role: primary or speculative) | Dev        |
+| `ci-failure` issue claimed  | `buildCIFailurePrompt`                                   | Dev        |
+| Doc coverage scan           | `buildDocCoveragePrompt`                                 | Doc        |
+| Canonical doc sync          | `buildDocCanonicalSyncPrompt`                            | Doc        |
+| Doc consistency check       | `buildDocConsistencyPrompt`                              | Doc        |
+| `feature` command           | `buildFeatureEvaluatePrompt`                             | (one-shot) |
+| `plan` command              | `buildReplanEvaluatePrompt`                              | (one-shot) |
 
 The orchestrator never assembles prompt strings inline — it always calls a typed builder.
 
@@ -477,6 +490,7 @@ A `ci-failure` entry looks like:
 ```
 
 Rules:
+
 - Strict total order — no checkboxes, no step numbers, no parallel group annotations
 - `ci-failure` entries appear at the top, above all phase blocks
 - Scout always first within its phase
@@ -543,49 +557,49 @@ No tests against real GitHub in Phase 1.
 
 ### Coverage Targets
 
-| Scenario | Layer |
-|---|---|
-| Planning loop: no failures — nothing created | Unit |
-| Planning loop: check failed — issue created, Plan updated | Integration |
-| Planning loop: duplicate failure — no second issue | Unit |
-| Planning loop: non-conforming issue — label + comment added | Unit |
-| Planning loop: issue missing from Plan — appended | Unit |
-| `plan`: all issues present in Plan body | Integration |
-| `plan`: missing issues appended in phase order | Unit |
-| `feature`: duplicate detected — user warned, no issue created | Unit |
-| `feature`: new issue created and appended to Plan | Integration |
-| Plan absent — created on first write | Unit |
-| Multiple repos, each with own assigned user | Unit |
-| `superfield github add` writes config correctly | Unit |
-| Octokit: endpoint, auth header, request shape | Unit |
-| `isomorphic-git`: fetch, HEAD resolution, branch lookup | Unit |
-| Planning loop: blueprint violation — comment posted with rule ID | Unit |
-| Dev loop: primary selected from top of Plan | Unit |
-| Dev loop: speculative slots stay empty until scout merged | Unit |
-| Dev loop: agent spawned with correct prompt per role | Unit |
-| Agent session: upsert creates comment on first claim | Unit |
-| Agent session: upsert updates existing comment on resume | Unit |
-| Agent session: delete removes comment on issue close | Unit |
-| Agent session: stale session detected via deadman timeout | Unit |
+| Scenario                                                         | Layer       |
+| ---------------------------------------------------------------- | ----------- |
+| Planning loop: no failures — nothing created                     | Unit        |
+| Planning loop: check failed — issue created, Plan updated        | Integration |
+| Planning loop: duplicate failure — no second issue               | Unit        |
+| Planning loop: non-conforming issue — label + comment added      | Unit        |
+| Planning loop: issue missing from Plan — appended                | Unit        |
+| `plan`: all issues present in Plan body                          | Integration |
+| `plan`: missing issues appended in phase order                   | Unit        |
+| `feature`: duplicate detected — user warned, no issue created    | Unit        |
+| `feature`: new issue created and appended to Plan                | Integration |
+| Plan absent — created on first write                             | Unit        |
+| Multiple repos, each with own assigned user                      | Unit        |
+| `superfield github add` writes config correctly                  | Unit        |
+| Octokit: endpoint, auth header, request shape                    | Unit        |
+| `isomorphic-git`: fetch, HEAD resolution, branch lookup          | Unit        |
+| Planning loop: blueprint violation — comment posted with rule ID | Unit        |
+| Dev loop: primary selected from top of Plan                      | Unit        |
+| Dev loop: speculative slots stay empty until scout merged        | Unit        |
+| Dev loop: agent spawned with correct prompt per role             | Unit        |
+| Agent session: upsert creates comment on first claim             | Unit        |
+| Agent session: upsert updates existing comment on resume         | Unit        |
+| Agent session: delete removes comment on issue close             | Unit        |
+| Agent session: stale session detected via deadman timeout        | Unit        |
 | Scout merge qualification: compile + existing tests + todo stubs | Integration |
-| Documentation loop: doc-only change does not trigger CI | Unit |
+| Documentation loop: doc-only change does not trigger CI          | Unit        |
 
 ---
 
 ## Roadmap
 
-| Phase | Scope |
-|---|---|
-| 1 | Foundation: config, GitHub client, git client, MSW test harness, golden fixtures, `github add`, `github forget` |
-| 2 | Planning loop — CI watchdog: detect failed checks on `main`, create deduplicated `ci-failure` issues, insert at top of Plan |
-| 3 | Planning loop — issue audit and Plan coverage: schema conformance scan, append missing issues to Plan |
-| 4 | Planning loop — blueprint conformance: load `blueprint/rules/graph.yaml`, evaluate open issues against active rules, post advisory comments |
-| 5 | Agent infrastructure: `claude` CLI spawner, prompt builders (dev-scout, feature, ci-failure), forge-stored sessions with deadman switch |
-| 6 | `plan` command — LLM-driven phase grouping, scout creation, Plan rendering with `<!-- superfield: -->` metadata |
-| 7 | Dev loop — primary agent only: select top of Plan, prep worktree, run agent through 7-stage lifecycle to merge |
-| 8 | Dev loop — speculative slots: scout-gated parallel feature work (slots 2..N) |
-| 9 | `feature` command — interactive issue creation with PRD/duplicate evaluation |
-| 10 | Documentation loop — coverage scan, canonical sync, consistency check, doc PR creation |
+| Phase | Scope                                                                                                                                       |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Foundation: config, GitHub client, git client, MSW test harness, golden fixtures, `github add`, `github forget`                             |
+| 2     | Planning loop — CI watchdog: detect failed checks on `main`, create deduplicated `ci-failure` issues, insert at top of Plan                 |
+| 3     | Planning loop — issue audit and Plan coverage: schema conformance scan, append missing issues to Plan                                       |
+| 4     | Planning loop — blueprint conformance: load `blueprint/rules/graph.yaml`, evaluate open issues against active rules, post advisory comments |
+| 5     | Agent infrastructure: `claude` CLI spawner, prompt builders (dev-scout, feature, ci-failure), forge-stored sessions with deadman switch     |
+| 6     | `plan` command — LLM-driven phase grouping, scout creation, Plan rendering with `<!-- superfield: -->` metadata                             |
+| 7     | Dev loop — primary agent only: select top of Plan, prep worktree, run agent through 7-stage lifecycle to merge                              |
+| 8     | Dev loop — speculative slots: scout-gated parallel feature work (slots 2..N)                                                                |
+| 9     | `feature` command — interactive issue creation with PRD/duplicate evaluation                                                                |
+| 10    | Documentation loop — coverage scan, canonical sync, consistency check, doc PR creation                                                      |
 
 Phases describe build order. Each phase delivers a working slice and is testable in isolation.
 

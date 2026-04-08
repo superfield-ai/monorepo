@@ -1,4 +1,4 @@
-import type { GitHubClientPort as GitHubClient } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient } from "@superfield/github";
 import {
   parsePlan,
   serializePlan,
@@ -6,7 +6,7 @@ import {
   appendToPhase,
   type Plan,
   type PlanIssueMetadata,
-} from '../plan.ts';
+} from "../plan.ts";
 
 export interface PlanCoverageResult {
   /** Issue numbers that were appended to the Plan during this tick. */
@@ -37,10 +37,10 @@ export async function runPlanCoverage(
   // Exclude the Plan issue itself (label: plan) and ci-failure issues
   // (the watchdog owns those)
   const trackable = allIssues.filter(
-    (i) => !i.labels.includes('plan') && !i.labels.includes('ci-failure'),
+    (i) => !i.labels.includes("plan") && !i.labels.includes("ci-failure"),
   );
 
-  const plans = await client.listIssues(owner, repo, ['plan']);
+  const plans = await client.listIssues(owner, repo, ["plan"]);
   let plan: Plan;
   let planCreated = false;
 
@@ -48,7 +48,7 @@ export async function runPlanCoverage(
     plan = { ciFailures: [], phases: [] };
     planCreated = true;
   } else {
-    plan = parsePlan(plans[0]!.body ?? '');
+    plan = parsePlan(plans[0]!.body ?? "");
   }
 
   const appended: number[] = [];
@@ -70,9 +70,9 @@ export async function runPlanCoverage(
       await client.createIssue({
         owner,
         repo,
-        title: 'Plan',
+        title: "Plan",
         body,
-        labels: ['plan'],
+        labels: ["plan"],
       });
     } else {
       await client.updateIssueBody({
@@ -92,12 +92,12 @@ function issueToPlanEntry(issue: {
   title: string;
   labels: string[];
 }): PlanIssueMetadata {
-  const isScout = issue.labels.includes('dev-scout');
+  const isScout = issue.labels.includes("dev-scout");
   return {
     number: issue.number,
     title: issue.title,
-    phase: 'Backlog',
-    kind: isScout ? 'dev-scout' : 'feature',
+    phase: "Backlog",
+    kind: isScout ? "dev-scout" : "feature",
     risk: 3,
     dependencies: [],
     parallel_safe: true,

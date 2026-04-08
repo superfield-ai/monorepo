@@ -1,11 +1,11 @@
-import type { Issue } from '@superfield/github';
+import type { Issue } from "@superfield/github";
 import {
   projectContextFragment,
   commitStandardsFragment,
   worktreeIsolationFragment,
   blueprintReferenceFragment,
   joinSections,
-} from './fragments/index.ts';
+} from "./fragments/index.ts";
 
 export interface DevScoutContext {
   scoutIssue: Issue;
@@ -32,7 +32,7 @@ export interface DevScoutContext {
 export function buildDevScoutPrompt(ctx: DevScoutContext): string {
   const featureList = ctx.featureIssues
     .map((i) => `- #${i.number}: ${i.title}`)
-    .join('\n');
+    .join("\n");
 
   return joinSections(
     projectContextFragment(),

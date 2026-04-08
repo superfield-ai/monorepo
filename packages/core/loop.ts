@@ -1,13 +1,16 @@
-import type { Config } from './config.ts';
-import { GitHubClient } from '@superfield/github';
-import type { GitHubClientPort } from '@superfield/github';
-import { hasFailedChecks, runWatchdog } from './watchdog.ts';
-import { runPlanCoverage, type PlanCoverageResult } from './steps/plan-coverage.ts';
-import { runIssueAudit, type IssueAuditResult } from './steps/issue-audit.ts';
+import type { Config } from "./config.ts";
+import { GitHubClient } from "@superfield/github";
+import type { GitHubClientPort } from "@superfield/github";
+import { hasFailedChecks, runWatchdog } from "./watchdog.ts";
+import {
+  runPlanCoverage,
+  type PlanCoverageResult,
+} from "./steps/plan-coverage.ts";
+import { runIssueAudit, type IssueAuditResult } from "./steps/issue-audit.ts";
 import {
   runBlueprintConformance,
   type BlueprintConformanceResult,
-} from './steps/blueprint-conformance.ts';
+} from "./steps/blueprint-conformance.ts";
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -27,9 +30,13 @@ export async function runPlanningLoop(config: Config): Promise<void> {
   while (true) {
     await Promise.all(
       config.repositories.map((repoConfig) => {
-        const user = config.users.find((u) => u.handle === repoConfig.assignedUser);
+        const user = config.users.find(
+          (u) => u.handle === repoConfig.assignedUser,
+        );
         if (!user) {
-          console.error(`No user configured for ${repoConfig.owner}/${repoConfig.repo}`);
+          console.error(
+            `No user configured for ${repoConfig.owner}/${repoConfig.repo}`,
+          );
           return Promise.resolve();
         }
         const client = new GitHubClient(user.token);
@@ -96,20 +103,22 @@ async function tickRepository(
     const result = await runWatchdog(client, owner, repo, sha, run);
     if (result.issueCreated) {
       watchdogIssuesCreated.push(result.issue!.number);
-      console.log(`[${owner}/${repo}] Created issue #${result.issue!.number}: ${result.issue!.title}`);
+      console.log(
+        `[${owner}/${repo}] Created issue #${result.issue!.number}: ${result.issue!.title}`,
+      );
     } else if (result.skipped) {
       console.log(`[${owner}/${repo}] Skipped ${run.name}: ${result.reason}`);
     }
   }
 
   // Step 2: Issue audit — validate open issues against the IssueBody schema
-  let issueAuditOutcome: TickRepositoryResult['issueAudit'];
+  let issueAuditOutcome: TickRepositoryResult["issueAudit"];
   try {
     const audit = await auditFn(client, owner, repo, { cwd: process.cwd() });
     issueAuditOutcome = { ok: true, nonConformant: audit.nonConformant };
     if (audit.nonConformant.length > 0) {
       console.log(
-        `[${owner}/${repo}] Issue audit: ${audit.nonConformant.length} non-conformant issue(s): ${audit.nonConformant.join(', ')}`,
+        `[${owner}/${repo}] Issue audit: ${audit.nonConformant.length} non-conformant issue(s): ${audit.nonConformant.join(", ")}`,
       );
     }
   } catch (err) {
@@ -119,16 +128,20 @@ async function tickRepository(
   }
 
   // Step 3: Plan coverage — append open issues not yet referenced in Plan
-  let planCoverageOutcome: TickRepositoryResult['planCoverage'];
+  let planCoverageOutcome: TickRepositoryResult["planCoverage"];
   try {
     const coverage = await coverageFn(client, owner, repo);
-    planCoverageOutcome = { ok: true, appended: coverage.appended, planCreated: coverage.planCreated };
+    planCoverageOutcome = {
+      ok: true,
+      appended: coverage.appended,
+      planCreated: coverage.planCreated,
+    };
     if (coverage.planCreated) {
       console.log(`[${owner}/${repo}] Created Plan tracking issue`);
     }
     if (coverage.appended.length > 0) {
       console.log(
-        `[${owner}/${repo}] Appended ${coverage.appended.length} issues to Plan: ${coverage.appended.join(', ')}`,
+        `[${owner}/${repo}] Appended ${coverage.appended.length} issues to Plan: ${coverage.appended.join(", ")}`,
       );
     }
   } catch (err) {
@@ -138,13 +151,18 @@ async function tickRepository(
   }
 
   // Step 4: Blueprint conformance — advisory check of issues against blueprint rules
-  let blueprintConformanceOutcome: TickRepositoryResult['blueprintConformance'];
+  let blueprintConformanceOutcome: TickRepositoryResult["blueprintConformance"];
   try {
-    const conformance = await blueprintFn(client, owner, repo, { cwd: process.cwd() });
-    blueprintConformanceOutcome = { ok: true, issuesWithViolations: conformance.issuesWithViolations };
+    const conformance = await blueprintFn(client, owner, repo, {
+      cwd: process.cwd(),
+    });
+    blueprintConformanceOutcome = {
+      ok: true,
+      issuesWithViolations: conformance.issuesWithViolations,
+    };
     if (conformance.issuesWithViolations.length > 0) {
       console.log(
-        `[${owner}/${repo}] Blueprint conformance: violations on issue(s) ${conformance.issuesWithViolations.join(', ')}`,
+        `[${owner}/${repo}] Blueprint conformance: violations on issue(s) ${conformance.issuesWithViolations.join(", ")}`,
       );
     }
   } catch (err) {

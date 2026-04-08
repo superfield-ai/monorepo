@@ -7,11 +7,11 @@ keeps the codebase well-tested without paying that price on every commit.
 
 ## Three layers
 
-| Layer | Speed | Determinism | Cost | Coverage | When it runs |
-|---|---|---|---|---|---|
-| 1. Unit + injected fake | ms | total | $0 | Per-function | Every PR |
-| 2. Integration with replay fixtures | sub-second | total | $0 | Cross-module | Every PR |
-| 3. Live smoke against `claude` | minutes | low | real $ | Contract drift | Nightly / pre-release |
+| Layer                               | Speed      | Determinism | Cost   | Coverage       | When it runs          |
+| ----------------------------------- | ---------- | ----------- | ------ | -------------- | --------------------- |
+| 1. Unit + injected fake             | ms         | total       | $0     | Per-function   | Every PR              |
+| 2. Integration with replay fixtures | sub-second | total       | $0     | Cross-module   | Every PR              |
+| 3. Live smoke against `claude`      | minutes    | low         | real $ | Contract drift | Nightly / pre-release |
 
 ### Layer 1 — Unit tests with injected fake spawn
 
@@ -30,10 +30,10 @@ real `claude` CLI flag drift.
 **Helper:** `packages/core/tests/helpers/fake-spawn.ts`
 
 ```typescript
-import { fakeSpawn } from './helpers/fake-spawn.ts';
+import { fakeSpawn } from "./helpers/fake-spawn.ts";
 
 const spawn = fakeSpawn({ output: '{"missing_docs": []}' });
-const result = await runIssueAudit(client, 'o', 'r', { spawn });
+const result = await runIssueAudit(client, "o", "r", { spawn });
 ```
 
 ### Layer 2 — Integration tests with recorded fixtures
@@ -50,10 +50,10 @@ truth from the real model at the moment of capture.
 **Helper:** `packages/core/tests/helpers/replay.ts`
 
 ```typescript
-import { replaySpawn } from './helpers/replay.ts';
+import { replaySpawn } from "./helpers/replay.ts";
 
-const spawn = await replaySpawn('issue-audit-conformant');
-const result = await runIssueAudit(client, 'o', 'r', { spawn });
+const spawn = await replaySpawn("issue-audit-conformant");
+const result = await runIssueAudit(client, "o", "r", { spawn });
 ```
 
 `replaySpawn(name)` reads `tests/fixtures/claude/<name>.json` and returns a
@@ -63,6 +63,7 @@ spawn function that emits its `output` field.
 runs the real `claude` CLI once with the appropriate prompt, captures the
 JSON, and writes it to `tests/fixtures/claude/<task>.json`. Recording requires
 real Claude credentials. Refresh fixtures only when:
+
 - A prompt builder changes (new fixture name reflects the new prompt)
 - Claude's JSON output format changes (rare)
 - The task contract changes (e.g., new field added)
@@ -76,13 +77,13 @@ manually before a release.
 **Helper:** `packages/core/tests/helpers/live.ts`
 
 ```typescript
-import { isLiveMode, skipUnlessLive } from './helpers/live.ts';
+import { isLiveMode, skipUnlessLive } from "./helpers/live.ts";
 
-describe('runIssueAudit live smoke', () => {
+describe("runIssueAudit live smoke", () => {
   skipUnlessLive();
-  it('produces parseable JSON for a real issue', async () => {
+  it("produces parseable JSON for a real issue", async () => {
     // Uses real spawnAgent — no override
-    const result = await runIssueAudit(client, 'o', 'r', {});
+    const result = await runIssueAudit(client, "o", "r", {});
     expect(result.audited).toBeGreaterThan(0);
   });
 });

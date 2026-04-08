@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it } from "vitest";
 
 /**
  * Layer 3 helper: gate live `claude` smoke tests behind the
@@ -6,7 +6,10 @@ import { describe, it } from 'vitest';
  */
 
 export function isLiveMode(): boolean {
-  return Boolean(process.env.SUPERFIELD_LIVE_CLAUDE && process.env.SUPERFIELD_LIVE_CLAUDE !== '');
+  return Boolean(
+    process.env.SUPERFIELD_LIVE_CLAUDE &&
+    process.env.SUPERFIELD_LIVE_CLAUDE !== "",
+  );
 }
 
 /**
@@ -18,5 +21,7 @@ export function isLiveMode(): boolean {
  * with a different surface than `describe`. Both have call signatures
  * compatible with `(name, fn) => void`, which is all consumers need.
  */
-export const liveDescribe = (isLiveMode() ? describe : describe.skip) as typeof describe;
+export const liveDescribe = (
+  isLiveMode() ? describe : describe.skip
+) as typeof describe;
 export const liveIt = (isLiveMode() ? it : it.skip) as typeof it;

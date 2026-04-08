@@ -1,4 +1,4 @@
-import { spawnAgent, type AgentOpts, type AgentResult } from './agent.ts';
+import { spawnAgent, type AgentOpts, type AgentResult } from "./agent.ts";
 
 /**
  * Wraps `spawnAgent` for one-shot LLM tasks that emit structured JSON.
@@ -91,7 +91,7 @@ export function extractJson(text: string): string | null {
 
   // 2. Outside a fence, the trimmed text MUST be a single top-level object
   const trimmed = text.trim();
-  if (trimmed.length === 0 || trimmed[0] !== '{') return null;
+  if (trimmed.length === 0 || trimmed[0] !== "{") return null;
 
   // Walk balanced braces from index 0 — must consume the entire trimmed text
   let depth = 0;
@@ -105,7 +105,7 @@ export function extractJson(text: string): string | null {
       escape = false;
       continue;
     }
-    if (c === '\\') {
+    if (c === "\\") {
       escape = true;
       continue;
     }
@@ -114,9 +114,9 @@ export function extractJson(text: string): string | null {
       continue;
     }
     if (inString) continue;
-    if (c === '{') {
+    if (c === "{") {
       depth++;
-    } else if (c === '}') {
+    } else if (c === "}") {
       depth--;
       if (depth === 0) {
         endIdx = i;

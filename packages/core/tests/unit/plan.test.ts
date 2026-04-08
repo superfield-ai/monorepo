@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect } from "vitest";
 import {
   parsePlan,
   serializePlan,
@@ -8,13 +8,13 @@ import {
   planIssueOrder,
   type Plan,
   type PlanIssueMetadata,
-} from '../../plan.ts';
+} from "../../plan.ts";
 
 const scoutEntry: PlanIssueMetadata = {
   number: 196,
-  title: 'stub identity integration seams',
-  phase: 'Identity foundation',
-  kind: 'dev-scout',
+  title: "stub identity integration seams",
+  phase: "Identity foundation",
+  kind: "dev-scout",
   risk: 5,
   dependencies: [],
   parallel_safe: true,
@@ -22,9 +22,9 @@ const scoutEntry: PlanIssueMetadata = {
 
 const featureEntry: PlanIssueMetadata = {
   number: 201,
-  title: 'feat: build user authentication',
-  phase: 'Identity foundation',
-  kind: 'feature',
+  title: "feat: build user authentication",
+  phase: "Identity foundation",
+  kind: "feature",
   risk: 4,
   dependencies: [196],
   parallel_safe: false,
@@ -32,20 +32,20 @@ const featureEntry: PlanIssueMetadata = {
 
 const ciFailureEntry: PlanIssueMetadata = {
   number: 999,
-  title: 'fix(core): test:unit failed on main @ abc1234',
-  phase: 'watchdog',
-  kind: 'ci-failure',
+  title: "fix(core): test:unit failed on main @ abc1234",
+  phase: "watchdog",
+  kind: "ci-failure",
   risk: 6,
   dependencies: [],
   parallel_safe: true,
 };
 
-describe('parsePlan', () => {
-  it('parses an empty body as an empty plan', () => {
-    expect(parsePlan('')).toEqual({ ciFailures: [], phases: [] });
+describe("parsePlan", () => {
+  it("parses an empty body as an empty plan", () => {
+    expect(parsePlan("")).toEqual({ ciFailures: [], phases: [] });
   });
 
-  it('parses a phase with a scout and a feature', () => {
+  it("parses a phase with a scout and a feature", () => {
     const body = `## Phase: Identity foundation
 
 Goal: Create the auth and session seams.
@@ -60,14 +60,14 @@ Scout gate: #196
     const plan = parsePlan(body);
     expect(plan.ciFailures).toEqual([]);
     expect(plan.phases).toHaveLength(1);
-    expect(plan.phases[0]?.name).toBe('Identity foundation');
-    expect(plan.phases[0]?.goal).toBe('Create the auth and session seams.');
+    expect(plan.phases[0]?.name).toBe("Identity foundation");
+    expect(plan.phases[0]?.goal).toBe("Create the auth and session seams.");
     expect(plan.phases[0]?.dependsOn).toEqual([]);
     expect(plan.phases[0]?.scoutGate).toBe(196);
     expect(plan.phases[0]?.issues).toEqual([scoutEntry, featureEntry]);
   });
 
-  it('parses top-of-plan ci-failure entries before phase blocks', () => {
+  it("parses top-of-plan ci-failure entries before phase blocks", () => {
     const body = `- #999 — fix(core): test:unit failed on main @ abc1234 [risk: 6]
   <!-- superfield: ${JSON.stringify(ciFailureEntry)} -->
 
@@ -86,7 +86,7 @@ Scout gate: #196
     expect(plan.phases[0]?.issues).toEqual([scoutEntry]);
   });
 
-  it('parses dependsOn list', () => {
+  it("parses dependsOn list", () => {
     const body = `## Phase: Later
 
 Goal: after foundation.
@@ -95,10 +95,13 @@ Scout gate: #300
 
 `;
     const plan = parsePlan(body);
-    expect(plan.phases[0]?.dependsOn).toEqual(['Identity foundation', 'Configuration']);
+    expect(plan.phases[0]?.dependsOn).toEqual([
+      "Identity foundation",
+      "Configuration",
+    ]);
   });
 
-  it('skips orphan entry lines without metadata', () => {
+  it("skips orphan entry lines without metadata", () => {
     const body = `## Phase: P
 
 Goal: g.
@@ -114,14 +117,14 @@ Scout gate: #1
   });
 });
 
-describe('serializePlan', () => {
-  it('round-trips a plan with ci-failures and a phase', () => {
+describe("serializePlan", () => {
+  it("round-trips a plan with ci-failures and a phase", () => {
     const plan: Plan = {
       ciFailures: [ciFailureEntry],
       phases: [
         {
-          name: 'Identity foundation',
-          goal: 'Create the auth and session seams.',
+          name: "Identity foundation",
+          goal: "Create the auth and session seams.",
           dependsOn: [],
           scoutGate: 196,
           issues: [scoutEntry, featureEntry],
@@ -136,91 +139,111 @@ describe('serializePlan', () => {
     const plan: Plan = {
       ciFailures: [],
       phases: [
-        { name: 'P', goal: 'g.', dependsOn: [], scoutGate: 1, issues: [scoutEntry] },
+        {
+          name: "P",
+          goal: "g.",
+          dependsOn: [],
+          scoutGate: 1,
+          issues: [scoutEntry],
+        },
       ],
     };
-    expect(serializePlan(plan)).toContain('Depends on phases: None.');
+    expect(serializePlan(plan)).toContain("Depends on phases: None.");
   });
 
-  it('renders ci-failure entries before phase blocks', () => {
+  it("renders ci-failure entries before phase blocks", () => {
     const plan: Plan = {
       ciFailures: [ciFailureEntry],
       phases: [
-        { name: 'P', goal: 'g.', dependsOn: [], scoutGate: 196, issues: [scoutEntry] },
-      ],
-    };
-    const body = serializePlan(plan);
-    const ciIdx = body.indexOf('#999');
-    const phaseIdx = body.indexOf('## Phase:');
-    expect(ciIdx).toBeGreaterThanOrEqual(0);
-    expect(phaseIdx).toBeGreaterThan(ciIdx);
-  });
-});
-
-describe('insertCIFailureAtTop', () => {
-  it('prepends a ci-failure to an empty plan', () => {
-    const plan: Plan = { ciFailures: [], phases: [] };
-    const updated = insertCIFailureAtTop(plan, ciFailureEntry);
-    expect(updated.ciFailures).toEqual([ciFailureEntry]);
-  });
-
-  it('dedupes by issue number and puts new entry first', () => {
-    const older = { ...ciFailureEntry, title: 'older title' };
-    const plan: Plan = { ciFailures: [older], phases: [] };
-    const updated = insertCIFailureAtTop(plan, ciFailureEntry);
-    expect(updated.ciFailures).toEqual([ciFailureEntry]);
-  });
-
-  it('keeps other ci-failures in order', () => {
-    const other: PlanIssueMetadata = { ...ciFailureEntry, number: 1000 };
-    const plan: Plan = { ciFailures: [other], phases: [] };
-    const updated = insertCIFailureAtTop(plan, ciFailureEntry);
-    expect(updated.ciFailures).toEqual([ciFailureEntry, other]);
-  });
-
-  it('rejects non-ci-failure kinds', () => {
-    const plan: Plan = { ciFailures: [], phases: [] };
-    expect(() => insertCIFailureAtTop(plan, scoutEntry)).toThrow();
-  });
-});
-
-describe('appendToPhase', () => {
-  it('creates a new phase if it does not exist', () => {
-    const plan: Plan = { ciFailures: [], phases: [] };
-    const updated = appendToPhase(plan, 'Identity foundation', scoutEntry);
-    expect(updated.phases).toHaveLength(1);
-    expect(updated.phases[0]?.issues).toEqual([scoutEntry]);
-  });
-
-  it('appends to an existing phase', () => {
-    const plan: Plan = {
-      ciFailures: [],
-      phases: [
         {
-          name: 'Identity foundation',
-          goal: '',
+          name: "P",
+          goal: "g.",
           dependsOn: [],
           scoutGate: 196,
           issues: [scoutEntry],
         },
       ],
     };
-    const updated = appendToPhase(plan, 'Identity foundation', featureEntry);
+    const body = serializePlan(plan);
+    const ciIdx = body.indexOf("#999");
+    const phaseIdx = body.indexOf("## Phase:");
+    expect(ciIdx).toBeGreaterThanOrEqual(0);
+    expect(phaseIdx).toBeGreaterThan(ciIdx);
+  });
+});
+
+describe("insertCIFailureAtTop", () => {
+  it("prepends a ci-failure to an empty plan", () => {
+    const plan: Plan = { ciFailures: [], phases: [] };
+    const updated = insertCIFailureAtTop(plan, ciFailureEntry);
+    expect(updated.ciFailures).toEqual([ciFailureEntry]);
+  });
+
+  it("dedupes by issue number and puts new entry first", () => {
+    const older = { ...ciFailureEntry, title: "older title" };
+    const plan: Plan = { ciFailures: [older], phases: [] };
+    const updated = insertCIFailureAtTop(plan, ciFailureEntry);
+    expect(updated.ciFailures).toEqual([ciFailureEntry]);
+  });
+
+  it("keeps other ci-failures in order", () => {
+    const other: PlanIssueMetadata = { ...ciFailureEntry, number: 1000 };
+    const plan: Plan = { ciFailures: [other], phases: [] };
+    const updated = insertCIFailureAtTop(plan, ciFailureEntry);
+    expect(updated.ciFailures).toEqual([ciFailureEntry, other]);
+  });
+
+  it("rejects non-ci-failure kinds", () => {
+    const plan: Plan = { ciFailures: [], phases: [] };
+    expect(() => insertCIFailureAtTop(plan, scoutEntry)).toThrow();
+  });
+});
+
+describe("appendToPhase", () => {
+  it("creates a new phase if it does not exist", () => {
+    const plan: Plan = { ciFailures: [], phases: [] };
+    const updated = appendToPhase(plan, "Identity foundation", scoutEntry);
+    expect(updated.phases).toHaveLength(1);
+    expect(updated.phases[0]?.issues).toEqual([scoutEntry]);
+  });
+
+  it("appends to an existing phase", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "Identity foundation",
+          goal: "",
+          dependsOn: [],
+          scoutGate: 196,
+          issues: [scoutEntry],
+        },
+      ],
+    };
+    const updated = appendToPhase(plan, "Identity foundation", featureEntry);
     expect(updated.phases[0]?.issues).toEqual([scoutEntry, featureEntry]);
   });
 });
 
-describe('planContainsIssue', () => {
-  it('returns true for issues in a phase', () => {
+describe("planContainsIssue", () => {
+  it("returns true for issues in a phase", () => {
     const plan: Plan = {
       ciFailures: [],
-      phases: [{ name: 'P', goal: '', dependsOn: [], scoutGate: 1, issues: [scoutEntry] }],
+      phases: [
+        {
+          name: "P",
+          goal: "",
+          dependsOn: [],
+          scoutGate: 1,
+          issues: [scoutEntry],
+        },
+      ],
     };
     expect(planContainsIssue(plan, 196)).toBe(true);
     expect(planContainsIssue(plan, 999)).toBe(false);
   });
 
-  it('returns true for top-of-plan ci-failures', () => {
+  it("returns true for top-of-plan ci-failures", () => {
     const plan: Plan = { ciFailures: [ciFailureEntry], phases: [] };
     expect(planContainsIssue(plan, 999)).toBe(true);
   });
@@ -232,7 +255,7 @@ describe('planContainsIssue', () => {
 
 /** Generates a PlanIssueMetadata with deterministic values from an integer seed. */
 function genEntry(seed: number, phase: string): PlanIssueMetadata {
-  const kinds = ['feature', 'dev-scout', 'ci-failure'] as const;
+  const kinds = ["feature", "dev-scout", "ci-failure"] as const;
   return {
     number: 100 + seed,
     title: `feat: item ${seed}`,
@@ -245,14 +268,30 @@ function genEntry(seed: number, phase: string): PlanIssueMetadata {
 }
 
 /** Generates a Plan with `phaseCount` phases, each containing `issuesPerPhase` issues. */
-function genPlan(phaseCount: number, issuesPerPhase: number, hasCIFailures: boolean): Plan {
+function genPlan(
+  phaseCount: number,
+  issuesPerPhase: number,
+  hasCIFailures: boolean,
+): Plan {
   let seed = 0;
   const ciFailures: PlanIssueMetadata[] = hasCIFailures
-    ? [{ number: 999, title: 'fix(ci): test failed', phase: 'watchdog', kind: 'ci-failure', risk: 8, dependencies: [], parallel_safe: true }]
+    ? [
+        {
+          number: 999,
+          title: "fix(ci): test failed",
+          phase: "watchdog",
+          kind: "ci-failure",
+          risk: 8,
+          dependencies: [],
+          parallel_safe: true,
+        },
+      ]
     : [];
   const phases = Array.from({ length: phaseCount }, (_, pi) => {
     const phaseName = `Phase ${pi + 1}`;
-    const issues = Array.from({ length: issuesPerPhase }, () => genEntry(seed++, phaseName));
+    const issues = Array.from({ length: issuesPerPhase }, () =>
+      genEntry(seed++, phaseName),
+    );
     return {
       name: phaseName,
       goal: `Goal of phase ${pi + 1}`,
@@ -264,18 +303,49 @@ function genPlan(phaseCount: number, issuesPerPhase: number, hasCIFailures: bool
   return { ciFailures, phases };
 }
 
-describe('parsePlan + serializePlan — round-trip property', () => {
+describe("parsePlan + serializePlan — round-trip property", () => {
   const variants: Array<[string, Plan]> = [
-    ['empty plan', { ciFailures: [], phases: [] }],
-    ['single phase, one issue', genPlan(1, 1, false)],
-    ['single phase, three issues', genPlan(1, 3, false)],
-    ['two phases, two issues each', genPlan(2, 2, false)],
-    ['ci-failures only, no phases', { ciFailures: [ciFailureEntry], phases: [] }],
-    ['ci-failures + two phases', genPlan(2, 2, true)],
-    ['three phases, five issues each', genPlan(3, 5, false)],
-    ['phase with null scoutGate', { ciFailures: [], phases: [{ name: 'P', goal: 'g', dependsOn: [], scoutGate: null, issues: [featureEntry] }] }],
-    ['phase with multiple dependsOn', { ciFailures: [], phases: [{ name: 'P2', goal: '', dependsOn: ['P0', 'P1'], scoutGate: null, issues: [] }] }],
-    ['issue with empty dependencies', genPlan(1, 1, false)],
+    ["empty plan", { ciFailures: [], phases: [] }],
+    ["single phase, one issue", genPlan(1, 1, false)],
+    ["single phase, three issues", genPlan(1, 3, false)],
+    ["two phases, two issues each", genPlan(2, 2, false)],
+    [
+      "ci-failures only, no phases",
+      { ciFailures: [ciFailureEntry], phases: [] },
+    ],
+    ["ci-failures + two phases", genPlan(2, 2, true)],
+    ["three phases, five issues each", genPlan(3, 5, false)],
+    [
+      "phase with null scoutGate",
+      {
+        ciFailures: [],
+        phases: [
+          {
+            name: "P",
+            goal: "g",
+            dependsOn: [],
+            scoutGate: null,
+            issues: [featureEntry],
+          },
+        ],
+      },
+    ],
+    [
+      "phase with multiple dependsOn",
+      {
+        ciFailures: [],
+        phases: [
+          {
+            name: "P2",
+            goal: "",
+            dependsOn: ["P0", "P1"],
+            scoutGate: null,
+            issues: [],
+          },
+        ],
+      },
+    ],
+    ["issue with empty dependencies", genPlan(1, 1, false)],
   ];
 
   for (const [label, plan] of variants) {
@@ -286,12 +356,12 @@ describe('parsePlan + serializePlan — round-trip property', () => {
     });
   }
 
-  it('serialized text is deterministic (pure function)', () => {
+  it("serialized text is deterministic (pure function)", () => {
     const plan = genPlan(2, 3, true);
     expect(serializePlan(plan)).toBe(serializePlan(plan));
   });
 
-  it('planIssueOrder is stable across round-trip', () => {
+  it("planIssueOrder is stable across round-trip", () => {
     const plan = genPlan(2, 3, true);
     const original = planIssueOrder(plan);
     const reparsed = parsePlan(serializePlan(plan));
@@ -299,14 +369,14 @@ describe('parsePlan + serializePlan — round-trip property', () => {
   });
 });
 
-describe('planIssueOrder', () => {
-  it('returns ci-failures before phase issues', () => {
+describe("planIssueOrder", () => {
+  it("returns ci-failures before phase issues", () => {
     const plan: Plan = {
       ciFailures: [ciFailureEntry],
       phases: [
         {
-          name: 'P',
-          goal: '',
+          name: "P",
+          goal: "",
           dependsOn: [],
           scoutGate: 196,
           issues: [scoutEntry, featureEntry],

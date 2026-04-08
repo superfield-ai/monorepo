@@ -1,8 +1,17 @@
-import { projectContextFragment, blueprintReferenceFragment, joinSections } from './fragments/index.ts';
+import {
+  projectContextFragment,
+  blueprintReferenceFragment,
+  joinSections,
+} from "./fragments/index.ts";
 
 export interface ReplanEvaluateContext {
   /** All open issues with their current bodies. */
-  openIssues: Array<{ number: number; title: string; body: string | null; labels: string[] }>;
+  openIssues: Array<{
+    number: number;
+    title: string;
+    body: string | null;
+    labels: string[];
+  }>;
   /** Current Plan body, if one exists. */
   currentPlanBody: string | null;
 }
@@ -18,9 +27,9 @@ export function buildReplanEvaluatePrompt(ctx: ReplanEvaluateContext): string {
   const issueList = ctx.openIssues
     .map(
       (i) =>
-        `### #${i.number} — ${i.title}\nLabels: ${i.labels.join(', ') || '(none)'}\n\n${i.body ?? '(no body)'}`,
+        `### #${i.number} — ${i.title}\nLabels: ${i.labels.join(", ") || "(none)"}\n\n${i.body ?? "(no body)"}`,
     )
-    .join('\n\n---\n\n');
+    .join("\n\n---\n\n");
 
   return joinSections(
     projectContextFragment(),
@@ -31,7 +40,7 @@ dev-scout, and emit a strict total ordering as JSON.
 
 ### Current Plan
 
-${ctx.currentPlanBody ?? '(no Plan issue exists yet)'}
+${ctx.currentPlanBody ?? "(no Plan issue exists yet)"}
 
 ### Open issues
 

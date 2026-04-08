@@ -1,6 +1,6 @@
-import type { GitHubClientPort as GitHubClient } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient } from "@superfield/github";
 
-export type AgentRole = 'primary' | 'speculative';
+export type AgentRole = "primary" | "speculative";
 
 export interface AgentSession {
   sessionId: string;
@@ -9,8 +9,8 @@ export interface AgentSession {
   startedAt: string;
 }
 
-const MARKER = '<!-- superfield-session:';
-const MARKER_END = '-->';
+const MARKER = "<!-- superfield-session:";
+const MARKER_END = "-->";
 
 /**
  * Returns the session comment for an issue, or null if none exists.
@@ -28,11 +28,13 @@ export async function getSession(
   const comments = await client.listIssueComments(owner, repo, issueNumber);
   for (const comment of comments) {
     if (!comment.body.startsWith(MARKER)) continue;
-    const jsonStart = comment.body.indexOf('\n') + 1;
+    const jsonStart = comment.body.indexOf("\n") + 1;
     const jsonEnd = comment.body.lastIndexOf(MARKER_END);
     if (jsonEnd < 0) continue;
     try {
-      const session = JSON.parse(comment.body.slice(jsonStart, jsonEnd).trim()) as AgentSession;
+      const session = JSON.parse(
+        comment.body.slice(jsonStart, jsonEnd).trim(),
+      ) as AgentSession;
       return { session, commentId: comment.id };
     } catch {
       // malformed — skip
@@ -87,9 +89,15 @@ export async function findStaleSessions(
   owner: string,
   repo: string,
   timeoutMs: number,
-): Promise<Array<{ issueNumber: number; session: AgentSession; commentId: number }>> {
+): Promise<
+  Array<{ issueNumber: number; session: AgentSession; commentId: number }>
+> {
   const issues = await client.listIssues(owner, repo);
-  const stale: Array<{ issueNumber: number; session: AgentSession; commentId: number }> = [];
+  const stale: Array<{
+    issueNumber: number;
+    session: AgentSession;
+    commentId: number;
+  }> = [];
   const now = Date.now();
 
   for (const issue of issues) {

@@ -9,7 +9,7 @@ name: Blueprint sync — inbound
 
 on:
   schedule:
-    - cron: '0 2 * * *'
+    - cron: "0 2 * * *"
   repository_dispatch:
     types: [blueprint-updated]
   workflow_dispatch:

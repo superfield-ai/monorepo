@@ -1,6 +1,6 @@
-import git from 'isomorphic-git';
-import http from 'isomorphic-git/http/web';
-import * as fs from 'node:fs';
+import git from "isomorphic-git";
+import http from "isomorphic-git/http/web";
+import * as fs from "node:fs";
 
 export interface RemoteRef {
   ref: string;
@@ -16,7 +16,7 @@ export class GitClient {
   private repoRoot: string;
 
   constructor(options: GitClientOptions = {}) {
-    this.repoRoot = options.repoRoot ?? '/tmp/superfield-repos';
+    this.repoRoot = options.repoRoot ?? "/tmp/superfield-repos";
   }
 
   private repoDir(owner: string, repo: string): string {
@@ -33,7 +33,7 @@ export class GitClient {
     const refs = await git.listServerRefs({
       http,
       url,
-      onAuth: () => ({ username: 'x-access-token', password: token }),
+      onAuth: () => ({ username: "x-access-token", password: token }),
       prefix: `refs/heads/${branch}`,
     });
     const ref = refs.find((r) => r.ref === `refs/heads/${branch}`);
@@ -41,7 +41,12 @@ export class GitClient {
     return ref.oid;
   }
 
-  async clone(owner: string, repo: string, branch: string, token: string): Promise<string> {
+  async clone(
+    owner: string,
+    repo: string,
+    branch: string,
+    token: string,
+  ): Promise<string> {
     const dir = this.repoDir(owner, repo);
     await git.clone({
       fs,
@@ -51,7 +56,7 @@ export class GitClient {
       ref: branch,
       singleBranch: true,
       depth: 1,
-      onAuth: () => ({ username: 'x-access-token', password: token }),
+      onAuth: () => ({ username: "x-access-token", password: token }),
     });
     return dir;
   }
@@ -62,16 +67,21 @@ export class GitClient {
   }
 
   /** Read the GitHub owner/repo from the `origin` remote of a local git directory. */
-  async readRemoteOwnerRepo(dir: string): Promise<{ owner: string; repo: string }> {
+  async readRemoteOwnerRepo(
+    dir: string,
+  ): Promise<{ owner: string; repo: string }> {
     const remotes = await git.listRemotes({ fs, dir });
-    const origin = remotes.find((r) => r.remote === 'origin');
+    const origin = remotes.find((r) => r.remote === "origin");
     if (!origin) throw new Error(`No origin remote found in ${dir}`);
     return parseGitHubRemote(origin.url);
   }
 }
 
 /** Parse a GitHub remote URL (https or ssh) into owner and repo. */
-export function parseGitHubRemote(url: string): { owner: string; repo: string } {
+export function parseGitHubRemote(url: string): {
+  owner: string;
+  repo: string;
+} {
   // https://github.com/owner/repo.git  or  git@github.com:owner/repo.git
   const match =
     url.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/) ??

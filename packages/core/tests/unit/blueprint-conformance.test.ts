@@ -1,16 +1,16 @@
-import { describe, it, expect, vi } from 'vitest';
-import { runBlueprintConformance } from '../../steps/blueprint-conformance.ts';
-import type { Blueprint } from '../../blueprint.ts';
-import type { GitHubClient, Issue } from '@superfield/github';
-import type { AgentOpts, AgentResult } from '../../agent.ts';
+import { describe, it, expect, vi } from "vitest";
+import { runBlueprintConformance } from "../../steps/blueprint-conformance.ts";
+import type { Blueprint } from "../../blueprint.ts";
+import type { GitHubClient, Issue } from "@superfield/github";
+import type { AgentOpts, AgentResult } from "../../agent.ts";
 
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     number: 10,
-    title: 'feat: architecture refactor of package boundaries',
-    body: 'Split monorepo into clearer package boundaries.',
-    html_url: 'https://github.com/x/y/issues/10',
-    state: 'open',
+    title: "feat: architecture refactor of package boundaries",
+    body: "Split monorepo into clearer package boundaries.",
+    html_url: "https://github.com/x/y/issues/10",
+    state: "open",
     labels: [],
     ...overrides,
   };
@@ -38,16 +38,16 @@ function fakeSpawn(responses: unknown[]) {
 
 const emptyBlueprint: Blueprint = {
   corpusVersion: 1,
-  generated: '2026-01-01',
+  generated: "2026-01-01",
   ruleCount: 0,
   nodes: [],
   domains: new Map(),
 };
 
-describe('runBlueprintConformance', () => {
-  it('returns empty result when no candidates', async () => {
+describe("runBlueprintConformance", () => {
+  it("returns empty result when no candidates", async () => {
     const client = makeClient();
-    const result = await runBlueprintConformance(client, 'org', 'repo', {
+    const result = await runBlueprintConformance(client, "org", "repo", {
       blueprint: emptyBlueprint,
       spawn: fakeSpawn([{ issue_number: 10, violations: [] }]),
     });
@@ -55,11 +55,11 @@ describe('runBlueprintConformance', () => {
     expect(result.issuesWithViolations).toEqual([]);
   });
 
-  it('checks candidate issues and reports no violations cleanly', async () => {
+  it("checks candidate issues and reports no violations cleanly", async () => {
     const client = makeClient({
       listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
     });
-    const result = await runBlueprintConformance(client, 'org', 'repo', {
+    const result = await runBlueprintConformance(client, "org", "repo", {
       blueprint: emptyBlueprint,
       spawn: fakeSpawn([{ issue_number: 10, violations: [] }]),
     });
@@ -68,88 +68,102 @@ describe('runBlueprintConformance', () => {
     expect(client.createIssueComment).not.toHaveBeenCalled();
   });
 
-  it('posts advisory comment when violations exist', async () => {
+  it("posts advisory comment when violations exist", async () => {
     const client = makeClient({
       listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
     });
     const violation = {
-      rule_id: 'ARCH-P-001',
-      rule_name: 'boundaries-are-physical-not-conceptual',
-      rule_type: 'principle',
-      domain: 'arch',
-      concern: 'This refactor blurs the server/client boundary.',
+      rule_id: "ARCH-P-001",
+      rule_name: "boundaries-are-physical-not-conceptual",
+      rule_type: "principle",
+      domain: "arch",
+      concern: "This refactor blurs the server/client boundary.",
     };
-    const result = await runBlueprintConformance(client, 'org', 'repo', {
+    const result = await runBlueprintConformance(client, "org", "repo", {
       blueprint: emptyBlueprint,
       spawn: fakeSpawn([{ issue_number: 10, violations: [violation] }]),
     });
     expect(result.issuesWithViolations).toEqual([10]);
     expect(client.createIssueComment).toHaveBeenCalledTimes(1);
-    const body = (client.createIssueComment as ReturnType<typeof vi.fn>).mock.calls[0]![3] as string;
-    expect(body).toContain('<!-- superfield-blueprint -->');
-    expect(body).toContain('ARCH-P-001');
-    expect(body).toContain('blurs the server/client boundary');
+    const body = (client.createIssueComment as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+    expect(body).toContain("<!-- superfield-blueprint -->");
+    expect(body).toContain("ARCH-P-001");
+    expect(body).toContain("blurs the server/client boundary");
   });
 
-  it('updates existing advisory comment instead of duplicating', async () => {
+  it("updates existing advisory comment instead of duplicating", async () => {
     const client = makeClient({
       listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
-      listIssueComments: vi.fn().mockResolvedValue([
-        { id: 777, body: '<!-- superfield-blueprint -->\nold content' },
-      ]),
+      listIssueComments: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 777, body: "<!-- superfield-blueprint -->\nold content" },
+        ]),
     });
     const violation = {
-      rule_id: 'ARCH-P-001',
-      rule_name: 'boundaries',
-      rule_type: 'principle',
-      domain: 'arch',
-      concern: 'new concern',
+      rule_id: "ARCH-P-001",
+      rule_name: "boundaries",
+      rule_type: "principle",
+      domain: "arch",
+      concern: "new concern",
     };
-    await runBlueprintConformance(client, 'org', 'repo', {
+    await runBlueprintConformance(client, "org", "repo", {
       blueprint: emptyBlueprint,
       spawn: fakeSpawn([{ issue_number: 10, violations: [violation] }]),
     });
-    expect(client.updateIssueComment).toHaveBeenCalledWith('org', 'repo', 777, expect.any(String));
+    expect(client.updateIssueComment).toHaveBeenCalledWith(
+      "org",
+      "repo",
+      777,
+      expect.any(String),
+    );
     expect(client.createIssueComment).not.toHaveBeenCalled();
   });
 
-  it('deletes stale advisory comment when issue has no violations', async () => {
+  it("deletes stale advisory comment when issue has no violations", async () => {
     const client = makeClient({
       listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
-      listIssueComments: vi.fn().mockResolvedValue([
-        { id: 500, body: '<!-- superfield-blueprint -->\nstale advisory' },
-      ]),
+      listIssueComments: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 500, body: "<!-- superfield-blueprint -->\nstale advisory" },
+        ]),
     });
-    await runBlueprintConformance(client, 'org', 'repo', {
+    await runBlueprintConformance(client, "org", "repo", {
       blueprint: emptyBlueprint,
       spawn: fakeSpawn([{ issue_number: 10, violations: [] }]),
     });
-    expect(client.deleteIssueComment).toHaveBeenCalledWith('org', 'repo', 500);
+    expect(client.deleteIssueComment).toHaveBeenCalledWith("org", "repo", 500);
   });
 
-  it('skips issues with no candidate domains without spawning LLM', async () => {
+  it("skips issues with no candidate domains without spawning LLM", async () => {
     const spawn = vi.fn();
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([
-        makeIssue({ number: 10, title: 'foo', body: 'bar' }),
-      ]),
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([
+          makeIssue({ number: 10, title: "foo", body: "bar" }),
+        ]),
     });
-    await runBlueprintConformance(client, 'org', 'repo', {
+    await runBlueprintConformance(client, "org", "repo", {
       blueprint: emptyBlueprint,
       spawn: spawn as unknown as (opts: AgentOpts) => Promise<AgentResult>,
     });
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it('skips plan and ci-failure labelled issues', async () => {
+  it("skips plan and ci-failure labelled issues", async () => {
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([
-        makeIssue({ number: 10 }),
-        makeIssue({ number: 99, labels: ['plan'] }),
-        makeIssue({ number: 50, labels: ['ci-failure'] }),
-      ]),
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([
+          makeIssue({ number: 10 }),
+          makeIssue({ number: 99, labels: ["plan"] }),
+          makeIssue({ number: 50, labels: ["ci-failure"] }),
+        ]),
     });
-    const result = await runBlueprintConformance(client, 'org', 'repo', {
+    const result = await runBlueprintConformance(client, "org", "repo", {
       blueprint: emptyBlueprint,
       spawn: fakeSpawn([{ issue_number: 10, violations: [] }]),
     });

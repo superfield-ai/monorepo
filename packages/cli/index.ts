@@ -1,10 +1,10 @@
-import { githubCommand } from './commands/github.ts';
-import { startCommand } from './commands/start.ts';
-import { planCommand } from './commands/plan.ts';
-import { featureCommand } from './commands/feature.ts';
-const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? 'dev';
-const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? 'unknown';
-const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? 'unknown';
+import { githubCommand } from "./commands/github.ts";
+import { startCommand } from "./commands/start.ts";
+import { planCommand } from "./commands/plan.ts";
+import { featureCommand } from "./commands/feature.ts";
+const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
+const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
+const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
 
 function usage(): string {
   return `
@@ -26,27 +26,27 @@ Commands:
 export async function runCLI(args: string[]): Promise<void> {
   const [cmd, sub, third] = args;
 
-  if (cmd === '--help' || cmd === '-h' || cmd === 'help') {
+  if (cmd === "--help" || cmd === "-h" || cmd === "help") {
     console.log(usage());
     return;
   }
 
-  if (cmd === 'github') {
+  if (cmd === "github") {
     await githubCommand(sub, third);
     return;
   }
 
-  if (cmd === 'start') {
+  if (cmd === "start") {
     await startCommand(sub);
     return;
   }
 
-  if (cmd === 'plan') {
+  if (cmd === "plan") {
     await planCommand(sub);
     return;
   }
 
-  if (cmd === 'feature') {
+  if (cmd === "feature") {
     await featureCommand(sub, third);
     return;
   }

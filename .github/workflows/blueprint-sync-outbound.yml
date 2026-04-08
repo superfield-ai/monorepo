@@ -7,7 +7,7 @@ name: Blueprint sync — outbound
 on:
   push:
     branches: [main]
-    paths: ['blueprint/**']
+    paths: ["blueprint/**"]
 
 jobs:
   sync:

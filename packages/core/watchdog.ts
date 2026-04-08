@@ -1,10 +1,14 @@
-import type { GitHubClientPort as GitHubClient, CheckRun, Issue } from '@superfield/github';
+import type {
+  GitHubClientPort as GitHubClient,
+  CheckRun,
+  Issue,
+} from "@superfield/github";
 import {
   parsePlan,
   serializePlan,
   insertCIFailureAtTop,
   type PlanIssueMetadata,
-} from './plan.ts';
+} from "./plan.ts";
 
 export interface WatchdogResult {
   issueCreated: boolean;
@@ -14,33 +18,43 @@ export interface WatchdogResult {
 }
 
 export function hasFailedChecks(runs: CheckRun[]): CheckRun[] {
-  return runs.filter((r) => r.status === 'completed' && r.conclusion === 'failure');
+  return runs.filter(
+    (r) => r.status === "completed" && r.conclusion === "failure",
+  );
 }
 
-export function buildCIFailureIssueTitle(repoName: string, checkName: string, shortSha: string): string {
+export function buildCIFailureIssueTitle(
+  repoName: string,
+  checkName: string,
+  shortSha: string,
+): string {
   return `fix(${repoName}): ${checkName} failed on main @ ${shortSha}`;
 }
 
-export function buildCIFailureIssueBody(checkName: string, sha: string, checkRunUrl: string): string {
+export function buildCIFailureIssueBody(
+  checkName: string,
+  sha: string,
+  checkRunUrl: string,
+): string {
   return [
-    '## Phase',
-    'watchdog',
-    '',
-    '## Motivation',
+    "## Phase",
+    "watchdog",
+    "",
+    "## Motivation",
     `${checkName} failed on commit ${sha}, blocking main`,
-    '',
-    '## Canonical docs',
+    "",
+    "## Canonical docs",
     `- ${checkRunUrl}`,
-    '',
-    '## Features',
+    "",
+    "## Features",
     `- [ ] Investigate root cause of ${checkName} failure`,
     `- [ ] Apply minimal targeted fix`,
     `- [ ] Verify ${checkName} passes locally`,
-    '',
-    '## Test Plan',
+    "",
+    "## Test Plan",
     `- [ ] ${checkName} passes on main`,
-    '- [ ] No related regressions introduced',
-  ].join('\n');
+    "- [ ] No related regressions introduced",
+  ].join("\n");
 }
 
 export function buildCIFailurePlanEntry(
@@ -50,8 +64,8 @@ export function buildCIFailurePlanEntry(
   return {
     number: issueNumber,
     title,
-    phase: 'watchdog',
-    kind: 'ci-failure',
+    phase: "watchdog",
+    kind: "ci-failure",
     risk: 6,
     dependencies: [],
     parallel_safe: true,
@@ -69,14 +83,24 @@ export async function runWatchdog(
   const title = buildCIFailureIssueTitle(repo, failedRun.name, shortSha);
 
   // Deduplicate: check for an existing open issue with the same title
-  const existing = await client.listIssues(owner, repo, ['ci-failure']);
+  const existing = await client.listIssues(owner, repo, ["ci-failure"]);
   const duplicate = existing.find((i) => i.title === title);
   if (duplicate) {
-    return { issueCreated: false, skipped: true, reason: `duplicate of #${duplicate.number}` };
+    return {
+      issueCreated: false,
+      skipped: true,
+      reason: `duplicate of #${duplicate.number}`,
+    };
   }
 
   const body = buildCIFailureIssueBody(failedRun.name, sha, failedRun.html_url);
-  const issue = await client.createIssue({ owner, repo, title, body, labels: ['ci-failure', 'watchdog'] });
+  const issue = await client.createIssue({
+    owner,
+    repo,
+    title,
+    body,
+    labels: ["ci-failure", "watchdog"],
+  });
 
   await upsertPlanIssue(client, owner, repo, issue.number, title);
 
@@ -90,23 +114,26 @@ async function upsertPlanIssue(
   newIssueNumber: number,
   newIssueTitle: string,
 ): Promise<void> {
-  const plans = await client.listIssues(owner, repo, ['plan']);
+  const plans = await client.listIssues(owner, repo, ["plan"]);
   const entry = buildCIFailurePlanEntry(newIssueNumber, newIssueTitle);
 
   if (plans.length === 0) {
-    const initialPlan = insertCIFailureAtTop({ ciFailures: [], phases: [] }, entry);
+    const initialPlan = insertCIFailureAtTop(
+      { ciFailures: [], phases: [] },
+      entry,
+    );
     await client.createIssue({
       owner,
       repo,
-      title: 'Plan',
+      title: "Plan",
       body: serializePlan(initialPlan),
-      labels: ['plan'],
+      labels: ["plan"],
     });
     return;
   }
 
   const plan = plans[0]!;
-  const parsed = parsePlan(plan.body ?? '');
+  const parsed = parsePlan(plan.body ?? "");
   const updated = insertCIFailureAtTop(parsed, entry);
   await client.updateIssueBody({
     owner,

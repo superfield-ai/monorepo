@@ -19,18 +19,21 @@
  *   2. ~/.superfield/config.yaml (first user entry)
  */
 
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import * as os from 'node:os';
-import { pathToFileURL } from 'node:url';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
+import { pathToFileURL } from "node:url";
 
-const FIXTURES_DIR = path.resolve(import.meta.dirname, '../tests/fixtures/github');
-const GITHUB_API = 'https://api.github.com';
+const FIXTURES_DIR = path.resolve(
+  import.meta.dirname,
+  "../tests/fixtures/github",
+);
+const GITHUB_API = "https://api.github.com";
 
 async function readTokenFromConfig(): Promise<string | null> {
   try {
-    const configPath = path.join(os.homedir(), '.superfield', 'config.yaml');
-    const raw = await fs.readFile(configPath, 'utf8');
+    const configPath = path.join(os.homedir(), ".superfield", "config.yaml");
+    const raw = await fs.readFile(configPath, "utf8");
     const match = raw.match(/token:\s*(\S+)/);
     return match?.[1] ?? null;
   } catch {
@@ -42,19 +45,21 @@ async function githubGet(path: string, token: string): Promise<unknown> {
   const res = await fetch(`${GITHUB_API}${path}`, {
     headers: {
       Authorization: `Bearer ${token}`,
-      Accept: 'application/vnd.github+json',
-      'X-GitHub-Api-Version': '2022-11-28',
+      Accept: "application/vnd.github+json",
+      "X-GitHub-Api-Version": "2022-11-28",
     },
   });
   if (!res.ok) {
-    throw new Error(`GitHub API error ${res.status} for ${path}: ${await res.text()}`);
+    throw new Error(
+      `GitHub API error ${res.status} for ${path}: ${await res.text()}`,
+    );
   }
   return res.json();
 }
 
 async function writeFixture(filename: string, data: unknown): Promise<void> {
   const outPath = path.join(FIXTURES_DIR, filename);
-  await fs.writeFile(outPath, JSON.stringify(data, null, 2) + '\n', 'utf8');
+  await fs.writeFile(outPath, JSON.stringify(data, null, 2) + "\n", "utf8");
   console.log(`  wrote ${filename}`);
 }
 
@@ -66,13 +71,16 @@ async function main(): Promise<void> {
 
   if (!token) {
     console.error(
-      'No token found. Set GITHUB_TOKEN or ensure ~/.superfield/config.yaml has a user entry.',
+      "No token found. Set GITHUB_TOKEN or ensure ~/.superfield/config.yaml has a user entry.",
     );
     process.exit(1);
   }
 
-  console.log('Fetching GET /user/installations...');
-  const installationsResp = (await githubGet('/user/installations?per_page=100', token)) as {
+  console.log("Fetching GET /user/installations...");
+  const installationsResp = (await githubGet(
+    "/user/installations?per_page=100",
+    token,
+  )) as {
     total_count: number;
     installations: Array<{
       id: number;
@@ -89,14 +97,16 @@ async function main(): Promise<void> {
   const installations = installationsResp.installations;
 
   if (installations.length === 0) {
-    await writeFixture('user-installations-empty.json', installationsResp);
-    console.log('\nState: no installations. Recorded user-installations-empty.json.');
+    await writeFixture("user-installations-empty.json", installationsResp);
+    console.log(
+      "\nState: no installations. Recorded user-installations-empty.json.",
+    );
     return;
   }
 
   // Detect state from the first installation and write the matching fixture
   for (const inst of installations) {
-    const accountType = inst.account?.type ?? 'User';
+    const accountType = inst.account?.type ?? "User";
     const repoSelection = inst.repository_selection;
 
     // Build a trimmed fixture that only includes fields our client and tests care about
@@ -112,15 +122,18 @@ async function main(): Promise<void> {
       updated_at: inst.updated_at,
     };
 
-    const resp = { total_count: installationsResp.total_count, installations: [trimmedInst] };
+    const resp = {
+      total_count: installationsResp.total_count,
+      installations: [trimmedInst],
+    };
 
     let fixtureFile: string;
-    if (repoSelection === 'all') {
-      fixtureFile = 'user-installations-all-repos.json';
-    } else if (accountType === 'Organization') {
-      fixtureFile = 'user-installations-org-selected.json';
+    if (repoSelection === "all") {
+      fixtureFile = "user-installations-all-repos.json";
+    } else if (accountType === "Organization") {
+      fixtureFile = "user-installations-org-selected.json";
     } else {
-      fixtureFile = 'user-installations-personal-selected.json';
+      fixtureFile = "user-installations-personal-selected.json";
     }
 
     await writeFixture(fixtureFile, resp);
@@ -129,8 +142,10 @@ async function main(): Promise<void> {
     );
 
     // Record repos for the first selected installation
-    if (repoSelection === 'selected') {
-      console.log(`\nFetching GET /user/installations/${inst.id}/repositories...`);
+    if (repoSelection === "selected") {
+      console.log(
+        `\nFetching GET /user/installations/${inst.id}/repositories...`,
+      );
       const reposResp = (await githubGet(
         `/user/installations/${inst.id}/repositories?per_page=100`,
         token,
@@ -153,17 +168,30 @@ async function main(): Promise<void> {
         })),
       };
 
-      await writeFixture('installation-repos.json', trimmedRepos);
+      await writeFixture("installation-repos.json", trimmedRepos);
     }
   }
 
-  console.log('\nDone. Run in other installation states to complete the fixture set:');
-  console.log('  - No app installed             → user-installations-empty.json');
-  console.log('  - Personal account, selected   → user-installations-personal-selected.json');
-  console.log('  - Org account, selected        → user-installations-org-selected.json');
-  console.log('  - Any account, all repos       → user-installations-all-repos.json');
+  console.log(
+    "\nDone. Run in other installation states to complete the fixture set:",
+  );
+  console.log(
+    "  - No app installed             → user-installations-empty.json",
+  );
+  console.log(
+    "  - Personal account, selected   → user-installations-personal-selected.json",
+  );
+  console.log(
+    "  - Org account, selected        → user-installations-org-selected.json",
+  );
+  console.log(
+    "  - Any account, all repos       → user-installations-all-repos.json",
+  );
 }
 
-if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
+if (
+  process.argv[1] &&
+  pathToFileURL(process.argv[1]).href === import.meta.url
+) {
   await main();
 }

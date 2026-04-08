@@ -1,5 +1,5 @@
-import type { Issue } from '@superfield/github';
-import { joinSections } from './fragments/index.ts';
+import type { Issue } from "@superfield/github";
+import { joinSections } from "./fragments/index.ts";
 
 export interface IssueAuditContext {
   issue: Issue;
@@ -25,7 +25,7 @@ Superfield IssueBody schema.
 
 ### Issue #${ctx.issue.number} — ${ctx.issue.title}
 
-${ctx.issue.body ?? '(no body)'}`,
+${ctx.issue.body ?? "(no body)"}`,
     `## What you check
 
 Required sections (must be present as level-2 markdown headings):

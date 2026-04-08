@@ -16,7 +16,7 @@
  * read the human-readable line.
  */
 
-export type PlanIssueKind = 'dev-scout' | 'feature' | 'ci-failure';
+export type PlanIssueKind = "dev-scout" | "feature" | "ci-failure";
 
 export interface PlanIssueMetadata {
   number: number;
@@ -52,7 +52,7 @@ const SCOUT_GATE_RE = /^Scout gate:\s*#(\d+)\s*$/;
 
 /** Parses a Plan body into a structured Plan. */
 export function parsePlan(body: string): Plan {
-  const lines = body.split('\n');
+  const lines = body.split("\n");
   const ciFailures: PlanIssueMetadata[] = [];
   const phases: PlanPhase[] = [];
   let currentPhase: PlanPhase | null = null;
@@ -65,7 +65,7 @@ export function parsePlan(body: string): Plan {
       if (currentPhase) phases.push(currentPhase);
       currentPhase = {
         name: phaseMatch[1]!,
-        goal: '',
+        goal: "",
         dependsOn: [],
         scoutGate: null,
         issues: [],
@@ -82,7 +82,8 @@ export function parsePlan(body: string): Plan {
       const depsMatch = DEPENDS_ON_RE.exec(line);
       if (depsMatch) {
         const v = depsMatch[1]!.trim();
-        currentPhase.dependsOn = v && v !== 'None.' ? v.split(',').map((s) => s.trim()) : [];
+        currentPhase.dependsOn =
+          v && v !== "None." ? v.split(",").map((s) => s.trim()) : [];
         continue;
       }
       const scoutMatch = SCOUT_GATE_RE.exec(line);
@@ -94,7 +95,7 @@ export function parsePlan(body: string): Plan {
 
     const entryMatch = ENTRY_RE.exec(line);
     if (entryMatch) {
-      const nextLine = lines[i + 1] ?? '';
+      const nextLine = lines[i + 1] ?? "";
       const metadataMatch = METADATA_RE.exec(nextLine);
       if (!metadataMatch) {
         // Orphan entry line without metadata — skip silently
@@ -112,7 +113,7 @@ export function parsePlan(body: string): Plan {
         currentPhase.issues.push(metadata);
       } else {
         // No phase header seen yet — these are top-of-plan ci-failures
-        if (metadata.kind === 'ci-failure') {
+        if (metadata.kind === "ci-failure") {
           ciFailures.push(metadata);
         }
       }
@@ -130,35 +131,42 @@ export function serializePlan(plan: Plan): string {
   const parts: string[] = [];
 
   if (plan.ciFailures.length > 0) {
-    parts.push(plan.ciFailures.map(renderEntry).join('\n'));
+    parts.push(plan.ciFailures.map(renderEntry).join("\n"));
   }
 
   for (const phase of plan.phases) {
-    const header: string[] = [`## Phase: ${phase.name}`, ''];
+    const header: string[] = [`## Phase: ${phase.name}`, ""];
     header.push(`Goal: ${phase.goal}`);
     header.push(
-      `Depends on phases: ${phase.dependsOn.length ? phase.dependsOn.join(', ') : 'None.'}`,
+      `Depends on phases: ${phase.dependsOn.length ? phase.dependsOn.join(", ") : "None."}`,
     );
-    header.push(`Scout gate: ${phase.scoutGate === null ? 'pending' : `#${phase.scoutGate}`}`);
-    header.push('');
-    header.push(phase.issues.map(renderEntry).join('\n'));
-    parts.push(header.join('\n'));
+    header.push(
+      `Scout gate: ${phase.scoutGate === null ? "pending" : `#${phase.scoutGate}`}`,
+    );
+    header.push("");
+    header.push(phase.issues.map(renderEntry).join("\n"));
+    parts.push(header.join("\n"));
   }
 
-  return parts.join('\n\n') + '\n';
+  return parts.join("\n\n") + "\n";
 }
 
 function renderEntry(m: PlanIssueMetadata): string {
-  const display = m.kind === 'dev-scout' ? `[dev-scout] ${m.title}` : m.title;
+  const display = m.kind === "dev-scout" ? `[dev-scout] ${m.title}` : m.title;
   const line = `- #${m.number} — ${display} [risk: ${m.risk}]`;
   const metadata = `  <!-- superfield: ${JSON.stringify(m)} -->`;
   return `${line}\n${metadata}`;
 }
 
 /** Adds or replaces a ci-failure entry at the top of the Plan. Dedupe by issue number. */
-export function insertCIFailureAtTop(plan: Plan, entry: PlanIssueMetadata): Plan {
-  if (entry.kind !== 'ci-failure') {
-    throw new Error(`insertCIFailureAtTop: expected kind=ci-failure, got ${entry.kind}`);
+export function insertCIFailureAtTop(
+  plan: Plan,
+  entry: PlanIssueMetadata,
+): Plan {
+  if (entry.kind !== "ci-failure") {
+    throw new Error(
+      `insertCIFailureAtTop: expected kind=ci-failure, got ${entry.kind}`,
+    );
   }
   const filtered = plan.ciFailures.filter((e) => e.number !== entry.number);
   return { ...plan, ciFailures: [entry, ...filtered] };
@@ -175,7 +183,7 @@ export function appendToPhase(
   if (idx < 0) {
     phases.push({
       name: phaseName,
-      goal: '',
+      goal: "",
       dependsOn: [],
       scoutGate: null,
       issues: [entry],

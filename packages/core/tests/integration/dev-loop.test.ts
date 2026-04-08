@@ -1,4 +1,4 @@
-import { describe, it } from 'vitest';
+import { describe, it } from "vitest";
 
 /**
  * End-to-end dev loop integration test.
@@ -16,16 +16,20 @@ import { describe, it } from 'vitest';
  *
  * See docs/testing.md §Layer 2.
  */
-describe('dev loop — primary end to end', () => {
-  it.todo('selects top of plan, creates worktree, claims slot, spawns develop-issue agent');
-  it.todo('uses dev-scout prompt when the selected issue has dev-scout kind');
-  it.todo('uses ci-failure prompt when the selected issue has ci-failure kind');
-  it.todo('deletes session comment after the issue closes');
-  it.todo('resumes existing session when a deadman comment is present on startup');
+describe("dev loop — primary end to end", () => {
+  it.todo(
+    "selects top of plan, creates worktree, claims slot, spawns develop-issue agent",
+  );
+  it.todo("uses dev-scout prompt when the selected issue has dev-scout kind");
+  it.todo("uses ci-failure prompt when the selected issue has ci-failure kind");
+  it.todo("deletes session comment after the issue closes");
+  it.todo(
+    "resumes existing session when a deadman comment is present on startup",
+  );
 });
 
-describe('dev loop — speculative slots end to end', () => {
-  it.todo('opens speculative slot for a phase-mate when scout is closed');
-  it.todo('keeps speculative slots empty when scout is still open');
-  it.todo('does not pair speculative work with a ci-failure primary');
+describe("dev loop — speculative slots end to end", () => {
+  it.todo("opens speculative slot for a phase-mate when scout is closed");
+  it.todo("keeps speculative slots empty when scout is still open");
+  it.todo("does not pair speculative work with a ci-failure primary");
 });

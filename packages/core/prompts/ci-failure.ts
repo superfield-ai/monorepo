@@ -1,10 +1,10 @@
-import type { Issue } from '@superfield/github';
+import type { Issue } from "@superfield/github";
 import {
   projectContextFragment,
   commitStandardsFragment,
   worktreeIsolationFragment,
   joinSections,
-} from './fragments/index.ts';
+} from "./fragments/index.ts";
 
 export interface CIFailureContext {
   issue: Issue;

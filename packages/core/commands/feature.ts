@@ -1,13 +1,13 @@
-import type { GitHubClientPort as GitHubClient } from '@superfield/github';
-import { buildFeatureEvaluatePrompt } from '../prompts/index.ts';
-import { runLLMTask, type LLMTaskOpts } from '../llm-task.ts';
-import { renderIssueBody, type IssueBody } from '../issue-body.ts';
+import type { GitHubClientPort as GitHubClient } from "@superfield/github";
+import { buildFeatureEvaluatePrompt } from "../prompts/index.ts";
+import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
+import { renderIssueBody, type IssueBody } from "../issue-body.ts";
 import {
   parsePlan,
   serializePlan,
   appendToPhase,
   type PlanIssueMetadata,
-} from '../plan.ts';
+} from "../plan.ts";
 
 /** Shape emitted by the LLM `feature-evaluate` task. */
 export interface FeatureEvaluation {
@@ -36,7 +36,7 @@ export interface FeatureCommandOpts {
   repo: string;
   /** The natural-language feature request. */
   request: string;
-  spawn?: LLMTaskOpts['spawn'];
+  spawn?: LLMTaskOpts["spawn"];
   cwd?: string;
 }
 
@@ -48,8 +48,8 @@ export interface FeatureCommandResult {
   blueprintRulesCited: string[];
 }
 
-const PLAN_LABEL = 'plan';
-const FEATURE_LABEL = 'feature';
+const PLAN_LABEL = "plan";
+const FEATURE_LABEL = "feature";
 
 /**
  * One-shot `feature` command. See PRD §Command: feature.
@@ -61,7 +61,9 @@ const FEATURE_LABEL = 'feature';
  *   4. Create issue — render IssueBody and create with `feature` label
  *   5. Append to Plan in the correct phase
  */
-export async function runFeatureCommand(opts: FeatureCommandOpts): Promise<FeatureCommandResult> {
+export async function runFeatureCommand(
+  opts: FeatureCommandOpts,
+): Promise<FeatureCommandResult> {
   const { client, owner, repo, request } = opts;
 
   // 1. Collect
@@ -116,7 +118,7 @@ export async function runFeatureCommand(opts: FeatureCommandOpts): Promise<Featu
     number: created.number,
     title: evaluation.title,
     phase: evaluation.phase,
-    kind: 'feature',
+    kind: "feature",
     risk: evaluation.risk ?? 3,
     dependencies: evaluation.dependencies ?? [],
     parallel_safe: true,
@@ -125,18 +127,22 @@ export async function runFeatureCommand(opts: FeatureCommandOpts): Promise<Featu
   let planCreated = false;
   let planUpdated = false;
   if (planIssues.length === 0) {
-    const newPlan = appendToPhase({ ciFailures: [], phases: [] }, evaluation.phase, planEntry);
+    const newPlan = appendToPhase(
+      { ciFailures: [], phases: [] },
+      evaluation.phase,
+      planEntry,
+    );
     await client.createIssue({
       owner,
       repo,
-      title: 'Plan',
+      title: "Plan",
       body: serializePlan(newPlan),
       labels: [PLAN_LABEL],
     });
     planCreated = true;
   } else {
     const planIssue = planIssues[0]!;
-    const plan = parsePlan(planIssue.body ?? '');
+    const plan = parsePlan(planIssue.body ?? "");
     const updated = appendToPhase(plan, evaluation.phase, planEntry);
     await client.updateIssueBody({
       owner,
@@ -158,11 +164,14 @@ export async function runFeatureCommand(opts: FeatureCommandOpts): Promise<Featu
 
 function parseFeatureEvaluation(json: string): FeatureEvaluation {
   const parsed = JSON.parse(json) as Partial<FeatureEvaluation>;
-  if (typeof parsed.title !== 'string') throw new Error('missing title');
-  if (typeof parsed.phase !== 'string') throw new Error('missing phase');
-  if (typeof parsed.motivation !== 'string') throw new Error('missing motivation');
-  if (!Array.isArray(parsed.features)) throw new Error('missing features array');
-  if (!Array.isArray(parsed.test_plan)) throw new Error('missing test_plan array');
+  if (typeof parsed.title !== "string") throw new Error("missing title");
+  if (typeof parsed.phase !== "string") throw new Error("missing phase");
+  if (typeof parsed.motivation !== "string")
+    throw new Error("missing motivation");
+  if (!Array.isArray(parsed.features))
+    throw new Error("missing features array");
+  if (!Array.isArray(parsed.test_plan))
+    throw new Error("missing test_plan array");
   return {
     title: parsed.title,
     phase: parsed.phase,
@@ -170,10 +179,10 @@ function parseFeatureEvaluation(json: string): FeatureEvaluation {
     features: parsed.features,
     test_plan: parsed.test_plan,
     canonical_docs: parsed.canonical_docs ?? [],
-    risk: typeof parsed.risk === 'number' ? parsed.risk : undefined,
+    risk: typeof parsed.risk === "number" ? parsed.risk : undefined,
     dependencies: Array.isArray(parsed.dependencies) ? parsed.dependencies : [],
     duplicate_of:
-      typeof parsed.duplicate_of === 'number' ? parsed.duplicate_of : null,
+      typeof parsed.duplicate_of === "number" ? parsed.duplicate_of : null,
     blueprint_rules_cited: parsed.blueprint_rules_cited ?? [],
   };
 }

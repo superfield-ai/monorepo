@@ -20,7 +20,10 @@ export interface RetryOpts {
  * delay between each failure. Returns the first successful result or throws
  * the last error after all attempts are exhausted.
  */
-export async function withRetry<T>(fn: () => Promise<T>, opts: RetryOpts = {}): Promise<T> {
+export async function withRetry<T>(
+  fn: () => Promise<T>,
+  opts: RetryOpts = {},
+): Promise<T> {
   const maxAttempts = opts.maxAttempts ?? 3;
   const initialDelayMs = opts.initialDelayMs ?? 1000;
   const backoffFactor = opts.backoffFactor ?? 2;

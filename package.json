@@ -1,6 +1,7 @@
 {
   "name": "superfield",
   "private": true,
+  "type": "module",
   "workspaces": [
     "packages/*"
   ],

@@ -1,7 +1,14 @@
-import type { GitHubClientPort as GitHubClient, Issue } from '@superfield/github';
-import { buildBlueprintConformancePrompt } from '../prompts/index.ts';
-import { runLLMTask, type LLMTaskOpts } from '../llm-task.ts';
-import { loadBlueprint, pickCandidateDomains, type Blueprint } from '../blueprint.ts';
+import type {
+  GitHubClientPort as GitHubClient,
+  Issue,
+} from "@superfield/github";
+import { buildBlueprintConformancePrompt } from "../prompts/index.ts";
+import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
+import {
+  loadBlueprint,
+  pickCandidateDomains,
+  type Blueprint,
+} from "../blueprint.ts";
 
 export interface BlueprintViolation {
   rule_id: string;
@@ -23,14 +30,14 @@ export interface BlueprintConformanceResult {
 }
 
 export interface BlueprintConformanceOpts {
-  spawn?: LLMTaskOpts['spawn'];
+  spawn?: LLMTaskOpts["spawn"];
   cwd?: string;
   concurrency?: number;
   /** Pre-loaded blueprint. If omitted, loaded from `cwd`/blueprint. */
   blueprint?: Blueprint;
 }
 
-const MARKER = '<!-- superfield-blueprint -->';
+const MARKER = "<!-- superfield-blueprint -->";
 
 /**
  * Planning loop step: evaluate each open issue against candidate blueprint
@@ -49,7 +56,7 @@ export async function runBlueprintConformance(
 
   const allIssues = await client.listIssues(owner, repo);
   const candidates = allIssues.filter(
-    (i) => !i.labels.includes('plan') && !i.labels.includes('ci-failure'),
+    (i) => !i.labels.includes("plan") && !i.labels.includes("ci-failure"),
   );
 
   const concurrency = Math.max(1, opts.concurrency ?? 3);
@@ -59,7 +66,9 @@ export async function runBlueprintConformance(
   for (let i = 0; i < candidates.length; i += concurrency) {
     const batch = candidates.slice(i, i + concurrency);
     const results = await Promise.all(
-      batch.map((issue) => checkOne(client, owner, repo, issue, blueprint, opts)),
+      batch.map((issue) =>
+        checkOne(client, owner, repo, issue, blueprint, opts),
+      ),
     );
     for (const r of results) {
       if (!r) continue;
@@ -98,11 +107,11 @@ async function checkOne(
     { prompt, spawn: opts.spawn, cwd: opts.cwd },
     (json) => {
       const parsed = JSON.parse(json) as Partial<BlueprintConformanceReport>;
-      if (typeof parsed.issue_number !== 'number') {
-        throw new Error('missing issue_number');
+      if (typeof parsed.issue_number !== "number") {
+        throw new Error("missing issue_number");
       }
       if (!Array.isArray(parsed.violations)) {
-        throw new Error('missing violations array');
+        throw new Error("missing violations array");
       }
       return {
         issue_number: parsed.issue_number,
@@ -130,22 +139,24 @@ async function postConformanceFindings(
 ): Promise<void> {
   const lines: string[] = [
     MARKER,
-    '## Blueprint conformance — advisory',
-    '',
-    'This issue may conflict with rules in the Superfield Blueprint. These \
+    "## Blueprint conformance — advisory",
+    "",
+    "This issue may conflict with rules in the Superfield Blueprint. These \
 findings are advisory — they do not block the issue from being worked. The \
-agent picking up this issue should weigh each concern.',
-    '',
+agent picking up this issue should weigh each concern.",
+    "",
   ];
 
   for (const v of report.violations) {
-    lines.push(`### \`${v.rule_id}\` — ${v.rule_name} (${v.rule_type}, ${v.domain})`);
-    lines.push('');
+    lines.push(
+      `### \`${v.rule_id}\` — ${v.rule_name} (${v.rule_type}, ${v.domain})`,
+    );
+    lines.push("");
     lines.push(v.concern);
-    lines.push('');
+    lines.push("");
   }
 
-  const body = lines.join('\n');
+  const body = lines.join("\n");
   const comments = await client.listIssueComments(owner, repo, issueNumber);
   const existing = comments.find((c) => c.body.startsWith(MARKER));
   if (existing) {

@@ -1,5 +1,5 @@
-import type { Issue } from '@superfield/github';
-import type { AgentRole } from '../sessions.ts';
+import type { Issue } from "@superfield/github";
+import type { AgentRole } from "../sessions.ts";
 import {
   projectContextFragment,
   commitStandardsFragment,
@@ -8,7 +8,7 @@ import {
   tddOutsideInFragment,
   blueprintReferenceFragment,
   joinSections,
-} from './fragments/index.ts';
+} from "./fragments/index.ts";
 
 export interface DevelopIssueContext {
   issue: Issue;
@@ -37,7 +37,7 @@ export function buildDevelopIssuePrompt(ctx: DevelopIssueContext): string {
 - URL: ${ctx.issue.html_url}`,
     `## Issue body
 
-${ctx.issue.body ?? '(no body)'}`,
+${ctx.issue.body ?? "(no body)"}`,
     worktreeIsolationFragment(ctx.worktreePath),
     roleFragment(ctx.role),
     tddOutsideInFragment(),

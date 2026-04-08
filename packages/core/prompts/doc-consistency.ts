@@ -1,4 +1,4 @@
-import { joinSections } from './fragments/index.ts';
+import { joinSections } from "./fragments/index.ts";
 
 export interface DocConsistencyContext {
   /** Sample of canonical doc snippets keyed by source path. */
@@ -15,9 +15,12 @@ export interface DocConsistencyContext {
  * for contradictions and resolves them by treating the code as ground truth.
  */
 export function buildDocConsistencyPrompt(ctx: DocConsistencyContext): string {
-  const fmt = (label: string, items: Array<{ path: string; content: string }>) =>
+  const fmt = (
+    label: string,
+    items: Array<{ path: string; content: string }>,
+  ) =>
     `### ${label}\n\n` +
-    items.map((s) => `**${s.path}**\n\n${s.content}`).join('\n\n---\n\n');
+    items.map((s) => `**${s.path}**\n\n${s.content}`).join("\n\n---\n\n");
 
   return joinSections(
     `## Task: doc-consistency
@@ -33,11 +36,11 @@ A change at any level can create inconsistencies at the others. Your job is \
 to detect and resolve them. Treat the code (inline level) as ground truth: \
 if module or canonical docs contradict the inline reality, the inline \
 description wins.`,
-    fmt('Canonical snippets', ctx.canonicalSnippets),
-    fmt('Module snippets', ctx.moduleSnippets),
+    fmt("Canonical snippets", ctx.canonicalSnippets),
+    fmt("Module snippets", ctx.moduleSnippets),
     `### Inline snippets
 
-${ctx.inlineSnippets.map((s) => `**${s.path}** — \`${s.symbol}\`\n\n${s.content}`).join('\n\n---\n\n')}`,
+${ctx.inlineSnippets.map((s) => `**${s.path}** — \`${s.symbol}\`\n\n${s.content}`).join("\n\n---\n\n")}`,
     `## What you check
 
 For each canonical or module snippet, ask:

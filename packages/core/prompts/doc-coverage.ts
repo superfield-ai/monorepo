@@ -1,4 +1,4 @@
-import { joinSections } from './fragments/index.ts';
+import { joinSections } from "./fragments/index.ts";
 
 export interface DocCoverageContext {
   /** Files changed in the PR that just merged. */
@@ -22,7 +22,7 @@ lack a doc comment.
 
 ### Files changed
 
-${ctx.changedFiles.map((f) => `- ${f}`).join('\n')}`,
+${ctx.changedFiles.map((f) => `- ${f}`).join("\n")}`,
     `## What you check
 
 For each \`.ts\` file in the list above:

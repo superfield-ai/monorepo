@@ -1,11 +1,11 @@
-import type { AgentRole } from '../../sessions.ts';
+import type { AgentRole } from "../../sessions.ts";
 
 /**
  * Role-specific behavior fragment. Determines the agent's stop conditions,
  * PR-opening responsibility, and idle behavior.
  */
 export function roleFragment(role: AgentRole): string {
-  if (role === 'primary') {
+  if (role === "primary") {
     return `\
 ## Role: PRIMARY
 

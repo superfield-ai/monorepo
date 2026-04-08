@@ -1,4 +1,4 @@
-import { Octokit } from '@octokit/rest';
+import { Octokit } from "@octokit/rest";
 
 export interface CheckRun {
   id: number;
@@ -60,20 +60,66 @@ export interface GitHubClientPort {
   listIssues(owner: string, repo: string, labels?: string[]): Promise<Issue[]>;
   createIssue(params: CreateIssueParams): Promise<Issue>;
   updateIssueBody(params: UpdateIssueParams): Promise<void>;
-  listIssueComments(owner: string, repo: string, issue_number: number): Promise<{ id: number; body: string }[]>;
-  createIssueComment(owner: string, repo: string, issue_number: number, body: string): Promise<{ id: number }>;
-  updateIssueComment(owner: string, repo: string, comment_id: number, body: string): Promise<void>;
-  deleteIssueComment(owner: string, repo: string, comment_id: number): Promise<void>;
-  listMergedPullRequests(owner: string, repo: string, perPage?: number): Promise<PullRequest[]>;
-  listPullRequestFiles(owner: string, repo: string, pull_number: number): Promise<string[]>;
-  createBranch(owner: string, repo: string, branch: string, fromSha: string): Promise<void>;
+  listIssueComments(
+    owner: string,
+    repo: string,
+    issue_number: number,
+  ): Promise<{ id: number; body: string }[]>;
+  createIssueComment(
+    owner: string,
+    repo: string,
+    issue_number: number,
+    body: string,
+  ): Promise<{ id: number }>;
+  updateIssueComment(
+    owner: string,
+    repo: string,
+    comment_id: number,
+    body: string,
+  ): Promise<void>;
+  deleteIssueComment(
+    owner: string,
+    repo: string,
+    comment_id: number,
+  ): Promise<void>;
+  listMergedPullRequests(
+    owner: string,
+    repo: string,
+    perPage?: number,
+  ): Promise<PullRequest[]>;
+  listPullRequestFiles(
+    owner: string,
+    repo: string,
+    pull_number: number,
+  ): Promise<string[]>;
+  createBranch(
+    owner: string,
+    repo: string,
+    branch: string,
+    fromSha: string,
+  ): Promise<void>;
   putFileContents(params: {
-    owner: string; repo: string; path: string; branch: string;
-    message: string; content: string; sha?: string;
+    owner: string;
+    repo: string;
+    path: string;
+    branch: string;
+    message: string;
+    content: string;
+    sha?: string;
   }): Promise<{ commitSha: string }>;
-  getFileContents(owner: string, repo: string, path: string, ref?: string): Promise<{ content: string; sha: string } | null>;
+  getFileContents(
+    owner: string,
+    repo: string,
+    path: string,
+    ref?: string,
+  ): Promise<{ content: string; sha: string } | null>;
   createPullRequest(params: {
-    owner: string; repo: string; title: string; head: string; base: string; body: string;
+    owner: string;
+    repo: string;
+    title: string;
+    head: string;
+    base: string;
+    body: string;
   }): Promise<{ number: number; html_url: string }>;
 }
 
@@ -89,25 +135,45 @@ export class GitHubClient implements GitHubClientPort {
     return { login: data.login };
   }
 
-  async getHeadSha(owner: string, repo: string, branch = 'main'): Promise<string> {
-    const { data } = await this.octokit.repos.getBranch({ owner, repo, branch });
+  async getHeadSha(
+    owner: string,
+    repo: string,
+    branch = "main",
+  ): Promise<string> {
+    const { data } = await this.octokit.repos.getBranch({
+      owner,
+      repo,
+      branch,
+    });
     return data.commit.sha;
   }
 
-  async getCheckRuns(owner: string, repo: string, ref: string): Promise<CheckRun[]> {
+  async getCheckRuns(
+    owner: string,
+    repo: string,
+    ref: string,
+  ): Promise<CheckRun[]> {
     const { data } = await this.octokit.checks.listForRef({ owner, repo, ref });
     return data.check_runs.map((run) => ({
       id: run.id,
       name: run.name,
       status: run.status,
       conclusion: run.conclusion ?? null,
-      html_url: run.html_url ?? '',
+      html_url: run.html_url ?? "",
       head_sha: run.head_sha,
     }));
   }
 
-  async getIssue(owner: string, repo: string, issue_number: number): Promise<Issue> {
-    const { data } = await this.octokit.issues.get({ owner, repo, issue_number });
+  async getIssue(
+    owner: string,
+    repo: string,
+    issue_number: number,
+  ): Promise<Issue> {
+    const { data } = await this.octokit.issues.get({
+      owner,
+      repo,
+      issue_number,
+    });
     return {
       number: data.number,
       title: data.title,
@@ -115,17 +181,21 @@ export class GitHubClient implements GitHubClientPort {
       html_url: data.html_url,
       state: data.state,
       labels: data.labels
-        .map((l) => (typeof l === 'string' ? l : l.name ?? ''))
+        .map((l) => (typeof l === "string" ? l : (l.name ?? "")))
         .filter(Boolean),
     };
   }
 
-  async listIssues(owner: string, repo: string, labels?: string[]): Promise<Issue[]> {
+  async listIssues(
+    owner: string,
+    repo: string,
+    labels?: string[],
+  ): Promise<Issue[]> {
     const { data } = await this.octokit.issues.listForRepo({
       owner,
       repo,
-      state: 'open',
-      labels: labels?.join(','),
+      state: "open",
+      labels: labels?.join(","),
       per_page: 100,
     });
     return data.map((issue) => ({
@@ -135,7 +205,7 @@ export class GitHubClient implements GitHubClientPort {
       html_url: issue.html_url,
       state: issue.state,
       labels: issue.labels
-        .map((l) => (typeof l === 'string' ? l : l.name ?? ''))
+        .map((l) => (typeof l === "string" ? l : (l.name ?? "")))
         .filter(Boolean),
     }));
   }
@@ -155,7 +225,7 @@ export class GitHubClient implements GitHubClientPort {
       html_url: data.html_url,
       state: data.state,
       labels: data.labels
-        .map((l) => (typeof l === 'string' ? l : l.name ?? ''))
+        .map((l) => (typeof l === "string" ? l : (l.name ?? "")))
         .filter(Boolean),
     };
   }
@@ -180,7 +250,7 @@ export class GitHubClient implements GitHubClientPort {
       issue_number,
       per_page: 100,
     });
-    return data.map((c) => ({ id: c.id, body: c.body ?? '' }));
+    return data.map((c) => ({ id: c.id, body: c.body ?? "" }));
   }
 
   async createIssueComment(
@@ -189,7 +259,12 @@ export class GitHubClient implements GitHubClientPort {
     issue_number: number,
     body: string,
   ): Promise<{ id: number }> {
-    const { data } = await this.octokit.issues.createComment({ owner, repo, issue_number, body });
+    const { data } = await this.octokit.issues.createComment({
+      owner,
+      repo,
+      issue_number,
+      body,
+    });
     return { id: data.id };
   }
 
@@ -202,7 +277,11 @@ export class GitHubClient implements GitHubClientPort {
     await this.octokit.issues.updateComment({ owner, repo, comment_id, body });
   }
 
-  async deleteIssueComment(owner: string, repo: string, comment_id: number): Promise<void> {
+  async deleteIssueComment(
+    owner: string,
+    repo: string,
+    comment_id: number,
+  ): Promise<void> {
     await this.octokit.issues.deleteComment({ owner, repo, comment_id });
   }
 
@@ -218,9 +297,9 @@ export class GitHubClient implements GitHubClientPort {
     const { data } = await this.octokit.pulls.list({
       owner,
       repo,
-      state: 'closed',
-      sort: 'updated',
-      direction: 'desc',
+      state: "closed",
+      sort: "updated",
+      direction: "desc",
       per_page: perPage,
     });
     return data
@@ -290,10 +369,10 @@ export class GitHubClient implements GitHubClientPort {
       path: params.path,
       branch: params.branch,
       message: params.message,
-      content: Buffer.from(params.content, 'utf8').toString('base64'),
+      content: Buffer.from(params.content, "utf8").toString("base64"),
       sha: params.sha,
     });
-    return { commitSha: data.commit.sha ?? '' };
+    return { commitSha: data.commit.sha ?? "" };
   }
 
   async getFileContents(
@@ -303,9 +382,14 @@ export class GitHubClient implements GitHubClientPort {
     ref?: string,
   ): Promise<{ content: string; sha: string } | null> {
     try {
-      const { data } = await this.octokit.repos.getContent({ owner, repo, path, ref });
-      if (Array.isArray(data) || data.type !== 'file') return null;
-      const content = Buffer.from(data.content, 'base64').toString('utf8');
+      const { data } = await this.octokit.repos.getContent({
+        owner,
+        repo,
+        path,
+        ref,
+      });
+      if (Array.isArray(data) || data.type !== "file") return null;
+      const content = Buffer.from(data.content, "base64").toString("utf8");
       return { content, sha: data.sha };
     } catch (err: unknown) {
       if ((err as { status?: number }).status === 404) return null;
@@ -332,25 +416,52 @@ export class GitHubClient implements GitHubClientPort {
     return { number: data.number, html_url: data.html_url };
   }
 
-  async listAppInstallations(appSlug: string): Promise<{ id: number; accountLogin: string; accountType: 'User' | 'Organization'; repositorySelection: 'all' | 'selected' }[]> {
+  async listAppInstallations(appSlug: string): Promise<
+    {
+      id: number;
+      accountLogin: string;
+      accountType: "User" | "Organization";
+      repositorySelection: "all" | "selected";
+    }[]
+  > {
     const all = await this.listAllInstallations();
     return all
       .filter((inst) => inst.appSlug.toLowerCase() === appSlug.toLowerCase())
-      .map((inst) => ({ id: inst.id, accountLogin: inst.accountLogin, accountType: inst.accountType, repositorySelection: inst.repositorySelection }));
+      .map((inst) => ({
+        id: inst.id,
+        accountLogin: inst.accountLogin,
+        accountType: inst.accountType,
+        repositorySelection: inst.repositorySelection,
+      }));
   }
 
-  async listAllInstallations(): Promise<{ id: number; appSlug: string; accountLogin: string; accountType: 'User' | 'Organization'; repositorySelection: 'all' | 'selected' }[]> {
+  async listAllInstallations(): Promise<
+    {
+      id: number;
+      appSlug: string;
+      accountLogin: string;
+      accountType: "User" | "Organization";
+      repositorySelection: "all" | "selected";
+    }[]
+  > {
     const result = [];
     let page = 1;
     while (true) {
-      const { data } = await this.octokit.apps.listInstallationsForAuthenticatedUser({ per_page: 100, page });
+      const { data } =
+        await this.octokit.apps.listInstallationsForAuthenticatedUser({
+          per_page: 100,
+          page,
+        });
       for (const inst of data.installations) {
         result.push({
           id: inst.id,
-          appSlug: inst.app_slug ?? '',
-          accountLogin: inst.account && 'login' in inst.account ? inst.account.login : '',
-          accountType: (inst.account && 'type' in inst.account ? inst.account.type : 'User') as 'User' | 'Organization',
-          repositorySelection: inst.repository_selection as 'all' | 'selected',
+          appSlug: inst.app_slug ?? "",
+          accountLogin:
+            inst.account && "login" in inst.account ? inst.account.login : "",
+          accountType: (inst.account && "type" in inst.account
+            ? inst.account.type
+            : "User") as "User" | "Organization",
+          repositorySelection: inst.repository_selection as "all" | "selected",
         });
       }
       if (data.installations.length < 100) break;
@@ -363,11 +474,12 @@ export class GitHubClient implements GitHubClientPort {
     const all: string[] = [];
     let page = 1;
     while (true) {
-      const { data } = await this.octokit.apps.listInstallationReposForAuthenticatedUser({
-        installation_id: installationId,
-        per_page: 100,
-        page,
-      });
+      const { data } =
+        await this.octokit.apps.listInstallationReposForAuthenticatedUser({
+          installation_id: installationId,
+          per_page: 100,
+          page,
+        });
       for (const repo of data.repositories) {
         all.push(repo.full_name);
       }

@@ -1,17 +1,19 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import * as os from 'node:os';
-import { tickDevLoop } from '../../loops/dev-loop.ts';
-import { WorktreeManager } from '@superfield/git';
-import type { GitHubClient, Issue } from '@superfield/github';
-import type { AgentOpts, AgentResult } from '../../agent.ts';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
+import { tickDevLoop } from "../../loops/dev-loop.ts";
+import { WorktreeManager } from "@superfield/git";
+import type { GitHubClient, Issue } from "@superfield/github";
+import type { AgentOpts, AgentResult } from "../../agent.ts";
 
 let tmpRoot: string;
 let worktrees: WorktreeManager;
 
 beforeEach(async () => {
-  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), 'superfield-devloop-test-'));
+  tmpRoot = await fs.mkdtemp(
+    path.join(os.tmpdir(), "superfield-devloop-test-"),
+  );
   worktrees = new WorktreeManager({ root: tmpRoot });
   // Pre-create the worktree dir so the test doesn't try to clone over the network
 });
@@ -27,10 +29,10 @@ afterEach(async () => {
 function makeIssue(overrides: Partial<Issue> = {}): Issue {
   return {
     number: 10,
-    title: 'feat: build the thing',
-    body: '## Phase\nIdentity\n\n## Motivation\nbecause\n\n## Features\n- [ ] x\n\n## Test Plan\n- [ ] y',
-    html_url: '',
-    state: 'open',
+    title: "feat: build the thing",
+    body: "## Phase\nIdentity\n\n## Motivation\nbecause\n\n## Features\n- [ ] x\n\n## Test Plan\n- [ ] y",
+    html_url: "",
+    state: "open",
     labels: [],
     ...overrides,
   };
@@ -63,8 +65,8 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
 function fakeSpawn(result: Partial<AgentResult> = {}) {
   return vi.fn(
     async (_opts: AgentOpts): Promise<AgentResult> => ({
-      sessionId: 'sess-new',
-      output: 'done',
+      sessionId: "sess-new",
+      output: "done",
       isError: false,
       ...result,
     }),
@@ -74,18 +76,18 @@ function fakeSpawn(result: Partial<AgentResult> = {}) {
 async function preCreateWorktree(issueNumber: number, slug: string) {
   // Avoid hitting the network: pre-create the worktree directory so
   // WorktreeManager.create returns the existing path immediately.
-  const dir = worktrees.worktreePath('o', 'r', issueNumber, slug);
+  const dir = worktrees.worktreePath("o", "r", issueNumber, slug);
   await fs.mkdir(dir, { recursive: true });
 }
 
-describe('tickDevLoop', () => {
-  it('returns idle when no Plan issue exists', async () => {
+describe("tickDevLoop", () => {
+  it("returns idle when no Plan issue exists", async () => {
     const client = makeClient();
     const result = await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn: fakeSpawn(),
     });
@@ -93,27 +95,32 @@ describe('tickDevLoop', () => {
     expect(result.primaryIssue).toBeNull();
   });
 
-  it('selects the top of plan and spawns the agent', async () => {
-    await preCreateWorktree(10, 'build-the-thing');
+  it("selects the top of plan and spawns the agent", async () => {
+    await preCreateWorktree(10, "build-the-thing");
     const client = makeClient({
-      listIssues: vi
-        .fn()
-        .mockResolvedValueOnce([{ number: 99, body: planBodyWithFeature, labels: ['plan'], state: 'open' }]),
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: planBodyWithFeature,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
       getIssue: vi
         .fn()
         // Dependency check for #10 → #5 closed
         .mockImplementation(async (_o, _r, n: number) => {
-          if (n === 5) return makeIssue({ number: 5, state: 'closed' });
-          if (n === 10) return makeIssue({ number: 10, state: 'open' });
+          if (n === 5) return makeIssue({ number: 5, state: "closed" });
+          if (n === 10) return makeIssue({ number: 10, state: "open" });
           throw new Error(`unexpected getIssue ${n}`);
         }),
     });
     const spawn = fakeSpawn();
     const result = await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn,
     });
@@ -123,23 +130,28 @@ describe('tickDevLoop', () => {
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
-  it('does not select an issue whose dependencies are still open', async () => {
-    await preCreateWorktree(5, 'scout-identity');
+  it("does not select an issue whose dependencies are still open", async () => {
+    await preCreateWorktree(5, "scout-identity");
     const client = makeClient({
-      listIssues: vi
-        .fn()
-        .mockResolvedValueOnce([{ number: 99, body: planBodyWithFeature, labels: ['plan'], state: 'open' }]),
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: planBodyWithFeature,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
-        if (n === 5) return makeIssue({ number: 5, state: 'open' }); // scout still open
-        return makeIssue({ number: n, state: 'closed' });
+        if (n === 5) return makeIssue({ number: 5, state: "open" }); // scout still open
+        return makeIssue({ number: n, state: "closed" });
       }),
     });
     const spawn = fakeSpawn();
     const result = await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn,
     });
@@ -147,29 +159,37 @@ describe('tickDevLoop', () => {
     expect(result.primaryIssue).toBe(5);
   });
 
-  it('reports closed when issue closes after agent run', async () => {
-    await preCreateWorktree(10, 'build-the-thing');
+  it("reports closed when issue closes after agent run", async () => {
+    await preCreateWorktree(10, "build-the-thing");
     let issue10Calls = 0;
     const client = makeClient({
-      listIssues: vi
-        .fn()
-        .mockResolvedValueOnce([{ number: 99, body: planBodyWithFeature, labels: ['plan'], state: 'open' }]),
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: planBodyWithFeature,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
-        if (n === 5) return makeIssue({ number: 5, state: 'closed' });
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
         if (n === 10) {
           issue10Calls++;
           // First two calls (eligibility + body fetch): open
           // Third call (post-spawn close check): closed
-          return makeIssue({ number: 10, state: issue10Calls >= 3 ? 'closed' : 'open' });
+          return makeIssue({
+            number: 10,
+            state: issue10Calls >= 3 ? "closed" : "open",
+          });
         }
         throw new Error(`unexpected getIssue ${n}`);
       }),
     });
     const result = await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn: fakeSpawn(),
     });
@@ -178,33 +198,39 @@ describe('tickDevLoop', () => {
     // (only if there was a session comment to delete; in this test there isn't, so noop)
   });
 
-  it('claims slot via session comment before spawning', async () => {
-    await preCreateWorktree(10, 'build-the-thing');
+  it("claims slot via session comment before spawning", async () => {
+    await preCreateWorktree(10, "build-the-thing");
     const client = makeClient({
-      listIssues: vi
-        .fn()
-        .mockResolvedValueOnce([{ number: 99, body: planBodyWithFeature, labels: ['plan'], state: 'open' }]),
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: planBodyWithFeature,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
-        if (n === 5) return makeIssue({ number: 5, state: 'closed' });
-        return makeIssue({ number: 10, state: 'open' });
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        return makeIssue({ number: 10, state: "open" });
       }),
     });
     await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn: fakeSpawn(),
     });
     // upsertSession calls createIssueComment (no existing session)
     expect(client.createIssueComment).toHaveBeenCalled();
-    const body = (client.createIssueComment as ReturnType<typeof vi.fn>).mock.calls[0]![3] as string;
-    expect(body).toContain('<!-- superfield-session:');
+    const body = (client.createIssueComment as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+    expect(body).toContain("<!-- superfield-session:");
     expect(body).toContain('"role": "primary"');
   });
 
-  it('runs speculative slot when scout is closed', async () => {
+  it("runs speculative slot when scout is closed", async () => {
     // Two features in the phase: #10 (primary) and #11 (speculative)
     const planBody = `## Phase: Identity
 
@@ -219,23 +245,25 @@ Scout gate: #5
 - #11 — feat: build the other thing [risk: 4]
   <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
 `;
-    await preCreateWorktree(10, 'build-the-thing');
-    await preCreateWorktree(11, 'build-the-other-thing');
+    await preCreateWorktree(10, "build-the-thing");
+    await preCreateWorktree(11, "build-the-other-thing");
     const client = makeClient({
       listIssues: vi
         .fn()
-        .mockResolvedValueOnce([{ number: 99, body: planBody, labels: ['plan'], state: 'open' }]),
+        .mockResolvedValueOnce([
+          { number: 99, body: planBody, labels: ["plan"], state: "open" },
+        ]),
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
-        if (n === 5) return makeIssue({ number: 5, state: 'closed' }); // scout closed
-        return makeIssue({ number: n, state: 'open' });
+        if (n === 5) return makeIssue({ number: 5, state: "closed" }); // scout closed
+        return makeIssue({ number: n, state: "open" });
       }),
     });
     const spawn = fakeSpawn();
     const result = await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn,
       slotCount: 3,
@@ -246,7 +274,7 @@ Scout gate: #5
     expect(spawn).toHaveBeenCalledTimes(2);
   });
 
-  it('does not open speculative slots when scout is still open', async () => {
+  it("does not open speculative slots when scout is still open", async () => {
     const planBody = `## Phase: Identity
 
 Goal: Build the auth seams.
@@ -260,21 +288,23 @@ Scout gate: #5
 - #11 — feat: build the other thing [risk: 4]
   <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[],"parallel_safe":true} -->
 `;
-    await preCreateWorktree(5, 'scout-identity');
+    await preCreateWorktree(5, "scout-identity");
     const client = makeClient({
       listIssues: vi
         .fn()
-        .mockResolvedValueOnce([{ number: 99, body: planBody, labels: ['plan'], state: 'open' }]),
+        .mockResolvedValueOnce([
+          { number: 99, body: planBody, labels: ["plan"], state: "open" },
+        ]),
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
-        return makeIssue({ number: n, state: 'open' }); // scout still open
+        return makeIssue({ number: n, state: "open" }); // scout still open
       }),
     });
     const spawn = fakeSpawn();
     const result = await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn,
       slotCount: 3,
@@ -286,7 +316,7 @@ Scout gate: #5
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
-  it('does not pair speculative work with a ci-failure primary', async () => {
+  it("does not pair speculative work with a ci-failure primary", async () => {
     const planBody = `- #999 — fix(repo): test:unit failed on main @ abc1234 [risk: 6]
   <!-- superfield: {"number":999,"title":"fix(repo): test:unit failed on main @ abc1234","phase":"watchdog","kind":"ci-failure","risk":6,"dependencies":[],"parallel_safe":true} -->
 
@@ -301,21 +331,23 @@ Scout gate: #5
 - #10 — feat: build the thing [risk: 4]
   <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
 `;
-    await preCreateWorktree(999, 'fix-repo-test-unit-failed-on-main-abc1234');
+    await preCreateWorktree(999, "fix-repo-test-unit-failed-on-main-abc1234");
     const client = makeClient({
       listIssues: vi
         .fn()
-        .mockResolvedValueOnce([{ number: 99, body: planBody, labels: ['plan'], state: 'open' }]),
+        .mockResolvedValueOnce([
+          { number: 99, body: planBody, labels: ["plan"], state: "open" },
+        ]),
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
-        return makeIssue({ number: n, state: 'open' });
+        return makeIssue({ number: n, state: "open" });
       }),
     });
     const spawn = fakeSpawn();
     const result = await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn,
       slotCount: 3,
@@ -326,37 +358,45 @@ Scout gate: #5
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
-  it('resumes existing session when session comment exists', async () => {
-    await preCreateWorktree(10, 'build-the-thing');
+  it("resumes existing session when session comment exists", async () => {
+    await preCreateWorktree(10, "build-the-thing");
     const existingSession = {
-      sessionId: 'sess-existing',
-      role: 'primary' as const,
+      sessionId: "sess-existing",
+      role: "primary" as const,
       slot: 1,
-      startedAt: '2026-04-08T01:00:00.000Z',
+      startedAt: "2026-04-08T01:00:00.000Z",
     };
     const client = makeClient({
-      listIssues: vi
-        .fn()
-        .mockResolvedValueOnce([{ number: 99, body: planBodyWithFeature, labels: ['plan'], state: 'open' }]),
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: planBodyWithFeature,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
-        if (n === 5) return makeIssue({ number: 5, state: 'closed' });
-        return makeIssue({ number: 10, state: 'open' });
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        return makeIssue({ number: 10, state: "open" });
       }),
       listIssueComments: vi.fn().mockResolvedValue([
-        { id: 999, body: `<!-- superfield-session:\n${JSON.stringify(existingSession, null, 2)}\n-->` },
+        {
+          id: 999,
+          body: `<!-- superfield-session:\n${JSON.stringify(existingSession, null, 2)}\n-->`,
+        },
       ]),
     });
     const spawn = fakeSpawn();
     await tickDevLoop({
       client,
-      owner: 'o',
-      repo: 'r',
-      token: 't',
+      owner: "o",
+      repo: "r",
+      token: "t",
       worktrees,
       spawn,
     });
     expect(spawn).toHaveBeenCalledTimes(1);
     const spawnArgs = spawn.mock.calls[0]![0];
-    expect(spawnArgs.sessionId).toBe('sess-existing');
+    expect(spawnArgs.sessionId).toBe("sess-existing");
   });
 });

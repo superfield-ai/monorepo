@@ -1,4 +1,4 @@
-import { spawn } from 'node:child_process';
+import { spawn } from "node:child_process";
 
 // Shape of the JSON object Claude Code emits with --output-format json
 interface ClaudeJsonResult {
@@ -47,25 +47,25 @@ export async function spawnAgent(opts: AgentOpts): Promise<AgentResult> {
   const args = buildArgs(opts);
 
   return new Promise<AgentResult>((resolve, reject) => {
-    const proc = spawn('claude', args, {
+    const proc = spawn("claude", args, {
       cwd: opts.worktreePath,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: ["ignore", "pipe", "pipe"],
       env: { ...process.env },
     });
 
     const stdoutChunks: Buffer[] = [];
     const stderrChunks: Buffer[] = [];
 
-    proc.stdout.on('data', (chunk: Buffer) => stdoutChunks.push(chunk));
-    proc.stderr.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+    proc.stdout.on("data", (chunk: Buffer) => stdoutChunks.push(chunk));
+    proc.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
-    proc.on('error', (err) => {
+    proc.on("error", (err) => {
       reject(new Error(`Failed to spawn claude: ${err.message}`));
     });
 
-    proc.on('close', (code) => {
-      const raw = Buffer.concat(stdoutChunks).toString('utf8').trim();
-      const stderr = Buffer.concat(stderrChunks).toString('utf8').trim();
+    proc.on("close", (code) => {
+      const raw = Buffer.concat(stdoutChunks).toString("utf8").trim();
+      const stderr = Buffer.concat(stderrChunks).toString("utf8").trim();
 
       let parsed: ClaudeJsonResult;
       try {
@@ -82,13 +82,15 @@ export async function spawnAgent(opts: AgentOpts): Promise<AgentResult> {
       }
 
       if (!parsed.session_id) {
-        reject(new Error(`claude response missing session_id: ${raw.slice(0, 500)}`));
+        reject(
+          new Error(`claude response missing session_id: ${raw.slice(0, 500)}`),
+        );
         return;
       }
 
       resolve({
         sessionId: parsed.session_id,
-        output: parsed.result ?? parsed.error ?? '',
+        output: parsed.result ?? parsed.error ?? "",
         isError: parsed.is_error,
         costUsd: parsed.cost_usd,
       });
@@ -98,19 +100,21 @@ export async function spawnAgent(opts: AgentOpts): Promise<AgentResult> {
 
 function buildArgs(opts: AgentOpts): string[] {
   const args: string[] = [
-    '--print',
-    '--output-format', 'json',
-    '--no-ansi',
-    '--dangerously-skip-permissions',
-    '--max-turns', String(opts.maxTurns ?? 50),
+    "--print",
+    "--output-format",
+    "json",
+    "--no-ansi",
+    "--dangerously-skip-permissions",
+    "--max-turns",
+    String(opts.maxTurns ?? 50),
   ];
 
   if (opts.model) {
-    args.push('--model', opts.model);
+    args.push("--model", opts.model);
   }
 
   if (opts.sessionId) {
-    args.push('--resume', opts.sessionId);
+    args.push("--resume", opts.sessionId);
   }
 
   args.push(opts.prompt);

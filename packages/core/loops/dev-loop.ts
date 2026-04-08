@@ -1,14 +1,17 @@
-import type { GitHubClientPort as GitHubClient, Issue } from '@superfield/github';
-import { WorktreeManager, type IssueWorktree } from '@superfield/git';
-import { parsePlan, type PlanIssueMetadata, type Plan } from '../plan.ts';
+import type {
+  GitHubClientPort as GitHubClient,
+  Issue,
+} from "@superfield/github";
+import { WorktreeManager, type IssueWorktree } from "@superfield/git";
+import { parsePlan, type PlanIssueMetadata, type Plan } from "../plan.ts";
 import {
   buildDevelopIssuePrompt,
   buildDevScoutPrompt,
   buildCIFailurePrompt,
-} from '../prompts/index.ts';
-import { spawnAgent, type AgentOpts, type AgentResult } from '../agent.ts';
-import { getSession, upsertSession, deleteSession } from '../sessions.ts';
-import { withRetry, CircuitBreaker } from '../retry.ts';
+} from "../prompts/index.ts";
+import { spawnAgent, type AgentOpts, type AgentResult } from "../agent.ts";
+import { getSession, upsertSession, deleteSession } from "../sessions.ts";
+import { withRetry, CircuitBreaker } from "../retry.ts";
 
 /**
  * The dev loop — drives one primary issue at a time through the 7-stage
@@ -67,7 +70,8 @@ const DEFAULT_IDLE_MS = 30_000;
 export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   const idleMs = opts.idlePollMs ?? DEFAULT_IDLE_MS;
   // Shared circuit breaker across all slots in this loop instance
-  const circuit = opts.circuit ?? new CircuitBreaker({ tripAt: 5, resetMs: 5 * 60 * 1000 });
+  const circuit =
+    opts.circuit ?? new CircuitBreaker({ tripAt: 5, resetMs: 5 * 60 * 1000 });
   while (true) {
     const result = await tickDevLoop({ ...opts, circuit });
     if (result.idle) {
@@ -83,20 +87,34 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
 }
 
 /** One iteration of the dev loop. Exported for testing. */
-export async function tickDevLoop(opts: DevLoopOpts): Promise<DevLoopTickResult> {
+export async function tickDevLoop(
+  opts: DevLoopOpts,
+): Promise<DevLoopTickResult> {
   const { client, owner, repo } = opts;
 
   // 1. Read the Plan
-  const planIssues = await client.listIssues(owner, repo, ['plan']);
+  const planIssues = await client.listIssues(owner, repo, ["plan"]);
   if (planIssues.length === 0) {
-    return { primaryIssue: null, speculativeIssues: [], closed: false, idle: true, reason: 'no Plan issue exists' };
+    return {
+      primaryIssue: null,
+      speculativeIssues: [],
+      closed: false,
+      idle: true,
+      reason: "no Plan issue exists",
+    };
   }
-  const plan = parsePlan(planIssues[0]!.body ?? '');
+  const plan = parsePlan(planIssues[0]!.body ?? "");
 
   // 2. Select primary
   const primaryEntry = await selectPrimary(client, owner, repo, plan);
   if (!primaryEntry) {
-    return { primaryIssue: null, speculativeIssues: [], closed: false, idle: true, reason: 'no eligible primary' };
+    return {
+      primaryIssue: null,
+      speculativeIssues: [],
+      closed: false,
+      idle: true,
+      reason: "no eligible primary",
+    };
   }
 
   // 3. Select speculative candidates (only if scout is merged for the primary's phase)
@@ -111,12 +129,15 @@ export async function tickDevLoop(opts: DevLoopOpts): Promise<DevLoopTickResult>
   );
 
   // 4. Run primary slot to completion + speculative slots in parallel
-  const primaryPromise = runSlot(opts, plan, primaryEntry, 'primary', 1);
+  const primaryPromise = runSlot(opts, plan, primaryEntry, "primary", 1);
   const speculativePromises = speculative.map((entry, idx) =>
-    runSlot(opts, plan, entry, 'speculative', idx + 2),
+    runSlot(opts, plan, entry, "speculative", idx + 2),
   );
 
-  const [primaryResult] = await Promise.all([primaryPromise, ...speculativePromises]);
+  const [primaryResult] = await Promise.all([
+    primaryPromise,
+    ...speculativePromises,
+  ]);
 
   return {
     primaryIssue: primaryEntry.number,
@@ -134,13 +155,13 @@ async function runSlot(
   opts: DevLoopOpts,
   plan: Plan,
   entry: PlanIssueMetadata,
-  role: 'primary' | 'speculative',
+  role: "primary" | "speculative",
   slot: number,
 ): Promise<{ closed: boolean }> {
   const { client, owner, repo } = opts;
 
   const issue = await client.getIssue(owner, repo, entry.number);
-  if (issue.state === 'closed') {
+  if (issue.state === "closed") {
     await deleteSession(client, owner, repo, issue.number);
     return { closed: true };
   }
@@ -163,7 +184,7 @@ async function runSlot(
   const prompt = buildPromptForKind(entry, issue, branch, wt, plan, role);
 
   await upsertSession(client, owner, repo, entry.number, {
-    sessionId: sessionId ?? 'pending',
+    sessionId: sessionId ?? "pending",
     role,
     slot,
     startedAt: new Date().toISOString(),
@@ -190,9 +211,9 @@ async function runSlot(
   // Speculative agents exit when their checklist is complete; the issue
   // does NOT close until the primary later opens and merges the PR. So we
   // only check close on the primary slot.
-  if (role === 'primary') {
+  if (role === "primary") {
     const updatedIssue = await client.getIssue(owner, repo, entry.number);
-    if (updatedIssue.state === 'closed') {
+    if (updatedIssue.state === "closed") {
       await deleteSession(client, owner, repo, entry.number);
       return { closed: true };
     }
@@ -214,7 +235,7 @@ async function selectSpeculative(
   count: number,
 ): Promise<PlanIssueMetadata[]> {
   if (count <= 0) return [];
-  if (primary.kind === 'ci-failure') return []; // CI failures are never paired
+  if (primary.kind === "ci-failure") return []; // CI failures are never paired
 
   const phase = plan.phases.find((p) => p.name === primary.phase);
   if (!phase) return [];
@@ -222,13 +243,13 @@ async function selectSpeculative(
 
   // Scout gate: scout must be CLOSED
   const scoutIssue = await client.getIssue(owner, repo, phase.scoutGate);
-  if (scoutIssue.state !== 'closed') return [];
+  if (scoutIssue.state !== "closed") return [];
 
   const candidates: PlanIssueMetadata[] = [];
   for (const entry of phase.issues) {
     if (candidates.length >= count) break;
     if (entry.number === primary.number) continue;
-    if (entry.kind === 'dev-scout') continue;
+    if (entry.kind === "dev-scout") continue;
     if (await isEligible(client, owner, repo, entry)) {
       candidates.push(entry);
     }
@@ -270,7 +291,7 @@ async function isEligible(
   entry: PlanIssueMetadata,
 ): Promise<boolean> {
   const issue = await client.getIssue(owner, repo, entry.number);
-  if (issue.state === 'closed') return false;
+  if (issue.state === "closed") return false;
   return predecessorsClosed(client, owner, repo, entry);
 }
 
@@ -283,7 +304,7 @@ async function predecessorsClosed(
   if (entry.dependencies.length === 0) return true;
   for (const depNumber of entry.dependencies) {
     const dep = await client.getIssue(owner, repo, depNumber);
-    if (dep.state !== 'closed') return false;
+    if (dep.state !== "closed") return false;
   }
   return true;
 }
@@ -291,17 +312,21 @@ async function predecessorsClosed(
 function branchForIssue(entry: PlanIssueMetadata): string {
   const slug = slugFromTitle(entry.title);
   const prefix =
-    entry.kind === 'dev-scout' ? 'chore' : entry.kind === 'ci-failure' ? 'fix' : 'feat';
+    entry.kind === "dev-scout"
+      ? "chore"
+      : entry.kind === "ci-failure"
+        ? "fix"
+        : "feat";
   return `${prefix}/${entry.number}-${slug}`;
 }
 
 function slugFromTitle(title: string): string {
   return title
     .toLowerCase()
-    .replace(/^[a-z]+:\s*/, '') // strip conventional prefix
-    .replace(/\[.*?\]\s*/g, '') // strip [dev-scout] tags
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
+    .replace(/^[a-z]+:\s*/, "") // strip conventional prefix
+    .replace(/\[.*?\]\s*/g, "") // strip [dev-scout] tags
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-|-$/g, "")
     .slice(0, 40);
 }
 
@@ -311,9 +336,9 @@ function buildPromptForKind(
   branch: string,
   wt: IssueWorktree,
   plan: Plan,
-  role: 'primary' | 'speculative',
+  role: "primary" | "speculative",
 ): string {
-  if (entry.kind === 'ci-failure') {
+  if (entry.kind === "ci-failure") {
     return buildCIFailurePrompt({
       issue,
       checkName: extractCheckName(entry.title),
@@ -324,14 +349,14 @@ function buildPromptForKind(
     });
   }
 
-  if (entry.kind === 'dev-scout') {
+  if (entry.kind === "dev-scout") {
     const phase = plan.phases.find((p) => p.name === entry.phase);
     return buildDevScoutPrompt({
       scoutIssue: issue,
       worktreePath: wt.path,
       branch,
       phaseName: entry.phase,
-      phaseGoal: phase?.goal ?? '',
+      phaseGoal: phase?.goal ?? "",
       featureIssues: [],
     });
   }
@@ -348,23 +373,23 @@ function buildPromptForKind(
 function extractCheckName(title: string): string {
   // "fix(repo): test:unit failed on main @ abc1234" → "test:unit"
   const match = /:\s*(.+?)\s+failed/.exec(title);
-  return match?.[1] ?? 'unknown';
+  return match?.[1] ?? "unknown";
 }
 
 function extractSha(title: string): string {
   const match = /@\s*([a-f0-9]+)/.exec(title);
-  return match?.[1] ?? '';
+  return match?.[1] ?? "";
 }
 
 function extractCheckUrl(body: string | null): string {
-  if (!body) return '';
+  if (!body) return "";
   const match = /(https:\/\/github\.com\/[^\s)]+\/runs\/\d+)/.exec(body);
-  return match?.[1] ?? '';
+  return match?.[1] ?? "";
 }
 
 const DEFAULT_STALE_SESSION_MS = 4 * 60 * 60 * 1000; // 4 hours
-const SESSION_MARKER = '<!-- superfield-session:';
-const SESSION_MARKER_END = '-->';
+const SESSION_MARKER = "<!-- superfield-session:";
+const SESSION_MARKER_END = "-->";
 
 /**
  * Maintenance pass: prune worktrees for closed issues and reap stale session
@@ -392,8 +417,13 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
     allWorktrees.map(async (wt) => {
       try {
         const issue = await client.getIssue(owner, repo, wt.issueNumber);
-        if (issue.state === 'closed') {
-          await worktrees.prune(owner, repo, wt.issueNumber, slugFromPath(wt.path));
+        if (issue.state === "closed") {
+          await worktrees.prune(
+            owner,
+            repo,
+            wt.issueNumber,
+            slugFromPath(wt.path),
+          );
           prunedWorktrees.push(wt.issueNumber);
         }
       } catch {
@@ -407,17 +437,25 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
   await Promise.all(
     openIssues.map(async (issue) => {
       try {
-        const comments = await client.listIssueComments(owner, repo, issue.number);
-        const sessionComment = comments.find((c) => c.body.startsWith(SESSION_MARKER));
+        const comments = await client.listIssueComments(
+          owner,
+          repo,
+          issue.number,
+        );
+        const sessionComment = comments.find((c) =>
+          c.body.startsWith(SESSION_MARKER),
+        );
         if (!sessionComment) return;
 
-        const jsonStart = sessionComment.body.indexOf('\n') + 1;
+        const jsonStart = sessionComment.body.indexOf("\n") + 1;
         const jsonEnd = sessionComment.body.lastIndexOf(SESSION_MARKER_END);
         if (jsonEnd < 0) return;
 
         let startedAt: string;
         try {
-          const parsed = JSON.parse(sessionComment.body.slice(jsonStart, jsonEnd).trim()) as {
+          const parsed = JSON.parse(
+            sessionComment.body.slice(jsonStart, jsonEnd).trim(),
+          ) as {
             startedAt: string;
           };
           startedAt = parsed.startedAt;
@@ -441,7 +479,7 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
 
 /** Extracts the slug from a worktree path (last path segment after issue-N-). */
 function slugFromPath(wtPath: string): string {
-  const base = wtPath.split('/').pop() ?? '';
+  const base = wtPath.split("/").pop() ?? "";
   const match = /^issue-\d+-(.+)$/.exec(base);
   return match?.[1] ?? base;
 }

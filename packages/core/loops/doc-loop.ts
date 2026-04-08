@@ -1,12 +1,15 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import type { GitHubClientPort as GitHubClient, PullRequest } from '@superfield/github';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import type {
+  GitHubClientPort as GitHubClient,
+  PullRequest,
+} from "@superfield/github";
 import {
   buildDocCoveragePrompt,
   buildDocCanonicalSyncPrompt,
   buildDocConsistencyPrompt,
-} from '../prompts/index.ts';
-import { runLLMTask, type LLMTaskOpts } from '../llm-task.ts';
+} from "../prompts/index.ts";
+import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
 
 /**
  * The documentation loop. Triggered on every merge to `main`. Runs three
@@ -22,7 +25,7 @@ export interface DocLoopOpts {
   repo: string;
   /** Local checkout path used for reading current PRD/README/source files. */
   repoPath: string;
-  spawn?: LLMTaskOpts['spawn'];
+  spawn?: LLMTaskOpts["spawn"];
   /** Poll interval in ms between checks for newly merged PRs. Default 60_000. */
   pollIntervalMs?: number;
 }
@@ -48,7 +51,7 @@ export interface DocSyncProposal {
 }
 
 export interface DocConsistencyFinding {
-  level: 'canonical' | 'module' | 'inline';
+  level: "canonical" | "module" | "inline";
   path: string;
   section?: string;
   concern: string;
@@ -93,7 +96,9 @@ export interface DocLoopTickOpts extends DocLoopOpts {
 }
 
 /** One iteration of the doc loop. Exported for testing. */
-export async function tickDocLoop(opts: DocLoopTickOpts): Promise<DocLoopTickResult> {
+export async function tickDocLoop(
+  opts: DocLoopTickOpts,
+): Promise<DocLoopTickResult> {
   const { client, owner, repo, lastProcessedAt } = opts;
 
   // 1. Find the most-recently merged PR after the watermark
@@ -113,24 +118,34 @@ export async function tickDocLoop(opts: DocLoopTickOpts): Promise<DocLoopTickRes
   }
 
   // 2. Fetch changed files
-  const changedFiles = await client.listPullRequestFiles(owner, repo, candidate.number);
+  const changedFiles = await client.listPullRequestFiles(
+    owner,
+    repo,
+    candidate.number,
+  );
   const sourceFiles = changedFiles.filter(
-    (f) => /\.tsx?$/.test(f) && !f.includes('/tests/') && !f.endsWith('.test.ts'),
+    (f) =>
+      /\.tsx?$/.test(f) && !f.includes("/tests/") && !f.endsWith(".test.ts"),
   );
 
   // 3. Run the three doc tasks in parallel.
   //    Canonical sync and consistency require at least one canonical doc
   //    (docs/prd.md or README.md) to be present. Skip both gracefully when
   //    neither exists — an LLM call with zero canonical content is useless.
-  const hasPrd = await fileExists(opts.repoPath, 'docs/prd.md');
-  const hasReadme = await fileExists(opts.repoPath, 'README.md');
+  const hasPrd = await fileExists(opts.repoPath, "docs/prd.md");
+  const hasReadme = await fileExists(opts.repoPath, "README.md");
   const hasCanonicalDocs = hasPrd || hasReadme;
 
-  const [coverageResult, canonicalResult, consistencyResult] = await Promise.all([
-    runCoverageScan(opts, candidate.number, sourceFiles),
-    hasCanonicalDocs ? runCanonicalSync(opts, candidate, changedFiles) : Promise.resolve(null),
-    hasCanonicalDocs ? runConsistencyCheck(opts, sourceFiles) : Promise.resolve([]),
-  ]);
+  const [coverageResult, canonicalResult, consistencyResult] =
+    await Promise.all([
+      runCoverageScan(opts, candidate.number, sourceFiles),
+      hasCanonicalDocs
+        ? runCanonicalSync(opts, candidate, changedFiles)
+        : Promise.resolve(null),
+      hasCanonicalDocs
+        ? runConsistencyCheck(opts, sourceFiles)
+        : Promise.resolve([]),
+    ]);
 
   const hasChanges =
     (canonicalResult?.prd_patches.length ?? 0) > 0 ||
@@ -139,7 +154,12 @@ export async function tickDocLoop(opts: DocLoopTickOpts): Promise<DocLoopTickRes
 
   let docPrNumber: number | null = null;
   if (hasChanges && canonicalResult) {
-    docPrNumber = await openDocPR(opts, candidate, canonicalResult, consistencyResult);
+    docPrNumber = await openDocPR(
+      opts,
+      candidate,
+      canonicalResult,
+      consistencyResult,
+    );
   }
 
   return {
@@ -158,11 +178,16 @@ async function runCoverageScan(
   sourceFiles: string[],
 ): Promise<DocCoverageMissing[]> {
   if (sourceFiles.length === 0) return [];
-  const prompt = buildDocCoveragePrompt({ prNumber, changedFiles: sourceFiles });
+  const prompt = buildDocCoveragePrompt({
+    prNumber,
+    changedFiles: sourceFiles,
+  });
   const { result } = await runLLMTask<{ missing_docs: DocCoverageMissing[] }>(
     { prompt, spawn: opts.spawn, cwd: opts.repoPath },
     (json) => {
-      const parsed = JSON.parse(json) as { missing_docs?: DocCoverageMissing[] };
+      const parsed = JSON.parse(json) as {
+        missing_docs?: DocCoverageMissing[];
+      };
       return { missing_docs: parsed.missing_docs ?? [] };
     },
   );
@@ -174,15 +199,15 @@ async function runCanonicalSync(
   pr: PullRequest,
   changedFiles: string[],
 ): Promise<DocSyncProposal> {
-  const prdContent = await readIfExists(opts.repoPath, 'docs/prd.md');
-  const readmeContent = await readIfExists(opts.repoPath, 'README.md');
+  const prdContent = await readIfExists(opts.repoPath, "docs/prd.md");
+  const readmeContent = await readIfExists(opts.repoPath, "README.md");
   const prompt = buildDocCanonicalSyncPrompt({
     prNumber: pr.number,
     prTitle: pr.title,
-    prBody: pr.body ?? '',
+    prBody: pr.body ?? "",
     changedFiles,
-    prdContent: prdContent ?? '',
-    readmeContent: readmeContent ?? '',
+    prdContent: prdContent ?? "",
+    readmeContent: readmeContent ?? "",
   });
   const { result } = await runLLMTask<DocSyncProposal>(
     { prompt, spawn: opts.spawn, cwd: opts.repoPath },
@@ -207,26 +232,33 @@ async function runConsistencyCheck(
   // Read a sample of canonical/module/inline docs from disk
   const canonicalSnippets = await collectCanonicalSnippets(opts.repoPath);
   const moduleSnippets: Array<{ path: string; content: string }> = [];
-  const inlineSnippets = await collectInlineSnippets(opts.repoPath, sourceFiles);
+  const inlineSnippets = await collectInlineSnippets(
+    opts.repoPath,
+    sourceFiles,
+  );
 
   const prompt = buildDocConsistencyPrompt({
     canonicalSnippets,
     moduleSnippets,
     inlineSnippets,
   });
-  const { result } = await runLLMTask<{ inconsistencies: DocConsistencyFinding[] }>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath },
-    (json) => {
-      const parsed = JSON.parse(json) as { inconsistencies?: DocConsistencyFinding[] };
-      return { inconsistencies: parsed.inconsistencies ?? [] };
-    },
-  );
+  const { result } = await runLLMTask<{
+    inconsistencies: DocConsistencyFinding[];
+  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath }, (json) => {
+    const parsed = JSON.parse(json) as {
+      inconsistencies?: DocConsistencyFinding[];
+    };
+    return { inconsistencies: parsed.inconsistencies ?? [] };
+  });
   return result.inconsistencies;
 }
 
-async function readIfExists(repoPath: string, relPath: string): Promise<string | null> {
+async function readIfExists(
+  repoPath: string,
+  relPath: string,
+): Promise<string | null> {
   try {
-    return await fs.readFile(path.join(repoPath, relPath), 'utf8');
+    return await fs.readFile(path.join(repoPath, relPath), "utf8");
   } catch {
     return null;
   }
@@ -245,7 +277,7 @@ async function collectCanonicalSnippets(
   repoPath: string,
 ): Promise<Array<{ path: string; content: string }>> {
   const snippets: Array<{ path: string; content: string }> = [];
-  for (const rel of ['docs/prd.md', 'README.md']) {
+  for (const rel of ["docs/prd.md", "README.md"]) {
     const content = await readIfExists(repoPath, rel);
     if (content) snippets.push({ path: rel, content: content.slice(0, 4000) });
   }
@@ -260,7 +292,11 @@ async function collectInlineSnippets(
   for (const file of files.slice(0, 5)) {
     const full = await readIfExists(repoPath, file);
     if (!full) continue;
-    snippets.push({ path: file, symbol: '(file)', content: full.slice(0, 2000) });
+    snippets.push({
+      path: file,
+      symbol: "(file)",
+      content: full.slice(0, 2000),
+    });
   }
   return snippets;
 }
@@ -280,21 +316,25 @@ async function openDocPR(
   const branch = `docs/auto-${triggeringPR.number}-${Date.now()}`;
 
   // Create the branch from main
-  const main = await client.getHeadSha(owner, repo, 'main');
+  const main = await client.getHeadSha(owner, repo, "main");
   await client.createBranch(owner, repo, branch, main);
 
   let changesApplied = 0;
 
   // Apply PRD patches
   for (const patch of sync.prd_patches) {
-    if (await applyPatchToFile(client, owner, repo, branch, 'docs/prd.md', patch)) {
+    if (
+      await applyPatchToFile(client, owner, repo, branch, "docs/prd.md", patch)
+    ) {
       changesApplied++;
     }
   }
 
   // Apply README patches
   for (const patch of sync.readme_patches) {
-    if (await applyPatchToFile(client, owner, repo, branch, 'README.md', patch)) {
+    if (
+      await applyPatchToFile(client, owner, repo, branch, "README.md", patch)
+    ) {
       changesApplied++;
     }
   }
@@ -307,7 +347,9 @@ async function openDocPR(
       old_text: finding.fix_text_old,
       new_text: finding.fix_text_new,
     };
-    if (await applyPatchToFile(client, owner, repo, branch, filePath, docPatch)) {
+    if (
+      await applyPatchToFile(client, owner, repo, branch, filePath, docPatch)
+    ) {
       changesApplied++;
     }
   }
@@ -316,22 +358,22 @@ async function openDocPR(
 
   const body = [
     `Automated documentation PR triggered by #${triggeringPR.number}.`,
-    '',
-    sync.rationale ? `**Canonical sync rationale:** ${sync.rationale}` : '',
-    '',
+    "",
+    sync.rationale ? `**Canonical sync rationale:** ${sync.rationale}` : "",
+    "",
     `${sync.prd_patches.length} PRD patches, ${sync.readme_patches.length} README patches, ${consistency.length} consistency fixes applied.`,
-    '',
+    "",
     `Closes nothing — doc-only PR. CI is skipped (paths gating).`,
   ]
     .filter(Boolean)
-    .join('\n');
+    .join("\n");
 
   const pr = await client.createPullRequest({
     owner,
     repo,
     title: `docs: auto-sync after #${triggeringPR.number}`,
     head: branch,
-    base: 'main',
+    base: "main",
     body,
   });
 
@@ -356,7 +398,7 @@ async function applyPatchToFile(
     repo,
     path: filePath,
     branch,
-    message: `docs(${filePath}): auto-sync${patch.section ? ` ${patch.section}` : ''}`,
+    message: `docs(${filePath}): auto-sync${patch.section ? ` ${patch.section}` : ""}`,
     content: updated,
     sha: current.sha,
   });

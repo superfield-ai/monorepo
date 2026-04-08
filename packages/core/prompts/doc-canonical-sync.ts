@@ -1,4 +1,4 @@
-import { joinSections } from './fragments/index.ts';
+import { joinSections } from "./fragments/index.ts";
 
 export interface DocCanonicalSyncContext {
   prNumber: number;
@@ -16,7 +16,9 @@ export interface DocCanonicalSyncContext {
  * introduced a significant feature (new command, new public API, changed
  * behavior), updates the relevant canonical documents to match.
  */
-export function buildDocCanonicalSyncPrompt(ctx: DocCanonicalSyncContext): string {
+export function buildDocCanonicalSyncPrompt(
+  ctx: DocCanonicalSyncContext,
+): string {
   return joinSections(
     `## Task: doc-canonical-sync
 
@@ -33,7 +35,7 @@ ${ctx.prBody}
 
 ### Files changed
 
-${ctx.changedFiles.map((f) => `- ${f}`).join('\n')}
+${ctx.changedFiles.map((f) => `- ${f}`).join("\n")}
 
 ### Current PRD (\`docs/prd.md\`)
 

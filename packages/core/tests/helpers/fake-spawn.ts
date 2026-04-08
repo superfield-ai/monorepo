@@ -1,4 +1,4 @@
-import type { AgentOpts, AgentResult } from '../../agent.ts';
+import type { AgentOpts, AgentResult } from "../../agent.ts";
 
 /**
  * Layer 1 helper: build a canned `AgentResult` for tests that inject a fake

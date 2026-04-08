@@ -1,6 +1,6 @@
-import * as fs from 'node:fs/promises';
-import * as path from 'node:path';
-import { parse as parseYaml } from 'yaml';
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import { parse as parseYaml } from "yaml";
 
 /**
  * Loader for the Superfield Blueprint at `blueprint/rules/graph.yaml`
@@ -21,12 +21,12 @@ import { parse as parseYaml } from 'yaml';
  */
 
 export type BlueprintRuleType =
-  | 'threat'
-  | 'principle'
-  | 'design_pattern'
-  | 'architecture'
-  | 'checklist'
-  | 'antipattern';
+  | "threat"
+  | "principle"
+  | "design_pattern"
+  | "architecture"
+  | "checklist"
+  | "antipattern";
 
 export interface BlueprintGraphNode {
   hash: string;
@@ -63,19 +63,19 @@ export interface Blueprint {
 
 // Known blueprint domains. Used for the naive issue → domain heuristic.
 const KNOWN_DOMAINS = [
-  'arch',
-  'auth',
-  'data',
-  'deploy',
-  'env',
-  'etl',
-  'imap-etl',
-  'process',
-  'prune',
-  'task-queue',
-  'test',
-  'ux',
-  'worker',
+  "arch",
+  "auth",
+  "data",
+  "deploy",
+  "env",
+  "etl",
+  "imap-etl",
+  "process",
+  "prune",
+  "task-queue",
+  "test",
+  "ux",
+  "worker",
 ];
 
 /**
@@ -87,7 +87,7 @@ const KNOWN_DOMAINS = [
  * how many times it appears).
  */
 export function scanGraphForDuplicateKeys(rawYaml: string): string[] {
-  const lines = rawYaml.split('\n');
+  const lines = rawYaml.split("\n");
   let inNodes = false;
   const seen = new Set<string>();
   const duplicates = new Set<string>();
@@ -129,22 +129,26 @@ export function scanGraphForDuplicateKeys(rawYaml: string): string[] {
  *                     to `<cwd>/blueprint`.
  */
 export async function loadBlueprint(blueprintDir?: string): Promise<Blueprint> {
-  const dir = blueprintDir ?? path.resolve(process.cwd(), 'blueprint');
-  const graphPath = path.join(dir, 'rules', 'graph.yaml');
-  const rawGraph = await fs.readFile(graphPath, 'utf8');
+  const dir = blueprintDir ?? path.resolve(process.cwd(), "blueprint");
+  const graphPath = path.join(dir, "rules", "graph.yaml");
+  const rawGraph = await fs.readFile(graphPath, "utf8");
 
   // Surface collisions before they get silently swallowed by the YAML parser
   const duplicates = scanGraphForDuplicateKeys(rawGraph);
   if (duplicates.length > 0) {
     const message =
       `blueprint: ${duplicates.length} duplicate hash key(s) in ${graphPath}: ` +
-      duplicates.join(', ');
-    if (process.env.SUPERFIELD_BLUEPRINT_STRICT === '1') {
+      duplicates.join(", ");
+    if (process.env.SUPERFIELD_BLUEPRINT_STRICT === "1") {
       throw new Error(message);
     }
     console.warn(`⚠ ${message}`);
-    console.warn('  This is a data quality issue in dot-matrix-labs/calypso-blueprint.');
-    console.warn('  Last-write-wins is the current behaviour. File an upstream issue.');
+    console.warn(
+      "  This is a data quality issue in dot-matrix-labs/calypso-blueprint.",
+    );
+    console.warn(
+      "  Last-write-wins is the current behaviour. File an upstream issue.",
+    );
   }
 
   const graph = parseYaml(rawGraph, { uniqueKeys: false }) as {
@@ -167,9 +171,14 @@ export async function loadBlueprint(blueprintDir?: string): Promise<Blueprint> {
 
   const domains = new Map<string, BlueprintDomain>();
   for (const domainName of KNOWN_DOMAINS) {
-    const domainPath = path.join(dir, 'rules', 'blueprints', `${domainName}.yaml`);
+    const domainPath = path.join(
+      dir,
+      "rules",
+      "blueprints",
+      `${domainName}.yaml`,
+    );
     try {
-      const rawDomain = await fs.readFile(domainPath, 'utf8');
+      const rawDomain = await fs.readFile(domainPath, "utf8");
       const parsed = parseYaml(rawDomain) as {
         meta?: { domain: string; title?: string; vision?: string };
         rules?: Array<{
@@ -184,7 +193,7 @@ export async function loadBlueprint(blueprintDir?: string): Promise<Blueprint> {
       domains.set(domainName, {
         name: domainName,
         title: parsed.meta?.title ?? domainName,
-        vision: parsed.meta?.vision ?? '',
+        vision: parsed.meta?.vision ?? "",
         rules: (parsed.rules ?? []).map((r) => ({
           number: r.number,
           hash: r.hash,
@@ -221,22 +230,67 @@ export function pickCandidateDomains(input: {
   body: string | null;
   labels: string[];
 }): string[] {
-  const text = `${input.title} ${input.body ?? ''} ${input.labels.join(' ')}`.toLowerCase();
+  const text =
+    `${input.title} ${input.body ?? ""} ${input.labels.join(" ")}`.toLowerCase();
 
   const KEYWORDS: Record<string, string[]> = {
-    arch: ['architecture', 'module', 'package', 'dependency', 'monorepo', 'boundary', 'refactor'],
-    auth: ['auth', 'login', 'session', 'token', 'credential', 'oauth', 'password', 'permission'],
-    data: ['database', 'schema', 'migration', 'query', 'orm', 'model', 'table', 'index'],
-    deploy: ['deploy', 'release', 'docker', 'ci/cd', 'kubernetes', 'rollout', 'artifact'],
-    env: ['env var', 'environment', '.env', 'secret', 'config'],
-    etl: ['etl', 'pipeline', 'transform', 'ingest', 'batch'],
-    'imap-etl': ['imap', 'email ingest', 'mail fetch'],
-    process: ['pr', 'pull request', 'issue', 'commit', 'workflow', 'ci', 'review', 'merge', 'plan'],
-    prune: ['prune', 'cleanup', 'gc', 'garbage'],
-    'task-queue': ['queue', 'worker', 'job', 'task'],
-    test: ['test', 'spec', 'coverage', 'fixture', 'mock', 'msw', 'vitest'],
-    ux: ['ui', 'ux', 'frontend', 'component', 'page', 'form', 'layout'],
-    worker: ['worker', 'background', 'daemon', 'cron'],
+    arch: [
+      "architecture",
+      "module",
+      "package",
+      "dependency",
+      "monorepo",
+      "boundary",
+      "refactor",
+    ],
+    auth: [
+      "auth",
+      "login",
+      "session",
+      "token",
+      "credential",
+      "oauth",
+      "password",
+      "permission",
+    ],
+    data: [
+      "database",
+      "schema",
+      "migration",
+      "query",
+      "orm",
+      "model",
+      "table",
+      "index",
+    ],
+    deploy: [
+      "deploy",
+      "release",
+      "docker",
+      "ci/cd",
+      "kubernetes",
+      "rollout",
+      "artifact",
+    ],
+    env: ["env var", "environment", ".env", "secret", "config"],
+    etl: ["etl", "pipeline", "transform", "ingest", "batch"],
+    "imap-etl": ["imap", "email ingest", "mail fetch"],
+    process: [
+      "pr",
+      "pull request",
+      "issue",
+      "commit",
+      "workflow",
+      "ci",
+      "review",
+      "merge",
+      "plan",
+    ],
+    prune: ["prune", "cleanup", "gc", "garbage"],
+    "task-queue": ["queue", "worker", "job", "task"],
+    test: ["test", "spec", "coverage", "fixture", "mock", "msw", "vitest"],
+    ux: ["ui", "ux", "frontend", "component", "page", "form", "layout"],
+    worker: ["worker", "background", "daemon", "cron"],
   };
 
   const scores: Array<{ domain: string; score: number }> = [];
