@@ -2,23 +2,22 @@ import { describe, it, expect } from 'vitest';
 import { runLLMTask, extractJson } from '../../llm-task.ts';
 import type { AgentOpts, AgentResult } from '../../agent.ts';
 
-describe('extractJson', () => {
+describe('extractJson — strict mode', () => {
   it('returns a pure JSON object unchanged', () => {
     expect(extractJson('{"a":1}')).toBe('{"a":1}');
   });
 
-  it('extracts JSON from a markdown code fence', () => {
+  it('returns a pure JSON object with surrounding whitespace', () => {
+    expect(extractJson('  \n{"a":1}\n  ')).toBe('{"a":1}');
+  });
+
+  it('extracts JSON from a markdown code fence with json language tag', () => {
     const text = 'Here is the result:\n```json\n{"a":1,"b":2}\n```\nDone.';
     expect(extractJson(text)).toBe('{"a":1,"b":2}');
   });
 
   it('extracts JSON from a bare code fence', () => {
     expect(extractJson('```\n{"a":1}\n```')).toBe('{"a":1}');
-  });
-
-  it('extracts JSON surrounded by prose', () => {
-    const text = 'The answer is {"answer": 42} as requested.';
-    expect(extractJson(text)).toBe('{"answer": 42}');
   });
 
   it('handles nested objects', () => {
@@ -39,8 +38,29 @@ describe('extractJson', () => {
     expect(extractJson('no json here')).toBe(null);
   });
 
-  it('returns first object when multiple exist', () => {
-    expect(extractJson('{"a":1} {"b":2}')).toBe('{"a":1}');
+  // STRICTNESS — these are the bug fixes:
+
+  it('refuses inline JSON wrapped in prose (no fence, leading text)', () => {
+    expect(extractJson('The answer is {"answer": 42} as requested.')).toBe(null);
+  });
+
+  it('refuses inline JSON when prose has braces before the real object', () => {
+    expect(extractJson('Result is {something in braces}: {"actual":1}')).toBe(null);
+  });
+
+  it('refuses bare JSON when there are multiple top-level objects', () => {
+    expect(extractJson('{"a":1} {"b":2}')).toBe(null);
+  });
+
+  it('extracts the first object inside a code fence even if it has surrounding prose', () => {
+    const text = 'preamble\n```json\n{"a":1}\n```\nmore prose';
+    expect(extractJson(text)).toBe('{"a":1}');
+  });
+
+  it('multiple top-level objects inside a fence: returns the fence body verbatim', () => {
+    // Inside a fence we trust the model — even if it's two objects we return the fence body
+    const text = '```json\n{"a":1}\n{"b":2}\n```';
+    expect(extractJson(text)).toContain('"a":1');
   });
 });
 

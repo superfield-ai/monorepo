@@ -63,31 +63,44 @@ export async function runLLMTask<T>(
 }
 
 /**
- * Extracts the first top-level JSON object from a text blob.
+ * Extracts a JSON object from an LLM response. **Strict** by design — we
+ * refuse to guess at prose-wrapped JSON because that's how production
+ * agents start emitting wrong values.
  *
- * Handles three common LLM response shapes:
- *   1. Pure JSON: `{...}`
- *   2. JSON inside a markdown code fence: ````json\n{...}\n````
- *   3. JSON with surrounding prose: `Here is the result: {...}`
+ * Two acceptable shapes:
+ *   1. Pure JSON object: trimmed text starts with `{` and ends with `}`
+ *      and contains exactly one top-level object.
+ *   2. JSON inside a markdown code fence: ` ```json ... ``` ` or ` ``` ... ``` `.
+ *      Inside a fence we trust the model and return the fence body verbatim,
+ *      even if it contains multiple objects (the parser downstream decides).
  *
- * Returns the raw JSON string (without the code fence), or null if no
- * balanced `{...}` object is found.
+ * Refuses (returns `null`):
+ *   - Inline JSON wrapped in prose (e.g. "The answer is {...}")
+ *   - Multiple bare top-level objects outside a fence
+ *   - Anything where the first non-whitespace char isn't `{` or a fence
+ *
+ * If we cannot identify the JSON cleanly, the caller throws — better than
+ * silently parsing the wrong object.
  */
 export function extractJson(text: string): string | null {
-  // Try code-fence extraction first
+  // 1. Try code-fence extraction first — fences are the trusted path
   const fenceMatch = /```(?:json)?\s*\n([\s\S]*?)\n```/.exec(text);
   if (fenceMatch) {
     return fenceMatch[1]!.trim();
   }
 
-  // Scan for the first balanced top-level object
+  // 2. Outside a fence, the trimmed text MUST be a single top-level object
+  const trimmed = text.trim();
+  if (trimmed.length === 0 || trimmed[0] !== '{') return null;
+
+  // Walk balanced braces from index 0 — must consume the entire trimmed text
   let depth = 0;
-  let start = -1;
   let inString = false;
   let escape = false;
+  let endIdx = -1;
 
-  for (let i = 0; i < text.length; i++) {
-    const c = text[i]!;
+  for (let i = 0; i < trimmed.length; i++) {
+    const c = trimmed[i]!;
     if (escape) {
       escape = false;
       continue;
@@ -102,15 +115,22 @@ export function extractJson(text: string): string | null {
     }
     if (inString) continue;
     if (c === '{') {
-      if (depth === 0) start = i;
       depth++;
     } else if (c === '}') {
       depth--;
-      if (depth === 0 && start >= 0) {
-        return text.slice(start, i + 1);
+      if (depth === 0) {
+        endIdx = i;
+        break;
       }
     }
   }
 
-  return null;
+  if (endIdx < 0) return null;
+
+  // Anything after the closing brace must be only whitespace, otherwise
+  // we have either trailing prose or another top-level object — both refused
+  const trailing = trimmed.slice(endIdx + 1).trim();
+  if (trailing.length > 0) return null;
+
+  return trimmed.slice(0, endIdx + 1);
 }
