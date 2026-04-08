@@ -226,6 +226,79 @@ describe('planContainsIssue', () => {
   });
 });
 
+// ── Property-based round-trip tests ──────────────────────────────────────────
+// No external library needed — we generate representative Plan structures
+// inline and verify parsePlan(serializePlan(plan)) deep-equals the original.
+
+/** Generates a PlanIssueMetadata with deterministic values from an integer seed. */
+function genEntry(seed: number, phase: string): PlanIssueMetadata {
+  const kinds = ['feature', 'dev-scout', 'ci-failure'] as const;
+  return {
+    number: 100 + seed,
+    title: `feat: item ${seed}`,
+    phase,
+    kind: kinds[seed % 3]!,
+    risk: (seed % 10) + 1,
+    dependencies: seed > 0 ? [100 + seed - 1] : [],
+    parallel_safe: seed % 2 === 0,
+  };
+}
+
+/** Generates a Plan with `phaseCount` phases, each containing `issuesPerPhase` issues. */
+function genPlan(phaseCount: number, issuesPerPhase: number, hasCIFailures: boolean): Plan {
+  let seed = 0;
+  const ciFailures: PlanIssueMetadata[] = hasCIFailures
+    ? [{ number: 999, title: 'fix(ci): test failed', phase: 'watchdog', kind: 'ci-failure', risk: 8, dependencies: [], parallel_safe: true }]
+    : [];
+  const phases = Array.from({ length: phaseCount }, (_, pi) => {
+    const phaseName = `Phase ${pi + 1}`;
+    const issues = Array.from({ length: issuesPerPhase }, () => genEntry(seed++, phaseName));
+    return {
+      name: phaseName,
+      goal: `Goal of phase ${pi + 1}`,
+      dependsOn: pi > 0 ? [`Phase ${pi}`] : [],
+      scoutGate: issues[0]?.number ?? null,
+      issues,
+    };
+  });
+  return { ciFailures, phases };
+}
+
+describe('parsePlan + serializePlan — round-trip property', () => {
+  const variants: Array<[string, Plan]> = [
+    ['empty plan', { ciFailures: [], phases: [] }],
+    ['single phase, one issue', genPlan(1, 1, false)],
+    ['single phase, three issues', genPlan(1, 3, false)],
+    ['two phases, two issues each', genPlan(2, 2, false)],
+    ['ci-failures only, no phases', { ciFailures: [ciFailureEntry], phases: [] }],
+    ['ci-failures + two phases', genPlan(2, 2, true)],
+    ['three phases, five issues each', genPlan(3, 5, false)],
+    ['phase with null scoutGate', { ciFailures: [], phases: [{ name: 'P', goal: 'g', dependsOn: [], scoutGate: null, issues: [featureEntry] }] }],
+    ['phase with multiple dependsOn', { ciFailures: [], phases: [{ name: 'P2', goal: '', dependsOn: ['P0', 'P1'], scoutGate: null, issues: [] }] }],
+    ['issue with empty dependencies', genPlan(1, 1, false)],
+  ];
+
+  for (const [label, plan] of variants) {
+    it(`round-trips: ${label}`, () => {
+      const serialized = serializePlan(plan);
+      const reparsed = parsePlan(serialized);
+      expect(reparsed).toEqual(plan);
+    });
+  }
+
+  it('serialized text is deterministic (pure function)', () => {
+    const plan = genPlan(2, 3, true);
+    expect(serializePlan(plan)).toBe(serializePlan(plan));
+  });
+
+  it('planIssueOrder is stable across round-trip', () => {
+    const plan = genPlan(2, 3, true);
+    const original = planIssueOrder(plan);
+    const reparsed = parsePlan(serializePlan(plan));
+    expect(planIssueOrder(reparsed)).toEqual(original);
+  });
+});
+
 describe('planIssueOrder', () => {
   it('returns ci-failures before phase issues', () => {
     const plan: Plan = {
