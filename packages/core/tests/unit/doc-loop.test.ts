@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
-import { tickDocLoop } from "../../loops/doc-loop.ts";
+import {
+  tickDocLoop,
+  pickMergedDocCandidate,
+  filterDocSourceFiles,
+} from "../../loops/doc-loop.ts";
 import type { GitHubClient, PullRequest } from "@superfield/github";
 import type { AgentOpts, AgentResult } from "../../agent.ts";
 
@@ -70,6 +74,48 @@ function multiSpawn(
     isError: false,
   });
 }
+
+describe("pickMergedDocCandidate", () => {
+  it("returns the newest merged PR when no watermark is present", () => {
+    const merged = [
+      makePR({ number: 42, merged_at: "2026-04-08T02:00:00Z" }),
+      makePR({ number: 41, merged_at: "2026-04-08T01:00:00Z" }),
+    ];
+
+    expect(pickMergedDocCandidate(merged)).toMatchObject({ number: 42 });
+  });
+
+  it("returns the first PR newer than the legacy watermark", () => {
+    const merged = [
+      makePR({ number: 42, merged_at: "2026-04-08T02:00:00Z" }),
+      makePR({ number: 41, merged_at: "2026-04-08T01:00:00Z" }),
+    ];
+
+    expect(
+      pickMergedDocCandidate(merged, "2026-04-08T01:30:00Z"),
+    ).toMatchObject({ number: 42 });
+  });
+
+  it("returns null when no merged PR is newer than the legacy watermark", () => {
+    const merged = [makePR({ number: 41, merged_at: "2026-04-08T01:00:00Z" })];
+
+    expect(pickMergedDocCandidate(merged, "2026-04-08T03:00:00Z")).toBeNull();
+  });
+});
+
+describe("filterDocSourceFiles", () => {
+  it("keeps only non-test TypeScript sources", () => {
+    expect(
+      filterDocSourceFiles([
+        "packages/core/foo.ts",
+        "packages/core/foo.tsx",
+        "packages/core/tests/unit/foo.test.ts",
+        "packages/core/bar.test.ts",
+        "docs/prd.md",
+      ]),
+    ).toEqual(["packages/core/foo.ts", "packages/core/foo.tsx"]);
+  });
+});
 
 describe("tickDocLoop", () => {
   it("returns idle when the main SHA has not changed", async () => {

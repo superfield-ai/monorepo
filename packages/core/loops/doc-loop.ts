@@ -133,9 +133,7 @@ export async function tickDocLoop(
 
   // 1. Find the most-recently merged PR after the watermark
   const merged = await client.listMergedPullRequests(owner, repo);
-  const candidate = lastProcessedAt
-    ? merged.find((pr) => pr.merged_at && pr.merged_at > lastProcessedAt)
-    : (merged[0] ?? null);
+  const candidate = pickMergedDocCandidate(merged, lastProcessedAt);
   if (!candidate) {
     return {
       pr: null,
@@ -155,10 +153,7 @@ export async function tickDocLoop(
     repo,
     candidate.number,
   );
-  const sourceFiles = changedFiles.filter(
-    (f) =>
-      /\.tsx?$/.test(f) && !f.includes("/tests/") && !f.endsWith(".test.ts"),
-  );
+  const sourceFiles = filterDocSourceFiles(changedFiles);
 
   // 3. Run the three doc tasks in parallel.
   //    Canonical sync and consistency require at least one canonical doc
@@ -204,6 +199,25 @@ export async function tickDocLoop(
     consistencyFindings: consistencyResult,
     docPrNumber,
   };
+}
+
+export function pickMergedDocCandidate(
+  merged: PullRequest[],
+  lastProcessedAt?: string,
+): PullRequest | null {
+  return lastProcessedAt
+    ? (merged.find((pr) => pr.merged_at && pr.merged_at > lastProcessedAt) ??
+        null)
+    : (merged[0] ?? null);
+}
+
+export function filterDocSourceFiles(changedFiles: string[]): string[] {
+  return changedFiles.filter(
+    (file) =>
+      /\.tsx?$/.test(file) &&
+      !file.includes("/tests/") &&
+      !file.endsWith(".test.ts"),
+  );
 }
 
 async function runCoverageScan(
