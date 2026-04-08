@@ -42,7 +42,7 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 
 - **Forge as control plane.** Git and GitHub are the source of truth for all agent state, task ordering, and communication.
 - **No customization.** There are no workflow flags or configuration knobs. Superfield encodes one correct way to do things.
-- **No system binaries.** Never shell out to `git`, `gh`, `curl`, or any other executable. All git operations go through a TypeScript git library; all GitHub operations go through a TypeScript GitHub API client.
+- **No system binaries.** Never shell out to `git`, `gh`, `curl`, or any other system executable. All git operations go through a TypeScript git library; all GitHub operations go through a TypeScript GitHub API client. The sole exception is agent vendor CLIs (e.g. `claude`) — these are spawned as subprocesses because they are the LLM execution layer, not system utilities.
 - **Skills are code.** Each calypso-agents skill is a TypeScript module with an explicit interface, typed inputs/outputs, and unit tests.
 - **API-first testing.** Both the git library and the GitHub client are tested extensively via MSW-intercepted API calls and golden response fixtures.
 
