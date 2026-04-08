@@ -3,7 +3,7 @@ import {
   hasFailedChecks,
   buildCIFailureIssueTitle,
   buildCIFailureIssueBody,
-  buildPlanEntryLine,
+  buildCIFailurePlanEntry,
 } from '../../watchdog.ts';
 import type { CheckRun } from '@superfield/github';
 
@@ -65,10 +65,17 @@ describe('buildCIFailureIssueBody', () => {
   });
 });
 
-describe('buildPlanEntryLine', () => {
-  it('formats a plain reference with no checkboxes', () => {
-    const line = buildPlanEntryLine(42, 'fix(repo): test failed @ abc1234');
-    expect(line).toMatch(/^- #42 — fix\(repo\): test failed @ abc1234/);
-    expect(line).not.toContain('[ ]');
+describe('buildCIFailurePlanEntry', () => {
+  it('constructs a typed ci-failure PlanIssueMetadata', () => {
+    const entry = buildCIFailurePlanEntry(42, 'fix(repo): test failed @ abc1234');
+    expect(entry).toEqual({
+      number: 42,
+      title: 'fix(repo): test failed @ abc1234',
+      phase: 'watchdog',
+      kind: 'ci-failure',
+      risk: 6,
+      dependencies: [],
+      parallel_safe: true,
+    });
   });
 });

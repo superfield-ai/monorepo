@@ -4,7 +4,7 @@ import { hasFailedChecks, runWatchdog } from './watchdog.ts';
 
 const POLL_INTERVAL_MS = 5_000;
 
-export async function runOuterLoop(config: Config): Promise<void> {
+export async function runPlanningLoop(config: Config): Promise<void> {
   while (true) {
     await Promise.all(config.repositories.map((repoConfig) => {
       const user = config.users.find((u) => u.handle === repoConfig.assignedUser);

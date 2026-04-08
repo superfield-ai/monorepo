@@ -1,4 +1,10 @@
 import type { GitHubClient, CheckRun, Issue } from '@superfield/github';
+import {
+  parsePlan,
+  serializePlan,
+  insertCIFailureAtTop,
+  type PlanIssueMetadata,
+} from './plan.ts';
 
 export interface WatchdogResult {
   issueCreated: boolean;
@@ -37,8 +43,19 @@ export function buildCIFailureIssueBody(checkName: string, sha: string, checkRun
   ].join('\n');
 }
 
-export function buildPlanEntryLine(issueNumber: number, title: string): string {
-  return `- #${issueNumber} — ${title} (${new Date().toISOString()})`;
+export function buildCIFailurePlanEntry(
+  issueNumber: number,
+  title: string,
+): PlanIssueMetadata {
+  return {
+    number: issueNumber,
+    title,
+    phase: 'watchdog',
+    kind: 'ci-failure',
+    risk: 6,
+    dependencies: [],
+    parallel_safe: true,
+  };
 }
 
 export async function runWatchdog(
@@ -74,25 +91,27 @@ async function upsertPlanIssue(
   newIssueTitle: string,
 ): Promise<void> {
   const plans = await client.listIssues(owner, repo, ['plan']);
-  const entry = buildPlanEntryLine(newIssueNumber, newIssueTitle);
+  const entry = buildCIFailurePlanEntry(newIssueNumber, newIssueTitle);
 
   if (plans.length === 0) {
+    const initialPlan = insertCIFailureAtTop({ ciFailures: [], phases: [] }, entry);
     await client.createIssue({
       owner,
       repo,
       title: 'Plan',
-      body: entry + '\n',
+      body: serializePlan(initialPlan),
       labels: ['plan'],
     });
     return;
   }
 
-  const plan = plans[0];
-  const currentBody = plan.body ?? '';
+  const plan = plans[0]!;
+  const parsed = parsePlan(plan.body ?? '');
+  const updated = insertCIFailureAtTop(parsed, entry);
   await client.updateIssueBody({
     owner,
     repo,
     issue_number: plan.number,
-    body: currentBody + entry + '\n',
+    body: serializePlan(updated),
   });
 }

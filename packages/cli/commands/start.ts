@@ -1,6 +1,6 @@
 import * as path from 'node:path';
 import { loadConfig } from '@superfield/core';
-import { runOuterLoop } from '@superfield/core/loop';
+import { runPlanningLoop } from '@superfield/core/loop';
 import { GitClient } from '@superfield/git';
 import type { Config } from '@superfield/core';
 
@@ -15,7 +15,7 @@ export async function startCommand(repoPath?: string): Promise<void> {
 
   const { owner, repo } = effectiveConfig.repositories[0];
   console.log(`Starting superfield for ${owner}/${repo}. Ctrl-C to stop.\n`);
-  await runOuterLoop(effectiveConfig);
+  await runPlanningLoop(effectiveConfig);
 }
 
 async function configFromPath(base: Config, repoPath: string): Promise<Config> {
