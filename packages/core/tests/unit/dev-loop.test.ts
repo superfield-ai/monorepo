@@ -512,6 +512,144 @@ Scout gate: #5
     expect(spawnArgs.sessionId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
   });
 
+  it("prefers a non-stale in-plan session on startup over fresh selection", async () => {
+    await preCreateWorktree(11, "build-the-other-thing");
+    const existingSession = {
+      sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      role: "primary" as const,
+      slot: 1,
+      startedAt: new Date().toISOString(),
+    };
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: `## Phase: Identity
+
+Goal: Build the auth seams.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #11 — feat: build the other thing [risk: 4]
+  <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+`,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        if (n === 10) return makeIssue({ number: 10, state: "open" });
+        if (n === 11) return makeIssue({ number: 11, state: "open" });
+        throw new Error(`unexpected getIssue ${n}`);
+      }),
+      listIssueComments: vi
+        .fn()
+        .mockImplementation(async (_o, _r, n: number) => {
+          if (n === 11) {
+            return [
+              {
+                id: 999,
+                body: `<!-- superfield-session:\n${JSON.stringify(existingSession, null, 2)}\n-->`,
+              },
+            ];
+          }
+          return [];
+        }),
+    });
+    const spawn = fakeSpawn();
+
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+      startupPrioritizedIssueNumbers: [11],
+    });
+
+    expect(result.primaryIssue).toBe(11);
+    expect(result.reapedSessions).toEqual([]);
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn.mock.calls[0]![0].sessionId).toBe(
+      "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    );
+  });
+
+  it("reaps a stale startup session and reports it in reapedSessions", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: planBodyWithFeature,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        if (n === 10) return makeIssue({ number: 10, state: "open" });
+        throw new Error(`unexpected getIssue ${n}`);
+      }),
+    });
+    const spawn = fakeSpawn();
+
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      startupReapedSessions: [10],
+    });
+
+    expect(result.primaryIssue).toBe(10);
+    expect(result.reapedSessions).toEqual([10]);
+    expect(spawn.mock.calls[0]![0].sessionId).toBeUndefined();
+  });
+
+  it("reaps a startup session for an issue that is not in the plan", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: planBodyWithFeature,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        if (n === 10) return makeIssue({ number: 10, state: "open" });
+        throw new Error(`unexpected getIssue ${n}`);
+      }),
+    });
+    const spawn = fakeSpawn();
+
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      startupReapedSessions: [20],
+    });
+
+    expect(result.primaryIssue).toBe(10);
+    expect(result.reapedSessions).toEqual([20]);
+    expect(spawn.mock.calls[0]![0].sessionId).toBeUndefined();
+  });
+
   it("predecessorsClosed returns false when an earlier issue is still open", async () => {
     const client = makeClient({
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {

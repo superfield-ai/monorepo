@@ -15,7 +15,12 @@ import {
   buildCIFailurePrompt,
 } from "../prompts/index.ts";
 import { spawnAgent, type AgentOpts, type AgentResult } from "../agent.ts";
-import { getSession, upsertSession, deleteSession } from "../sessions.ts";
+import {
+  classifyStartupSessions,
+  getSession,
+  upsertSession,
+  deleteSession,
+} from "../sessions.ts";
 import { withRetry, CircuitBreaker } from "../retry.ts";
 
 /**
@@ -44,6 +49,10 @@ export interface DevLoopOpts {
    * (trips at 5 consecutive failures, 5min reset) is created internally.
    */
   circuit?: CircuitBreaker;
+  /** One-time startup handoff from runDevLoop to the first tick only. */
+  startupPrioritizedIssueNumbers?: number[];
+  /** One-time startup handoff from runDevLoop to the first tick only. */
+  startupReapedSessions?: number[];
 }
 
 export interface PruneResult {
@@ -81,6 +90,18 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   // Shared circuit breaker across all slots in this loop instance
   const circuit =
     opts.circuit ?? new CircuitBreaker({ tripAt: 5, resetMs: 5 * 60 * 1000 });
+  let startupHandoff: {
+    prioritizedIssueNumbers: number[];
+    reapedSessions: number[];
+  } = { prioritizedIssueNumbers: [], reapedSessions: [] };
+  try {
+    startupHandoff = await buildStartupSessionHandoff(opts);
+  } catch (err) {
+    console.error(
+      `[${opts.owner}/${opts.repo}] startup session scan failed:`,
+      err,
+    );
+  }
   try {
     await runPrunePass(opts);
   } catch (err) {
@@ -89,8 +110,19 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
       err,
     );
   }
+  let firstTick = true;
   while (true) {
-    const result = await tickDevLoop({ ...opts, circuit });
+    const result = await tickDevLoop({
+      ...opts,
+      circuit,
+      startupPrioritizedIssueNumbers: firstTick
+        ? startupHandoff.prioritizedIssueNumbers
+        : undefined,
+      startupReapedSessions: firstTick
+        ? startupHandoff.reapedSessions
+        : undefined,
+    });
+    firstTick = false;
     if (result.idle) {
       // Run maintenance on idle ticks — prune stale worktrees + stale sessions
       try {
@@ -108,6 +140,7 @@ export async function tickDevLoop(
   opts: DevLoopOpts,
 ): Promise<DevLoopTickResult> {
   const { client, owner, repo } = opts;
+  const startupReapedSessions = opts.startupReapedSessions ?? [];
 
   // 1. Read the Plan
   const planIssues = await client.listIssues(owner, repo, ["plan"]);
@@ -116,7 +149,7 @@ export async function tickDevLoop(
       primaryIssue: null,
       speculativeIssues: [],
       mergeGateBlocked: [],
-      reapedSessions: [],
+      reapedSessions: startupReapedSessions,
       closed: false,
       idle: true,
       reason: "no Plan issue exists",
@@ -125,18 +158,31 @@ export async function tickDevLoop(
   const plan = parsePlan(planIssues[0]!.body ?? "");
 
   // 2. Select primary
-  const { entry: primaryEntry, blocked } = await selectPrimary(
+  const startupEntry = await selectStartupPrimary(
     client,
     owner,
     repo,
     plan,
+    opts.startupPrioritizedIssueNumbers ?? [],
   );
+  const { entry: primaryEntry, blocked } = startupEntry
+    ? {
+        entry: startupEntry,
+        blocked: await collectMergeGateBlocked(
+          client,
+          owner,
+          repo,
+          plan,
+          startupEntry.number,
+        ),
+      }
+    : await selectPrimary(client, owner, repo, plan);
   if (!primaryEntry) {
     return {
       primaryIssue: null,
       speculativeIssues: [],
       mergeGateBlocked: blocked,
-      reapedSessions: [],
+      reapedSessions: startupReapedSessions,
       closed: false,
       idle: true,
       reason: blocked.length > 0 ? "merge gate blocked" : "no eligible primary",
@@ -171,7 +217,7 @@ export async function tickDevLoop(
     mergeGateBlocked: Array.from(
       new Set([...blocked, ...primaryResult.mergeGateBlocked]),
     ),
-    reapedSessions: [],
+    reapedSessions: startupReapedSessions,
     closed: primaryResult.closed,
     idle: false,
   };
@@ -353,6 +399,21 @@ async function selectPrimary(
   return { entry: null, blocked };
 }
 
+async function selectStartupPrimary(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  plan: Plan,
+  prioritizedIssueNumbers: number[],
+): Promise<PlanIssueMetadata | null> {
+  for (const issueNumber of prioritizedIssueNumbers) {
+    const entry = findPlanEntry(plan, issueNumber);
+    if (!entry) continue;
+    if (await isOpen(client, owner, repo, entry)) return entry;
+  }
+  return null;
+}
+
 async function isEligible(
   client: GitHubClient,
   owner: string,
@@ -469,6 +530,21 @@ async function isOpen(
   return issue.state !== "closed";
 }
 
+function findPlanEntry(
+  plan: Plan,
+  issueNumber: number,
+): PlanIssueMetadata | null {
+  for (const entry of plan.ciFailures) {
+    if (entry.number === issueNumber) return entry;
+  }
+  for (const phase of plan.phases) {
+    for (const entry of phase.issues) {
+      if (entry.number === issueNumber) return entry;
+    }
+  }
+  return null;
+}
+
 function branchForIssue(entry: PlanIssueMetadata): string {
   const slug = slugFromTitle(entry.title);
   const prefix =
@@ -545,6 +621,37 @@ function extractCheckUrl(body: string | null): string {
   if (!body) return "";
   const match = /(https:\/\/github\.com\/[^\s)]+\/runs\/\d+)/.exec(body);
   return match?.[1] ?? "";
+}
+
+async function buildStartupSessionHandoff(
+  opts: DevLoopOpts,
+): Promise<{ prioritizedIssueNumbers: number[]; reapedSessions: number[] }> {
+  const { client, owner, repo } = opts;
+  const planIssues = await client.listIssues(owner, repo, ["plan"]);
+  const plan =
+    planIssues.length > 0 ? parsePlan(planIssues[0]!.body ?? "") : emptyPlan();
+  const classified = await classifyStartupSessions(
+    client,
+    owner,
+    repo,
+    planIssueOrder(plan),
+    opts.staleSessionTimeoutMs ?? DEFAULT_STALE_SESSION_MS,
+  );
+
+  await Promise.all(
+    classified.reapedSessions.map((session) =>
+      client.deleteIssueComment(owner, repo, session.commentId),
+    ),
+  );
+
+  return {
+    prioritizedIssueNumbers: classified.prioritizedIssueNumbers,
+    reapedSessions: classified.reapedIssueNumbers,
+  };
+}
+
+function emptyPlan(): Plan {
+  return { ciFailures: [], phases: [] };
 }
 
 const DEFAULT_STALE_SESSION_MS = 4 * 60 * 60 * 1000; // 4 hours

@@ -3,6 +3,7 @@ import {
   getSession,
   upsertSession,
   deleteSession,
+  classifyStartupSessions,
   findIssuesWithSessions,
   findStaleSessions,
   type AgentSession,
@@ -197,5 +198,77 @@ describe("findStaleSessions", () => {
     });
     const stale = await findStaleSessions(client, "o", "r", 30_000);
     expect(stale).toEqual([]);
+  });
+});
+
+describe("classifyStartupSessions", () => {
+  it("prioritizes fresh in-plan sessions in plan order", async () => {
+    const freshSession: AgentSession = {
+      ...sampleSession,
+      startedAt: new Date().toISOString(),
+    };
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([{ number: 11 }, { number: 10 }]),
+      listIssueComments: vi
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 1, body: sessionCommentBody(freshSession) },
+        ])
+        .mockResolvedValueOnce([
+          { id: 2, body: sessionCommentBody(freshSession) },
+        ]),
+    });
+
+    const result = await classifyStartupSessions(
+      client,
+      "o",
+      "r",
+      [10, 11],
+      30_000,
+    );
+
+    expect(result.prioritizedIssueNumbers).toEqual([10, 11]);
+    expect(result.reapedIssueNumbers).toEqual([]);
+  });
+
+  it("reaps stale sessions and fresh sessions that are not in the plan", async () => {
+    const staleSession: AgentSession = {
+      ...sampleSession,
+      startedAt: new Date(Date.now() - 60_000).toISOString(),
+    };
+    const freshSession: AgentSession = {
+      ...sampleSession,
+      startedAt: new Date().toISOString(),
+    };
+    const client = makeClient({
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([{ number: 10 }, { number: 20 }, { number: 30 }]),
+      listIssueComments: vi
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 1, body: sessionCommentBody(staleSession) },
+        ])
+        .mockResolvedValueOnce([
+          { id: 2, body: sessionCommentBody(freshSession) },
+        ])
+        .mockResolvedValueOnce([
+          { id: 3, body: sessionCommentBody(freshSession) },
+        ]),
+    });
+
+    const result = await classifyStartupSessions(
+      client,
+      "o",
+      "r",
+      [30],
+      30_000,
+    );
+
+    expect(result.prioritizedIssueNumbers).toEqual([30]);
+    expect(result.reapedIssueNumbers).toEqual([10, 20]);
+    expect(result.reapedSessions.map((session) => session.commentId)).toEqual([
+      1, 2,
+    ]);
   });
 });
