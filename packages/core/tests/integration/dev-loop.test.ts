@@ -24,6 +24,9 @@ describe("dev loop — primary end to end", () => {
   it.todo("uses ci-failure prompt when the selected issue has ci-failure kind");
   it.todo("deletes session comment after the issue closes");
   it.todo(
+    "reports merge gate blocked when a new predecessor appears before merge",
+  );
+  it.todo(
     "resumes existing session when a deadman comment is present on startup",
   );
 });
