@@ -125,6 +125,34 @@ describe('tickRepository — all four planning-loop steps are wired', () => {
     expect(coverage).toHaveBeenCalled();
   });
 
+  it('returns structured result with step outcomes', async () => {
+    const client = makeClient();
+    const result = await tickRepositoryForTesting(client, 'org', 'repo', {
+      issueAudit: noOpAudit,
+      blueprintConformance: noOpBlueprint,
+      planCoverage: noOpCoverage,
+    });
+    expect(result.issueAudit.ok).toBe(true);
+    expect(result.planCoverage.ok).toBe(true);
+    expect(result.blueprintConformance.ok).toBe(true);
+  });
+
+  it('captures step error in structured result when issueAudit fails', async () => {
+    const client = makeClient();
+    const result = await tickRepositoryForTesting(client, 'org', 'repo', {
+      issueAudit: async () => { throw new Error('audit boom'); },
+      blueprintConformance: noOpBlueprint,
+      planCoverage: noOpCoverage,
+    });
+    expect(result.issueAudit.ok).toBe(false);
+    if (!result.issueAudit.ok) {
+      expect(result.issueAudit.error).toContain('audit boom');
+    }
+    // Other steps still succeeded
+    expect(result.planCoverage.ok).toBe(true);
+    expect(result.blueprintConformance.ok).toBe(true);
+  });
+
   it('runPlanCoverage failure does not abort the tick', async () => {
     const blueprint = vi.fn(noOpBlueprint);
     const client = makeClient();

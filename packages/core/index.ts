@@ -2,6 +2,7 @@ export { loadConfig, saveConfig } from './config.ts';
 export type { Config, GitHubUser, Repository } from './config.ts';
 
 export { runPlanningLoop } from './loop.ts';
+export type { TickRepositoryResult, TickRepositoryOpts } from './loop.ts';
 
 export { runDevLoop, tickDevLoop, runPrunePass } from './loops/dev-loop.ts';
 export type { DevLoopOpts, DevLoopTickResult, PruneResult } from './loops/dev-loop.ts';
