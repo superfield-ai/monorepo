@@ -18,6 +18,19 @@ export interface Issue {
   labels: string[];
 }
 
+export interface PullRequest {
+  number: number;
+  title: string;
+  body: string | null;
+  html_url: string;
+  state: string;
+  merged: boolean;
+  merged_at: string | null;
+  base_ref: string;
+  head_ref: string;
+  head_sha: string;
+}
+
 export interface CreateIssueParams {
   owner: string;
   repo: string;
@@ -160,6 +173,132 @@ export class GitHubClient {
 
   async deleteIssueComment(owner: string, repo: string, comment_id: number): Promise<void> {
     await this.octokit.issues.deleteComment({ owner, repo, comment_id });
+  }
+
+  /**
+   * Lists merged pull requests sorted by merge date descending. Used by the
+   * documentation loop to detect newly-merged PRs.
+   */
+  async listMergedPullRequests(
+    owner: string,
+    repo: string,
+    perPage = 30,
+  ): Promise<PullRequest[]> {
+    const { data } = await this.octokit.pulls.list({
+      owner,
+      repo,
+      state: 'closed',
+      sort: 'updated',
+      direction: 'desc',
+      per_page: perPage,
+    });
+    return data
+      .filter((pr) => pr.merged_at !== null)
+      .map((pr) => ({
+        number: pr.number,
+        title: pr.title,
+        body: pr.body ?? null,
+        html_url: pr.html_url,
+        state: pr.state,
+        merged: true,
+        merged_at: pr.merged_at,
+        base_ref: pr.base.ref,
+        head_ref: pr.head.ref,
+        head_sha: pr.head.sha,
+      }));
+  }
+
+  async listPullRequestFiles(
+    owner: string,
+    repo: string,
+    pull_number: number,
+  ): Promise<string[]> {
+    const { data } = await this.octokit.pulls.listFiles({
+      owner,
+      repo,
+      pull_number,
+      per_page: 100,
+    });
+    return data.map((f) => f.filename);
+  }
+
+  /**
+   * Creates a new branch from an existing ref. Used by the doc loop to
+   * branch off `main` for documentation PRs.
+   */
+  async createBranch(
+    owner: string,
+    repo: string,
+    branch: string,
+    fromSha: string,
+  ): Promise<void> {
+    await this.octokit.git.createRef({
+      owner,
+      repo,
+      ref: `refs/heads/${branch}`,
+      sha: fromSha,
+    });
+  }
+
+  /**
+   * Creates or updates a file via the contents API. Returns the new commit SHA.
+   * For new files, leave `sha` undefined; for updates, pass the existing blob sha.
+   */
+  async putFileContents(params: {
+    owner: string;
+    repo: string;
+    path: string;
+    branch: string;
+    message: string;
+    content: string;
+    sha?: string;
+  }): Promise<{ commitSha: string }> {
+    const { data } = await this.octokit.repos.createOrUpdateFileContents({
+      owner: params.owner,
+      repo: params.repo,
+      path: params.path,
+      branch: params.branch,
+      message: params.message,
+      content: Buffer.from(params.content, 'utf8').toString('base64'),
+      sha: params.sha,
+    });
+    return { commitSha: data.commit.sha ?? '' };
+  }
+
+  async getFileContents(
+    owner: string,
+    repo: string,
+    path: string,
+    ref?: string,
+  ): Promise<{ content: string; sha: string } | null> {
+    try {
+      const { data } = await this.octokit.repos.getContent({ owner, repo, path, ref });
+      if (Array.isArray(data) || data.type !== 'file') return null;
+      const content = Buffer.from(data.content, 'base64').toString('utf8');
+      return { content, sha: data.sha };
+    } catch (err: unknown) {
+      if ((err as { status?: number }).status === 404) return null;
+      throw err;
+    }
+  }
+
+  async createPullRequest(params: {
+    owner: string;
+    repo: string;
+    title: string;
+    head: string;
+    base: string;
+    body: string;
+  }): Promise<{ number: number; html_url: string }> {
+    const { data } = await this.octokit.pulls.create({
+      owner: params.owner,
+      repo: params.repo,
+      title: params.title,
+      head: params.head,
+      base: params.base,
+      body: params.body,
+    });
+    return { number: data.number, html_url: data.html_url };
   }
 
   async listAppInstallations(appSlug: string): Promise<{ id: number; accountLogin: string; accountType: 'User' | 'Organization'; repositorySelection: 'all' | 'selected' }[]> {

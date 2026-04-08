@@ -2,6 +2,7 @@ export { GitHubClient } from './client.ts';
 export type {
   CheckRun,
   Issue,
+  PullRequest,
   CreateIssueParams,
   UpdateIssueParams,
 } from './client.ts';

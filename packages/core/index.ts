@@ -6,6 +6,17 @@ export { runPlanningLoop } from './loop.ts';
 export { runDevLoop, tickDevLoop } from './loops/dev-loop.ts';
 export type { DevLoopOpts, DevLoopTickResult } from './loops/dev-loop.ts';
 
+export { runDocLoop, tickDocLoop } from './loops/doc-loop.ts';
+export type {
+  DocLoopOpts,
+  DocLoopTickOpts,
+  DocLoopTickResult,
+  DocCoverageMissing,
+  DocPatch,
+  DocSyncProposal,
+  DocConsistencyFinding,
+} from './loops/doc-loop.ts';
+
 export {
   parsePlan,
   serializePlan,
