@@ -168,15 +168,15 @@ The continuous development loop. Runs indefinitely until killed (Ctrl-C).
 
 `start` has three concurrent loops:
 
-### Outer loop — repository health (every 5 seconds)
+### Planning loop — repository health (every 5 seconds)
 
 1. **CI watchdog** — query Check Runs for the latest commit on `main`. On any failed check, create a `ci-failure` issue and insert it at the top of the Plan (deduplicated by SHA + check name). A broken `main` always takes priority over new feature work.
 2. **Issue audit** — scan all open issues for schema conformance (required sections present, correct labels). Flag non-conforming issues with a label and a comment describing what is missing.
 3. **Plan coverage** — verify every open issue is referenced in the Plan. Append any missing issue in dependency order.
 
-The outer loop feeds the Plan. It does not perform development work.
+The planning loop feeds the Plan. It does not perform development work.
 
-### Inner loop — development (Plan-driven)
+### Dev loop — development (Plan-driven)
 
 #### Issue lifecycle
 
@@ -204,7 +204,7 @@ When an issue that was completed speculatively later becomes the primary, the pr
 3. **Launch** — dispatch agents in parallel. Primary drives through merge and then exits; speculative agents drive through checklist completion then exit.
 4. Loop back to step 1 after the primary exits.
 
-The outer loop and inner loop run concurrently within the same process. The outer loop feeds the Plan; the inner loop drains it.
+The planning loop and dev loop run concurrently within the same process. The planning loop feeds the Plan; the dev loop drains it.
 
 ### Documentation loop — documentation fractal (on every merge to `main`)
 
@@ -263,7 +263,7 @@ Scout gate: #196
 
 Rules: strict total order, no checkboxes, no step numbers, no parallel group annotations. Dependency data lives in the inline `<!-- calypso: ... -->` metadata comments, not in issue bodies.
 
-`plan` is safe to run while `start` is active — it only writes to the Plan issue, which `start` re-reads on the next inner loop cycle.
+`plan` is safe to run while `start` is active — it only writes to the Plan issue, which `start` re-reads on the next dev loop cycle.
 
 ---
 
@@ -278,7 +278,7 @@ Tickets a new feature issue and registers it in the Plan.
 5. Create the GitHub issue.
 6. Append the new issue to the Plan in the correct phase position.
 
-`feature` is safe to run while `start` is active — it writes a new issue and appends to the Plan; `start` will pick it up on the next inner loop cycle.
+`feature` is safe to run while `start` is active — it writes a new issue and appends to the Plan; `start` will pick it up on the next dev loop cycle.
 
 ---
 
@@ -351,7 +351,7 @@ Rules:
 - Scout always first within its phase
 - All issues in a prerequisite phase appear before all issues in the dependent phase
 - Dependency data lives in inline `<!-- calypso: ... -->` metadata comments, not in issue bodies
-- `start` reads the metadata comments to drive the inner loop; the human-readable lines are for humans
+- `start` reads the metadata comments to drive the dev loop; the human-readable lines are for humans
 
 ---
 
@@ -394,7 +394,7 @@ These files are the source of truth for MSW handlers. Fixtures are recorded from
 
 **Unit** — single function or skill module, all network calls mocked via fixtures.
 
-**Integration** — multiple modules composed together (e.g. outer loop: poll → failed check → create issue → update Plan), network mocked, real TypeScript execution.
+**Integration** — multiple modules composed together (e.g. planning loop: poll → failed check → create issue → update Plan), network mocked, real TypeScript execution.
 
 No tests against real GitHub in Phase 1.
 
@@ -402,11 +402,11 @@ No tests against real GitHub in Phase 1.
 
 | Scenario | Layer |
 |---|---|
-| Outer loop: no failures — nothing created | Unit |
-| Outer loop: check failed — issue created, Plan updated | Integration |
-| Outer loop: duplicate failure — no second issue | Unit |
-| Outer loop: non-conforming issue — label + comment added | Unit |
-| Outer loop: issue missing from Plan — appended | Unit |
+| Planning loop: no failures — nothing created | Unit |
+| Planning loop: check failed — issue created, Plan updated | Integration |
+| Planning loop: duplicate failure — no second issue | Unit |
+| Planning loop: non-conforming issue — label + comment added | Unit |
+| Planning loop: issue missing from Plan — appended | Unit |
 | `plan`: all issues present in Plan body | Integration |
 | `plan`: missing issues appended in phase order | Unit |
 | `feature`: duplicate detected — user warned, no issue created | Unit |
@@ -423,10 +423,10 @@ No tests against real GitHub in Phase 1.
 
 | Phase | Scope |
 |---|---|
-| 1 | `github add`, `github forget`, `start` outer loop only (CI watchdog + issue audit + plan coverage) |
-| 2 | `plan` command; `start` inner loop (development agent, calypso-auto equivalent) |
+| 1 | `github add`, `github forget`, `start` planning loop only (CI watchdog + issue audit + plan coverage) |
+| 2 | `plan` command; `start` dev loop (development agent, calypso-auto equivalent) |
 | 3 | `feature` command |
-| 4 | Full LLM agent integration within the inner loop |
+| 4 | Full LLM agent integration within the dev loop |
 
 Phase 1 establishes the foundation — config, GitHub client, git client, issue rendering, Plan management — that all later phases build on.
 
