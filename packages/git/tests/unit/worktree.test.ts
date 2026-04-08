@@ -85,6 +85,24 @@ describe("WorktreeManager.list", () => {
     const numbers = list.map((w) => w.issueNumber).sort();
     expect(numbers).toEqual([10, 20]);
   });
+
+  it("lists worktrees for a single repository", async () => {
+    const wm = new WorktreeManager({ root: tmpRoot });
+    await fs.mkdir(path.join(tmpRoot, "org__repo", "issue-10-foo"), {
+      recursive: true,
+    });
+    await fs.mkdir(path.join(tmpRoot, "org__repo", "issue-20-bar"), {
+      recursive: true,
+    });
+    await fs.mkdir(path.join(tmpRoot, "other__repo", "issue-30-baz"), {
+      recursive: true,
+    });
+
+    const list = await wm.listForRepository("org", "repo");
+    const numbers = list.map((w) => w.issueNumber).sort();
+
+    expect(numbers).toEqual([10, 20]);
+  });
 });
 
 describe("WorktreeManager.prune", () => {

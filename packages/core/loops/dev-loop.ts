@@ -469,6 +469,16 @@ async function loadCurrentPlan(
   return parsePlan(planIssues[0]!.body ?? "");
 }
 
+/** Scout seam for dev-scout downstream issue hydration in #51. */
+export function listPhaseFeatureEntries(
+  plan: Plan,
+  phaseName: string,
+): PlanIssueMetadata[] {
+  const phase = plan.phases.find((candidate) => candidate.name === phaseName);
+  if (!phase) return [];
+  return phase.issues.filter((entry) => entry.kind === "feature");
+}
+
 async function collectBlockingPredecessors(
   client: GitHubClient,
   owner: string,
@@ -679,7 +689,7 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
   const reapedSessions: number[] = [];
 
   // --- Step 1: Prune worktrees for closed issues ---
-  const allWorktrees = await worktrees.list();
+  const allWorktrees = await listPrunableWorktrees(worktrees, owner, repo);
   await Promise.all(
     allWorktrees.map(async (wt) => {
       try {
@@ -742,6 +752,15 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
   );
 
   return { prunedWorktrees, reapedSessions };
+}
+
+async function listPrunableWorktrees(
+  worktrees: WorktreeManager,
+  _owner: string,
+  _repo: string,
+): Promise<IssueWorktree[]> {
+  // Scout seam: repository-scoped pruning lands behind this helper in #50.
+  return worktrees.list();
 }
 
 /** Extracts the slug from a worktree path (last path segment after issue-N-). */

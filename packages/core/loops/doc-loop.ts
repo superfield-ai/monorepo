@@ -84,14 +84,13 @@ const DEFAULT_POLL_MS = 60_000;
 export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
   const pollMs = opts.pollIntervalMs ?? DEFAULT_POLL_MS;
   let lastSeenSha: string | null = null;
-  while (true) {
+  await runLoopForever(async () => {
     const headSha = await opts.client.getHeadSha(opts.owner, opts.repo);
     const result = await tickDocLoop({ ...opts, lastSeenSha, headSha });
     if (result.triggered) {
       lastSeenSha = headSha;
     }
-    await sleep(pollMs);
-  }
+  }, pollMs);
 }
 
 export interface DocLoopTickOpts extends DocLoopOpts {
@@ -197,6 +196,16 @@ export async function tickDocLoop(
     consistencyFindings: consistencyResult,
     docPrNumber,
   };
+}
+
+async function runLoopForever(
+  tick: () => Promise<void>,
+  pollMs: number,
+): Promise<void> {
+  while (true) {
+    await tick();
+    await sleep(pollMs);
+  }
 }
 
 async function runCoverageScan(

@@ -69,6 +69,10 @@ describe("prompt builders — structural invariants", () => {
       expect(out).toContain("#50");
       expect(out).toContain("Build the auth seams");
     });
+
+    it.todo(
+      "dev-scout handoff includes every downstream feature issue in phase order",
+    );
   });
 
   describe("buildCIFailurePrompt", () => {

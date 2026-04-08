@@ -93,23 +93,8 @@ async function tickRepository(
   const blueprintFn = opts.blueprintConformance ?? runBlueprintConformance;
   const coverageFn = opts.planCoverage ?? runPlanCoverage;
 
-  const watchdogIssuesCreated: number[] = [];
-
   // Step 1: CI watchdog
-  const sha = await client.getHeadSha(owner, repo);
-  const runs = await client.getCheckRuns(owner, repo, sha);
-  const failed = hasFailedChecks(runs);
-  for (const run of failed) {
-    const result = await runWatchdog(client, owner, repo, sha, run);
-    if (result.issueCreated) {
-      watchdogIssuesCreated.push(result.issue!.number);
-      console.log(
-        `[${owner}/${repo}] Created issue #${result.issue!.number}: ${result.issue!.title}`,
-      );
-    } else if (result.skipped) {
-      console.log(`[${owner}/${repo}] Skipped ${run.name}: ${result.reason}`);
-    }
-  }
+  const watchdogIssuesCreated = await runWatchdogStep(client, owner, repo);
 
   // Step 2: Issue audit — validate open issues against the IssueBody schema
   let issueAuditOutcome: TickRepositoryResult["issueAudit"];
@@ -184,6 +169,29 @@ async function tickRepository(
  * @internal
  */
 export { tickRepository as tickRepositoryForTesting };
+
+async function runWatchdogStep(
+  client: GitHubClientPort,
+  owner: string,
+  repo: string,
+): Promise<number[]> {
+  const watchdogIssuesCreated: number[] = [];
+  const sha = await client.getHeadSha(owner, repo);
+  const runs = await client.getCheckRuns(owner, repo, sha);
+  const failed = hasFailedChecks(runs);
+  for (const run of failed) {
+    const result = await runWatchdog(client, owner, repo, sha, run);
+    if (result.issueCreated) {
+      watchdogIssuesCreated.push(result.issue!.number);
+      console.log(
+        `[${owner}/${repo}] Created issue #${result.issue!.number}: ${result.issue!.title}`,
+      );
+    } else if (result.skipped) {
+      console.log(`[${owner}/${repo}] Skipped ${run.name}: ${result.reason}`);
+    }
+  }
+  return watchdogIssuesCreated;
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));

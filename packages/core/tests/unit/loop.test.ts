@@ -197,4 +197,10 @@ describe("tickRepository — all four planning-loop steps are wired", () => {
     // blueprint-conformance should still have been called (comes after plan-coverage)
     expect(blueprint).toHaveBeenCalled();
   });
+
+  it.todo(
+    "watchdog getHeadSha/getCheckRuns failures are isolated so later planning steps still run",
+  );
+
+  it.todo("one repository tick failure does not abort the other repositories");
 });
