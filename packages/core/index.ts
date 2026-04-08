@@ -31,6 +31,9 @@ export type { IssueBody } from './issue-body.ts';
 export { runPlanCommand } from './commands/plan.ts';
 export type { PlanProposal, PlanCommandOpts, PlanCommandResult } from './commands/plan.ts';
 
+export { runFeatureCommand } from './commands/feature.ts';
+export type { FeatureEvaluation, FeatureCommandOpts, FeatureCommandResult } from './commands/feature.ts';
+
 export { runBlueprintConformance } from './steps/blueprint-conformance.ts';
 export type {
   BlueprintViolation,
