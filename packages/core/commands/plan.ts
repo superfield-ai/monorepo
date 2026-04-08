@@ -4,6 +4,7 @@ import type {
 } from "@superfield/github";
 import { buildReplanEvaluatePrompt } from "../prompts/index.ts";
 import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
+import { runIssueAudit, type IssueAuditResult } from "../steps/issue-audit.ts";
 import {
   serializePlan,
   validatePlan,
@@ -50,6 +51,12 @@ export interface PlanCommandOpts {
   repo: string;
   spawn?: LLMTaskOpts["spawn"];
   cwd?: string;
+  issueAudit?: (
+    client: GitHubClient,
+    owner: string,
+    repo: string,
+    opts: object,
+  ) => Promise<IssueAuditResult>;
 }
 
 export interface PlanCommandResult {
@@ -77,7 +84,11 @@ export async function runPlanCommand(
 ): Promise<PlanCommandResult> {
   const { client, owner, repo } = opts;
 
-  // 1. Collect
+  // 1. Audit — normalize PR hygiene before planning
+  const issueAuditFn = opts.issueAudit ?? runIssueAudit;
+  await issueAuditFn(client, owner, repo, { cwd: opts.cwd });
+
+  // 2. Collect
   const allIssues = await client.listIssues(owner, repo);
   const { planIssues, candidates } = collectPlanInputs(allIssues);
 
@@ -90,7 +101,7 @@ export async function runPlanCommand(
     };
   }
 
-  // 2. Evaluate (LLM)
+  // 3. Evaluate (LLM)
   const prompt = buildReplanEvaluatePrompt({
     openIssues: candidates.map((i) => ({
       number: i.number,
@@ -106,7 +117,7 @@ export async function runPlanCommand(
     parseProposal,
   );
 
-  // 3. Create scouts for any null-numbered slots
+  // 4. Create scouts for any null-numbered slots
   const scoutsCreated: number[] = [];
   if (proposal.scout_specs && proposal.scout_specs.length > 0) {
     for (let specIdx = 0; specIdx < proposal.scout_specs.length; specIdx++) {
@@ -133,7 +144,7 @@ export async function runPlanCommand(
     }
   }
 
-  // 4. Validate
+  // 5. Validate
   const validationErrors = validateProposal(proposal);
   if (validationErrors.length > 0) {
     return {
@@ -144,7 +155,7 @@ export async function runPlanCommand(
     };
   }
 
-  // 5. Apply: render Plan body and write
+  // 6. Apply: render Plan body and write
   const plan = buildPlanFromProposal(proposal);
   const planErrors = validatePlan(plan);
   if (planErrors.length > 0) {
@@ -192,7 +203,10 @@ export function collectPlanInputs(allIssues: Issue[]): {
   return {
     planIssues: allIssues.filter((i) => i.labels.includes(PLAN_LABEL)),
     candidates: allIssues.filter(
-      (i) => !i.labels.includes(PLAN_LABEL) && !i.labels.includes("ci-failure"),
+      (i) =>
+        !i.labels.includes(PLAN_LABEL) &&
+        !i.labels.includes("ci-failure") &&
+        !i.labels.includes("non-conformant"),
     ),
   };
 }

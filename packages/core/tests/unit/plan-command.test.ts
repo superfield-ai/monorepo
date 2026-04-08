@@ -32,6 +32,12 @@ function fakeSpawn(response: unknown) {
   });
 }
 
+const noOpAudit = vi.fn(async () => ({
+  audited: 0,
+  nonConformant: [],
+  reports: {},
+}));
+
 const validProposal = {
   phases: [
     {
@@ -76,11 +82,82 @@ describe("runPlanCommand", () => {
         title: "fix: ci failure",
         labels: ["ci-failure"],
       }),
+      makeIssue({
+        number: 51,
+        title: "feat: dirty",
+        labels: ["non-conformant"],
+      }),
       makeIssue({ number: 10, title: "feat: example" }),
     ]);
 
     expect(inputs.planIssues.map((issue) => issue.number)).toEqual([99]);
     expect(inputs.candidates.map((issue) => issue.number)).toEqual([10]);
+  });
+
+  it("runs issue audit before collecting inputs and evaluating the plan", async () => {
+    const events: string[] = [];
+    const issueAudit = vi.fn(async () => {
+      events.push("audit");
+      return {
+        audited: 1,
+        nonConformant: [],
+        reports: {},
+      };
+    });
+    const client = makeClient({
+      listIssues: vi.fn().mockImplementation(async () => {
+        events.push("collect");
+        return [
+          makeIssue({ number: 99, title: "Plan", labels: ["plan"] }),
+          makeIssue({ number: 10 }),
+        ];
+      }),
+    });
+
+    const result = await runPlanCommand({
+      client,
+      owner: "o",
+      repo: "r",
+      issueAudit,
+      spawn: fakeSpawn(validProposal),
+    });
+
+    expect(issueAudit).toHaveBeenCalledOnce();
+    expect(events).toEqual(["audit", "collect"]);
+    expect(result.planUpdated).toBe(true);
+    expect(result.planCreated).toBe(false);
+  });
+
+  it("still audits even when no planning candidates remain after hygiene filtering", async () => {
+    const issueAudit = vi.fn(async () => ({
+      audited: 1,
+      nonConformant: [],
+      reports: {},
+    }));
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({ number: 99, title: "Plan", labels: ["plan"] }),
+        makeIssue({
+          number: 10,
+          title: "feat: dirty",
+          labels: ["non-conformant"],
+        }),
+      ]),
+    });
+
+    const result = await runPlanCommand({
+      client,
+      owner: "o",
+      repo: "r",
+      issueAudit,
+      spawn: fakeSpawn(validProposal),
+    });
+
+    expect(issueAudit).toHaveBeenCalledOnce();
+    expect(client.listIssues).toHaveBeenCalledTimes(1);
+    expect(result.planUpdated).toBe(false);
+    expect(result.planCreated).toBe(false);
+    expect(result.scoutsCreated).toEqual([]);
   });
 
   it("returns empty result when no candidate issues", async () => {
@@ -89,6 +166,7 @@ describe("runPlanCommand", () => {
       client,
       owner: "o",
       repo: "r",
+      issueAudit: noOpAudit,
       spawn: fakeSpawn(validProposal),
     });
     expect(result.planUpdated).toBe(false);
@@ -109,6 +187,7 @@ describe("runPlanCommand", () => {
       client,
       owner: "o",
       repo: "r",
+      issueAudit: noOpAudit,
       spawn: fakeSpawn(validProposal),
     });
     expect(result.planCreated).toBe(true);
@@ -142,6 +221,7 @@ describe("runPlanCommand", () => {
       client,
       owner: "o",
       repo: "r",
+      issueAudit: noOpAudit,
       spawn: fakeSpawn(validProposal),
     });
     expect(result.planUpdated).toBe(true);
@@ -215,6 +295,7 @@ describe("runPlanCommand", () => {
       client,
       owner: "o",
       repo: "r",
+      issueAudit: noOpAudit,
       spawn: fakeSpawn(proposal),
     });
     expect(result.scoutsCreated).toEqual([555]);
@@ -267,6 +348,7 @@ describe("runPlanCommand", () => {
       client,
       owner: "o",
       repo: "r",
+      issueAudit: noOpAudit,
       spawn: fakeSpawn(proposal),
     });
     expect(result.validationErrors.length).toBeGreaterThan(0);
@@ -305,6 +387,7 @@ describe("runPlanCommand", () => {
       client,
       owner: "o",
       repo: "r",
+      issueAudit: noOpAudit,
       spawn: fakeSpawn(proposal),
     });
     expect(result.validationErrors.join(" ")).toContain("no dev-scout");
@@ -362,10 +445,9 @@ describe("runPlanCommand", () => {
       client,
       owner: "o",
       repo: "r",
+      issueAudit: noOpAudit,
       spawn: fakeSpawn(proposal),
     });
     expect(result.validationErrors.join(" ")).toContain("cycle");
   });
-
-  it.todo("runs the documented audit stage before applying plan coverage");
 });
