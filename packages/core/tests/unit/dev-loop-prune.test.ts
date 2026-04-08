@@ -146,7 +146,51 @@ describe("runPrunePass — worktree cleanup", () => {
     expect(result.prunedWorktrees).toEqual([]);
   });
 
-  it.todo("ignores worktrees owned by other repositories during prune scans");
+  it("ignores worktrees owned by other repositories during prune scans", async () => {
+    const activeWtx = worktrees.worktreePath(
+      "org",
+      "repo",
+      10,
+      "build-the-thing",
+    );
+    const otherWtx = worktrees.worktreePath(
+      "org",
+      "other-repo",
+      10,
+      "build-the-thing",
+    );
+    await fs.mkdir(activeWtx, { recursive: true });
+    await fs.mkdir(otherWtx, { recursive: true });
+
+    const client = makeClient({
+      getIssue: vi
+        .fn()
+        .mockResolvedValue(makeIssue({ number: 10, state: "closed" })),
+      listIssues: vi.fn().mockResolvedValue([]),
+    });
+
+    const result = await runPrunePass({
+      client,
+      owner: "org",
+      repo: "repo",
+      token: "tok",
+      worktrees,
+    });
+
+    expect(result.prunedWorktrees).toEqual([10]);
+    expect(
+      await fs
+        .stat(activeWtx)
+        .then(() => true)
+        .catch(() => false),
+    ).toBe(false);
+    expect(
+      await fs
+        .stat(otherWtx)
+        .then(() => true)
+        .catch(() => false),
+    ).toBe(true);
+  });
 });
 
 describe("runPrunePass — stale session reaping", () => {
