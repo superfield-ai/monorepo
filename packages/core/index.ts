@@ -3,8 +3,8 @@ export type { Config, GitHubUser, Repository } from './config.ts';
 
 export { runPlanningLoop } from './loop.ts';
 
-export { runDevLoop, tickDevLoop } from './loops/dev-loop.ts';
-export type { DevLoopOpts, DevLoopTickResult } from './loops/dev-loop.ts';
+export { runDevLoop, tickDevLoop, runPrunePass } from './loops/dev-loop.ts';
+export type { DevLoopOpts, DevLoopTickResult, PruneResult } from './loops/dev-loop.ts';
 
 export { runDocLoop, tickDocLoop } from './loops/doc-loop.ts';
 export type {

@@ -28,6 +28,15 @@ export interface DevLoopOpts {
   idlePollMs?: number;
   /** Total slot count (1 primary + N-1 speculative). Default 3. */
   slotCount?: number;
+  /** Sessions older than this are considered stale. Default 4h. */
+  staleSessionTimeoutMs?: number;
+}
+
+export interface PruneResult {
+  /** Issue numbers whose worktrees were deleted. */
+  prunedWorktrees: number[];
+  /** Issue numbers whose stale session comments were deleted. */
+  reapedSessions: number[];
 }
 
 export interface DevLoopTickResult {
@@ -54,6 +63,12 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   while (true) {
     const result = await tickDevLoop(opts);
     if (result.idle) {
+      // Run maintenance on idle ticks — prune stale worktrees + stale sessions
+      try {
+        await runPrunePass(opts);
+      } catch (err) {
+        console.error(`[${opts.owner}/${opts.repo}] prune pass failed:`, err);
+      }
       await sleep(idleMs);
     }
   }
@@ -333,6 +348,90 @@ function extractCheckUrl(body: string | null): string {
   if (!body) return '';
   const match = /(https:\/\/github\.com\/[^\s)]+\/runs\/\d+)/.exec(body);
   return match?.[1] ?? '';
+}
+
+const DEFAULT_STALE_SESSION_MS = 4 * 60 * 60 * 1000; // 4 hours
+const SESSION_MARKER = '<!-- superfield-session:';
+const SESSION_MARKER_END = '-->';
+
+/**
+ * Maintenance pass: prune worktrees for closed issues and reap stale session
+ * comments (deadman switch). Called on every idle tick of the dev loop.
+ *
+ * Worktree pruning: scans all managed worktrees and deletes those whose
+ * corresponding issue is now closed on the forge.
+ *
+ * Session reaping: scans all open issues for session comments older than
+ * `staleSessionTimeoutMs`. A stale session means the agent died without
+ * cleaning up — deleting the comment allows the issue to be re-claimed.
+ */
+export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
+  const { client, owner, repo } = opts;
+  const worktrees = opts.worktrees ?? new WorktreeManager();
+  const staleMs = opts.staleSessionTimeoutMs ?? DEFAULT_STALE_SESSION_MS;
+  const now = Date.now();
+
+  const prunedWorktrees: number[] = [];
+  const reapedSessions: number[] = [];
+
+  // --- Step 1: Prune worktrees for closed issues ---
+  const allWorktrees = await worktrees.list();
+  await Promise.all(
+    allWorktrees.map(async (wt) => {
+      try {
+        const issue = await client.getIssue(owner, repo, wt.issueNumber);
+        if (issue.state === 'closed') {
+          await worktrees.prune(owner, repo, wt.issueNumber, slugFromPath(wt.path));
+          prunedWorktrees.push(wt.issueNumber);
+        }
+      } catch {
+        // Skip if issue cannot be fetched
+      }
+    }),
+  );
+
+  // --- Step 2: Reap stale session comments on open issues ---
+  const openIssues = await client.listIssues(owner, repo);
+  await Promise.all(
+    openIssues.map(async (issue) => {
+      try {
+        const comments = await client.listIssueComments(owner, repo, issue.number);
+        const sessionComment = comments.find((c) => c.body.startsWith(SESSION_MARKER));
+        if (!sessionComment) return;
+
+        const jsonStart = sessionComment.body.indexOf('\n') + 1;
+        const jsonEnd = sessionComment.body.lastIndexOf(SESSION_MARKER_END);
+        if (jsonEnd < 0) return;
+
+        let startedAt: string;
+        try {
+          const parsed = JSON.parse(sessionComment.body.slice(jsonStart, jsonEnd).trim()) as {
+            startedAt: string;
+          };
+          startedAt = parsed.startedAt;
+        } catch {
+          return; // malformed session comment — leave it
+        }
+
+        const age = now - new Date(startedAt).getTime();
+        if (age > staleMs) {
+          await client.deleteIssueComment(owner, repo, sessionComment.id);
+          reapedSessions.push(issue.number);
+        }
+      } catch {
+        // Skip if comments cannot be fetched
+      }
+    }),
+  );
+
+  return { prunedWorktrees, reapedSessions };
+}
+
+/** Extracts the slug from a worktree path (last path segment after issue-N-). */
+function slugFromPath(wtPath: string): string {
+  const base = wtPath.split('/').pop() ?? '';
+  const match = /^issue-\d+-(.+)$/.exec(base);
+  return match?.[1] ?? base;
 }
 
 function sleep(ms: number): Promise<void> {
