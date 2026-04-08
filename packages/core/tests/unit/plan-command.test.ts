@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runPlanCommand } from "../../commands/plan.ts";
+import { collectPlanInputs, runPlanCommand } from "../../commands/plan.ts";
 import type { GitHubClient, Issue } from "@superfield/github";
 import type { AgentOpts, AgentResult } from "../../agent.ts";
 
@@ -68,6 +68,21 @@ const validProposal = {
 };
 
 describe("runPlanCommand", () => {
+  it("collectPlanInputs separates plan issues from planning candidates", () => {
+    const inputs = collectPlanInputs([
+      makeIssue({ number: 99, title: "Plan", labels: ["plan"] }),
+      makeIssue({
+        number: 50,
+        title: "fix: ci failure",
+        labels: ["ci-failure"],
+      }),
+      makeIssue({ number: 10, title: "feat: example" }),
+    ]);
+
+    expect(inputs.planIssues.map((issue) => issue.number)).toEqual([99]);
+    expect(inputs.candidates.map((issue) => issue.number)).toEqual([10]);
+  });
+
   it("returns empty result when no candidate issues", async () => {
     const client = makeClient();
     const result = await runPlanCommand({
