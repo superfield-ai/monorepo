@@ -174,6 +174,19 @@ export async function runGithubAdd(
   // Ensure app is installed and target repo is accessible
   deps.log("");
   let installedRepos = await deps.checkAppInstalled(user.token, appSlug);
+
+  // Reconcile config: remove repos that are no longer accessible via the app
+  if (installedRepos === null) {
+    config.repositories = config.repositories.filter(
+      (r) => r.assignedUser !== user.handle,
+    );
+  } else if (installedRepos !== "all") {
+    config.repositories = config.repositories.filter((r) => {
+      if (r.assignedUser !== user.handle) return true;
+      return repoAccessible(installedRepos as string[], `${r.owner}/${r.repo}`);
+    });
+  }
+
   if (installedRepos === null) {
     deps.log(
       `  Open https://github.com/apps/${appSlug}/installations/select_target`,
@@ -217,15 +230,32 @@ export async function runGithubAdd(
     if (installedRepos !== "all") logRepos(installedRepos, deps);
   }
 
-  // Register repo in local config
-  const existing = config.repositories.find(
-    (r) => r.owner === owner && r.repo === repo,
-  );
-  if (existing) {
-    deps.log(`\n✓ ${targetRepo} already in config`);
+  // Sync all accessible repos into local config
+  if (installedRepos === "all") {
+    // Can't enumerate; ensure target is present
+    if (!config.repositories.find((r) => r.owner === owner && r.repo === repo)) {
+      config.repositories.push({ owner, repo, assignedUser: user.handle });
+      deps.log(`\n✓ Added ${targetRepo} to config`);
+    } else {
+      deps.log(`\n✓ ${targetRepo} already in config`);
+    }
   } else {
-    config.repositories.push({ owner, repo, assignedUser: user.handle });
-    deps.log(`\n✓ Added ${targetRepo} to config`);
+    let added = 0;
+    for (const fullName of installedRepos) {
+      const slash = fullName.indexOf("/");
+      if (slash < 0) continue;
+      const repoOwner = fullName.slice(0, slash);
+      const repoName = fullName.slice(slash + 1);
+      if (!config.repositories.find((r) => r.owner === repoOwner && r.repo === repoName)) {
+        config.repositories.push({ owner: repoOwner, repo: repoName, assignedUser: user.handle });
+        added++;
+      }
+    }
+    if (added > 0) {
+      deps.log(`\n✓ Added ${added} repo(s) to config`);
+    } else {
+      deps.log(`\n✓ Config already up to date`);
+    }
   }
 
   await deps.saveConfig(config);

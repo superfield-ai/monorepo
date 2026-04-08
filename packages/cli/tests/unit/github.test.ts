@@ -83,7 +83,9 @@ describe("runGithubAdd", () => {
       "\n  Open https://github.com/apps/superfield-cli/installations/select_target to grant access.",
     );
     expect(deps.log).toHaveBeenCalledWith("Waiting for access...");
+    // both repos now accessible are synced into config
     expect(config.repositories).toEqual([
+      { owner: "org", repo: "other-repo", assignedUser: "octocat" },
       { owner: "org", repo: "new-repo", assignedUser: "octocat" },
     ]);
   }, 15_000);
@@ -153,7 +155,65 @@ describe("runGithubAdd", () => {
     expect(config.users[0]?.token).toBe("ghu_fresh");
   });
 
-  it("skips adding repo when already in config", async () => {
+  it("removes stale repos from config when app is fully uninstalled", async () => {
+    const checkAppInstalled = vi
+      .fn()
+      .mockResolvedValueOnce(null) // initial check: not installed
+      .mockResolvedValueOnce(["org/repo"]); // poll: now installed
+    const config: Config = {
+      users: [{ handle: "octocat", token: "ghu_existing" }],
+      repositories: [
+        { owner: "org", repo: "stale-repo", assignedUser: "octocat" },
+      ],
+    };
+    const deps = makeDeps({
+      loadConfig: vi.fn().mockResolvedValue(config),
+      fetchUserLogin: vi.fn().mockResolvedValue("octocat"),
+      saveConfig: vi.fn().mockResolvedValue(undefined),
+      resolveRepo: vi.fn().mockResolvedValue({ owner: "org", repo: "repo" }),
+      checkAppInstalled,
+    });
+
+    await runGithubAdd(undefined, deps);
+
+    // stale-repo was removed; only newly added repo remains
+    expect(config.repositories).toEqual([
+      { owner: "org", repo: "repo", assignedUser: "octocat" },
+    ]);
+  }, 15_000);
+
+  it("removes stale repos from config when app is installed on different repos", async () => {
+    const config: Config = {
+      users: [{ handle: "octocat", token: "ghu_existing" }],
+      repositories: [
+        { owner: "org", repo: "stale-repo", assignedUser: "octocat" },
+      ],
+    };
+    const checkAppInstalled = vi
+      .fn()
+      .mockResolvedValueOnce(["org/other-repo"]) // initial check: installed, but not stale-repo or target
+      .mockResolvedValueOnce(["org/other-repo"]) // poll 1
+      .mockResolvedValueOnce(["org/other-repo", "org/new-repo"]); // poll 2: target accessible
+    const deps = makeDeps({
+      loadConfig: vi.fn().mockResolvedValue(config),
+      fetchUserLogin: vi.fn().mockResolvedValue("octocat"),
+      saveConfig: vi.fn().mockResolvedValue(undefined),
+      resolveRepo: vi
+        .fn()
+        .mockResolvedValue({ owner: "org", repo: "new-repo" }),
+      checkAppInstalled,
+    });
+
+    await runGithubAdd(undefined, deps);
+
+    // stale-repo was removed; all newly accessible repos are synced
+    expect(config.repositories).toEqual([
+      { owner: "org", repo: "other-repo", assignedUser: "octocat" },
+      { owner: "org", repo: "new-repo", assignedUser: "octocat" },
+    ]);
+  }, 15_000);
+
+  it("logs up to date when all accessible repos are already in config", async () => {
     const config: Config = {
       users: [{ handle: "octocat", token: "ghu_existing" }],
       repositories: [{ owner: "org", repo: "repo", assignedUser: "octocat" }],
@@ -168,7 +228,7 @@ describe("runGithubAdd", () => {
     await runGithubAdd(undefined, deps);
 
     expect(config.repositories).toHaveLength(1);
-    expect(deps.log).toHaveBeenCalledWith("\n✓ org/repo already in config");
+    expect(deps.log).toHaveBeenCalledWith("\n✓ Config already up to date");
   });
 
   it("polls until app installation appears", async () => {
