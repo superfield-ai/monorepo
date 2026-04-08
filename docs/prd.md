@@ -68,12 +68,15 @@ Superfield is designed to run on remote VM instances, not developer machines. Th
 GitHub's device flow and GitHub App installation are separate steps with no native API to combine them. The CLI sequences them as a guided flow:
 
 1. **Device flow** — CLI prints a URL and a short code. User opens the URL on their own browser and enters the code. CLI polls until the token arrives.
-2. **App installation** — CLI checks if the app is already installed (`GET /user/installations`). If not, it prints the direct install URL and polls every 3 seconds until an installation appears.
+2. **App installation** — CLI checks if the app is already installed (`GET /user/installations`).
+   - If not installed: prints `https://github.com/apps/{slug}/installations/select_target` (forces the account/org picker) and polls every 3 seconds until any installation appears.
+   - If installed but the target repo is not in the accessible repo list: prints the same `select_target` URL and polls until any new repo appears in the accessible list (not necessarily the exact target — the user may have run the command from a different directory).
+   - If installed and the target repo is accessible (or the installation covers all repos): skips this step.
 3. **Repo registration** — CLI resolves the git remote of the current directory, registers `owner/repo` in local config assigned to the authenticated user.
 
 Subsequent runs of `superfield github add` skip any step that is already satisfied (valid token, app already installed, repo already registered).
 
-There is no API to uninstall a GitHub App using a user-to-server token — it requires either a browser visit or the app's RSA private key (which is never embedded in the CLI binary). `superfield github forget` clears local credentials and prints the direct `https://github.com/settings/installations/{id}` URL for the user to complete the uninstall.
+There is no API to uninstall a GitHub App using a user-to-server token — it requires either a browser visit or the app's RSA private key (which is never embedded in the CLI binary). `superfield github forget` clears local credentials and prints a browser URL for the user to complete the uninstall. The URL is account-type-aware: `https://github.com/organizations/{org}/settings/installations/{id}` for org installations, `https://github.com/settings/installations/{id}` for personal accounts. If the installation ID cannot be fetched, it falls back to `https://github.com/settings/installations`.
 
 The app itself is part of the product infrastructure and must be created and configured before the CLI onboarding flow can be considered complete.
 
@@ -312,7 +315,7 @@ Stored as plaintext YAML at `~/.superfield/config.yaml`.
 ```yaml
 users:
   - handle: octocat
-    token: ghp_xxxxxxxxxxxx
+    token: ghu_xxxxxxxxxxxx
 
 repositories:
   - owner: my-org
@@ -338,7 +341,7 @@ tests/fixtures/
   git/       # git HTTP smart protocol responses (clone, fetch, push)
 ```
 
-These files are the source of truth for MSW handlers. A recorder (not run in CI) hits real endpoints and writes fixtures. Fixtures are committed and updated deliberately.
+These files are the source of truth for MSW handlers. Fixtures are recorded from real GitHub API responses using `bun record-fixtures` (runs `scripts/record-github-fixtures.ts`). The recorder hits live endpoints, trims each response to the fields the client and tests depend on, and writes the matching fixture file based on the detected installation state. Run it once per state (no installations, personal-selected, org-selected, all-repos) to build the full fixture set. Fixtures are committed and updated deliberately.
 
 ### Test Layers
 

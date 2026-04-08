@@ -36,9 +36,9 @@ describe('GitHubClient.listAllInstallations', () => {
     const result = await client.listAllInstallations();
     expect(result).toHaveLength(1);
     expect(result[0]).toMatchObject({
-      id: 11111111,
+      id: 122161367,
       appSlug: 'superfield-cli',
-      accountLogin: 'octocat',
+      accountLogin: '0o-de-lally',
       accountType: 'User',
       repositorySelection: 'selected',
     });
@@ -98,25 +98,30 @@ describe('GitHubClient.listAllInstallations', () => {
 describe('GitHubClient.listInstallationRepos', () => {
   it('returns full_name of each repository', async () => {
     server.use(
-      http.get(`${BASE}/user/installations/11111111/repositories`, () =>
+      http.get(`${BASE}/user/installations/122161367/repositories`, () =>
         HttpResponse.json(installationRepos),
       ),
     );
 
     const client = new GitHubClient('ghu_test');
-    const repos = await client.listInstallationRepos(11111111);
-    expect(repos).toEqual(['dot-matrix-labs/superfield-ts', 'dot-matrix-labs/other-repo']);
+    const repos = await client.listInstallationRepos(122161367);
+    expect(repos).toEqual([
+      '0o-de-lally/app',
+      '0o-de-lally/ai-notes',
+      '0o-de-lally/coco',
+      '0o-de-lally/atomica',
+    ]);
   });
 
   it('returns empty array when no repositories selected', async () => {
     server.use(
-      http.get(`${BASE}/user/installations/11111111/repositories`, () =>
+      http.get(`${BASE}/user/installations/122161367/repositories`, () =>
         HttpResponse.json({ total_count: 0, repositories: [] }),
       ),
     );
 
     const client = new GitHubClient('ghu_test');
-    const repos = await client.listInstallationRepos(11111111);
+    const repos = await client.listInstallationRepos(122161367);
     expect(repos).toEqual([]);
   });
 
@@ -129,7 +134,7 @@ describe('GitHubClient.listInstallationRepos', () => {
     const page2Repos = [{ id: 101, full_name: 'org/repo-101', private: false }];
 
     server.use(
-      http.get(`${BASE}/user/installations/11111111/repositories`, ({ request }) => {
+      http.get(`${BASE}/user/installations/122161367/repositories`, ({ request }) => {
         const page = new URL(request.url).searchParams.get('page');
         return HttpResponse.json(
           page === '2'
@@ -140,7 +145,7 @@ describe('GitHubClient.listInstallationRepos', () => {
     );
 
     const client = new GitHubClient('ghu_test');
-    const repos = await client.listInstallationRepos(11111111);
+    const repos = await client.listInstallationRepos(122161367);
     expect(repos).toHaveLength(101);
     expect(repos.at(-1)).toBe('org/repo-101');
   });

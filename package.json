@@ -15,7 +15,8 @@
     "typecheck": "tsc --noEmit",
     "lint": "bunx eslint .",
     "format": "bunx prettier --write .",
-    "format:check": "bunx prettier --check ."
+    "format:check": "bunx prettier --check .",
+    "record-fixtures": "bun scripts/record-github-fixtures.ts"
   },
   "devDependencies": {
     "@eslint/js": "^9.0.0",

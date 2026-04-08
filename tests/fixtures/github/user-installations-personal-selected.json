@@ -2,16 +2,16 @@
   "total_count": 1,
   "installations": [
     {
-      "id": 11111111,
-      "app_id": 999999,
+      "id": 122161367,
+      "app_id": 3306319,
       "app_slug": "superfield-cli",
       "repository_selection": "selected",
       "account": {
-        "login": "octocat",
+        "login": "0o-de-lally",
         "type": "User"
       },
-      "created_at": "2024-01-01T00:00:00Z",
-      "updated_at": "2024-01-01T00:00:00Z"
+      "created_at": "2026-04-07T13:23:31.000-04:00",
+      "updated_at": "2026-04-07T19:38:47.000-04:00"
     }
   ]
 }
