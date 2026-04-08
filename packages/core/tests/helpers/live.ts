@@ -11,7 +11,7 @@ const SUPPORTED_BACKENDS: AgentBackend[] = ["claude", "codex"];
 export function isLiveMode(): boolean {
   return Boolean(
     process.env.SUPERFIELD_LIVE_AGENTS &&
-      process.env.SUPERFIELD_LIVE_AGENTS !== "",
+    process.env.SUPERFIELD_LIVE_AGENTS !== "",
   );
 }
 

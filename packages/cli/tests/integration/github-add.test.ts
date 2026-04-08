@@ -6,7 +6,15 @@
  * was removed or re-installed on different repos out-of-band).
  */
 
-import { describe, it, expect, beforeAll, afterEach, afterAll, vi } from "vitest";
+import {
+  describe,
+  it,
+  expect,
+  beforeAll,
+  afterEach,
+  afterAll,
+  vi,
+} from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 import { GitHubClient } from "@superfield/github";
@@ -44,7 +52,10 @@ async function checkAppInstalled(
   return repoLists.flat();
 }
 
-function makeDeps(config: Config, overrides: Partial<GithubDeps> = {}): GithubDeps {
+function makeDeps(
+  config: Config,
+  overrides: Partial<GithubDeps> = {},
+): GithubDeps {
   return {
     loadConfig: vi.fn().mockResolvedValue(config),
     saveConfig: vi.fn().mockResolvedValue(undefined),
@@ -57,7 +68,9 @@ function makeDeps(config: Config, overrides: Partial<GithubDeps> = {}): GithubDe
     fetchUserLogin: vi.fn().mockResolvedValue("0o-de-lally"),
     checkAppInstalled,
     getInstallation: vi.fn().mockResolvedValue(null),
-    resolveRepo: vi.fn().mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
+    resolveRepo: vi
+      .fn()
+      .mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
     ...overrides,
   };
 }
@@ -68,21 +81,29 @@ describe("github add — integration (MSW + real GitHubClient)", () => {
       http.get(`${BASE}/user/installations`, () =>
         HttpResponse.json(installationsPersonalSelected),
       ),
-      http.get(`${BASE}/user/installations/${INSTALLATION_ID}/repositories`, () =>
-        HttpResponse.json(installationRepos),
+      http.get(
+        `${BASE}/user/installations/${INSTALLATION_ID}/repositories`,
+        () => HttpResponse.json(installationRepos),
       ),
     );
 
-    const config: Config = { users: [{ handle: "0o-de-lally", token: TOKEN }], repositories: [] };
+    const config: Config = {
+      users: [{ handle: "0o-de-lally", token: TOKEN }],
+      repositories: [],
+    };
     const deps = makeDeps(config, {
       // target is one of the repos in the fixture
-      resolveRepo: vi.fn().mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
+      resolveRepo: vi
+        .fn()
+        .mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
     });
 
     await runGithubAdd(undefined, deps);
 
     // All 4 repos from the fixture should be synced
-    expect(config.repositories.map((r) => `${r.owner}/${r.repo}`).sort()).toEqual([
+    expect(
+      config.repositories.map((r) => `${r.owner}/${r.repo}`).sort(),
+    ).toEqual([
       "0o-de-lally/ai-notes",
       "0o-de-lally/app",
       "0o-de-lally/atomica",
@@ -98,9 +119,14 @@ describe("github add — integration (MSW + real GitHubClient)", () => {
       ),
     );
 
-    const config: Config = { users: [{ handle: "0o-de-lally", token: TOKEN }], repositories: [] };
+    const config: Config = {
+      users: [{ handle: "0o-de-lally", token: TOKEN }],
+      repositories: [],
+    };
     const deps = makeDeps(config, {
-      resolveRepo: vi.fn().mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
+      resolveRepo: vi
+        .fn()
+        .mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
     });
 
     await runGithubAdd(undefined, deps);
@@ -124,8 +150,9 @@ describe("github add — integration (MSW + real GitHubClient)", () => {
           callCount === 1 ? installationsEmpty : installationsPersonalSelected,
         );
       }),
-      http.get(`${BASE}/user/installations/${INSTALLATION_ID}/repositories`, () =>
-        HttpResponse.json(installationRepos),
+      http.get(
+        `${BASE}/user/installations/${INSTALLATION_ID}/repositories`,
+        () => HttpResponse.json(installationRepos),
       ),
     );
 
@@ -133,17 +160,25 @@ describe("github add — integration (MSW + real GitHubClient)", () => {
       users: [{ handle: "0o-de-lally", token: TOKEN }],
       repositories: [
         // stale entry that should be removed once we discover app is uninstalled
-        { owner: "0o-de-lally", repo: "stale-repo", assignedUser: "0o-de-lally" },
+        {
+          owner: "0o-de-lally",
+          repo: "stale-repo",
+          assignedUser: "0o-de-lally",
+        },
       ],
     };
     const deps = makeDeps(config, {
-      resolveRepo: vi.fn().mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
+      resolveRepo: vi
+        .fn()
+        .mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
     });
 
     await runGithubAdd(undefined, deps);
 
     // stale-repo gone; all repos from reinstalled fixture present
-    expect(config.repositories.find((r) => r.repo === "stale-repo")).toBeUndefined();
+    expect(
+      config.repositories.find((r) => r.repo === "stale-repo"),
+    ).toBeUndefined();
     expect(config.repositories.map((r) => r.repo).sort()).toEqual([
       "ai-notes",
       "app",
@@ -160,7 +195,9 @@ describe("github add — integration (MSW + real GitHubClient)", () => {
     // Poll detects when the target repo is granted access.
     const reposWithoutTarget = {
       total_count: 1,
-      repositories: [{ id: 16011412, full_name: "0o-de-lally/app", private: true }],
+      repositories: [
+        { id: 16011412, full_name: "0o-de-lally/app", private: true },
+      ],
     };
     const reposWithTarget = {
       total_count: 2,
@@ -175,30 +212,44 @@ describe("github add — integration (MSW + real GitHubClient)", () => {
       http.get(`${BASE}/user/installations`, () =>
         HttpResponse.json(installationsPersonalSelected),
       ),
-      http.get(`${BASE}/user/installations/${INSTALLATION_ID}/repositories`, () => {
-        repoCallCount++;
-        return HttpResponse.json(
-          repoCallCount <= 2 ? reposWithoutTarget : reposWithTarget,
-        );
-      }),
+      http.get(
+        `${BASE}/user/installations/${INSTALLATION_ID}/repositories`,
+        () => {
+          repoCallCount++;
+          return HttpResponse.json(
+            repoCallCount <= 2 ? reposWithoutTarget : reposWithTarget,
+          );
+        },
+      ),
     );
 
     const config: Config = {
       users: [{ handle: "0o-de-lally", token: TOKEN }],
       repositories: [
         // stale: was in config but app no longer installed on it
-        { owner: "0o-de-lally", repo: "stale-repo", assignedUser: "0o-de-lally" },
+        {
+          owner: "0o-de-lally",
+          repo: "stale-repo",
+          assignedUser: "0o-de-lally",
+        },
       ],
     };
     const deps = makeDeps(config, {
-      resolveRepo: vi.fn().mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
+      resolveRepo: vi
+        .fn()
+        .mockResolvedValue({ owner: "0o-de-lally", repo: "coco" }),
     });
 
     await runGithubAdd(undefined, deps);
 
     // stale-repo gone; both accessible repos synced
-    expect(config.repositories.find((r) => r.repo === "stale-repo")).toBeUndefined();
-    expect(config.repositories.map((r) => r.repo).sort()).toEqual(["app", "coco"]);
+    expect(
+      config.repositories.find((r) => r.repo === "stale-repo"),
+    ).toBeUndefined();
+    expect(config.repositories.map((r) => r.repo).sort()).toEqual([
+      "app",
+      "coco",
+    ]);
     expect(deps.log).toHaveBeenCalledWith("Waiting for access...");
   }, 15_000);
 });
