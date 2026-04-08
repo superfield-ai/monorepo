@@ -763,11 +763,10 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
 
 async function listPrunableWorktrees(
   worktrees: WorktreeManager,
-  _owner: string,
-  _repo: string,
+  owner: string,
+  repo: string,
 ): Promise<IssueWorktree[]> {
-  // Scout seam: repository-scoped pruning lands behind this helper in #50.
-  return worktrees.list();
+  return worktrees.listForRepository(owner, repo);
 }
 
 /** Extracts the slug from a worktree path (last path segment after issue-N-). */
