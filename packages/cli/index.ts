@@ -17,7 +17,8 @@ Build date: ${BUILD_DATE}
 Commands:
   github add    Authenticate and register a repository
   github forget Remove credentials and print app uninstall link
-  start         Begin the continuous development loop
+  start <path> [slotCount]
+                Begin the continuous development loop
   plan          Replan: group issues into phases, create scouts, write Plan
   feature "..." Evaluate a feature request and create an issue + Plan entry
 `.trim();
@@ -37,7 +38,15 @@ export async function runCLI(args: string[]): Promise<void> {
   }
 
   if (cmd === "start") {
-    await startCommand(sub);
+    const slotCount = parseSlotCount(third);
+    if (third !== undefined && slotCount === null) {
+      console.warn(
+        `Ignoring invalid slot count ${JSON.stringify(third)}; using the default slot count`,
+      );
+    }
+    await startCommand(sub, {
+      ...(slotCount !== null ? { slotCount } : {}),
+    });
     return;
   }
 
@@ -53,4 +62,11 @@ export async function runCLI(args: string[]): Promise<void> {
 
   console.log(usage());
   process.exit(cmd ? 1 : 0);
+}
+
+export function parseSlotCount(raw: string | undefined): number | null {
+  if (raw === undefined || raw.trim() === "") return null;
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) return null;
+  return parsed;
 }

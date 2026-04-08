@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
-import { tickDevLoop } from "../../loops/dev-loop.ts";
+import { tickDevLoop, predecessorsClosed } from "../../loops/dev-loop.ts";
 import { WorktreeManager } from "@superfield/git";
 import type { GitHubClient, Issue } from "@superfield/github";
 import type { AgentOpts, AgentResult } from "../../agent.ts";
@@ -93,6 +93,7 @@ describe("tickDevLoop", () => {
     });
     expect(result.idle).toBe(true);
     expect(result.primaryIssue).toBeNull();
+    expect(result.mergeGateBlocked).toEqual([]);
   });
 
   it("selects the top of plan and spawns the agent", async () => {
@@ -127,6 +128,7 @@ describe("tickDevLoop", () => {
 
     expect(result.primaryIssue).toBe(10);
     expect(result.idle).toBe(false);
+    expect(result.mergeGateBlocked).toEqual([]);
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
@@ -157,6 +159,49 @@ describe("tickDevLoop", () => {
     });
     // Scout #5 should be picked since its deps are empty
     expect(result.primaryIssue).toBe(5);
+  });
+
+  it("reports later open issues as merge-gate blocked after selecting the primary", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    await preCreateWorktree(11, "build-the-other-thing");
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: `## Phase: Identity
+
+Goal: Build the auth seams.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #11 — feat: build the other thing [risk: 4]
+  <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+`,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        return makeIssue({ number: n, state: "open" });
+      }),
+    });
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn: fakeSpawn(),
+      slotCount: 3,
+    });
+
+    expect(result.primaryIssue).toBe(10);
+    expect(result.mergeGateBlocked).toEqual([11]);
   });
 
   it("reports closed when issue closes after agent run", async () => {
@@ -355,6 +400,7 @@ Scout gate: #5
 
     expect(result.primaryIssue).toBe(999);
     expect(result.speculativeIssues).toEqual([]);
+    expect(result.mergeGateBlocked).toEqual([]);
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
@@ -398,5 +444,79 @@ Scout gate: #5
     expect(spawn).toHaveBeenCalledTimes(1);
     const spawnArgs = spawn.mock.calls[0]![0];
     expect(spawnArgs.sessionId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
+  });
+
+  it("predecessorsClosed returns false when an earlier issue is still open", async () => {
+    const client = makeClient({
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: "open" });
+        return makeIssue({ number: n, state: "closed" });
+      }),
+    });
+    const plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "",
+          dependsOn: [],
+          scoutGate: 5,
+          issues: [
+            {
+              number: 5,
+              title: "first",
+              phase: "P",
+              kind: "dev-scout" as const,
+              risk: 3,
+              dependencies: [],
+              parallel_safe: true,
+            },
+            {
+              number: 10,
+              title: "second",
+              phase: "P",
+              kind: "feature" as const,
+              risk: 3,
+              dependencies: [],
+              parallel_safe: true,
+            },
+          ],
+        },
+      ],
+    };
+    await expect(predecessorsClosed(client, "o", "r", plan, 10)).resolves.toBe(
+      false,
+    );
+  });
+
+  it("predecessorsClosed returns true for the first issue in plan order", async () => {
+    const client = makeClient({
+      getIssue: vi.fn().mockResolvedValue(makeIssue({ state: "closed" })),
+    });
+    const plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "",
+          dependsOn: [],
+          scoutGate: 5,
+          issues: [
+            {
+              number: 5,
+              title: "first",
+              phase: "P",
+              kind: "dev-scout" as const,
+              risk: 3,
+              dependencies: [],
+              parallel_safe: true,
+            },
+          ],
+        },
+      ],
+    };
+    await expect(predecessorsClosed(client, "o", "r", plan, 5)).resolves.toBe(
+      true,
+    );
   });
 });

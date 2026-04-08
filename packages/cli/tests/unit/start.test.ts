@@ -63,6 +63,24 @@ describe("startCommand", () => {
     expect(docArg.repoPath).toBe("/home/user/project");
   });
 
+  it("passes an explicit slotCount through to the dev loop", async () => {
+    const deps = makeDeps({ slotCount: 2 });
+    await startCommand("/home/user/project", deps);
+
+    const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(devArg.slotCount).toBe(2);
+  });
+
+  it("omits slotCount when none is configured", async () => {
+    const deps = makeDeps();
+    await startCommand("/home/user/project", deps);
+
+    const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
+      .calls[0][0];
+    expect(devArg.slotCount).toBeUndefined();
+  });
+
   it("exits with error when no repoPath is given", async () => {
     const exit = vi.fn() as unknown as StartDeps["exit"];
     const deps = makeDeps({ exit });

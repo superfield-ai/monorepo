@@ -64,6 +64,10 @@ export interface DocLoopTickResult {
   pr: number | null;
   /** True if no merged PRs need processing. */
   idle: boolean;
+  /** True when the tick actually ran because main changed. */
+  triggered: boolean;
+  /** The observed head SHA for this tick. */
+  headSha: string;
   coverageMissing: DocCoverageMissing[];
   canonicalSync: DocSyncProposal | null;
   consistencyFindings: DocConsistencyFinding[];
@@ -79,20 +83,24 @@ const DEFAULT_POLL_MS = 60_000;
  */
 export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
   const pollMs = opts.pollIntervalMs ?? DEFAULT_POLL_MS;
-  let lastProcessedAt = new Date().toISOString();
+  let lastSeenSha: string | null = null;
   while (true) {
-    const result = await tickDocLoop({ ...opts, lastProcessedAt });
-    if (result.pr) {
-      // Advance the watermark to the merge time of this PR
-      lastProcessedAt = new Date().toISOString();
+    const headSha = await opts.client.getHeadSha(opts.owner, opts.repo);
+    const result = await tickDocLoop({ ...opts, lastSeenSha, headSha });
+    if (result.triggered) {
+      lastSeenSha = headSha;
     }
     await sleep(pollMs);
   }
 }
 
 export interface DocLoopTickOpts extends DocLoopOpts {
-  /** Only process PRs merged strictly after this ISO timestamp. */
-  lastProcessedAt: string;
+  /** The last observed main SHA. If unchanged, the tick is skipped. */
+  lastSeenSha?: string | null;
+  /** Current main SHA when already known by the caller. */
+  headSha?: string;
+  /** Legacy merge watermark retained for test compatibility. */
+  lastProcessedAt?: string;
 }
 
 /** One iteration of the doc loop. Exported for testing. */
@@ -100,16 +108,33 @@ export async function tickDocLoop(
   opts: DocLoopTickOpts,
 ): Promise<DocLoopTickResult> {
   const { client, owner, repo, lastProcessedAt } = opts;
+  const headSha = opts.headSha ?? (await client.getHeadSha(owner, repo));
+  const lastSeenSha = opts.lastSeenSha ?? null;
+
+  if (lastSeenSha !== null && headSha === lastSeenSha) {
+    return {
+      pr: null,
+      idle: true,
+      triggered: false,
+      headSha,
+      coverageMissing: [],
+      canonicalSync: null,
+      consistencyFindings: [],
+      docPrNumber: null,
+    };
+  }
 
   // 1. Find the most-recently merged PR after the watermark
   const merged = await client.listMergedPullRequests(owner, repo);
-  const candidate = merged.find(
-    (pr) => pr.merged_at && pr.merged_at > lastProcessedAt,
-  );
+  const candidate = lastProcessedAt
+    ? merged.find((pr) => pr.merged_at && pr.merged_at > lastProcessedAt)
+    : (merged[0] ?? null);
   if (!candidate) {
     return {
       pr: null,
       idle: true,
+      triggered: false,
+      headSha,
       coverageMissing: [],
       canonicalSync: null,
       consistencyFindings: [],
@@ -165,6 +190,8 @@ export async function tickDocLoop(
   return {
     pr: candidate.number,
     idle: false,
+    triggered: true,
+    headSha,
     coverageMissing: coverageResult,
     canonicalSync: canonicalResult,
     consistencyFindings: consistencyResult,

@@ -72,39 +72,44 @@ function multiSpawn(
 }
 
 describe("tickDocLoop", () => {
-  it("returns idle when no merged PRs since watermark", async () => {
+  it("returns idle when the main SHA has not changed", async () => {
     const client = makeClient();
     const result = await tickDocLoop({
       client,
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T01:00:00Z",
+      lastSeenSha: "mainsha",
+      headSha: "mainsha",
       spawn: multiSpawn([]),
     });
     expect(result.idle).toBe(true);
     expect(result.pr).toBeNull();
+    expect(result.triggered).toBe(false);
+    expect(client.listMergedPullRequests).not.toHaveBeenCalled();
   });
 
-  it("returns idle when newest merged PR is older than watermark", async () => {
+  it("returns idle when a SHA change does not correspond to a merged PR", async () => {
     const client = makeClient({
-      listMergedPullRequests: vi
-        .fn()
-        .mockResolvedValue([makePR({ merged_at: "2026-04-07T00:00:00Z" })]),
+      getHeadSha: vi.fn().mockResolvedValue("newsha"),
+      listMergedPullRequests: vi.fn().mockResolvedValue([]),
     });
     const result = await tickDocLoop({
       client,
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T00:00:00Z",
+      lastSeenSha: "oldsha",
       spawn: multiSpawn([]),
     });
     expect(result.idle).toBe(true);
+    expect(result.triggered).toBe(false);
+    expect(result.headSha).toBe("newsha");
   });
 
   it("runs all three doc tasks for a fresh merged PR", async () => {
     const client = makeClient({
+      getHeadSha: vi.fn().mockResolvedValue("newsha"),
       listMergedPullRequests: vi.fn().mockResolvedValue([makePR()]),
       listPullRequestFiles: vi.fn().mockResolvedValue(["packages/core/foo.ts"]),
     });
@@ -122,11 +127,13 @@ describe("tickDocLoop", () => {
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T01:00:00Z",
+      lastSeenSha: "oldsha",
       spawn,
     });
     expect(result.idle).toBe(false);
     expect(result.pr).toBe(42);
+    expect(result.triggered).toBe(true);
+    expect(result.headSha).toBe("newsha");
     expect(spawn).toHaveBeenCalledTimes(3);
     expect(result.docPrNumber).toBeNull();
   });

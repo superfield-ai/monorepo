@@ -46,7 +46,7 @@ Config is saved to `~/.superfield/config.yaml`.
 Start the continuous loop — polls every 5 seconds, creates CI failure issues, and keeps the Plan issue up to date:
 
 ```bash
-bun run start /path/to/repo
+bun run start /path/to/repo [slotCount]
 ```
 
 The path is required. Superfield reads the `origin` remote from the local git checkout to resolve `owner/repo`, then uses the matching user token from config.

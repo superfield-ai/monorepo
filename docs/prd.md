@@ -109,7 +109,7 @@ Superfield has exactly three operational commands plus github subcommands. There
 superfield github add       # authenticate, install app, and register the current repo
 superfield github forget    # remove credentials and print the app uninstall link
 
-superfield start            # begin the continuous development loop (foreground)
+superfield start [slotCount]  # begin the continuous development loop (foreground)
 superfield plan             # sync all open issues into the Plan tracking issue
 superfield feature          # ticket a new feature issue and update the Plan
 ```

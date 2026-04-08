@@ -3,7 +3,12 @@ import type {
   Issue,
 } from "@superfield/github";
 import { WorktreeManager, type IssueWorktree } from "@superfield/git";
-import { parsePlan, type PlanIssueMetadata, type Plan } from "../plan.ts";
+import {
+  parsePlan,
+  planIssueOrder,
+  type PlanIssueMetadata,
+  type Plan,
+} from "../plan.ts";
 import {
   buildDevelopIssuePrompt,
   buildDevScoutPrompt,
@@ -53,6 +58,8 @@ export interface DevLoopTickResult {
   primaryIssue: number | null;
   /** Speculative issue numbers worked in this tick. */
   speculativeIssues: number[];
+  /** Issues blocked by an earlier plan predecessor. */
+  mergeGateBlocked: number[];
   /** True if the issue closed during this tick (success). */
   closed: boolean;
   /** True if no primary candidate exists (all done or all blocked). */
@@ -72,6 +79,14 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   // Shared circuit breaker across all slots in this loop instance
   const circuit =
     opts.circuit ?? new CircuitBreaker({ tripAt: 5, resetMs: 5 * 60 * 1000 });
+  try {
+    await runPrunePass(opts);
+  } catch (err) {
+    console.error(
+      `[${opts.owner}/${opts.repo}] startup prune pass failed:`,
+      err,
+    );
+  }
   while (true) {
     const result = await tickDevLoop({ ...opts, circuit });
     if (result.idle) {
@@ -98,6 +113,7 @@ export async function tickDevLoop(
     return {
       primaryIssue: null,
       speculativeIssues: [],
+      mergeGateBlocked: [],
       closed: false,
       idle: true,
       reason: "no Plan issue exists",
@@ -106,14 +122,20 @@ export async function tickDevLoop(
   const plan = parsePlan(planIssues[0]!.body ?? "");
 
   // 2. Select primary
-  const primaryEntry = await selectPrimary(client, owner, repo, plan);
+  const { entry: primaryEntry, blocked } = await selectPrimary(
+    client,
+    owner,
+    repo,
+    plan,
+  );
   if (!primaryEntry) {
     return {
       primaryIssue: null,
       speculativeIssues: [],
+      mergeGateBlocked: blocked,
       closed: false,
       idle: true,
-      reason: "no eligible primary",
+      reason: blocked.length > 0 ? "merge gate blocked" : "no eligible primary",
     };
   }
 
@@ -142,6 +164,7 @@ export async function tickDevLoop(
   return {
     primaryIssue: primaryEntry.number,
     speculativeIssues: speculative.map((e) => e.number),
+    mergeGateBlocked: blocked,
     closed: primaryResult.closed,
     idle: false,
   };
@@ -256,7 +279,7 @@ async function selectSpeculative(
     if (candidates.length >= count) break;
     if (entry.number === primary.number) continue;
     if (entry.kind === "dev-scout") continue;
-    if (await isEligible(client, owner, repo, entry)) {
+    if (await isSpeculativeEligible(client, owner, repo, entry)) {
       candidates.push(entry);
     }
   }
@@ -273,21 +296,39 @@ async function selectPrimary(
   owner: string,
   repo: string,
   plan: Plan,
-): Promise<PlanIssueMetadata | null> {
+): Promise<{ entry: PlanIssueMetadata | null; blocked: number[] }> {
+  const blocked: number[] = [];
+
   // CI failures take absolute priority
   for (const entry of plan.ciFailures) {
-    if (await isEligible(client, owner, repo, entry)) {
-      return entry;
+    if (await isEligible(client, owner, repo, entry, plan)) {
+      return { entry, blocked };
+    }
+    if (await isOpen(client, owner, repo, entry)) {
+      blocked.push(entry.number);
+      return { entry: null, blocked };
     }
   }
   for (const phase of plan.phases) {
     for (const entry of phase.issues) {
-      if (await isEligible(client, owner, repo, entry)) {
-        return entry;
+      if (await isEligible(client, owner, repo, entry, plan)) {
+        const remainingBlocked = await collectMergeGateBlocked(
+          client,
+          owner,
+          repo,
+          plan,
+          entry.number,
+        );
+        blocked.push(...remainingBlocked);
+        return { entry, blocked };
+      }
+      if (await isOpen(client, owner, repo, entry)) {
+        blocked.push(entry.number);
+        return { entry: null, blocked };
       }
     }
   }
-  return null;
+  return { entry: null, blocked };
 }
 
 async function isEligible(
@@ -295,24 +336,83 @@ async function isEligible(
   owner: string,
   repo: string,
   entry: PlanIssueMetadata,
+  plan: Plan,
 ): Promise<boolean> {
-  const issue = await client.getIssue(owner, repo, entry.number);
-  if (issue.state === "closed") return false;
-  return predecessorsClosed(client, owner, repo, entry);
+  if (!(await isOpen(client, owner, repo, entry))) return false;
+  return predecessorsClosed(client, owner, repo, plan, entry.number);
 }
 
-async function predecessorsClosed(
+async function isSpeculativeEligible(
   client: GitHubClient,
   owner: string,
   repo: string,
   entry: PlanIssueMetadata,
 ): Promise<boolean> {
+  if (!(await isOpen(client, owner, repo, entry))) return false;
   if (entry.dependencies.length === 0) return true;
   for (const depNumber of entry.dependencies) {
     const dep = await client.getIssue(owner, repo, depNumber);
     if (dep.state !== "closed") return false;
   }
   return true;
+}
+
+export async function predecessorsClosed(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  plan: Plan,
+  issueNumber: number,
+): Promise<boolean> {
+  const order = planIssueOrder(plan);
+  const targetIndex = order.indexOf(issueNumber);
+  if (targetIndex < 0) return false;
+  for (let i = 0; i < targetIndex; i++) {
+    const prev = order[i]!;
+    const issue = await client.getIssue(owner, repo, prev);
+    if (issue.state !== "closed") return false;
+  }
+  return true;
+}
+
+async function collectMergeGateBlocked(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  plan: Plan,
+  selectedIssueNumber: number,
+): Promise<number[]> {
+  const blocked: number[] = [];
+  const order = planIssueOrder(plan);
+  const selectedIndex = order.indexOf(selectedIssueNumber);
+  if (selectedIndex < 0) return blocked;
+
+  for (let i = selectedIndex + 1; i < order.length; i++) {
+    const issueNumber = order[i]!;
+    const issue = await client.getIssue(owner, repo, issueNumber);
+    if (issue.state !== "closed") {
+      const eligible = await predecessorsClosed(
+        client,
+        owner,
+        repo,
+        plan,
+        issueNumber,
+      );
+      if (!eligible) blocked.push(issueNumber);
+    }
+  }
+
+  return blocked;
+}
+
+async function isOpen(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  entry: PlanIssueMetadata,
+): Promise<boolean> {
+  const issue = await client.getIssue(owner, repo, entry.number);
+  return issue.state !== "closed";
 }
 
 function branchForIssue(entry: PlanIssueMetadata): string {

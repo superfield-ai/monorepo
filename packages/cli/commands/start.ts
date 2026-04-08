@@ -17,6 +17,7 @@ export interface StartDeps {
   runPlanningLoop?: (config: Config) => Promise<void>;
   runDevLoop?: (opts: DevLoopOpts) => Promise<void>;
   runDocLoop?: (opts: DocLoopOpts) => Promise<void>;
+  slotCount?: number;
   log?: (msg: string) => void;
   error?: (msg: string) => void;
   exit?: (code: number) => never;
@@ -32,6 +33,7 @@ export async function startCommand(
     runPlanningLoop = defaultRunPlanningLoop,
     runDevLoop = defaultRunDevLoop,
     runDocLoop = defaultRunDocLoop,
+    slotCount,
     log = console.log,
     error = console.error,
     exit = process.exit,
@@ -71,7 +73,14 @@ export async function startCommand(
 
   await Promise.all([
     runPlanningLoop(effectiveConfig),
-    runDevLoop({ client, owner, repo, token: user.token, worktrees }),
+    runDevLoop({
+      client,
+      owner,
+      repo,
+      token: user.token,
+      worktrees,
+      ...(slotCount !== undefined ? { slotCount } : {}),
+    }),
     runDocLoop({ client, owner, repo, repoPath: dir }),
   ]);
 }
