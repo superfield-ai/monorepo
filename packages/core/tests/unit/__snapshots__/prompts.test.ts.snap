@@ -168,6 +168,7 @@ When in doubt about an architectural or design decision, consult the blueprint r
 ### Downstream feature issues you are scaffolding for
 
 - #50: feat: child
+- #51: feat: sibling
 
 ## Worktree isolation
 

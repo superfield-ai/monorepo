@@ -62,17 +62,38 @@ describe("prompt builders — structural invariants", () => {
         branch: "chore/scout",
         phaseName: "Identity",
         phaseGoal: "Build the auth seams",
-        featureIssues: [{ ...issue, number: 50, title: "feat: child" }],
+        featureIssues: [
+          { ...issue, number: 50, title: "feat: child" },
+          { ...issue, number: 51, title: "feat: sibling" },
+        ],
       });
       expect(out).toContain("it.todo()");
       expect(out).toContain("Stubs only");
       expect(out).toContain("#50");
+      expect(out).toContain("#51");
       expect(out).toContain("Build the auth seams");
+      expect(out.indexOf("#50")).toBeLessThan(out.indexOf("#51"));
     });
 
-    it.todo(
-      "dev-scout handoff includes every downstream feature issue in phase order",
-    );
+    it("dev-scout handoff includes every downstream feature issue in phase order", () => {
+      const out = buildDevScoutPrompt({
+        scoutIssue: issue,
+        worktreePath: "/tmp/wt",
+        branch: "chore/scout",
+        phaseName: "Identity",
+        phaseGoal: "Build the auth seams",
+        featureIssues: [
+          { ...issue, number: 50, title: "feat: child" },
+          { ...issue, number: 51, title: "feat: sibling" },
+        ],
+      });
+      expect(out).toContain("### Downstream feature issues you are scaffolding for");
+      expect(out).toContain("- #50: feat: child");
+      expect(out).toContain("- #51: feat: sibling");
+      expect(out.indexOf("- #50: feat: child")).toBeLessThan(
+        out.indexOf("- #51: feat: sibling"),
+      );
+    });
   });
 
   describe("buildCIFailurePrompt", () => {
@@ -239,7 +260,10 @@ describe("prompt builders — snapshots", () => {
         branch: "chore/scout",
         phaseName: "Identity",
         phaseGoal: "Build the auth seams",
-        featureIssues: [{ ...issue, number: 50, title: "feat: child" }],
+        featureIssues: [
+          { ...issue, number: 50, title: "feat: child" },
+          { ...issue, number: 51, title: "feat: sibling" },
+        ],
       }),
     ).toMatchSnapshot();
   });

@@ -13,7 +13,7 @@ export interface DevScoutContext {
   branch: string;
   phaseName: string;
   phaseGoal: string;
-  featureIssues: Issue[];
+  featureIssues: Array<Pick<Issue, "number" | "title">>;
 }
 
 /**
