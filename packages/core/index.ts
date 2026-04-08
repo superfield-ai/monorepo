@@ -90,7 +90,12 @@ export type {
 } from "./blueprint.ts";
 
 export { spawnAgent } from "./agent.ts";
-export type { AgentOpts, AgentResult } from "./agent.ts";
+export type {
+  AgentOpts,
+  AgentResult,
+  AgentMode,
+  AgentBackend,
+} from "./agent.ts";
 
 export { withRetry, CircuitBreaker } from "./retry.ts";
 export type { RetryOpts, CircuitBreakerOpts } from "./retry.ts";

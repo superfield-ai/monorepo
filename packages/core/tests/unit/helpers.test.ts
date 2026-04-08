@@ -1,7 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { fakeSpawn, makeAgentResult } from "../helpers/fake-spawn.ts";
 import { replaySpawn, loadClaudeFixture } from "../helpers/replay.ts";
-import { isLiveMode } from "../helpers/live.ts";
+import { replayCodexSpawn, loadCodexFixture } from "../helpers/codex-replay.ts";
+import { isLiveMode, liveBackends } from "../helpers/live.ts";
 import * as path from "node:path";
 
 describe("helpers/fake-spawn", () => {
@@ -97,26 +98,67 @@ describe("helpers/replay", () => {
   });
 });
 
+describe("helpers/codex-replay", () => {
+  const FIXTURES_DIR = path.resolve(
+    import.meta.dirname,
+    "../../../../tests/fixtures/codex",
+  );
+
+  describe("loadCodexFixture", () => {
+    it("loads the codex JSONL fixture as raw text", async () => {
+      const fixture = await loadCodexFixture("test-sample", FIXTURES_DIR);
+      expect(fixture).toContain("thread.started");
+      expect(fixture).toContain('\\"answer\\":42');
+    });
+
+    it("throws a clear error when fixture is missing", async () => {
+      await expect(
+        loadCodexFixture("does-not-exist", FIXTURES_DIR),
+      ).rejects.toThrow(/does-not-exist/);
+    });
+  });
+
+  describe("replayCodexSpawn", () => {
+    it("returns a spawn function that emits the fixture output", async () => {
+      const spawn = await replayCodexSpawn("test-sample", FIXTURES_DIR);
+      const res = await spawn({ prompt: "anything", worktreePath: "/tmp" });
+      expect(res.sessionId).toMatch(/^019d6e98-/);
+      expect(res.output).toContain('"answer":42');
+    });
+  });
+});
+
 describe("helpers/live", () => {
-  it("returns false when SUPERFIELD_LIVE_CLAUDE is unset", () => {
-    delete process.env.SUPERFIELD_LIVE_CLAUDE;
+  it("returns false when SUPERFIELD_LIVE_AGENTS is unset", () => {
+    delete process.env.SUPERFIELD_LIVE_AGENTS;
     expect(isLiveMode()).toBe(false);
   });
 
-  it("returns false when SUPERFIELD_LIVE_CLAUDE is empty", () => {
-    process.env.SUPERFIELD_LIVE_CLAUDE = "";
+  it("returns false when SUPERFIELD_LIVE_AGENTS is empty", () => {
+    process.env.SUPERFIELD_LIVE_AGENTS = "";
     expect(isLiveMode()).toBe(false);
   });
 
-  it("returns true when SUPERFIELD_LIVE_CLAUDE=1", () => {
-    process.env.SUPERFIELD_LIVE_CLAUDE = "1";
+  it("returns true when SUPERFIELD_LIVE_AGENTS=1", () => {
+    process.env.SUPERFIELD_LIVE_AGENTS = "1";
     expect(isLiveMode()).toBe(true);
-    delete process.env.SUPERFIELD_LIVE_CLAUDE;
+    delete process.env.SUPERFIELD_LIVE_AGENTS;
   });
 
   it("returns true for any non-empty value", () => {
-    process.env.SUPERFIELD_LIVE_CLAUDE = "yes";
+    process.env.SUPERFIELD_LIVE_AGENTS = "yes";
     expect(isLiveMode()).toBe(true);
-    delete process.env.SUPERFIELD_LIVE_CLAUDE;
+    delete process.env.SUPERFIELD_LIVE_AGENTS;
+  });
+
+  it("returns both backends by default", () => {
+    delete process.env.SUPERFIELD_LIVE_AGENTS;
+    expect(liveBackends()).toEqual(["claude", "codex"]);
+  });
+
+  it("filters backends by env value", () => {
+    process.env.SUPERFIELD_LIVE_AGENTS = "codex";
+    expect(liveBackends()).toEqual(["codex"]);
+    delete process.env.SUPERFIELD_LIVE_AGENTS;
   });
 });

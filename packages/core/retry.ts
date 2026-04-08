@@ -1,6 +1,6 @@
 /**
  * Retry / circuit-breaker utilities for transient agent failures.
- * Used by the dev loop to guard against Claude API rate limits and
+ * Used by the dev loop to guard against agent CLI rate limits and
  * transient process-spawn errors.
  */
 

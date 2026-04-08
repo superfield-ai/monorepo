@@ -1,4 +1,9 @@
-import { spawnAgent, type AgentOpts, type AgentResult } from "./agent.ts";
+import {
+  spawnAgent,
+  type AgentOpts,
+  type AgentResult,
+  type AgentMode,
+} from "./agent.ts";
 
 /**
  * Wraps `spawnAgent` for one-shot LLM tasks that emit structured JSON.
@@ -11,12 +16,14 @@ import { spawnAgent, type AgentOpts, type AgentResult } from "./agent.ts";
 export interface LLMTaskOpts {
   /** The prompt to send. Built via one of the prompt builders. */
   prompt: string;
-  /** Working directory for the spawned `claude` process. Defaults to `process.cwd()`. */
+  /** Working directory for the spawned agent process. Defaults to `process.cwd()`. */
   cwd?: string;
   /** Optional session ID to resume. */
   sessionId?: string;
   /** Override max turns (default: 10 for one-shot tasks — much less than dev agents). */
   maxTurns?: number;
+  /** Explicit backend override. Defaults to the shared agent selection logic. */
+  provider?: AgentMode;
   /** Injectable spawn function for testing. */
   spawn?: (opts: AgentOpts) => Promise<AgentResult>;
 }
@@ -37,6 +44,7 @@ export async function runLLMTask<T>(
     worktreePath: opts.cwd ?? process.cwd(),
     sessionId: opts.sessionId,
     maxTurns: opts.maxTurns ?? 10,
+    provider: opts.provider,
   });
 
   if (res.isError) {

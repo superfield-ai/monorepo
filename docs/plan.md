@@ -38,7 +38,7 @@ what was built; future work should reopen specific items.
 
 - ✅ `runIssueAudit` — LLM-driven schema conformance via `buildIssueAuditPrompt`
 - ✅ Posts findings comment with `<!-- superfield-audit -->` dedupe marker
-- ✅ Bounded concurrency (default 3 parallel claude invocations)
+- ✅ Bounded concurrency (default 3 parallel agent invocations)
 - ✅ `runPlanCoverage` — pure deterministic, appends missing open issues to Backlog phase
 - ✅ Skips plan/ci-failure labelled issues; classifies dev-scout label
 - ✅ `runLLMTask` reusable helper with `extractJson` (handles fenced + bare JSON)
@@ -54,7 +54,7 @@ what was built; future work should reopen specific items.
 
 ## Phase 5 — Agent infrastructure ✅
 
-- ✅ `spawnAgent` (`packages/core/agent.ts`) — `claude --print --output-format json`
+- ✅ `spawnAgent` (`packages/core/agent.ts`) — `claude` / `codex` subprocess wrapper
 - ✅ Forge-stored sessions (`packages/core/sessions.ts`) — `<!-- superfield-session: -->` comments
 - ✅ `findStaleSessions` — deadman switch scan
 - ✅ Prompt templating system (`packages/core/prompts/`) — fragments + 10 builders
@@ -130,4 +130,4 @@ what was built; future work should reopen specific items.
 - Slack / webhook notifications
 - Web UI
 - Forges other than GitHub
-- Self-hosted LLM backends (only the `claude` CLI is supported)
+- Self-hosted LLM backends (Claude and Codex CLIs are supported)

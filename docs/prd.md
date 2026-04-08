@@ -29,20 +29,20 @@ The calypso-agents skill system requires a human (or LLM session) to interpret a
 
 Superfield is a direct replacement for the calypso-agents + shell script stack:
 
-| calypso-agents concept                 | Superfield equivalent                                                          |
-| -------------------------------------- | ------------------------------------------------------------------------------ |
-| Markdown skill (`SKILL.md`)            | TypeScript skill module with typed I/O                                         |
-| Shell script (`.agents/scripts/`)      | TypeScript function; agent vendor CLIs (e.g. `claude`) spawned as subprocesses |
-| `calypso-auto` orchestrator loop       | `superfield start`                                                             |
-| `calypso-feature` + `feature-evaluate` | `superfield feature`                                                           |
-| Plan rebuild / replan                  | `superfield plan`                                                              |
-| Plan issue (GitHub)                    | Plan issue (GitHub, same format)                                               |
+| calypso-agents concept                 | Superfield equivalent                                                                   |
+| -------------------------------------- | --------------------------------------------------------------------------------------- |
+| Markdown skill (`SKILL.md`)            | TypeScript skill module with typed I/O                                                  |
+| Shell script (`.agents/scripts/`)      | TypeScript function; agent vendor CLIs (e.g. `claude`, `codex`) spawned as subprocesses |
+| `calypso-auto` orchestrator loop       | `superfield start`                                                                      |
+| `calypso-feature` + `feature-evaluate` | `superfield feature`                                                                    |
+| Plan rebuild / replan                  | `superfield plan`                                                                       |
+| Plan issue (GitHub)                    | Plan issue (GitHub, same format)                                                        |
 
 ## Guiding Principles
 
 - **Forge as control plane.** Git and GitHub are the source of truth for all agent state, task ordering, and communication.
 - **No customization.** There are no workflow flags or configuration knobs. Superfield encodes one correct way to do things.
-- **No system binaries.** Never shell out to `git`, `gh`, `curl`, or any other system executable. All git operations go through a TypeScript git library; all GitHub operations go through a TypeScript GitHub API client. The sole exception is agent vendor CLIs (e.g. `claude`) — these are spawned as subprocesses because they are the LLM execution layer, not system utilities.
+- **No system binaries.** Never shell out to `git`, `gh`, `curl`, or any other system executable. All git operations go through a TypeScript git library; all GitHub operations go through a TypeScript GitHub API client. The sole exception is agent vendor CLIs (e.g. `claude`, `codex`) — these are spawned as subprocesses because they are the LLM execution layer, not system utilities.
 - **Skills are code.** Each calypso-agents skill is a TypeScript module with an explicit interface, typed inputs/outputs, and unit tests.
 - **API-first testing.** Both the git library and the GitHub client are tested extensively via MSW-intercepted API calls and golden response fixtures.
 
@@ -238,7 +238,7 @@ When an issue that was completed speculatively later becomes the primary, the pr
 
 #### Parallel Claude processes — practical limit
 
-Each slot spawns one `claude` subprocess. With the default `slotCount: 3` (1 primary + 2 speculative), up to **3 `claude` processes** run in parallel per configured repository.
+Each slot spawns one agent subprocess. With the default `slotCount: 3` (1 primary + 2 speculative), up to **3 agent processes** run in parallel per configured repository.
 
 **Why this matters:**
 
@@ -442,7 +442,7 @@ export interface XxxContext {
 export function buildXxxPrompt(ctx: XxxContext): string;
 ```
 
-The returned string is the complete prompt passed to `claude` via `spawnAgent`. Builders combine fragments using a small set of helpers (`joinSections`, `bullet`, etc.) — there is no template engine, no string interpolation library, just typed functions returning strings.
+The returned string is the complete prompt passed to the agent CLI via `spawnAgent`. Builders combine fragments using a small set of helpers (`joinSections`, `bullet`, etc.) — there is no template engine, no string interpolation library, just typed functions returning strings.
 
 ### Mapping to workflow
 
@@ -588,18 +588,18 @@ No tests against real GitHub in Phase 1.
 
 ## Roadmap
 
-| Phase | Scope                                                                                                                                       |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Foundation: config, GitHub client, git client, MSW test harness, golden fixtures, `github add`, `github forget`                             |
-| 2     | Planning loop — CI watchdog: detect failed checks on `main`, create deduplicated `ci-failure` issues, insert at top of Plan                 |
-| 3     | Planning loop — issue audit and Plan coverage: schema conformance scan, append missing issues to Plan                                       |
-| 4     | Planning loop — blueprint conformance: load `blueprint/rules/graph.yaml`, evaluate open issues against active rules, post advisory comments |
-| 5     | Agent infrastructure: `claude` CLI spawner, prompt builders (dev-scout, feature, ci-failure), forge-stored sessions with deadman switch     |
-| 6     | `plan` command — LLM-driven phase grouping, scout creation, Plan rendering with `<!-- superfield: -->` metadata                             |
-| 7     | Dev loop — primary agent only: select top of Plan, prep worktree, run agent through 7-stage lifecycle to merge                              |
-| 8     | Dev loop — speculative slots: scout-gated parallel feature work (slots 2..N)                                                                |
-| 9     | `feature` command — interactive issue creation with PRD/duplicate evaluation                                                                |
-| 10    | Documentation loop — coverage scan, canonical sync, consistency check, doc PR creation                                                      |
+| Phase | Scope                                                                                                                                             |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | Foundation: config, GitHub client, git client, MSW test harness, golden fixtures, `github add`, `github forget`                                   |
+| 2     | Planning loop — CI watchdog: detect failed checks on `main`, create deduplicated `ci-failure` issues, insert at top of Plan                       |
+| 3     | Planning loop — issue audit and Plan coverage: schema conformance scan, append missing issues to Plan                                             |
+| 4     | Planning loop — blueprint conformance: load `blueprint/rules/graph.yaml`, evaluate open issues against active rules, post advisory comments       |
+| 5     | Agent infrastructure: `claude` / `codex` CLI spawner, prompt builders (dev-scout, feature, ci-failure), forge-stored sessions with deadman switch |
+| 6     | `plan` command — LLM-driven phase grouping, scout creation, Plan rendering with `<!-- superfield: -->` metadata                                   |
+| 7     | Dev loop — primary agent only: select top of Plan, prep worktree, run agent through 7-stage lifecycle to merge                                    |
+| 8     | Dev loop — speculative slots: scout-gated parallel feature work (slots 2..N)                                                                      |
+| 9     | `feature` command — interactive issue creation with PRD/duplicate evaluation                                                                      |
+| 10    | Documentation loop — coverage scan, canonical sync, consistency check, doc PR creation                                                            |
 
 Phases describe build order. Each phase delivers a working slice and is testable in isolation.
 
@@ -610,7 +610,7 @@ Phases describe build order. Each phase delivers a working slice and is testable
 - Slack / webhook notifications
 - Web UI
 - Forges other than GitHub
-- Self-hosted LLM backends (only the `claude` CLI is supported)
+- Self-hosted LLM backends (Claude and Codex CLIs are supported)
 
 ---
 
