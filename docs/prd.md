@@ -166,7 +166,7 @@ Default: 1 primary + 2 speculative (3 total slots).
 
 The continuous development loop. Runs indefinitely until killed (Ctrl-C).
 
-`start` has two concurrent loops:
+`start` has three concurrent loops:
 
 ### Outer loop — repository health (every 5 seconds)
 
@@ -205,6 +205,33 @@ When an issue that was completed speculatively later becomes the primary, the pr
 4. Loop back to step 1 after the primary exits.
 
 The outer loop and inner loop run concurrently within the same process. The outer loop feeds the Plan; the inner loop drains it.
+
+### Documentation loop — documentation fractal (on every merge to `main`)
+
+The documentation loop runs concurrently with the other two loops. It is triggered whenever a PR merges to `main` and is responsible for keeping all documentation consistent and complete at every level of the fractal.
+
+#### Documentation fractal
+
+Documentation is maintained at three levels, each reflecting the others:
+
+| Level | Artifacts |
+|---|---|
+| Canonical | PRD, architecture docs, top-level README |
+| Module | Package READMEs, public API doc comments |
+| Inline | Function and type doc comments in source files |
+
+A change at any level can create inconsistencies at the others. The loop detects and resolves those inconsistencies.
+
+#### What the loop does on each trigger
+
+1. **Coverage scan** — inspect source files changed in the merged PR. Flag any exported function, class, or type that lacks a doc comment.
+2. **Canonical sync** — if the merged PR introduced a significant feature (new command, new public API surface, changed behavior), update the relevant canonical documents (PRD, README) to reflect the current state of the code.
+3. **Consistency check** — verify that descriptions in canonical docs, module docs, and inline comments do not contradict each other. Resolve any conflicts by treating the code as ground truth and updating the docs.
+4. **PR open** — if any documentation changes are needed, open a single doc PR per trigger. These PRs are merged outside the development loop.
+
+#### CI gating
+
+CI jobs are gated on changes to source code and config files. Documentation-only PRs (changes to `*.md` files and doc comments) do not trigger CI runs and do not consume CI minutes. This means doc PRs can be reviewed and merged freely without competing for CI capacity with development PRs.
 
 ---
 
