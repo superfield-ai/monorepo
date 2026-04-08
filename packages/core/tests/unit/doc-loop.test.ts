@@ -147,22 +147,38 @@ describe("tickDocLoop", () => {
         sha: "fileSha",
       }),
     });
-    const spawn = multiSpawn([
-      { missing_docs: [] },
-      {
-        significant: true,
-        rationale: "New command added",
-        prd_patches: [
-          {
-            section: "## Commands",
-            old_text: "old text",
-            new_text: "new text",
-          },
-        ],
-        readme_patches: [],
-      },
-      { inconsistencies: [] },
-    ]);
+    const spawn = vi.fn().mockImplementation(async (opts: AgentOpts) => {
+      if (opts.prompt.includes("doc-coverage")) {
+        return {
+          sessionId: "coverage",
+          output: JSON.stringify({ missing_docs: [] }),
+          isError: false,
+        };
+      }
+      if (opts.prompt.includes("doc-canonical-sync")) {
+        return {
+          sessionId: "canonical",
+          output: JSON.stringify({
+            significant: true,
+            rationale: "New command added",
+            prd_patches: [
+              {
+                section: "## Commands",
+                old_text: "old text",
+                new_text: "new text",
+              },
+            ],
+            readme_patches: [],
+          }),
+          isError: false,
+        };
+      }
+      return {
+        sessionId: "consistency",
+        output: JSON.stringify({ inconsistencies: [] }),
+        isError: false,
+      };
+    });
     const result = await tickDocLoop({
       client,
       owner: "o",
