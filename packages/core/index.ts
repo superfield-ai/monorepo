@@ -22,6 +22,23 @@ export type { PlanCoverageResult } from './steps/plan-coverage.ts';
 export { runIssueAudit } from './steps/issue-audit.ts';
 export type { IssueAuditReport, IssueAuditResult, IssueAuditOpts } from './steps/issue-audit.ts';
 
+export { runBlueprintConformance } from './steps/blueprint-conformance.ts';
+export type {
+  BlueprintViolation,
+  BlueprintConformanceReport,
+  BlueprintConformanceResult,
+  BlueprintConformanceOpts,
+} from './steps/blueprint-conformance.ts';
+
+export { loadBlueprint, pickCandidateDomains, filterActiveRules } from './blueprint.ts';
+export type {
+  Blueprint,
+  BlueprintDomain,
+  BlueprintGraphNode,
+  BlueprintRule,
+  BlueprintRuleType,
+} from './blueprint.ts';
+
 export { spawnAgent } from './agent.ts';
 export type { AgentOpts, AgentResult } from './agent.ts';
 
