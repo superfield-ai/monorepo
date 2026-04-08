@@ -21,6 +21,8 @@ describe("GitHubClientPort", () => {
       listIssueComments: vi.fn().mockResolvedValue([]),
       createIssueComment: vi.fn(),
       updateIssueComment: vi.fn(),
+      addIssueLabel: vi.fn(),
+      removeIssueLabel: vi.fn(),
       deleteIssueComment: vi.fn(),
       listMergedPullRequests: vi.fn().mockResolvedValue([]),
       listPullRequestFiles: vi.fn().mockResolvedValue([]),

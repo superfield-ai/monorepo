@@ -46,6 +46,13 @@ export interface UpdateIssueParams {
   body: string;
 }
 
+export interface IssueLabelMutationParams {
+  owner: string;
+  repo: string;
+  issue_number: number;
+  label: string;
+}
+
 /**
  * Structural interface for GitHub API operations used by the Superfield core.
  * Allows injecting test doubles without casting through `unknown`.
@@ -77,6 +84,8 @@ export interface GitHubClientPort {
     comment_id: number,
     body: string,
   ): Promise<void>;
+  addIssueLabel(params: IssueLabelMutationParams): Promise<void>;
+  removeIssueLabel(params: IssueLabelMutationParams): Promise<void>;
   deleteIssueComment(
     owner: string,
     repo: string,
@@ -275,6 +284,24 @@ export class GitHubClient implements GitHubClientPort {
     body: string,
   ): Promise<void> {
     await this.octokit.issues.updateComment({ owner, repo, comment_id, body });
+  }
+
+  async addIssueLabel(params: IssueLabelMutationParams): Promise<void> {
+    await this.octokit.issues.addLabels({
+      owner: params.owner,
+      repo: params.repo,
+      issue_number: params.issue_number,
+      labels: [params.label],
+    });
+  }
+
+  async removeIssueLabel(params: IssueLabelMutationParams): Promise<void> {
+    await this.octokit.issues.removeLabel({
+      owner: params.owner,
+      repo: params.repo,
+      issue_number: params.issue_number,
+      name: params.label,
+    });
   }
 
   async deleteIssueComment(

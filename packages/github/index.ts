@@ -4,6 +4,7 @@ export type {
   Issue,
   PullRequest,
   CreateIssueParams,
+  IssueLabelMutationParams,
   UpdateIssueParams,
   GitHubClientPort,
 } from "./client.ts";

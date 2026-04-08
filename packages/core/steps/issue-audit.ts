@@ -30,6 +30,8 @@ export interface IssueAuditOpts {
   concurrency?: number;
 }
 
+export const NON_CONFORMANT_LABEL = "non-conformant";
+
 /**
  * Planning loop step: audit every open issue against the IssueBody schema.
  * For each non-conformant issue, post a comment describing what is missing
@@ -52,7 +54,7 @@ export async function runIssueAudit(
     (i) =>
       !i.labels.includes("plan") &&
       !i.labels.includes("ci-failure") &&
-      !i.labels.includes("non-conformant"),
+      !i.labels.includes(NON_CONFORMANT_LABEL),
   );
 
   const concurrency = Math.max(1, opts.concurrency ?? 3);
@@ -117,6 +119,21 @@ async function postAuditFindings(
   issueNumber: number,
   report: IssueAuditReport,
 ): Promise<void> {
+  const body = buildIssueAuditCommentBody(report);
+
+  const marker = "<!-- superfield-audit -->";
+
+  // Dedupe: find existing audit comment by marker, update rather than duplicate
+  const comments = await client.listIssueComments(owner, repo, issueNumber);
+  const existing = comments.find((c) => c.body.startsWith(marker));
+  if (existing) {
+    await client.updateIssueComment(owner, repo, existing.id, body);
+  } else {
+    await client.createIssueComment(owner, repo, issueNumber, body);
+  }
+}
+
+export function buildIssueAuditCommentBody(report: IssueAuditReport): string {
   const lines: string[] = [
     "## Schema audit — non-conformant",
     "",
@@ -146,15 +163,5 @@ See `docs/prd.md` §Issue Schema.",
     lines.push("");
   }
 
-  const marker = "<!-- superfield-audit -->";
-  const body = `${marker}\n${lines.join("\n")}`;
-
-  // Dedupe: find existing audit comment by marker, update rather than duplicate
-  const comments = await client.listIssueComments(owner, repo, issueNumber);
-  const existing = comments.find((c) => c.body.startsWith(marker));
-  if (existing) {
-    await client.updateIssueComment(owner, repo, existing.id, body);
-  } else {
-    await client.createIssueComment(owner, repo, issueNumber, body);
-  }
+  return `<!-- superfield-audit -->\n${lines.join("\n")}`;
 }

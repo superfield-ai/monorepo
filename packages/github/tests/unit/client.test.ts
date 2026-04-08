@@ -102,3 +102,49 @@ describe("GitHubClient.createIssue", () => {
     ]);
   });
 });
+
+describe("GitHubClient.addIssueLabel", () => {
+  it("adds a single label to an issue", async () => {
+    let capturedBody: unknown;
+    server.use(
+      http.post(
+        `${BASE}/repos/test-org/test-repo/issues/42/labels`,
+        async ({ request }) => {
+          capturedBody = await request.json();
+          return HttpResponse.json(issueCreated);
+        },
+      ),
+    );
+
+    const client = new GitHubClient("test-token");
+    await client.addIssueLabel({
+      owner: "test-org",
+      repo: "test-repo",
+      issue_number: 42,
+      label: "non-conformant",
+    });
+
+    expect((capturedBody as { labels: string[] }).labels).toEqual([
+      "non-conformant",
+    ]);
+  });
+});
+
+describe("GitHubClient.removeIssueLabel", () => {
+  it("removes a single label from an issue", async () => {
+    server.use(
+      http.delete(
+        `${BASE}/repos/test-org/test-repo/issues/42/labels/non-conformant`,
+        () => HttpResponse.json(issueCreated),
+      ),
+    );
+
+    const client = new GitHubClient("test-token");
+    await client.removeIssueLabel({
+      owner: "test-org",
+      repo: "test-repo",
+      issue_number: 42,
+      label: "non-conformant",
+    });
+  });
+});
