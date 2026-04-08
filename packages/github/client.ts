@@ -111,6 +111,43 @@ export class GitHubClient {
     });
   }
 
+  async listIssueComments(
+    owner: string,
+    repo: string,
+    issue_number: number,
+  ): Promise<{ id: number; body: string }[]> {
+    const { data } = await this.octokit.issues.listComments({
+      owner,
+      repo,
+      issue_number,
+      per_page: 100,
+    });
+    return data.map((c) => ({ id: c.id, body: c.body ?? '' }));
+  }
+
+  async createIssueComment(
+    owner: string,
+    repo: string,
+    issue_number: number,
+    body: string,
+  ): Promise<{ id: number }> {
+    const { data } = await this.octokit.issues.createComment({ owner, repo, issue_number, body });
+    return { id: data.id };
+  }
+
+  async updateIssueComment(
+    owner: string,
+    repo: string,
+    comment_id: number,
+    body: string,
+  ): Promise<void> {
+    await this.octokit.issues.updateComment({ owner, repo, comment_id, body });
+  }
+
+  async deleteIssueComment(owner: string, repo: string, comment_id: number): Promise<void> {
+    await this.octokit.issues.deleteComment({ owner, repo, comment_id });
+  }
+
   async listAppInstallations(appSlug: string): Promise<{ id: number; accountLogin: string; accountType: 'User' | 'Organization'; repositorySelection: 'all' | 'selected' }[]> {
     const all = await this.listAllInstallations();
     return all

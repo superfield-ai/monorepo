@@ -19,7 +19,7 @@ All orchestration state lives in the forge, not on disk or in memory:
 | Issue labels | State machine transitions (e.g. `ci-failure`, `watchdog`) |
 | Issue comments | Agent-to-agent and agent-to-human communication |
 
-Superfield is stateless at the process level. Any instance can resume from the forge alone. Killing and restarting the process loses nothing.
+Superfield is stateless at the process level. Any instance can resume from the forge alone. Killing and restarting the process loses nothing. The sole local exception is `~/.superfield/config.yaml` (credentials and repo assignments). All orchestration state — including active agent sessions — lives in the forge.
 
 ## Problem
 
@@ -32,7 +32,7 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 | calypso-agents concept | Superfield equivalent |
 |---|---|
 | Markdown skill (`SKILL.md`) | TypeScript skill module with typed I/O |
-| Shell script (`.agents/scripts/`) | TypeScript function (no subprocess, no binary) |
+| Shell script (`.agents/scripts/`) | TypeScript function; agent vendor CLIs (e.g. `claude`) spawned as subprocesses |
 | `calypso-auto` orchestrator loop | `superfield start` |
 | `calypso-feature` + `feature-evaluate` | `superfield feature` |
 | Plan rebuild / replan | `superfield plan` |
@@ -50,7 +50,7 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 
 The Superfield Blueprint is a compiled knowledge graph of design rules that ships bundled inside the `superfield` executable. It is the authoritative source of architectural constraints, security principles, design patterns, checklists, and antipatterns that all issues, proposed designs, and agent-generated code must conform to.
 
-The blueprint is sourced from `dot-matrix-labs/calypso-blueprint` (tracked as a git submodule at `blueprint/`). The compiled graph lives at `blueprint/rules/graph.yaml` — 1 231 nodes across domains including ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, and WORKER, with TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
+The blueprint is sourced from `dot-matrix-labs/calypso-blueprint` (tracked as a git subtree at `blueprint/`; kept in sync via bidirectional GitHub Actions workflows). The compiled graph lives at `blueprint/rules/graph.yaml` — 1 231 nodes across domains including ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, and WORKER, with TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
 
 Each node in the graph carries:
 
@@ -141,7 +141,17 @@ The first issue in every phase is a **dev-scout** — a stub-only integration pa
 - Documents integration points and risks discovered during the pass
 - Posts follow-up comments on downstream issues with findings
 
-**The scout gates the entire phase.** No non-scout issue in a phase may begin until the scout PR is merged and its follow-up updates are complete. This is enforced by explicit dependencies in the Plan, not by convention.
+**The scout gates the entire phase.** No non-scout issue in a phase may begin until the scout PR is merged. This is enforced by explicit dependencies in the Plan, not by convention.
+
+**Scout merge qualification.** A scout PR qualifies for merge when:
+1. TypeScript compiles with zero errors across the entire monorepo
+2. All pre-existing tests pass (CI green on the existing suite)
+3. New integration test stubs are committed using `it.todo()` / `describe.todo()` — declared but not implemented; CI passes because todo tests do not fail
+4. Every planned public interface, type, and no-op stub is present in the code
+5. A comment is posted on each downstream feature issue listing the specific stubs and seams it will consume
+6. The scout issue checklist is fully checked off
+
+Feature agents convert each `it.todo()` to a real failing test, then implement until it passes.
 
 ### Dependencies
 
@@ -171,7 +181,7 @@ Validation rules (enforced at plan-write time, not runtime):
 Development runs in parallel within a phase; merging is strictly sequential.
 
 **Slots:**
-- **Slot 1 — primary**: always the highest-priority unmerged Plan issue. The primary agent drives implementation → CI → checklist → merge without stopping. It does not exit until the PR is merged and the issue is CLOSED.
+- **Slot 1 — primary**: always the highest-priority unmerged Plan issue. The primary agent drives develop → checklist complete → PR open → CI pass → merge without stopping. It does not exit until the PR is merged and the issue is CLOSED.
 - **Slots 2..N — speculative**: feature issues within the current phase whose phase scout is already CLOSED on `main`. Speculative agents drive implementation and checklist to completion then exit without opening a PR. They do not run CI and do not merge.
 
 **Scout gate**: speculative slots remain empty until the phase's dev-scout issue is merged. The scout defines all development seams (outside-in stubs and interfaces) that the parallel feature agents build against. No speculative work begins before those seams exist on `main`.
@@ -279,12 +289,12 @@ Depends on phases: None.
 Scout gate: #196
 
 - #196 — [dev-scout] stub identity integration seams [risk: 5]
-  <!-- calypso: {"number":196,"phase":"Identity foundation","kind":"dev-scout","dependencies":[],"parallel_safe":true} -->
+  <!-- superfield: {"number":196,"phase":"Identity foundation","kind":"dev-scout","dependencies":[],"parallel_safe":true} -->
 - #201 — feat: build user authentication [risk: 4]
-  <!-- calypso: {"number":201,"phase":"Identity foundation","kind":"feature","dependencies":[196],"parallel_safe":false} -->
+  <!-- superfield: {"number":201,"phase":"Identity foundation","kind":"feature","dependencies":[196],"parallel_safe":false} -->
 ```
 
-Rules: strict total order, no checkboxes, no step numbers, no parallel group annotations. Dependency data lives in the inline `<!-- calypso: ... -->` metadata comments, not in issue bodies.
+Rules: strict total order, no checkboxes, no step numbers, no parallel group annotations. Dependency data lives in the inline `<!-- superfield: ... -->` metadata comments, not in issue bodies.
 
 `plan` is safe to run while `start` is active — it only writes to the Plan issue, which `start` re-reads on the next dev loop cycle.
 
@@ -316,7 +326,6 @@ interface IssueBody {
   issue_kind: "feature" | "dev-scout" | "ci-failure";
   canonical_docs: string[];
   motivation: string;
-  behaviour: string;
   scope: { in: string[]; out: string[] }; // explicit for dev-scout; prose for feature
   acceptance_criteria: string[];
   test_plan: string[];
@@ -364,16 +373,24 @@ Depends on phases: <names or "None.">
 Scout gate: #<scout_issue_number>
 
 - #<n> — [dev-scout] <title> [risk: <1-6>]
-  <!-- calypso: {"number":<n>,"phase":"...","kind":"dev-scout","dependencies":[],"parallel_safe":true} -->
+  <!-- superfield: {"number":<n>,"phase":"...","kind":"dev-scout","dependencies":[],"parallel_safe":true} -->
 - #<n> — <title> [risk: <1-6>]
-  <!-- calypso: {"number":<n>,"phase":"...","kind":"feature","dependencies":[...],"parallel_safe":false} -->
+  <!-- superfield: {"number":<n>,"phase":"...","kind":"feature","dependencies":[...],"parallel_safe":false} -->
+```
+
+A `ci-failure` entry looks like:
+
+```markdown
+- #<n> — fix(repo): <check-name> failed on main @ <sha> [risk: 6]
+  <!-- superfield: {"number":<n>,"phase":"watchdog","kind":"ci-failure","dependencies":[],"parallel_safe":true} -->
 ```
 
 Rules:
 - Strict total order — no checkboxes, no step numbers, no parallel group annotations
+- `ci-failure` entries appear at the top, above all phase blocks
 - Scout always first within its phase
 - All issues in a prerequisite phase appear before all issues in the dependent phase
-- Dependency data lives in inline `<!-- calypso: ... -->` metadata comments, not in issue bodies
+- Dependency data lives in inline `<!-- superfield: ... -->` metadata comments, not in issue bodies
 - `start` reads the metadata comments to drive the dev loop; the human-readable lines are for humans
 
 ---
@@ -394,6 +411,18 @@ repositories:
 ```
 
 Multiple users and repositories are supported. Each repository is assigned to one user; that user's token is used for all API calls against that repository.
+
+### Agent session storage
+
+Active agent sessions are stored in the forge as hidden comments on the issue being worked, not on local disk. When an agent claims an issue it posts:
+
+```
+<!-- superfield-session:
+{"sessionId":"01JNXXX...","role":"primary","slot":1,"startedAt":"2026-04-08T01:00:00Z"}
+-->
+```
+
+This comment is updated on each resumption and deleted when the issue closes. On startup, Superfield scans open issues for this comment to detect and resume in-progress sessions — the deadman switch. A stale session comment (agent gone, issue still open) is detected by comparing `startedAt` against a configurable timeout; the orchestrator re-claims and resumes.
 
 ---
 
@@ -446,7 +475,7 @@ No tests against real GitHub in Phase 1.
 
 | Phase | Scope |
 |---|---|
-| 1 | `github add`, `github forget`, `start` planning loop only (CI watchdog + issue audit + plan coverage) |
+| 1 | `github add`, `github forget`, `start` planning loop only (CI watchdog + issue audit + plan coverage + blueprint conformance) |
 | 2 | `plan` command; `start` dev loop (development agent, calypso-auto equivalent) |
 | 3 | `feature` command |
 | 4 | Full LLM agent integration within the dev loop |
@@ -457,9 +486,7 @@ Phase 1 establishes the foundation — config, GitHub client, git client, issue 
 
 ## Out of Scope (Phase 1)
 
-- LLM calls of any kind
 - `superfield plan` and `superfield feature` commands
-- Inner development loop (agent assignment, worktree management, PR creation)
 - Slack / webhook notifications
 - Web UI
 
