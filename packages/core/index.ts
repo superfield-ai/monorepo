@@ -22,6 +22,12 @@ export type { PlanCoverageResult } from './steps/plan-coverage.ts';
 export { runIssueAudit } from './steps/issue-audit.ts';
 export type { IssueAuditReport, IssueAuditResult, IssueAuditOpts } from './steps/issue-audit.ts';
 
+export { renderIssueBody, isConformantBody } from './issue-body.ts';
+export type { IssueBody } from './issue-body.ts';
+
+export { runPlanCommand } from './commands/plan.ts';
+export type { PlanProposal, PlanCommandOpts, PlanCommandResult } from './commands/plan.ts';
+
 export { runBlueprintConformance } from './steps/blueprint-conformance.ts';
 export type {
   BlueprintViolation,

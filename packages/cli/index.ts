@@ -1,5 +1,6 @@
 import { githubCommand } from './commands/github.ts';
 import { startCommand } from './commands/start.ts';
+import { planCommand } from './commands/plan.ts';
 import { BUILD_COMMIT, BUILD_DATE, BUILD_VERSION } from './build-info.ts';
 
 function usage(): string {
@@ -14,6 +15,7 @@ Commands:
   github add    Authenticate and register a repository
   github forget Remove credentials and print app uninstall link
   start         Begin the continuous development loop
+  plan          Replan: group issues into phases, create scouts, write Plan
 `.trim();
 }
 
@@ -32,6 +34,11 @@ export async function runCLI(args: string[]): Promise<void> {
 
   if (cmd === 'start') {
     await startCommand(sub);
+    return;
+  }
+
+  if (cmd === 'plan') {
+    await planCommand(sub);
     return;
   }
 
