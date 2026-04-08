@@ -113,7 +113,7 @@ export async function runPlanCommand(
       const issueBody: IssueBody = {
         title: spec.title,
         phase: spec.phase,
-        motivation: spec.motivation ?? '',
+        motivation: spec.motivation ?? "",
         features: spec.features ?? [],
         test_plan: spec.test_plan ?? [],
         canonical_docs: spec.canonical_docs ?? [],
@@ -181,8 +181,10 @@ function parseProposal(json: string): PlanProposal {
     throw new Error("missing ordered_issues array");
   const rawSpecs = (parsed.scout_specs ?? []) as Array<Record<string, unknown>>;
   const specs = rawSpecs.map((s) => ({
-    ...(s as PlanProposal['scout_specs'][number]),
-    canonical_docs: Array.isArray(s['canonical_docs']) ? (s['canonical_docs'] as string[]) : [],
+    ...(s as PlanProposal["scout_specs"][number]),
+    canonical_docs: Array.isArray(s["canonical_docs"])
+      ? (s["canonical_docs"] as string[])
+      : [],
   }));
   return {
     phases: parsed.phases,
@@ -218,7 +220,8 @@ function patchScoutNumber(
     const firstPhaseIdx = proposal.ordered_issues.findIndex(
       (i) => i.phase === phaseName,
     );
-    const insertAt = firstPhaseIdx >= 0 ? firstPhaseIdx : proposal.ordered_issues.length;
+    const insertAt =
+      firstPhaseIdx >= 0 ? firstPhaseIdx : proposal.ordered_issues.length;
     proposal.ordered_issues.splice(insertAt, 0, {
       number: realNumber,
       title: spec.title,
