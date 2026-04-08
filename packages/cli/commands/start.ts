@@ -18,6 +18,7 @@ export interface StartDeps {
   runDevLoop?: (opts: DevLoopOpts) => Promise<void>;
   runDocLoop?: (opts: DocLoopOpts) => Promise<void>;
   slotCount?: number;
+  env?: NodeJS.ProcessEnv;
   log?: (msg: string) => void;
   error?: (msg: string) => void;
   exit?: (code: number) => never;
@@ -34,6 +35,7 @@ export async function startCommand(
     runDevLoop = defaultRunDevLoop,
     runDocLoop = defaultRunDocLoop,
     slotCount,
+    env = process.env,
     log = console.log,
     error = console.error,
     exit = process.exit,
@@ -70,6 +72,7 @@ export async function startCommand(
 
   const client = new GitHubClient(user.token);
   const worktrees = new WorktreeManager();
+  const envSlotCount = slotCount ?? resolveEnvSlotCount(env, error);
 
   await Promise.all([
     runPlanningLoop(effectiveConfig),
@@ -79,7 +82,7 @@ export async function startCommand(
       repo,
       token: user.token,
       worktrees,
-      ...(slotCount !== undefined ? { slotCount } : {}),
+      ...(envSlotCount !== undefined ? { slotCount: envSlotCount } : {}),
     }),
     runDocLoop({ client, owner, repo, repoPath: dir }),
   ]);
@@ -90,4 +93,22 @@ async function defaultResolveRepo(
 ): Promise<{ owner: string; repo: string }> {
   const gitClient = new GitClient();
   return gitClient.readRemoteOwnerRepo(dir);
+}
+
+function resolveEnvSlotCount(
+  env: NodeJS.ProcessEnv,
+  error: (msg: string) => void,
+): number | undefined {
+  const raw = env.SUPERFIELD_SLOT_COUNT;
+  if (raw === undefined || raw.trim() === "") return undefined;
+
+  const parsed = Number(raw);
+  if (!Number.isInteger(parsed) || parsed < 1) {
+    error(
+      `Ignoring invalid SUPERFIELD_SLOT_COUNT=${JSON.stringify(raw)}; using the default slot count`,
+    );
+    return undefined;
+  }
+
+  return parsed;
 }
