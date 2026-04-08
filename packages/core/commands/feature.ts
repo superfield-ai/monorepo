@@ -182,7 +182,11 @@ function parseFeatureEvaluation(json: string): FeatureEvaluation {
     risk: typeof parsed.risk === "number" ? parsed.risk : undefined,
     dependencies: Array.isArray(parsed.dependencies) ? parsed.dependencies : [],
     duplicate_of:
-      typeof parsed.duplicate_of === "number" ? parsed.duplicate_of : null,
+      parsed.duplicate_of === null || typeof parsed.duplicate_of === "number"
+        ? parsed.duplicate_of
+        : (() => {
+            throw new Error("invalid duplicate_of");
+          })(),
     blueprint_rules_cited: parsed.blueprint_rules_cited ?? [],
   };
 }

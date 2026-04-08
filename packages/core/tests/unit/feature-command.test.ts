@@ -130,6 +130,19 @@ Scout gate: #5
     expect(client.updateIssueBody).not.toHaveBeenCalled();
   });
 
+  it("throws when duplicate_of is not a number or null", async () => {
+    const client = makeClient();
+    await expect(
+      runFeatureCommand({
+        client,
+        owner: "o",
+        repo: "r",
+        request: "x",
+        spawn: fakeSpawn({ ...validEvaluation, duplicate_of: "50" }),
+      }),
+    ).rejects.toThrow(/duplicate_of/);
+  });
+
   it("throws when LLM response is missing required fields", async () => {
     const client = makeClient();
     await expect(

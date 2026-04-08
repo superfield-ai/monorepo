@@ -57,7 +57,8 @@ alternative scope or a PRD amendment.
 any rule IDs that apply.
 3. **Duplicate detection** — search the open issues list above for exact \
 duplicates, likely overlap, or improvement candidates of an existing issue. If \
-this should improve an existing issue rather than become a new one, say so.
+this feature is substantially the same as an existing open issue, set \
+\`duplicate_of\` to that issue number; otherwise set it to \`null\`.
 4. **Phase placement** — which phase does this belong to? If there's no \
 appropriate phase yet, name a new one.
 5. **Smallest clear scope** — prefer the narrowest scope that satisfies the \

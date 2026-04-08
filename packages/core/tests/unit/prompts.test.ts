@@ -99,6 +99,8 @@ describe("prompt builders — structural invariants", () => {
       expect(out).toContain('"features"');
       expect(out).toContain('"test_plan"');
       expect(out).toContain("feat: existing");
+      expect(out).toContain("duplicate_of");
+      expect(out).toContain("substantially the same as an existing open issue");
       expect(out).not.toContain('"acceptance_criteria"');
       expect(out).not.toContain('"scope"');
     });
