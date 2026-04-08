@@ -96,7 +96,7 @@ export async function runGithubAdd(repoPath: string | undefined, deps: GithubDep
   const appSlug = deps.env.SUPERFIELD_GITHUB_APP_SLUG?.trim() || DEFAULT_GITHUB_APP_SLUG;
 
   // Ensure authenticated
-  let user = config.users[0] ?? null;
+  let user: GitHubUser | null = config.users[0] ?? null;
   if (user) {
     const login = await deps.fetchUserLogin(user.token);
     if (login) {
@@ -144,7 +144,7 @@ export async function runGithubAdd(repoPath: string | undefined, deps: GithubDep
     deps.log('Waiting for installation...');
     installedRepos = await pollUntilInstalled(user.token, appSlug, deps, targetRepo);
     deps.log('✓ App installed');
-    logRepos(installedRepos, deps);
+    if (installedRepos !== 'all') logRepos(installedRepos, deps);
   } else if (installedRepos !== 'all' && !repoAccessible(installedRepos, targetRepo)) {
     deps.log('✓ GitHub App installed');
     logRepos(installedRepos, deps);
