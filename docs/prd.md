@@ -230,6 +230,35 @@ Each Plan issue moves through these stages in order:
 
 When an issue that was completed speculatively later becomes the primary, the primary agent picks up at stage 4 (PR open) rather than re-doing the development work.
 
+#### Parallel Claude processes — practical limit
+
+Each slot spawns one `claude` subprocess. With the default `slotCount: 3` (1 primary + 2 speculative), up to **3 `claude` processes** run in parallel per configured repository.
+
+**Why this matters:**
+
+- **API rate limits** — Each subprocess counts against your Anthropic API usage. At `slotCount: 3` across several repos you can saturate the API concurrent-request limit quickly.
+- **CPU and memory** — Each process loads Node (or Bun), Claude Code, and a git worktree. At 3 slots, RSS can exceed 2 GB on a developer laptop.
+- **Context overlap** — Speculative agents share no context with the primary. Merge conflicts become more likely the more agents write in parallel.
+
+**Recommendations:**
+
+| Scenario | Suggested `slotCount` |
+|---|---|
+| Single repo, developer laptop | 2 (primary only, 1 speculative) |
+| Single repo, CI machine (8+ cores) | 3 (default) |
+| Multi-repo, any machine | 2 per repo; cap total at 4-6 agents |
+| Rate-limit sensitive accounts | 1 (primary only) |
+
+**How to configure:**
+
+Pass `slotCount` when calling `runDevLoop` or `tickDevLoop`:
+
+```typescript
+runDevLoop({ client, owner, repo, token, slotCount: 1 });
+```
+
+There is no CLI flag yet — it is code-configured. A `SUPERFIELD_SLOT_COUNT` environment variable will be added in a future phase when the configuration surface stabilises.
+
 #### Loop steps
 
 1. **Select** — identify the primary issue and up to N-1 speculative issues.
