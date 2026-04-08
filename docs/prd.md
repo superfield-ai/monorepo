@@ -170,7 +170,7 @@ The continuous development loop. Runs indefinitely until killed (Ctrl-C).
 
 ### Outer loop — repository health (every 5 seconds)
 
-1. **CI watchdog** — query Check Runs for the latest commit on `main`. On any failed check, create a `ci-failure` issue and append it to the Plan (deduplicated by SHA + check name).
+1. **CI watchdog** — query Check Runs for the latest commit on `main`. On any failed check, create a `ci-failure` issue and insert it at the top of the Plan (deduplicated by SHA + check name). A broken `main` always takes priority over new feature work.
 2. **Issue audit** — scan all open issues for schema conformance (required sections present, correct labels). Flag non-conforming issues with a label and a comment describing what is missing.
 3. **Plan coverage** — verify every open issue is referenced in the Plan. Append any missing issue in dependency order.
 
@@ -199,7 +199,7 @@ When an issue that was completed speculatively later becomes the primary, the pr
 
 #### Loop steps
 
-1. **Select** — identify the primary issue (highest-priority unclosed issue whose predecessors are all CLOSED) and up to 2 speculative issues (any eligible issue with all dependencies CLOSED). If no primary: all work is done — stop.
+1. **Select** — identify the primary issue and up to 2 speculative issues. The primary is always the top of the Plan: `ci-failure` issues inserted by the CI watchdog sit above all feature work, so a broken `main` is remediated before any new feature is advanced. If no primary: all work is done — stop.
 2. **Prep** — for each selected issue without an existing worktree, create one via `isomorphic-git` (no `git` binary).
 3. **Launch** — dispatch agents in parallel. Primary drives through merge and then exits; speculative agents drive through checklist completion then exit.
 4. Loop back to step 1 after the primary exits.
