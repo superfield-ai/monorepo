@@ -73,7 +73,7 @@ bun run test
 
 ```
 packages/
-  cli/      Commands: setup gh-login, setup gh-logout, start
+  cli/      Commands: github add, github forget, start, plan, feature
   core/     Config, outer loop, CI watchdog
   github/   Octokit wrapper (GitHub API client)
   git/      isomorphic-git wrapper (no git binary)
