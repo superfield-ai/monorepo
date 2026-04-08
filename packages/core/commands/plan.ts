@@ -113,10 +113,10 @@ export async function runPlanCommand(
       const issueBody: IssueBody = {
         title: spec.title,
         phase: spec.phase,
-        motivation: spec.motivation,
-        features: spec.features,
-        test_plan: spec.test_plan,
-        canonical_docs: spec.canonical_docs,
+        motivation: spec.motivation ?? '',
+        features: spec.features ?? [],
+        test_plan: spec.test_plan ?? [],
+        canonical_docs: spec.canonical_docs ?? [],
       };
       const created = await client.createIssue({
         owner,
@@ -179,10 +179,15 @@ function parseProposal(json: string): PlanProposal {
   if (!Array.isArray(parsed.phases)) throw new Error("missing phases array");
   if (!Array.isArray(parsed.ordered_issues))
     throw new Error("missing ordered_issues array");
+  const rawSpecs = (parsed.scout_specs ?? []) as Array<Record<string, unknown>>;
+  const specs = rawSpecs.map((s) => ({
+    ...(s as PlanProposal['scout_specs'][number]),
+    canonical_docs: Array.isArray(s['canonical_docs']) ? (s['canonical_docs'] as string[]) : [],
+  }));
   return {
     phases: parsed.phases,
     ordered_issues: parsed.ordered_issues,
-    scout_specs: parsed.scout_specs ?? [],
+    scout_specs: specs,
   };
 }
 
@@ -191,32 +196,54 @@ function patchScoutNumber(
   specIdx: number,
   realNumber: number,
 ): void {
-  // The scout slot is the one with number === null and matching scout_spec_index,
-  // OR (legacy) the first null-numbered scout in a phase whose scout_issue_number is null
+  const spec = proposal.scout_specs[specIdx]!;
+  const phaseName = spec.phase;
+
+  // Find an existing null-numbered dev-scout slot for this phase
+  let patched = false;
   for (const issue of proposal.ordered_issues) {
-    if (issue.number === null && issue.kind === "dev-scout") {
-      if (
-        issue.scout_spec_index === specIdx ||
-        issue.scout_spec_index === undefined
-      ) {
-        issue.number = realNumber;
-        // Add it to dependencies of any feature in the same phase that doesn't have it
-        for (const other of proposal.ordered_issues) {
-          if (
-            other.phase === issue.phase &&
-            other.kind === "feature" &&
-            !other.dependencies.includes(realNumber)
-          ) {
-            other.dependencies.push(realNumber);
-          }
-        }
-        break;
-      }
+    if (
+      issue.number === null &&
+      issue.kind === "dev-scout" &&
+      issue.phase === phaseName
+    ) {
+      issue.number = realNumber;
+      patched = true;
+      break;
     }
   }
-  // Patch the phase block too
+
+  // If the LLM didn't include a null slot, insert the scout at the front of its phase
+  if (!patched) {
+    const firstPhaseIdx = proposal.ordered_issues.findIndex(
+      (i) => i.phase === phaseName,
+    );
+    const insertAt = firstPhaseIdx >= 0 ? firstPhaseIdx : proposal.ordered_issues.length;
+    proposal.ordered_issues.splice(insertAt, 0, {
+      number: realNumber,
+      title: spec.title,
+      phase: phaseName,
+      kind: "dev-scout",
+      risk: 3,
+      dependencies: [],
+      parallel_safe: true,
+    });
+  }
+
+  // Ensure all features in the same phase depend on the scout
+  for (const other of proposal.ordered_issues) {
+    if (
+      other.phase === phaseName &&
+      other.kind === "feature" &&
+      !other.dependencies.includes(realNumber)
+    ) {
+      other.dependencies.push(realNumber);
+    }
+  }
+
+  // Patch the matching phase block
   for (const phase of proposal.phases) {
-    if (phase.scout_issue_number === null) {
+    if (phase.name === phaseName) {
       phase.scout_issue_number = realNumber;
       if (!phase.issue_numbers.includes(realNumber)) {
         phase.issue_numbers.unshift(realNumber);

@@ -103,7 +103,6 @@ function buildArgs(opts: AgentOpts): string[] {
     "--print",
     "--output-format",
     "json",
-    "--no-ansi",
     "--dangerously-skip-permissions",
     "--max-turns",
     String(opts.maxTurns ?? 50),
