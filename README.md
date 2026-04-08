@@ -30,13 +30,13 @@ export PATH="$HOME/.bun/bin:$PATH"
 Sign in, then open the GitHub App install page:
 
 ```bash
-bun run packages/cli/bin/superfield.ts setup gh-login
+bun run packages/cli/bin/superfield.ts github add
 ```
 
 Remove a stored GitHub user:
 
 ```bash
-bun run packages/cli/bin/superfield.ts setup gh-logout <handle>
+bun run packages/cli/bin/superfield.ts github forget <handle>
 ```
 
 Config is saved to `~/.superfield/config.yaml`.
@@ -73,7 +73,7 @@ bun run test
 
 ```
 packages/
-  cli/      Commands: setup gh-login, setup gh-logout, start
+  cli/      Commands: github add, github forget, start, plan, feature
   core/     Config, outer loop, CI watchdog
   github/   Octokit wrapper (GitHub API client)
   git/      isomorphic-git wrapper (no git binary)
