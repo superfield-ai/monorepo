@@ -1,42 +1,74 @@
 import * as path from 'node:path';
-import { loadConfig } from '@superfield/core';
-import { runPlanningLoop } from '@superfield/core/loop';
-import { GitClient } from '@superfield/git';
+import { loadConfig as defaultLoadConfig, runPlanningLoop as defaultRunPlanningLoop } from '@superfield/core';
+import { runDevLoop as defaultRunDevLoop } from '@superfield/core/loops/dev-loop';
+import { runDocLoop as defaultRunDocLoop } from '@superfield/core/loops/doc-loop';
+import { GitHubClient } from '@superfield/github';
+import { GitClient, WorktreeManager } from '@superfield/git';
 import type { Config } from '@superfield/core';
+import type { DevLoopOpts } from '@superfield/core/loops/dev-loop';
+import type { DocLoopOpts } from '@superfield/core/loops/doc-loop';
 
-export async function startCommand(repoPath?: string): Promise<void> {
+export interface StartDeps {
+  loadConfig?: () => Promise<Config>;
+  resolveRepo?: (dir: string) => Promise<{ owner: string; repo: string }>;
+  runPlanningLoop?: (config: Config) => Promise<void>;
+  runDevLoop?: (opts: DevLoopOpts) => Promise<void>;
+  runDocLoop?: (opts: DocLoopOpts) => Promise<void>;
+  log?: (msg: string) => void;
+  error?: (msg: string) => void;
+  exit?: (code: number) => never;
+}
+
+export async function startCommand(repoPath: string | undefined, deps: StartDeps = {}): Promise<void> {
+  const {
+    loadConfig = defaultLoadConfig,
+    resolveRepo = defaultResolveRepo,
+    runPlanningLoop = defaultRunPlanningLoop,
+    runDevLoop = defaultRunDevLoop,
+    runDocLoop = defaultRunDocLoop,
+    log = console.log,
+    error = console.error,
+    exit = process.exit,
+  } = deps;
+
   if (!repoPath) {
-    console.error('Usage: superfield start <path-to-repo>');
-    process.exit(1);
+    error('Usage: superfield start <path-to-repo>');
+    exit(1);
+    return;
   }
 
   const config = await loadConfig();
-  const effectiveConfig = await configFromPath(config, repoPath);
-
-  const { owner, repo } = effectiveConfig.repositories[0];
-  console.log(`Starting superfield for ${owner}/${repo}. Ctrl-C to stop.\n`);
-  await runPlanningLoop(effectiveConfig);
-}
-
-async function configFromPath(base: Config, repoPath: string): Promise<Config> {
   const dir = path.resolve(repoPath);
-  const gitClient = new GitClient();
-  const { owner, repo } = await gitClient.readRemoteOwnerRepo(dir);
+  const { owner, repo } = await resolveRepo(dir);
 
-  // Use a configured user if one is already assigned to this repo,
-  // otherwise fall back to the first available user.
-  const existing = base.repositories.find((r) => r.owner === owner && r.repo === repo);
-  const assignedUser = existing?.assignedUser ?? base.users[0]?.handle;
+  const existing = config.repositories.find((r) => r.owner === owner && r.repo === repo);
+  const assignedUser = existing?.assignedUser ?? config.users[0]?.handle;
+  const user = config.users.find((u) => u.handle === assignedUser);
 
-  if (!assignedUser) {
-    console.error('No GitHub users configured. Run `superfield setup` first.');
-    process.exit(1);
+  if (!assignedUser || !user) {
+    error('No GitHub users configured. Run `superfield setup` first.');
+    exit(1);
+    return;
   }
 
-  console.log(`Resolved ${dir} → ${owner}/${repo} (user: ${assignedUser})\n`);
+  log(`Starting superfield for ${owner}/${repo} (user: ${assignedUser})\n`);
 
-  return {
-    users: base.users,
+  const effectiveConfig: Config = {
+    users: config.users,
     repositories: [{ owner, repo, assignedUser }],
   };
+
+  const client = new GitHubClient(user.token);
+  const worktrees = new WorktreeManager();
+
+  await Promise.all([
+    runPlanningLoop(effectiveConfig),
+    runDevLoop({ client, owner, repo, token: user.token, worktrees }),
+    runDocLoop({ client, owner, repo, repoPath: dir }),
+  ]);
+}
+
+async function defaultResolveRepo(dir: string): Promise<{ owner: string; repo: string }> {
+  const gitClient = new GitClient();
+  return gitClient.readRemoteOwnerRepo(dir);
 }
