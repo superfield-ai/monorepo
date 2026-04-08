@@ -36,6 +36,7 @@ export type {
   PlanPhase,
   PlanIssueMetadata,
   PlanIssueKind,
+  ValidationError,
 } from "./plan.ts";
 
 export { runLLMTask, extractJson } from "./llm-task.ts";

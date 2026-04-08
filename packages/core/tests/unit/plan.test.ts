@@ -531,3 +531,36 @@ describe("planIssueOrder", () => {
     expect(planIssueOrder(plan)).toEqual([999, 196, 201]);
   });
 });
+
+// ── validatePlan stubs ────────────────────────────────────────────────────────
+// Scaffolded by issue #28 for implementation in issue #16.
+
+describe("validatePlan", () => {
+  it("returns empty array for a valid plan", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "g.",
+          dependsOn: [],
+          scoutGate: 196,
+          issues: [scoutEntry, featureEntry],
+        },
+      ],
+    };
+    expect(validatePlan(plan)).toEqual([]);
+  });
+
+  it.todo("detects duplicate issue numbers");
+
+  it.todo("detects a forward dependency edge (dep references a later issue)");
+
+  it.todo("detects a phase with no dev-scout");
+
+  it.todo("detects a phase with scout not in first position");
+
+  it.todo("detects a cyclic phase dependency (A dependsOn B, B dependsOn A)");
+
+  it.todo("returns errors that include the offending issue number or phase name");
+});
