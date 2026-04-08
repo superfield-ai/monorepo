@@ -692,7 +692,7 @@ If a rule applies, follow it. If you choose to deviate, document why in the comm
 
 1. **PRD alignment** — does this feature fit the product as defined in \`docs/prd.md\`? If it conflicts, say so in your output and propose either an alternative scope or a PRD amendment.
 2. **Blueprint fit** — check the blueprint domains relevant to this work (\`arch\`, \`auth\`, \`data\`, \`process\`, \`test\`, \`ux\`, \`worker\`). Cite any rule IDs that apply.
-3. **Duplicate detection** — search the open issues list above for exact duplicates, likely overlap, or improvement candidates of an existing issue. If this should improve an existing issue rather than become a new one, say so.
+3. **Duplicate detection** — search the open issues list above for exact duplicates, likely overlap, or improvement candidates of an existing issue. If this feature is substantially the same as an existing open issue, set \`duplicate_of\` to that issue number; otherwise set it to \`null\`.
 4. **Phase placement** — which phase does this belong to? If there's no appropriate phase yet, name a new one.
 5. **Smallest clear scope** — prefer the narrowest scope that satisfies the request.
 
