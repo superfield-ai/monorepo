@@ -17,11 +17,18 @@ import { describe, it } from "vitest";
  * See docs/testing.md §Layer 2.
  */
 describe("doc loop — end to end", () => {
-  it.todo("detects newly merged PR after the watermark");
-  it.todo("runs all three doc tasks in parallel");
+  it.todo(
+    "processes the newest merged PR on cold start and idles until main changes again",
+  );
+  it.todo(
+    "runs coverage scan, canonical sync, and consistency check in documented order",
+  );
   it.todo("opens a doc PR when canonical sync produces patches");
   it.todo("skips PR when no patches matched the file content");
   it.todo("skips coverage and consistency tasks when PR has no source files");
+  it.todo(
+    "lets consistency check see canonical-sync updates before the doc PR is opened",
+  );
   it.todo(
     "respects CI gating: doc-only changes do not trigger build/test workflows",
   );
