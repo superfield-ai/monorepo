@@ -182,7 +182,8 @@ async function tickConfiguredRepositories(
   config: Config,
   opts: PlanningLoopTickOpts = {},
 ): Promise<void> {
-  const createClient = opts.createClient ?? ((token) => new GitHubClient(token));
+  const createClient =
+    opts.createClient ?? ((token) => new GitHubClient(token));
   const tickRepositoryFn = opts.tickRepository ?? tickRepository;
 
   await Promise.all(
