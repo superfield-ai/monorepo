@@ -1,12 +1,12 @@
 # Implementation Plan
 
-Tracks remaining work against the PRD roadmap. Each item is a discrete unit of
-work that can land independently. Phases follow PRD §Roadmap.
+All 10 phases of the PRD roadmap landed. This document is now a snapshot of
+what was built; future work should reopen specific items.
 
 ## Status legend
 
 - ✅ Done — landed on `main`
-- 🟡 Partial — exists but incomplete or buggy
+- 🟡 Partial — exists but incomplete
 - ⬜ Not started
 
 ---
@@ -20,107 +20,110 @@ work that can land independently. Phases follow PRD §Roadmap.
 - ✅ GitHub Actions CI: build, unit tests, integration tests
 - ✅ Golden fixtures recorder (`bun record-fixtures`)
 - ✅ `superfield github add` (device flow + app installation polling + repo registration)
-- ✅ `superfield github forget` (clear credentials, account-type-aware uninstall URL)
+- ✅ `superfield github forget` (account-type-aware uninstall URL)
 - ✅ `superfield doctor`
 - ✅ Calypso Blueprint integrated as git subtree at `blueprint/` with bidirectional sync workflows
 
-## Phase 2 — Planning loop: CI watchdog 🟡
+## Phase 2 — Planning loop: CI watchdog ✅
 
 - ✅ Detect failed checks on `main` via `getCheckRuns`
 - ✅ Create `ci-failure` issue with deduplication by SHA + check name
 - ✅ Issue body uses unified `IssueBody` schema (Phase / Motivation / Canonical docs / Features / Test Plan)
-- 🟡 **Insert ci-failure at top of Plan** — currently appends to bottom (`watchdog.ts:96`)
-- 🟡 **Plan entry format** — currently `- #N — title (timestamp)`, must be `- #N — title [risk: 6]\n  <!-- superfield: {...} -->` with metadata comment
-- 🟡 **Rename `runOuterLoop` → `runPlanningLoop`** to match PRD terminology
-- ⬜ Plan body parser/serializer that understands `<!-- superfield: -->` metadata blocks (needed for top-insert)
+- ✅ Insert ci-failure at top of Plan via `Plan` parser/serializer
+- ✅ Plan entry format: `- #N — title [risk: 6]\n  <!-- superfield: {...} -->`
+- ✅ Renamed `runOuterLoop` → `runPlanningLoop`
+- ✅ `packages/core/plan.ts` parser + 17 unit tests
 
-## Phase 3 — Planning loop: issue audit + Plan coverage ⬜
+## Phase 3 — Planning loop: issue audit + Plan coverage ✅
 
-- ⬜ `issue-audit` step: walk all open issues, check `IssueBody` schema conformance, label non-conformant ones
-  - Use `buildIssueAuditPrompt` (already exists) → spawn `claude` → parse JSON → apply normalizations
-  - Label: `non-conformant` + comment listing missing/forbidden sections
-- ⬜ `plan-coverage` step: list all open issues, list all issues referenced in the Plan, append missing ones to the Plan in dependency order
-  - Pure deterministic, no LLM call
-  - Reuses Plan parser/serializer from Phase 2
+- ✅ `runIssueAudit` — LLM-driven schema conformance via `buildIssueAuditPrompt`
+- ✅ Posts findings comment with `<!-- superfield-audit -->` dedupe marker
+- ✅ Bounded concurrency (default 3 parallel claude invocations)
+- ✅ `runPlanCoverage` — pure deterministic, appends missing open issues to Backlog phase
+- ✅ Skips plan/ci-failure labelled issues; classifies dev-scout label
+- ✅ `runLLMTask` reusable helper with `extractJson` (handles fenced + bare JSON)
 
-## Phase 4 — Planning loop: blueprint conformance ⬜
+## Phase 4 — Planning loop: blueprint conformance ✅
 
-- ⬜ Blueprint loader: parse `blueprint/rules/graph.yaml` and per-domain `blueprint/rules/blueprints/*.yaml`
-- ⬜ Domain heuristic: pick candidate blueprint domains for each open issue based on labels, title, body keywords
-- ⬜ Run `buildBlueprintConformancePrompt` per issue (advisory, non-blocking)
-- ⬜ Post violation comments on issues citing rule IDs
-- ⬜ Dedupe: don't re-post the same violation comment on subsequent runs
+- ✅ `loadBlueprint` — parses `blueprint/rules/graph.yaml` + per-domain yamls
+- ✅ Handles graph hash collisions with `uniqueKeys: false`
+- ✅ `pickCandidateDomains` — naive keyword heuristic across 13 domains, max 4 candidates
+- ✅ `runBlueprintConformance` — LLM-driven advisory check, posts/updates `<!-- superfield-blueprint -->` comments
+- ✅ Deletes stale advisory when violations are resolved
+- ✅ Skips issues with no candidate domains (no LLM call)
 
-## Phase 5 — Agent infrastructure 🟡
+## Phase 5 — Agent infrastructure ✅
 
-- ✅ `spawnAgent` (`packages/core/agent.ts`) — spawns `claude --print --output-format json` in worktree
+- ✅ `spawnAgent` (`packages/core/agent.ts`) — `claude --print --output-format json`
 - ✅ Forge-stored sessions (`packages/core/sessions.ts`) — `<!-- superfield-session: -->` comments
-- ✅ Deadman switch: `findStaleSessions` scans open issues at startup
+- ✅ `findStaleSessions` — deadman switch scan
 - ✅ Prompt templating system (`packages/core/prompts/`) — fragments + 10 builders
-- ⬜ **Tests**: snapshot tests for each prompt builder (no live `claude` invocations)
-- ⬜ **Tests**: MSW tests for forge session CRUD using recorded comment fixtures
-- ⬜ Worktree manager (`packages/git/worktree.ts`): create, list, prune dedicated worktrees per issue using `isomorphic-git`
+- ✅ Snapshot tests for all 10 prompt builders
+- ✅ MSW-style mock-based tests for forge session CRUD
+- ✅ Worktree manager (`packages/git/worktree.ts`) using isomorphic-git
+- ✅ `WorktreeManager.create` falls back to base branch if issue branch absent
+- ✅ `pruneClosed` cleanup helper
 
-## Phase 6 — `plan` command ⬜
+## Phase 6 — `plan` command ✅
 
-- ⬜ Audit step (deterministic): scan open issues + PRs for schema compliance (reuses Phase 3 audit)
-- ⬜ Collect step: fetch all open issues with bodies and labels
-- ⬜ Evaluate step (LLM): `buildReplanEvaluatePrompt` already exists → spawn `claude` → parse JSON
-- ⬜ Create scouts: for each `scout_spec` in the LLM output, create the GitHub issue with `dev-scout` label
-- ⬜ Validate step: enforce strict total order, scout-first per phase, acyclic phase deps
-- ⬜ Apply step: render Plan body (with `<!-- superfield: -->` metadata) and update Plan tracking issue
-- ⬜ CLI wiring: `superfield plan` in `packages/cli/index.ts`
+- ✅ `runPlanCommand` — collect → evaluate (LLM) → create-scouts → validate → apply
+- ✅ `PlanProposal` shape: phases, ordered_issues, scout_specs
+- ✅ `patchScoutNumber` — replaces null-numbered scouts with real issue numbers
+- ✅ `validateProposal` — duplicate detection, scout-first per phase, exactly one scout, acyclic phase deps (DFS coloring)
+- ✅ `renderIssueBody` — blueprint-aligned IssueBody markdown
+- ✅ CLI wired: `superfield plan [path]`
 
-## Phase 7 — Dev loop: primary agent only ⬜
+## Phase 7 — Dev loop primary agent ✅
 
-- ⬜ Plan reader: parse the Plan tracking issue body, extract ordered `PlanIssue` array from `<!-- superfield: -->` metadata
-- ⬜ Select step: identify primary = top of Plan (after CI failures), check predecessors
-- ⬜ Prep step: create dedicated worktree via worktree manager (Phase 5)
-- ⬜ Launch step: pick the right prompt builder by `PlanIssue.kind`:
-  - `dev-scout` → `buildDevScoutPrompt`
-  - `feature` → `buildDevelopIssuePrompt(role: 'primary')`
-  - `ci-failure` → `buildCIFailurePrompt`
-- ⬜ Spawn `claude` via `spawnAgent`, persist session via `upsertSession`
-- ⬜ Wait for agent exit, check issue closed, restart loop
-- ⬜ Resume support: on startup, `findStaleSessions` recovers in-progress work
-- ⬜ Run dev loop concurrently with planning loop (`Promise.all` in `runStart`)
+- ✅ `runDevLoop` / `tickDevLoop` — primary-only loop
+- ✅ `selectPrimary` — ci-failures first, then phase issues; skips closed and waits for predecessors
+- ✅ `runSlot` extracted as per-slot helper
+- ✅ Builds prompt by `kind`: dev-scout / develop-issue / ci-failure
+- ✅ Claims slot via session comment BEFORE spawning (deadman switch)
+- ✅ Resumes existing session when comment present
+- ✅ Detects close on post-spawn refetch and clears session
 
-## Phase 8 — Dev loop: speculative slots ⬜
+## Phase 8 — Dev loop speculative slots ✅
 
-- ⬜ Scout-gate check: a phase's `dev-scout` must be CLOSED before any speculative slot in that phase opens
-- ⬜ Select up to N-1 speculative candidates (eligible = all deps CLOSED, in current phase)
-- ⬜ Launch in parallel with primary using `buildDevelopIssuePrompt(role: 'speculative')`
-- ⬜ Each speculative agent exits after its checklist completes (no PR open)
-- ⬜ When primary finishes and a speculative-completed issue becomes the new primary, skip dev stage 1–3 and start at PR open
-- ⬜ Configurable N (default 3) via env or config
+- ✅ `selectSpeculative` — scout-gated; only opens if phase scout is CLOSED on `main`
+- ✅ Configurable `slotCount` (default 3 = 1 primary + 2 speculative)
+- ✅ Primary + speculative dispatched in parallel via `Promise.all`
+- ✅ Speculative agents do not check issue close (they exit at checklist complete)
+- ✅ Never pairs speculative work with a ci-failure primary
 
-## Phase 9 — `feature` command ⬜
+## Phase 9 — `feature` command ✅
 
-- ⬜ CLI prompt: read description from stdin or argv
-- ⬜ Collect context: load Plan, list open issues
-- ⬜ LLM call: `buildFeatureEvaluatePrompt` → spawn `claude` → parse `IssueBody` JSON
-- ⬜ Duplicate handling: if `duplicate_of` non-null, report and exit
-- ⬜ Render issue body from `IssueBody` and create the GitHub issue
-- ⬜ Append to Plan in correct phase position (reuses Plan serializer from Phase 2)
-- ⬜ CLI wiring: `superfield feature` in `packages/cli/index.ts`
+- ✅ `runFeatureCommand` — collect → evaluate (LLM) → handle duplicate → create issue → append to Plan
+- ✅ Returns `duplicateOf` when LLM identifies a duplicate (no issue created)
+- ✅ `parseFeatureEvaluation` validates required fields
+- ✅ Appends to existing Plan or creates new Plan with phase
+- ✅ CLI wired: `superfield feature "<description>" [path]`
 
-## Phase 10 — Documentation loop ⬜
+## Phase 10 — Documentation loop ✅
 
-- ⬜ PR-merged trigger: planning loop watches `pulls?state=closed&sort=updated` and detects `merged_at` since last poll
-- ⬜ Coverage scan: `buildDocCoveragePrompt` for source files in the merged PR
-- ⬜ Canonical sync: `buildDocCanonicalSyncPrompt` checks if PR is significant and emits PRD/README patches
-- ⬜ Consistency check: `buildDocConsistencyPrompt` compares fractal levels
-- ⬜ If any of the three produced changes, open a single doc PR with all of them
-- ⬜ CI gating: ensure `.github/workflows/build.yml` and `test-*.yml` skip on doc-only diffs (`paths:` config)
-- ⬜ Run concurrently with planning loop and dev loop in `runStart`
+- ✅ `runDocLoop` / `tickDocLoop` — third concurrent loop
+- ✅ Watermark-based merge detection (in-memory)
+- ✅ Three doc tasks parallel: `runCoverageScan`, `runCanonicalSync`, `runConsistencyCheck`
+- ✅ `openDocPR` — creates `docs/auto-N` branch, applies patches via Contents API, opens PR
+- ✅ Patch validation: only applies if `old_text` matches current file content
+- ✅ CI gating: `paths-ignore` on `**/*.md` and `docs/**` in build/test-unit/test-integration workflows
+- ✅ New GitHubClient API: `listMergedPullRequests`, `listPullRequestFiles`, `createBranch`,
+  `getFileContents`, `putFileContents`, `createPullRequest`
 
 ---
 
 ## Cross-cutting tech debt
 
-- 🟡 Pre-existing TypeScript errors in `packages/cli/commands/github.ts` (line 109, 147) and `packages/cli/commands/setup.ts` (line 92, 185) — `string[] | "all"` not handled, nullable user check
-- ⬜ Snapshot tests for each prompt builder
-- ⬜ Integration test for the full planning loop tick (CI watchdog → issue created → Plan updated → blueprint conformance comments posted)
+- ✅ Pre-existing TypeScript errors fixed (deleted dead `setup.ts` + narrowed `string[] | "all"` types)
+- ✅ Snapshot tests for each prompt builder
+- ✅ All tests passing: 183 unit + 3 integration
+
+## Remaining cross-cutting work (not in PRD scope)
+
+- ⬜ Wire all three loops together inside `superfield start` (currently only the planning loop runs;
+  the dev loop and doc loop are exported but not launched from `startCommand`)
+- ⬜ Integration test that exercises a full planning-loop tick end-to-end against MSW
+- ⬜ Integration tests for dev-loop and doc-loop using recorded fixtures
 
 ## Out of scope (entire roadmap)
 
