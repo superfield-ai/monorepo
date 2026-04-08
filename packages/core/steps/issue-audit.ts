@@ -1,4 +1,4 @@
-import type { GitHubClient, Issue } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient, Issue } from '@superfield/github';
 import { buildIssueAuditPrompt } from '../prompts/index.ts';
 import { runLLMTask, type LLMTaskOpts } from '../llm-task.ts';
 

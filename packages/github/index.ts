@@ -5,6 +5,7 @@ export type {
   PullRequest,
   CreateIssueParams,
   UpdateIssueParams,
+  GitHubClientPort,
 } from './client.ts';
 export {
   pollGitHubAppAccessToken,

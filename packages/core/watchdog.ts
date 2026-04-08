@@ -1,4 +1,4 @@
-import type { GitHubClient, CheckRun, Issue } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient, CheckRun, Issue } from '@superfield/github';
 import {
   parsePlan,
   serializePlan,

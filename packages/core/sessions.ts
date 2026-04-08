@@ -1,4 +1,4 @@
-import type { GitHubClient } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient } from '@superfield/github';
 
 export type AgentRole = 'primary' | 'speculative';
 

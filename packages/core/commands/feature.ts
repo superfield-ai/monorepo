@@ -1,4 +1,4 @@
-import type { GitHubClient } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient } from '@superfield/github';
 import { buildFeatureEvaluatePrompt } from '../prompts/index.ts';
 import { runLLMTask, type LLMTaskOpts } from '../llm-task.ts';
 import { renderIssueBody, type IssueBody } from '../issue-body.ts';

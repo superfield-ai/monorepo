@@ -48,6 +48,7 @@ function makeCheckRun(overrides: Partial<CheckRun> = {}): CheckRun {
     status: 'completed',
     conclusion: 'failure',
     html_url: 'https://github.com/org/repo/runs/1',
+    head_sha: 'abc123',
     ...overrides,
   };
 }

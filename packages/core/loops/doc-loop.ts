@@ -1,6 +1,6 @@
 import * as fs from 'node:fs/promises';
 import * as path from 'node:path';
-import type { GitHubClient, PullRequest } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient, PullRequest } from '@superfield/github';
 import {
   buildDocCoveragePrompt,
   buildDocCanonicalSyncPrompt,

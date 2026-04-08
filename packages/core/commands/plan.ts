@@ -1,4 +1,4 @@
-import type { GitHubClient } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient } from '@superfield/github';
 import { buildReplanEvaluatePrompt } from '../prompts/index.ts';
 import { runLLMTask, type LLMTaskOpts } from '../llm-task.ts';
 import {

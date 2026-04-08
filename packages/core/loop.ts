@@ -1,5 +1,6 @@
 import type { Config } from './config.ts';
 import { GitHubClient } from '@superfield/github';
+import type { GitHubClientPort } from '@superfield/github';
 import { hasFailedChecks, runWatchdog } from './watchdog.ts';
 import { runPlanCoverage, type PlanCoverageResult } from './steps/plan-coverage.ts';
 import { runIssueAudit, type IssueAuditResult } from './steps/issue-audit.ts';
@@ -57,26 +58,26 @@ export interface TickRepositoryResult {
 /** Injectable step functions — used in unit tests to avoid spawning the LLM. */
 export interface TickRepositoryOpts {
   issueAudit?: (
-    client: GitHubClient,
+    client: GitHubClientPort,
     owner: string,
     repo: string,
     opts: object,
   ) => Promise<IssueAuditResult>;
   blueprintConformance?: (
-    client: GitHubClient,
+    client: GitHubClientPort,
     owner: string,
     repo: string,
     opts: object,
   ) => Promise<BlueprintConformanceResult>;
   planCoverage?: (
-    client: GitHubClient,
+    client: GitHubClientPort,
     owner: string,
     repo: string,
   ) => Promise<PlanCoverageResult>;
 }
 
 async function tickRepository(
-  client: GitHubClient,
+  client: GitHubClientPort,
   owner: string,
   repo: string,
   opts: TickRepositoryOpts = {},

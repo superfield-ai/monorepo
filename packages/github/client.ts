@@ -46,7 +46,38 @@ export interface UpdateIssueParams {
   body: string;
 }
 
-export class GitHubClient {
+/**
+ * Structural interface for GitHub API operations used by the Superfield core.
+ * Allows injecting test doubles without casting through `unknown`.
+ *
+ * The concrete `GitHubClient` class satisfies this interface automatically
+ * because TypeScript uses structural typing.
+ */
+export interface GitHubClientPort {
+  getHeadSha(owner: string, repo: string, branch?: string): Promise<string>;
+  getCheckRuns(owner: string, repo: string, ref: string): Promise<CheckRun[]>;
+  getIssue(owner: string, repo: string, issue_number: number): Promise<Issue>;
+  listIssues(owner: string, repo: string, labels?: string[]): Promise<Issue[]>;
+  createIssue(params: CreateIssueParams): Promise<Issue>;
+  updateIssueBody(params: UpdateIssueParams): Promise<void>;
+  listIssueComments(owner: string, repo: string, issue_number: number): Promise<{ id: number; body: string }[]>;
+  createIssueComment(owner: string, repo: string, issue_number: number, body: string): Promise<{ id: number }>;
+  updateIssueComment(owner: string, repo: string, comment_id: number, body: string): Promise<void>;
+  deleteIssueComment(owner: string, repo: string, comment_id: number): Promise<void>;
+  listMergedPullRequests(owner: string, repo: string, perPage?: number): Promise<PullRequest[]>;
+  listPullRequestFiles(owner: string, repo: string, pull_number: number): Promise<string[]>;
+  createBranch(owner: string, repo: string, branch: string, fromSha: string): Promise<void>;
+  putFileContents(params: {
+    owner: string; repo: string; path: string; branch: string;
+    message: string; content: string; sha?: string;
+  }): Promise<{ commitSha: string }>;
+  getFileContents(owner: string, repo: string, path: string, ref?: string): Promise<{ content: string; sha: string } | null>;
+  createPullRequest(params: {
+    owner: string; repo: string; title: string; head: string; base: string; body: string;
+  }): Promise<{ number: number; html_url: string }>;
+}
+
+export class GitHubClient implements GitHubClientPort {
   private octokit: Octokit;
 
   constructor(token: string) {

@@ -1,4 +1,4 @@
-import type { GitHubClient, Issue } from '@superfield/github';
+import type { GitHubClientPort as GitHubClient, Issue } from '@superfield/github';
 import { WorktreeManager, type IssueWorktree } from '@superfield/git';
 import { parsePlan, type PlanIssueMetadata, type Plan } from '../plan.ts';
 import {
