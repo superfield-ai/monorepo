@@ -470,6 +470,104 @@ Scout gate: #5
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 
+  it("caps speculative candidates at slotCount - 1 and never includes the primary issue", async () => {
+    const planBody = `## Phase: Identity
+
+Goal: Build the auth seams.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #11 — feat: build the other thing [risk: 4]
+  <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #12 — feat: build the third thing [risk: 4]
+  <!-- superfield: {"number":12,"title":"feat: build the third thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #13 — feat: build the fourth thing [risk: 4]
+  <!-- superfield: {"number":13,"title":"feat: build the fourth thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+`;
+    await preCreateWorktree(10, "build-the-thing");
+    await preCreateWorktree(11, "build-the-other-thing");
+    await preCreateWorktree(12, "build-the-third-thing");
+    const client = makeClient({
+      listIssues: vi
+        .fn()
+        .mockResolvedValueOnce([
+          { number: 99, body: planBody, labels: ["plan"], state: "open" },
+        ]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        return makeIssue({ number: n, state: "open" });
+      }),
+    });
+    const spawn = fakeSpawn();
+
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 3,
+    });
+
+    expect(result.primaryIssue).toBe(10);
+    expect(result.speculativeIssues).toEqual([11, 12]);
+    expect(result.speculativeIssues).not.toContain(10);
+    expect(spawn).toHaveBeenCalledTimes(3);
+  });
+
+  it("excludes speculative candidates whose dependencies are still open", async () => {
+    const planBody = `## Phase: Identity
+
+Goal: Build the auth seams.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #11 — feat: build the other thing [risk: 4]
+  <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #12 — feat: build the blocked thing [risk: 4]
+  <!-- superfield: {"number":12,"title":"feat: build the blocked thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5,99],"parallel_safe":false} -->
+`;
+    await preCreateWorktree(10, "build-the-thing");
+    await preCreateWorktree(11, "build-the-other-thing");
+    const client = makeClient({
+      listIssues: vi
+        .fn()
+        .mockResolvedValueOnce([
+          { number: 99, body: planBody, labels: ["plan"], state: "open" },
+        ]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        if (n === 99) return makeIssue({ number: 99, state: "open" });
+        return makeIssue({ number: n, state: "open" });
+      }),
+    });
+    const spawn = fakeSpawn();
+
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 3,
+    });
+
+    expect(result.primaryIssue).toBe(10);
+    expect(result.speculativeIssues).toEqual([11]);
+    expect(result.speculativeIssues).not.toContain(12);
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
   it("resumes existing session when session comment exists", async () => {
     await preCreateWorktree(10, "build-the-thing");
     const existingSession = {
