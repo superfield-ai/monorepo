@@ -172,6 +172,9 @@ function parseFeatureEvaluation(json: string): FeatureEvaluation {
     throw new Error("missing features array");
   if (!Array.isArray(parsed.test_plan))
     throw new Error("missing test_plan array");
+  if (parsed.duplicate_of !== null && typeof parsed.duplicate_of !== "number") {
+    throw new Error("invalid duplicate_of");
+  }
   return {
     title: parsed.title,
     phase: parsed.phase,
@@ -181,12 +184,7 @@ function parseFeatureEvaluation(json: string): FeatureEvaluation {
     canonical_docs: parsed.canonical_docs ?? [],
     risk: typeof parsed.risk === "number" ? parsed.risk : undefined,
     dependencies: Array.isArray(parsed.dependencies) ? parsed.dependencies : [],
-    duplicate_of:
-      parsed.duplicate_of === null || typeof parsed.duplicate_of === "number"
-        ? parsed.duplicate_of
-        : (() => {
-            throw new Error("invalid duplicate_of");
-          })(),
+    duplicate_of: parsed.duplicate_of ?? null,
     blueprint_rules_cited: parsed.blueprint_rules_cited ?? [],
   };
 }
