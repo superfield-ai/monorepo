@@ -179,7 +179,13 @@ async function runSlot(
   });
 
   const existing = await getSession(client, owner, repo, entry.number);
-  const sessionId = existing?.session.sessionId;
+  // Only resume a session that has a real UUID (not the "pending" placeholder
+  // written before the first spawn completes)
+  const rawSessionId = existing?.session.sessionId;
+  const sessionId =
+    rawSessionId && /^[0-9a-f-]{36}$/i.test(rawSessionId)
+      ? rawSessionId
+      : undefined;
 
   const prompt = buildPromptForKind(entry, issue, branch, wt, plan, role);
 
