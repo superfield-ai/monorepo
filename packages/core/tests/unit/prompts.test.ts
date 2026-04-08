@@ -87,7 +87,9 @@ describe("prompt builders — structural invariants", () => {
           { ...issue, number: 51, title: "feat: sibling" },
         ],
       });
-      expect(out).toContain("### Downstream feature issues you are scaffolding for");
+      expect(out).toContain(
+        "### Downstream feature issues you are scaffolding for",
+      );
       expect(out).toContain("- #50: feat: child");
       expect(out).toContain("- #51: feat: sibling");
       expect(out.indexOf("- #50: feat: child")).toBeLessThan(
