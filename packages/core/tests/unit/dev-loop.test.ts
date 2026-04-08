@@ -50,6 +50,20 @@ Scout gate: #5
   <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
 `;
 
+const planBodyWithScoutAndDownstreamFeatures = `## Phase: Identity
+
+Goal: Build the auth seams.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #11 — feat: build the other thing [risk: 4]
+  <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+`;
+
 function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
   return {
     listIssues: vi.fn().mockResolvedValue([]),
@@ -132,6 +146,41 @@ describe("tickDevLoop", () => {
     expect(result.mergeGateBlocked).toEqual([]);
     expect(result.reapedSessions).toEqual([]);
     expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("passes downstream feature issues into the dev-scout prompt in plan order", async () => {
+    await preCreateWorktree(5, "scout-identity");
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValueOnce([
+        {
+          number: 99,
+          body: planBodyWithScoutAndDownstreamFeatures,
+          labels: ["plan"],
+          state: "open",
+        },
+      ]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        return makeIssue({ number: n, state: "open" });
+      }),
+    });
+    const spawn = fakeSpawn();
+
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+    });
+
+    expect(spawn).toHaveBeenCalledTimes(1);
+    const prompt = spawn.mock.calls[0]![0].prompt;
+    const firstFeatureIndex = prompt.indexOf("#10: feat: build the thing");
+    const secondFeatureIndex = prompt.indexOf("#11: feat: build the other thing");
+    expect(firstFeatureIndex).toBeGreaterThanOrEqual(0);
+    expect(secondFeatureIndex).toBeGreaterThanOrEqual(0);
+    expect(firstFeatureIndex).toBeLessThan(secondFeatureIndex);
   });
 
   it("does not select an issue whose dependencies are still open", async () => {

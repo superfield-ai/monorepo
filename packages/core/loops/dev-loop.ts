@@ -610,7 +610,7 @@ function buildPromptForKind(
       branch,
       phaseName: entry.phase,
       phaseGoal: phase?.goal ?? "",
-      featureIssues: [],
+      featureIssues: listPhaseFeatureEntries(plan, entry.phase),
     });
   }
 
