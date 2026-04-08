@@ -135,6 +135,36 @@ Scout gate: #5
     ).rejects.toThrow(/missing/);
   });
 
+  it('uses LLM-supplied dependencies in the Plan entry', async () => {
+    const client = makeClient();
+    await runFeatureCommand({
+      client,
+      owner: 'o',
+      repo: 'r',
+      request: 'add a logout button',
+      spawn: fakeSpawn({ ...validEvaluation, dependencies: [5, 10] }),
+    });
+
+    const planBody = (client.createIssue as ReturnType<typeof vi.fn>).mock.calls
+      .find((c) => c[0].labels?.includes('plan'))?.[0].body as string;
+    expect(planBody).toContain('"dependencies":[5,10]');
+  });
+
+  it('defaults dependencies to [] when LLM omits the field', async () => {
+    const client = makeClient();
+    await runFeatureCommand({
+      client,
+      owner: 'o',
+      repo: 'r',
+      request: 'add a logout button',
+      spawn: fakeSpawn(validEvaluation), // validEvaluation has no dependencies field
+    });
+
+    const planBody = (client.createIssue as ReturnType<typeof vi.fn>).mock.calls
+      .find((c) => c[0].labels?.includes('plan'))?.[0].body as string;
+    expect(planBody).toContain('"dependencies":[]');
+  });
+
   it('uses LLM-supplied risk score in the Plan entry', async () => {
     const client = makeClient();
     await runFeatureCommand({

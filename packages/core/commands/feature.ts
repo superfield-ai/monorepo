@@ -19,6 +19,11 @@ export interface FeatureEvaluation {
   canonical_docs: string[];
   /** Risk score 1-10. Higher = more disruptive. LLM-supplied; defaults to 3 if omitted. */
   risk?: number;
+  /**
+   * Issue numbers that must be closed before this issue can start.
+   * LLM-supplied; defaults to [] if omitted.
+   */
+  dependencies?: number[];
   /** When non-null, this request duplicates an existing issue and should not create a new one. */
   duplicate_of: number | null;
   /** Blueprint rule IDs cited by the evaluator (for visibility). */
@@ -113,7 +118,7 @@ export async function runFeatureCommand(opts: FeatureCommandOpts): Promise<Featu
     phase: evaluation.phase,
     kind: 'feature',
     risk: evaluation.risk ?? 3,
-    dependencies: [],
+    dependencies: evaluation.dependencies ?? [],
     parallel_safe: true,
   };
 
@@ -166,6 +171,7 @@ function parseFeatureEvaluation(json: string): FeatureEvaluation {
     test_plan: parsed.test_plan,
     canonical_docs: parsed.canonical_docs ?? [],
     risk: typeof parsed.risk === 'number' ? parsed.risk : undefined,
+    dependencies: Array.isArray(parsed.dependencies) ? parsed.dependencies : [],
     duplicate_of:
       typeof parsed.duplicate_of === 'number' ? parsed.duplicate_of : null,
     blueprint_rules_cited: parsed.blueprint_rules_cited ?? [],
