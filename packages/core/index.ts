@@ -53,7 +53,7 @@ export type {
   BlueprintConformanceOpts,
 } from './steps/blueprint-conformance.ts';
 
-export { loadBlueprint, pickCandidateDomains, filterActiveRules } from './blueprint.ts';
+export { loadBlueprint, pickCandidateDomains, filterActiveRules, scanGraphForDuplicateKeys } from './blueprint.ts';
 export type {
   Blueprint,
   BlueprintDomain,

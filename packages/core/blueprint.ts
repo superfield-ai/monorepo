@@ -79,8 +79,51 @@ const KNOWN_DOMAINS = [
 ];
 
 /**
+ * Pre-scans the raw graph.yaml text for duplicate keys inside the `nodes`
+ * block. Used to surface upstream data quality issues that the YAML parser
+ * would silently swallow under `uniqueKeys: false`.
+ *
+ * Returns the list of duplicated keys (each reported once, regardless of
+ * how many times it appears).
+ */
+export function scanGraphForDuplicateKeys(rawYaml: string): string[] {
+  const lines = rawYaml.split('\n');
+  let inNodes = false;
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  for (const line of lines) {
+    if (/^nodes:\s*$/.test(line)) {
+      inNodes = true;
+      continue;
+    }
+    if (inNodes && /^\S/.test(line)) {
+      // dedented to a new top-level key — out of nodes block
+      inNodes = false;
+      continue;
+    }
+    if (!inNodes) continue;
+
+    // Match `  <key>: [...]` indented under nodes
+    const match = /^\s+([0-9a-fA-F]+):/.exec(line);
+    if (!match) continue;
+    const key = match[1]!;
+    if (seen.has(key)) {
+      duplicates.add(key);
+    } else {
+      seen.add(key);
+    }
+  }
+
+  return [...duplicates];
+}
+
+/**
  * Loads the Superfield Blueprint from disk. Returns an indexed graph plus
  * all loaded domain rules.
+ *
+ * Pre-scans `graph.yaml` for duplicate keys and logs a warning per
+ * collision. Set `SUPERFIELD_BLUEPRINT_STRICT=1` to throw instead of warn.
  *
  * @param blueprintDir Absolute path to the `blueprint/` directory. Defaults
  *                     to `<cwd>/blueprint`.
@@ -89,6 +132,21 @@ export async function loadBlueprint(blueprintDir?: string): Promise<Blueprint> {
   const dir = blueprintDir ?? path.resolve(process.cwd(), 'blueprint');
   const graphPath = path.join(dir, 'rules', 'graph.yaml');
   const rawGraph = await fs.readFile(graphPath, 'utf8');
+
+  // Surface collisions before they get silently swallowed by the YAML parser
+  const duplicates = scanGraphForDuplicateKeys(rawGraph);
+  if (duplicates.length > 0) {
+    const message =
+      `blueprint: ${duplicates.length} duplicate hash key(s) in ${graphPath}: ` +
+      duplicates.join(', ');
+    if (process.env.SUPERFIELD_BLUEPRINT_STRICT === '1') {
+      throw new Error(message);
+    }
+    console.warn(`⚠ ${message}`);
+    console.warn('  This is a data quality issue in dot-matrix-labs/calypso-blueprint.');
+    console.warn('  Last-write-wins is the current behaviour. File an upstream issue.');
+  }
+
   const graph = parseYaml(rawGraph, { uniqueKeys: false }) as {
     corpus_version: number;
     generated: string;

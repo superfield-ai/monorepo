@@ -1,5 +1,7 @@
-import { describe, it, expect } from 'vitest';
-import { loadBlueprint, pickCandidateDomains, filterActiveRules } from '../../blueprint.ts';
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
+import { loadBlueprint, pickCandidateDomains, filterActiveRules, scanGraphForDuplicateKeys } from '../../blueprint.ts';
 import * as path from 'node:path';
 
 const BLUEPRINT_DIR = path.resolve(import.meta.dirname, '../../../../blueprint');
@@ -77,6 +79,105 @@ describe('pickCandidateDomains', () => {
       labels: [],
     });
     expect(domains.length).toBeLessThanOrEqual(4);
+  });
+});
+
+describe('scanGraphForDuplicateKeys', () => {
+  it('returns an empty array when there are no duplicates', () => {
+    const yaml = `nodes:
+  abc: [A, B, C, D, E]
+  def: [F, G, H, I, J]
+`;
+    expect(scanGraphForDuplicateKeys(yaml)).toEqual([]);
+  });
+
+  it('detects duplicate hash keys and returns each duplicated key', () => {
+    const yaml = `nodes:
+  abc: [A, B, C, D, E]
+  def: [F, G, H, I, J]
+  abc: [X, Y, Z, W, V]
+`;
+    const dups = scanGraphForDuplicateKeys(yaml);
+    expect(dups).toContain('abc');
+    expect(dups).not.toContain('def');
+  });
+
+  it('reports each duplicate only once even when it appears 3+ times', () => {
+    const yaml = `nodes:
+  abc: [a]
+  abc: [b]
+  abc: [c]
+`;
+    const dups = scanGraphForDuplicateKeys(yaml);
+    expect(dups).toEqual(['abc']);
+  });
+
+  it('only scans the nodes block — top-level duplicates outside nodes are not reported', () => {
+    const yaml = `corpus_version: 1
+nodes:
+  abc: [a]
+generated: x
+`;
+    expect(scanGraphForDuplicateKeys(yaml)).toEqual([]);
+  });
+});
+
+describe('loadBlueprint — collision warnings', () => {
+  let tmpDir: string;
+  let warnSpy: ReturnType<typeof vi.spyOn>;
+
+  beforeEach(async () => {
+    tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), 'bp-test-'));
+    await fs.mkdir(path.join(tmpDir, 'rules', 'blueprints'), { recursive: true });
+    warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+  });
+
+  afterEach(async () => {
+    warnSpy.mockRestore();
+    await fs.rm(tmpDir, { recursive: true, force: true });
+  });
+
+  async function writeGraph(content: string): Promise<void> {
+    await fs.writeFile(path.join(tmpDir, 'rules', 'graph.yaml'), content);
+  }
+
+  it('warns once per duplicate key when graph has hash collisions', async () => {
+    await writeGraph(`corpus_version: 1
+generated: '2026-04-08'
+rule_count: 2
+nodes:
+  abc: [TEST-T-001, dup-name-1, threat, ARCH, blueprints/arch]
+  def: [TEST-T-002, unique-name, principle, ARCH, blueprints/arch]
+  abc: [TEST-T-003, dup-name-2, threat, ARCH, blueprints/arch]
+`);
+    await loadBlueprint(tmpDir);
+    const warnings = warnSpy.mock.calls.map((c) => String(c[0]));
+    expect(warnings.some((w) => w.includes('abc'))).toBe(true);
+    expect(warnings.some((w) => w.toLowerCase().includes('duplicate'))).toBe(true);
+  });
+
+  it('does not warn when there are no collisions', async () => {
+    await writeGraph(`corpus_version: 1
+generated: '2026-04-08'
+rule_count: 1
+nodes:
+  abc: [TEST-T-001, unique-name, threat, ARCH, blueprints/arch]
+`);
+    await loadBlueprint(tmpDir);
+    expect(warnSpy).not.toHaveBeenCalled();
+  });
+
+  it('throws in strict mode (SUPERFIELD_BLUEPRINT_STRICT=1) when collisions exist', async () => {
+    await writeGraph(`nodes:
+  abc: [a, b, c, d, e]
+  abc: [x, y, z, w, v]
+`);
+    process.env.SUPERFIELD_BLUEPRINT_STRICT = '1';
+    try {
+      await expect(loadBlueprint(tmpDir)).rejects.toThrow(/duplicate/i);
+    } finally {
+      delete process.env.SUPERFIELD_BLUEPRINT_STRICT;
+    }
   });
 });
 
