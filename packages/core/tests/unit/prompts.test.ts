@@ -192,6 +192,102 @@ describe('prompt builders — structural invariants', () => {
   });
 });
 
+describe('prompt builders — snapshots', () => {
+  it('buildDevelopIssuePrompt primary matches snapshot', () => {
+    expect(buildDevelopIssuePrompt({
+      issue,
+      role: 'primary',
+      worktreePath: '/tmp/wt',
+      branch: 'feat/42',
+      phaseName: 'Identity',
+    })).toMatchSnapshot();
+  });
+
+  it('buildDevelopIssuePrompt speculative matches snapshot', () => {
+    expect(buildDevelopIssuePrompt({
+      issue,
+      role: 'speculative',
+      worktreePath: '/tmp/wt',
+      branch: 'feat/42',
+      phaseName: 'Identity',
+    })).toMatchSnapshot();
+  });
+
+  it('buildDevScoutPrompt matches snapshot', () => {
+    expect(buildDevScoutPrompt({
+      scoutIssue: issue,
+      worktreePath: '/tmp/wt',
+      branch: 'chore/scout',
+      phaseName: 'Identity',
+      phaseGoal: 'Build the auth seams',
+      featureIssues: [{ ...issue, number: 50, title: 'feat: child' }],
+    })).toMatchSnapshot();
+  });
+
+  it('buildCIFailurePrompt matches snapshot', () => {
+    expect(buildCIFailurePrompt({
+      issue,
+      checkName: 'test:unit',
+      checkRunUrl: 'https://github.com/o/r/runs/1',
+      sha: 'abc1234',
+      worktreePath: '/tmp/wt',
+      branch: 'fix/ci',
+    })).toMatchSnapshot();
+  });
+
+  it('buildFeatureEvaluatePrompt matches snapshot', () => {
+    expect(buildFeatureEvaluatePrompt({
+      request: 'Add a logout button to the navbar',
+      planBody: '## Phase: P\n',
+      openIssueTitles: [{ number: 1, title: 'feat: existing' }],
+    })).toMatchSnapshot();
+  });
+
+  it('buildReplanEvaluatePrompt matches snapshot', () => {
+    expect(buildReplanEvaluatePrompt({
+      openIssues: [{ number: 10, title: 'feat: A', body: 'a body', labels: ['feature'] }],
+      currentPlanBody: null,
+    })).toMatchSnapshot();
+  });
+
+  it('buildIssueAuditPrompt matches snapshot', () => {
+    expect(buildIssueAuditPrompt({ issue })).toMatchSnapshot();
+  });
+
+  it('buildBlueprintConformancePrompt matches snapshot', () => {
+    expect(buildBlueprintConformancePrompt({
+      issue,
+      candidateDomains: ['arch', 'auth'],
+    })).toMatchSnapshot();
+  });
+
+  it('buildDocCoveragePrompt matches snapshot', () => {
+    expect(buildDocCoveragePrompt({
+      prNumber: 99,
+      changedFiles: ['packages/core/foo.ts', 'packages/cli/bar.ts'],
+    })).toMatchSnapshot();
+  });
+
+  it('buildDocCanonicalSyncPrompt matches snapshot', () => {
+    expect(buildDocCanonicalSyncPrompt({
+      prNumber: 100,
+      prTitle: 'feat: new command',
+      prBody: 'Adds frobnicate command',
+      changedFiles: ['packages/cli/commands/frobnicate.ts'],
+      prdContent: '# PRD\n## Commands\n',
+      readmeContent: '# README\n',
+    })).toMatchSnapshot();
+  });
+
+  it('buildDocConsistencyPrompt matches snapshot', () => {
+    expect(buildDocConsistencyPrompt({
+      canonicalSnippets: [{ path: 'docs/prd.md', content: '# PRD' }],
+      moduleSnippets: [{ path: 'packages/core/README.md', content: '# core' }],
+      inlineSnippets: [{ path: 'packages/core/foo.ts', symbol: 'spawnAgent', content: '/** doc */' }],
+    })).toMatchSnapshot();
+  });
+});
+
 describe('prompt builders — pure functions', () => {
   it('buildDevelopIssuePrompt is deterministic for the same input', () => {
     const ctx = {
