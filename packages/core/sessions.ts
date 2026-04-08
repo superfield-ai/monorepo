@@ -15,6 +15,13 @@ export interface IssueSession {
   commentId: number;
 }
 
+export interface StartupSessionClassification {
+  prioritizedSessions: IssueSession[];
+  prioritizedIssueNumbers: number[];
+  reapedSessions: IssueSession[];
+  reapedIssueNumbers: number[];
+}
+
 const MARKER = "<!-- superfield-session:";
 const MARKER_END = "-->";
 
@@ -69,6 +76,52 @@ export async function findIssuesWithSessions(
   }
 
   return sessions;
+}
+
+/**
+ * Classifies forge-stored sessions for the dev loop's one-time startup scan.
+ *
+ * - Non-stale sessions whose issues still exist in the current Plan are
+ *   resumable and returned in Plan order.
+ * - Stale sessions are reaped.
+ * - Fresh sessions on issues not present in the current Plan are also reaped.
+ */
+export async function classifyStartupSessions(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  planIssueNumbers: number[],
+  timeoutMs: number,
+): Promise<StartupSessionClassification> {
+  const now = Date.now();
+  const planOrder = new Map(
+    planIssueNumbers.map((issueNumber, index) => [issueNumber, index]),
+  );
+  const prioritizedSessions: IssueSession[] = [];
+  const reapedSessions: IssueSession[] = [];
+
+  for (const found of await findIssuesWithSessions(client, owner, repo)) {
+    const age = now - new Date(found.session.startedAt).getTime();
+    const planIndex = planOrder.get(found.issueNumber);
+    if (age > timeoutMs || planIndex === undefined) {
+      reapedSessions.push(found);
+      continue;
+    }
+    prioritizedSessions.push(found);
+  }
+
+  prioritizedSessions.sort(
+    (a, b) =>
+      (planOrder.get(a.issueNumber) ?? Number.MAX_SAFE_INTEGER) -
+      (planOrder.get(b.issueNumber) ?? Number.MAX_SAFE_INTEGER),
+  );
+
+  return {
+    prioritizedSessions,
+    prioritizedIssueNumbers: prioritizedSessions.map((s) => s.issueNumber),
+    reapedSessions,
+    reapedIssueNumbers: reapedSessions.map((s) => s.issueNumber),
+  };
 }
 
 /**
