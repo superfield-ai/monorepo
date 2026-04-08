@@ -65,6 +65,9 @@ export type {
 export { spawnAgent } from './agent.ts';
 export type { AgentOpts, AgentResult } from './agent.ts';
 
+export { withRetry, CircuitBreaker } from './retry.ts';
+export type { RetryOpts, CircuitBreakerOpts } from './retry.ts';
+
 export { getSession, upsertSession, deleteSession, findStaleSessions } from './sessions.ts';
 export type { AgentRole, AgentSession } from './sessions.ts';
 

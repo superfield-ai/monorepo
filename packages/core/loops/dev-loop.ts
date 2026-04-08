@@ -8,6 +8,7 @@ import {
 } from '../prompts/index.ts';
 import { spawnAgent, type AgentOpts, type AgentResult } from '../agent.ts';
 import { getSession, upsertSession, deleteSession } from '../sessions.ts';
+import { withRetry, CircuitBreaker } from '../retry.ts';
 
 /**
  * The dev loop — drives one primary issue at a time through the 7-stage
@@ -30,6 +31,11 @@ export interface DevLoopOpts {
   slotCount?: number;
   /** Sessions older than this are considered stale. Default 4h. */
   staleSessionTimeoutMs?: number;
+  /**
+   * Circuit breaker shared across all slots. If omitted, a default instance
+   * (trips at 5 consecutive failures, 5min reset) is created internally.
+   */
+  circuit?: CircuitBreaker;
 }
 
 export interface PruneResult {
@@ -60,8 +66,10 @@ const DEFAULT_IDLE_MS = 30_000;
  */
 export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   const idleMs = opts.idlePollMs ?? DEFAULT_IDLE_MS;
+  // Shared circuit breaker across all slots in this loop instance
+  const circuit = opts.circuit ?? new CircuitBreaker({ tripAt: 5, resetMs: 5 * 60 * 1000 });
   while (true) {
-    const result = await tickDevLoop(opts);
+    const result = await tickDevLoop({ ...opts, circuit });
     if (result.idle) {
       // Run maintenance on idle ticks — prune stale worktrees + stale sessions
       try {
@@ -161,12 +169,16 @@ async function runSlot(
     startedAt: new Date().toISOString(),
   });
 
-  const spawn = opts.spawn ?? spawnAgent;
-  const agentResult = await spawn({
-    prompt,
-    worktreePath: wt.path,
-    sessionId,
-  });
+  const spawnFn = opts.spawn ?? spawnAgent;
+  const circuit = opts.circuit;
+
+  const agentResult = await withRetry(
+    () => {
+      const call = () => spawnFn({ prompt, worktreePath: wt.path, sessionId });
+      return circuit ? circuit.call(call) : call();
+    },
+    { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
+  );
 
   await upsertSession(client, owner, repo, entry.number, {
     sessionId: agentResult.sessionId,
