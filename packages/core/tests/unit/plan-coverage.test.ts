@@ -38,8 +38,20 @@ function makeIssueBody(phase: string): string {
 }
 
 describe("runPlanCoverage", () => {
-  it("creates the Plan issue on first run when open issues exist", async () => {
-    const issues = [makeIssue({ number: 10, title: "feat: one" })];
+  it("creates the Plan issue on first run when uncovered issues define a valid scout-backed phase", async () => {
+    const issues = [
+      makeIssue({
+        number: 5,
+        title: "stub identity integration seams",
+        labels: ["dev-scout"],
+        body: makeIssueBody("Identity foundation"),
+      }),
+      makeIssue({
+        number: 10,
+        title: "feat: one",
+        body: makeIssueBody("Identity foundation"),
+      }),
+    ];
     const client = makeClient({
       listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
         if (labels?.includes("plan")) return [];
@@ -51,14 +63,53 @@ describe("runPlanCoverage", () => {
     const result = await runPlanCoverage(client, "org", "repo");
 
     expect(result.planCreated).toBe(true);
-    expect(result.appended).toEqual([10]);
+    expect(result.appended).toEqual([5, 10]);
     expect(client.createIssue).toHaveBeenCalledTimes(1);
     const createArg = (client.createIssue as ReturnType<typeof vi.fn>).mock
       .calls[0]![0];
     expect(createArg.title).toBe("Plan");
     expect(createArg.labels).toContain("plan");
     expect(createArg.body).toContain("#10");
+    expect(createArg.body).toContain("#5");
     expect(createArg.body).toContain("<!-- superfield:");
+    const plan = parsePlan(createArg.body);
+    expect(plan.phases[0]?.scoutGate).toBe(5);
+    expect(plan.phases[0]?.issues[1]?.dependencies).toEqual([5]);
+  });
+
+  it("creates a first-run Plan with scout-first ordering and derived dependencies", async () => {
+    const issues = [
+      makeIssue({
+        number: 11,
+        title: "feat: add session refresh",
+        body: makeIssueBody("Identity foundation"),
+      }),
+      makeIssue({
+        number: 5,
+        title: "stub identity integration seams",
+        labels: ["dev-scout"],
+        body: makeIssueBody("Identity foundation"),
+      }),
+    ];
+    const client = makeClient({
+      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
+        if (labels?.includes("plan")) return [];
+        return issues;
+      }) as unknown as GitHubClient["listIssues"],
+      createIssue: vi.fn().mockResolvedValue({ number: 99, title: "Plan" }),
+    });
+
+    await runPlanCoverage(client, "org", "repo");
+
+    const body = (client.createIssue as ReturnType<typeof vi.fn>).mock
+      .calls[0]![0].body;
+    const plan = parsePlan(body);
+    expect(plan.phases).toHaveLength(1);
+    expect(plan.phases[0]?.scoutGate).toBe(5);
+    expect(plan.phases[0]?.issues.map((issue) => issue.number)).toEqual([
+      5, 11,
+    ]);
+    expect(plan.phases[0]?.issues[1]?.dependencies).toEqual([5]);
   });
 
   it("appends only missing issues when Plan already exists", async () => {
@@ -168,7 +219,7 @@ Depends on phases: None.
 Scout gate: #5
 
 - #10 — feat: build user authentication [risk: 4]
-  <!-- superfield: {"number":10,"title":"feat: build user authentication","phase":"Identity foundation","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":true} -->
+  <!-- superfield: {"number":10,"title":"feat: build user authentication","phase":"Identity foundation","kind":"feature","risk":4,"dependencies":[42],"parallel_safe":true} -->
 `;
     const planIssue = {
       number: 99,
@@ -204,12 +255,43 @@ Scout gate: #5
     expect(plan.phases[0]?.issues.map((issue) => issue.number)).toEqual([
       5, 10,
     ]);
-    expect(plan.phases[0]?.issues[1]?.dependencies).toEqual([5]);
+    expect(plan.phases[0]?.issues[1]?.dependencies).toEqual([5, 42]);
+  });
+
+  it("fails clearly when first-run coverage finds a phased feature without a scout gate", async () => {
+    const issues = [
+      makeIssue({
+        number: 11,
+        title: "feat: add session refresh",
+        body: makeIssueBody("Identity foundation"),
+      }),
+    ];
+    const client = makeClient({
+      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
+        if (labels?.includes("plan")) return [];
+        return issues;
+      }) as unknown as GitHubClient["listIssues"],
+    });
+
+    await expect(runPlanCoverage(client, "org", "repo")).rejects.toThrow(
+      'plan coverage cannot place feature issue #11: phase "Identity foundation" has no scout gate',
+    );
+    expect(client.createIssue).not.toHaveBeenCalled();
   });
 
   it("skips ci-failure and plan-labelled issues", async () => {
     const openIssues = [
-      makeIssue({ number: 10, title: "feat: real work" }),
+      makeIssue({
+        number: 5,
+        title: "chore: scout",
+        labels: ["dev-scout"],
+        body: makeIssueBody("Identity foundation"),
+      }),
+      makeIssue({
+        number: 10,
+        title: "feat: real work",
+        body: makeIssueBody("Identity foundation"),
+      }),
       makeIssue({
         number: 20,
         title: "fix: ci failure",
@@ -227,12 +309,17 @@ Scout gate: #5
 
     const result = await runPlanCoverage(client, "org", "repo");
 
-    expect(result.appended).toEqual([10]);
+    expect(result.appended).toEqual([5, 10]);
   });
 
   it("classifies dev-scout labelled issues with kind dev-scout", async () => {
     const openIssues = [
-      makeIssue({ number: 10, title: "chore: scout", labels: ["dev-scout"] }),
+      makeIssue({
+        number: 10,
+        title: "chore: scout",
+        labels: ["dev-scout"],
+        body: makeIssueBody("Identity foundation"),
+      }),
     ];
     const client = makeClient({
       listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
@@ -247,6 +334,44 @@ Scout gate: #5
       .calls[0]![0].body;
     expect(body).toContain('"kind":"dev-scout"');
     expect(body).toContain("[dev-scout]");
+  });
+
+  it("fails clearly when issue bodies do not provide phase placement", async () => {
+    const client = makeClient({
+      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
+        if (labels?.includes("plan")) return [];
+        return [makeIssue({ number: 10, title: "feat: one", body: null })];
+      }) as unknown as GitHubClient["listIssues"],
+    });
+
+    await expect(runPlanCoverage(client, "org", "repo")).rejects.toThrow(
+      "plan coverage cannot place issue #10: missing ## Phase section",
+    );
+  });
+
+  it("fails clearly when an uncovered feature would violate scout dependency semantics", async () => {
+    const planBody = `## Phase: Identity foundation
+
+Goal: Create the auth and session seams.
+Depends on phases: None.
+Scout gate: pending
+`;
+    const client = makeClient({
+      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
+        if (labels?.includes("plan")) return [{ number: 99, body: planBody }];
+        return [
+          makeIssue({
+            number: 10,
+            title: "feat: one",
+            body: makeIssueBody("Identity foundation"),
+          }),
+        ];
+      }) as unknown as GitHubClient["listIssues"],
+    });
+
+    await expect(runPlanCoverage(client, "org", "repo")).rejects.toThrow(
+      'plan coverage cannot place feature issue #10: phase "Identity foundation" has no scout gate',
+    );
   });
 
   it("is a no-op when all issues are already covered", async () => {

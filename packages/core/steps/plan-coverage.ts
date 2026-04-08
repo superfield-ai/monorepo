@@ -59,32 +59,41 @@ export async function runPlanCoverage(
     plan = parsePlan(plans[0]!.body ?? "");
   }
 
-  const appended: number[] = [];
+  const uncoveredEntries: Array<PlanIssueMetadata & { originalIndex: number }> =
+    [];
   const alreadyCovered: number[] = [];
 
-  for (const issue of trackable) {
+  for (let index = 0; index < trackable.length; index++) {
+    const issue = trackable[index]!;
     if (planContainsIssue(plan, issue.number)) {
       alreadyCovered.push(issue.number);
       continue;
     }
-    const phaseName = planCreated
-      ? (extractIssuePhase(issue.body) ?? "Backlog")
-      : extractIssuePhase(issue.body);
+    const phaseName = extractIssuePhase(issue.body);
     if (phaseName === null) {
       throw new Error(
         `plan coverage cannot place issue #${issue.number}: missing ## Phase section`,
       );
     }
 
-    const entry = buildPlanCoverageEntry(issue, phaseName);
-    if (planCreated) {
-      plan = appendToPhase(plan, entry.phase, entry);
-    } else if (entry.kind === "dev-scout") {
+    uncoveredEntries.push({
+      ...buildPlanCoverageEntry(issue, phaseName),
+      originalIndex: index,
+    });
+  }
+
+  if (planCreated) {
+    plan = initializeCoveragePhases(plan, uncoveredEntries);
+  }
+
+  const appended: number[] = [];
+  for (const entry of orderEntries(plan, uncoveredEntries)) {
+    if (entry.kind === "dev-scout") {
       plan = insertScoutIntoPhase(plan, entry);
     } else {
       plan = appendFeatureIntoPhase(plan, entry);
     }
-    appended.push(issue.number);
+    appended.push(entry.number);
   }
 
   if (appended.length > 0 || planCreated) {
@@ -124,6 +133,28 @@ export function buildPlanCoverageEntry(
     dependencies: [],
     parallel_safe: true,
   };
+}
+
+function initializeCoveragePhases(
+  plan: Plan,
+  entries: Array<PlanIssueMetadata & { originalIndex: number }>,
+): Plan {
+  const knownPhaseNames = new Set(plan.phases.map((phase) => phase.name));
+  const phases = plan.phases.slice();
+
+  for (const entry of entries) {
+    if (knownPhaseNames.has(entry.phase)) continue;
+    knownPhaseNames.add(entry.phase);
+    phases.push({
+      name: entry.phase,
+      goal: "",
+      dependsOn: [],
+      scoutGate: null,
+      issues: [],
+    });
+  }
+
+  return { ...plan, phases };
 }
 
 function appendFeatureIntoPhase(plan: Plan, entry: PlanIssueMetadata): Plan {
@@ -190,6 +221,45 @@ function insertScoutIntoPhase(plan: Plan, entry: PlanIssueMetadata): Plan {
       candidate.name === entry.phase ? nextPhase : candidate,
     ),
   };
+}
+
+function orderEntries(
+  plan: Plan,
+  entries: Array<PlanIssueMetadata & { originalIndex: number }>,
+): PlanIssueMetadata[] {
+  if (entries.length === 0) return [];
+
+  const phaseIndex = new Map(
+    plan.phases.map((phase, index) => [phase.name, index]),
+  );
+  const newPhaseOrder = new Map<string, number>();
+
+  for (const entry of entries) {
+    if (!phaseIndex.has(entry.phase) && !newPhaseOrder.has(entry.phase)) {
+      newPhaseOrder.set(entry.phase, newPhaseOrder.size);
+    }
+  }
+
+  return entries
+    .slice()
+    .sort((left, right) => {
+      const leftPhaseRank =
+        phaseIndex.get(left.phase) ??
+        plan.phases.length + newPhaseOrder.get(left.phase)!;
+      const rightPhaseRank =
+        phaseIndex.get(right.phase) ??
+        plan.phases.length + newPhaseOrder.get(right.phase)!;
+      if (leftPhaseRank !== rightPhaseRank) {
+        return leftPhaseRank - rightPhaseRank;
+      }
+
+      if (left.kind !== right.kind) {
+        return left.kind === "dev-scout" ? -1 : 1;
+      }
+
+      return left.originalIndex - right.originalIndex;
+    })
+    .map(({ originalIndex: _originalIndex, ...entry }) => entry);
 }
 
 function findPhase(plan: Plan, phaseName: string) {
