@@ -29,6 +29,7 @@ export {
   appendToPhase,
   planContainsIssue,
   planIssueOrder,
+  validatePlan,
 } from "./plan.ts";
 export type {
   Plan,

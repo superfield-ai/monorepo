@@ -70,6 +70,7 @@ what was built; future work should reopen specific items.
 - ✅ `PlanProposal` shape: phases, ordered_issues, scout_specs
 - ✅ `patchScoutNumber` — replaces null-numbered scouts with real issue numbers
 - ✅ `validateProposal` — duplicate detection, scout-first per phase, exactly one scout, acyclic phase deps (DFS coloring)
+- ✅ `validatePlan` — structural validation of the rendered Plan body before write-back
 - ✅ `renderIssueBody` — blueprint-aligned IssueBody markdown
 - ✅ CLI wired: `superfield plan [path]`
 

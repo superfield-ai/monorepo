@@ -6,6 +6,7 @@ import {
   appendToPhase,
   planContainsIssue,
   planIssueOrder,
+  validatePlan,
   type Plan,
   type PlanIssueMetadata,
 } from "../../plan.ts";
@@ -246,6 +247,150 @@ describe("planContainsIssue", () => {
   it("returns true for top-of-plan ci-failures", () => {
     const plan: Plan = { ciFailures: [ciFailureEntry], phases: [] };
     expect(planContainsIssue(plan, 999)).toBe(true);
+  });
+});
+
+describe("validatePlan", () => {
+  it("returns empty array for a valid plan", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "g.",
+          dependsOn: [],
+          scoutGate: 196,
+          issues: [scoutEntry, featureEntry],
+        },
+      ],
+    };
+    expect(validatePlan(plan)).toEqual([]);
+  });
+
+  it("detects duplicate issue numbers", () => {
+    const duplicate = { ...featureEntry, phase: "Other phase" };
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "Identity foundation",
+          goal: "",
+          dependsOn: [],
+          scoutGate: 196,
+          issues: [scoutEntry, featureEntry],
+        },
+        {
+          name: "Other phase",
+          goal: "",
+          dependsOn: [],
+          scoutGate: null,
+          issues: [duplicate],
+        },
+      ],
+    };
+    expect(
+      validatePlan(plan).some((error) =>
+        error.message.includes("duplicate issue #201"),
+      ),
+    ).toBe(true);
+  });
+
+  it("detects a forward dependency edge", () => {
+    const lateScout: PlanIssueMetadata = {
+      ...scoutEntry,
+      number: 250,
+      title: "late scout",
+      phase: "Later",
+    };
+    const earlyFeature: PlanIssueMetadata = {
+      ...featureEntry,
+      number: 240,
+      title: "early feature",
+      phase: "Later",
+      dependencies: [250],
+    };
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "Later",
+          goal: "",
+          dependsOn: [],
+          scoutGate: 250,
+          issues: [earlyFeature, lateScout],
+        },
+      ],
+    };
+    expect(
+      validatePlan(plan).some((error) =>
+        error.message.includes("depends on #250"),
+      ),
+    ).toBe(true);
+  });
+
+  it("detects a phase with no dev-scout", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "Identity foundation",
+          goal: "",
+          dependsOn: [],
+          scoutGate: null,
+          issues: [featureEntry],
+        },
+      ],
+    };
+    expect(
+      validatePlan(plan).some((error) =>
+        error.message.includes("has no dev-scout"),
+      ),
+    ).toBe(true);
+  });
+
+  it("detects a phase with scout not in first position", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "Identity foundation",
+          goal: "",
+          dependsOn: [],
+          scoutGate: 196,
+          issues: [featureEntry, scoutEntry],
+        },
+      ],
+    };
+    expect(
+      validatePlan(plan).some((error) =>
+        error.message.includes("scout is not first"),
+      ),
+    ).toBe(true);
+  });
+
+  it("detects a cyclic phase dependency", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "A",
+          goal: "",
+          dependsOn: ["B"],
+          scoutGate: 1,
+          issues: [{ ...scoutEntry, number: 1, phase: "A" }],
+        },
+        {
+          name: "B",
+          goal: "",
+          dependsOn: ["A"],
+          scoutGate: 2,
+          issues: [{ ...scoutEntry, number: 2, phase: "B" }],
+        },
+      ],
+    };
+    expect(
+      validatePlan(plan).some((error) => error.message.includes("has a cycle")),
+    ).toBe(true);
   });
 });
 

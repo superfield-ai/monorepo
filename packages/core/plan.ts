@@ -213,3 +213,109 @@ export function planIssueOrder(plan: Plan): number[] {
   }
   return order;
 }
+
+// ── Plan validation ───────────────────────────────────────────────────────────
+
+/** A structural violation found during plan validation. */
+export interface ValidationError {
+  message: string;
+  issueNumber?: number;
+  phaseName?: string;
+}
+
+/** Validates the Plan's ordering, scout structure, and phase dependency graph. */
+export function validatePlan(plan: Plan): ValidationError[] {
+  const errors: ValidationError[] = [];
+  const flatIssues: Array<{ issue: PlanIssueMetadata; phaseName?: string }> = [
+    ...plan.ciFailures.map((issue) => ({ issue })),
+    ...plan.phases.flatMap((phase) =>
+      phase.issues.map((issue) => ({ issue, phaseName: phase.name })),
+    ),
+  ];
+
+  const firstSeenAt = new Map<number, number>();
+  for (let index = 0; index < flatIssues.length; index++) {
+    const { issue, phaseName } = flatIssues[index]!;
+    if (firstSeenAt.has(issue.number)) {
+      errors.push({
+        message: `duplicate issue #${issue.number} appears multiple times in the Plan`,
+        issueNumber: issue.number,
+        phaseName,
+      });
+      continue;
+    }
+    firstSeenAt.set(issue.number, index);
+  }
+
+  for (let index = 0; index < flatIssues.length; index++) {
+    const { issue, phaseName } = flatIssues[index]!;
+    for (const dependency of issue.dependencies) {
+      const dependencyIndex = firstSeenAt.get(dependency);
+      if (dependencyIndex === undefined || dependencyIndex >= index) {
+        errors.push({
+          message: `issue #${issue.number} depends on #${dependency}, which does not appear earlier in plan order`,
+          issueNumber: issue.number,
+          phaseName,
+        });
+      }
+    }
+  }
+
+  for (const phase of plan.phases) {
+    const scouts = phase.issues.filter((issue) => issue.kind === "dev-scout");
+    if (scouts.length !== 1) {
+      errors.push({
+        message:
+          scouts.length === 0
+            ? `phase "${phase.name}" has no dev-scout`
+            : `phase "${phase.name}" has ${scouts.length} dev-scout issues (must be exactly 1)`,
+        phaseName: phase.name,
+      });
+      continue;
+    }
+    if (phase.issues[0]?.kind !== "dev-scout") {
+      errors.push({
+        message: `phase "${phase.name}" scout is not first`,
+        phaseName: phase.name,
+      });
+    }
+  }
+
+  const phaseNames = new Set(plan.phases.map((phase) => phase.name));
+  const adjacency = new Map<string, string[]>();
+  for (const phase of plan.phases) {
+    adjacency.set(
+      phase.name,
+      phase.dependsOn.filter((dependsOn) => phaseNames.has(dependsOn)),
+    );
+  }
+  if (hasPhaseCycle(adjacency)) {
+    errors.push({ message: "phase dependency graph has a cycle" });
+  }
+
+  return errors;
+}
+
+function hasPhaseCycle(adjacency: Map<string, string[]>): boolean {
+  const WHITE = 0;
+  const GRAY = 1;
+  const BLACK = 2;
+  const colors = new Map<string, number>();
+  for (const node of adjacency.keys()) colors.set(node, WHITE);
+
+  function visit(node: string): boolean {
+    colors.set(node, GRAY);
+    for (const next of adjacency.get(node) ?? []) {
+      const color = colors.get(next) ?? WHITE;
+      if (color === GRAY) return true;
+      if (color === WHITE && visit(next)) return true;
+    }
+    colors.set(node, BLACK);
+    return false;
+  }
+
+  for (const node of adjacency.keys()) {
+    if (colors.get(node) === WHITE && visit(node)) return true;
+  }
+  return false;
+}

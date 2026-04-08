@@ -3,6 +3,7 @@ import { buildReplanEvaluatePrompt } from "../prompts/index.ts";
 import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
 import {
   serializePlan,
+  validatePlan,
   type Plan,
   type PlanIssueMetadata,
   type PlanPhase,
@@ -145,6 +146,15 @@ export async function runPlanCommand(
 
   // 5. Apply: render Plan body and write
   const plan = buildPlanFromProposal(proposal);
+  const planErrors = validatePlan(plan);
+  if (planErrors.length > 0) {
+    return {
+      scoutsCreated,
+      planUpdated: false,
+      planCreated: false,
+      validationErrors: planErrors.map((error) => error.message),
+    };
+  }
   const body = serializePlan(plan);
 
   let planCreated = false;
