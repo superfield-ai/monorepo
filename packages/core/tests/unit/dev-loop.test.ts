@@ -177,7 +177,9 @@ describe("tickDevLoop", () => {
     expect(spawn).toHaveBeenCalledTimes(1);
     const prompt = spawn.mock.calls[0]![0].prompt;
     const firstFeatureIndex = prompt.indexOf("#10: feat: build the thing");
-    const secondFeatureIndex = prompt.indexOf("#11: feat: build the other thing");
+    const secondFeatureIndex = prompt.indexOf(
+      "#11: feat: build the other thing",
+    );
     expect(firstFeatureIndex).toBeGreaterThanOrEqual(0);
     expect(secondFeatureIndex).toBeGreaterThanOrEqual(0);
     expect(firstFeatureIndex).toBeLessThan(secondFeatureIndex);
