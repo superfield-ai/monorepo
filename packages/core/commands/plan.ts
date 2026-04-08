@@ -1,4 +1,7 @@
-import type { GitHubClientPort as GitHubClient } from "@superfield/github";
+import type {
+  GitHubClientPort as GitHubClient,
+  Issue,
+} from "@superfield/github";
 import { buildReplanEvaluatePrompt } from "../prompts/index.ts";
 import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
 import {
@@ -76,10 +79,7 @@ export async function runPlanCommand(
 
   // 1. Collect
   const allIssues = await client.listIssues(owner, repo);
-  const planIssues = allIssues.filter((i) => i.labels.includes(PLAN_LABEL));
-  const candidates = allIssues.filter(
-    (i) => !i.labels.includes(PLAN_LABEL) && !i.labels.includes("ci-failure"),
-  );
+  const { planIssues, candidates } = collectPlanInputs(allIssues);
 
   if (candidates.length === 0) {
     return {
@@ -181,6 +181,19 @@ export async function runPlanCommand(
     planUpdated: !planCreated,
     planCreated,
     validationErrors: [],
+  };
+}
+
+/** Scout seam for #54 issue-audit gating before plan evaluation. */
+export function collectPlanInputs(allIssues: Issue[]): {
+  planIssues: Issue[];
+  candidates: Issue[];
+} {
+  return {
+    planIssues: allIssues.filter((i) => i.labels.includes(PLAN_LABEL)),
+    candidates: allIssues.filter(
+      (i) => !i.labels.includes(PLAN_LABEL) && !i.labels.includes("ci-failure"),
+    ),
   };
 }
 

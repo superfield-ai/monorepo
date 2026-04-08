@@ -47,15 +47,7 @@ export async function runIssueAudit(
   opts: IssueAuditOpts = {},
 ): Promise<IssueAuditResult> {
   const allIssues = await client.listIssues(owner, repo);
-
-  // Skip the Plan issue itself and ci-failure issues (those have a
-  // watchdog-owned body we don't want to audit against the feature schema)
-  const candidates = allIssues.filter(
-    (i) =>
-      !i.labels.includes("plan") &&
-      !i.labels.includes("ci-failure") &&
-      !i.labels.includes(NON_CONFORMANT_LABEL),
-  );
+  const candidates = listAuditableIssues(allIssues);
 
   const concurrency = Math.max(1, opts.concurrency ?? 3);
   const reports: Record<number, IssueAuditReport> = {};
@@ -73,6 +65,18 @@ export async function runIssueAudit(
   }
 
   return { audited: candidates.length, nonConformant, reports };
+}
+
+/** Scout seam for #53 label normalization and relabel flow. */
+export function listAuditableIssues(issues: Issue[]): Issue[] {
+  // Skip the Plan issue itself and ci-failure issues (those have a
+  // watchdog-owned body we don't want to audit against the feature schema)
+  return issues.filter(
+    (i) =>
+      !i.labels.includes("plan") &&
+      !i.labels.includes("ci-failure") &&
+      !i.labels.includes(NON_CONFORMANT_LABEL),
+  );
 }
 
 async function auditOne(

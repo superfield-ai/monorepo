@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { runIssueAudit } from "../../steps/issue-audit.ts";
+import { listAuditableIssues, runIssueAudit } from "../../steps/issue-audit.ts";
 import type { GitHubClient, Issue } from "@superfield/github";
 import type { AgentOpts, AgentResult } from "../../agent.ts";
 
@@ -129,6 +129,17 @@ describe("runIssueAudit", () => {
     expect(result.audited).toBe(1);
   });
 
+  it("listAuditableIssues returns only schema-auditable issues", () => {
+    const auditable = listAuditableIssues([
+      makeIssue({ number: 10 }),
+      makeIssue({ number: 20, labels: ["plan"] }),
+      makeIssue({ number: 21, labels: ["ci-failure"] }),
+      makeIssue({ number: 22, labels: ["non-conformant"] }),
+    ]);
+
+    expect(auditable.map((issue) => issue.number)).toEqual([10]);
+  });
+
   it("throws when LLM response is missing required fields", async () => {
     const client = makeClient({
       listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
@@ -141,4 +152,5 @@ describe("runIssueAudit", () => {
   });
 
   it.todo("applies the non-conformant label when audit finds violations");
+  it.todo("normalizes malformed audit arrays before posting or labelling");
 });
