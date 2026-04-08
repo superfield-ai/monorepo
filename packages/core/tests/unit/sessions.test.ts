@@ -3,6 +3,7 @@ import {
   getSession,
   upsertSession,
   deleteSession,
+  findIssuesWithSessions,
   findStaleSessions,
   type AgentSession,
 } from "../../sessions.ts";
@@ -110,6 +111,46 @@ describe("deleteSession", () => {
     const client = makeClient();
     await deleteSession(client, "o", "r", 10);
     expect(client.deleteIssueComment).not.toHaveBeenCalled();
+  });
+});
+
+describe("findIssuesWithSessions", () => {
+  it("returns open issues that carry session comments", async () => {
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([{ number: 10 }, { number: 20 }]),
+      listIssueComments: vi
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 1, body: sessionCommentBody(sampleSession) },
+        ])
+        .mockResolvedValueOnce([{ id: 2, body: "regular comment" }]),
+    });
+
+    const found = await findIssuesWithSessions(client, "o", "r");
+
+    expect(found).toEqual([
+      { issueNumber: 10, commentId: 1, session: sampleSession },
+    ]);
+  });
+
+  it("skips malformed session comments while continuing the scan", async () => {
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([{ number: 10 }, { number: 20 }]),
+      listIssueComments: vi
+        .fn()
+        .mockResolvedValueOnce([
+          { id: 1, body: "<!-- superfield-session:\nnot json\n-->" },
+        ])
+        .mockResolvedValueOnce([
+          { id: 2, body: sessionCommentBody(sampleSession) },
+        ]),
+    });
+
+    const found = await findIssuesWithSessions(client, "o", "r");
+
+    expect(found).toEqual([
+      { issueNumber: 20, commentId: 2, session: sampleSession },
+    ]);
   });
 });
 

@@ -9,6 +9,12 @@ export interface AgentSession {
   startedAt: string;
 }
 
+export interface IssueSession {
+  issueNumber: number;
+  session: AgentSession;
+  commentId: number;
+}
+
 const MARKER = "<!-- superfield-session:";
 const MARKER_END = "-->";
 
@@ -41,6 +47,28 @@ export async function getSession(
     }
   }
   return null;
+}
+
+/**
+ * Enumerates open issues that currently carry a forge-stored agent session.
+ * This is the discovery seam the dev loop can use on startup before deciding
+ * whether sessions are stale, resumable, or orphaned.
+ */
+export async function findIssuesWithSessions(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+): Promise<IssueSession[]> {
+  const issues = await client.listIssues(owner, repo);
+  const sessions: IssueSession[] = [];
+
+  for (const issue of issues) {
+    const found = await getSession(client, owner, repo, issue.number);
+    if (!found) continue;
+    sessions.push({ issueNumber: issue.number, ...found });
+  }
+
+  return sessions;
 }
 
 /**
@@ -89,23 +117,14 @@ export async function findStaleSessions(
   owner: string,
   repo: string,
   timeoutMs: number,
-): Promise<
-  Array<{ issueNumber: number; session: AgentSession; commentId: number }>
-> {
-  const issues = await client.listIssues(owner, repo);
-  const stale: Array<{
-    issueNumber: number;
-    session: AgentSession;
-    commentId: number;
-  }> = [];
+): Promise<IssueSession[]> {
+  const stale: IssueSession[] = [];
   const now = Date.now();
 
-  for (const issue of issues) {
-    const found = await getSession(client, owner, repo, issue.number);
-    if (!found) continue;
+  for (const found of await findIssuesWithSessions(client, owner, repo)) {
     const age = now - new Date(found.session.startedAt).getTime();
     if (age > timeoutMs) {
-      stale.push({ issueNumber: issue.number, ...found });
+      stale.push(found);
     }
   }
 

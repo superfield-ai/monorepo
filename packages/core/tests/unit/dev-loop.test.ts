@@ -94,6 +94,7 @@ describe("tickDevLoop", () => {
     expect(result.idle).toBe(true);
     expect(result.primaryIssue).toBeNull();
     expect(result.mergeGateBlocked).toEqual([]);
+    expect(result.reapedSessions).toEqual([]);
   });
 
   it("selects the top of plan and spawns the agent", async () => {
@@ -129,6 +130,7 @@ describe("tickDevLoop", () => {
     expect(result.primaryIssue).toBe(10);
     expect(result.idle).toBe(false);
     expect(result.mergeGateBlocked).toEqual([]);
+    expect(result.reapedSessions).toEqual([]);
     expect(spawn).toHaveBeenCalledTimes(1);
   });
 

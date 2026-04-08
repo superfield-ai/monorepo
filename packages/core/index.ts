@@ -105,9 +105,10 @@ export {
   getSession,
   upsertSession,
   deleteSession,
+  findIssuesWithSessions,
   findStaleSessions,
 } from "./sessions.ts";
-export type { AgentRole, AgentSession } from "./sessions.ts";
+export type { AgentRole, AgentSession, IssueSession } from "./sessions.ts";
 
 export {
   buildDevelopIssuePrompt,

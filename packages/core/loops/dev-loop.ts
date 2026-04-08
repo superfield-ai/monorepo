@@ -60,6 +60,8 @@ export interface DevLoopTickResult {
   speculativeIssues: number[];
   /** Issues blocked by an earlier plan predecessor. */
   mergeGateBlocked: number[];
+  /** Startup/session scan seam for future session recovery work. */
+  reapedSessions: number[];
   /** True if the issue closed during this tick (success). */
   closed: boolean;
   /** True if no primary candidate exists (all done or all blocked). */
@@ -114,6 +116,7 @@ export async function tickDevLoop(
       primaryIssue: null,
       speculativeIssues: [],
       mergeGateBlocked: [],
+      reapedSessions: [],
       closed: false,
       idle: true,
       reason: "no Plan issue exists",
@@ -133,6 +136,7 @@ export async function tickDevLoop(
       primaryIssue: null,
       speculativeIssues: [],
       mergeGateBlocked: blocked,
+      reapedSessions: [],
       closed: false,
       idle: true,
       reason: blocked.length > 0 ? "merge gate blocked" : "no eligible primary",
@@ -165,6 +169,7 @@ export async function tickDevLoop(
     primaryIssue: primaryEntry.number,
     speculativeIssues: speculative.map((e) => e.number),
     mergeGateBlocked: blocked,
+    reapedSessions: [],
     closed: primaryResult.closed,
     idle: false,
   };
