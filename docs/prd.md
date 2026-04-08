@@ -355,6 +355,72 @@ Rendered issue body:
 
 ---
 
+## Prompt Templates
+
+Every LLM interaction in Superfield runs through a typed prompt builder, never a free-form string assembled at the call site. Prompts live in source code at `packages/core/prompts/`, are unit-tested like any other module, and ship inside the `superfield` executable. There are no external markdown skill files at runtime — the calypso-agents `SKILL.md` files are reference material, not loaded artifacts.
+
+### Why prompts as code
+
+- **Type safety.** Each prompt builder takes a typed context object. The compiler catches missing fields, wrong types, and dead code paths before they reach the LLM.
+- **Composability.** Shared fragments (project context, commit standards, role behavior, stop conditions) are reused across tasks instead of copy-pasted into separate skill files.
+- **Testability.** Prompt builders are pure functions and can be snapshot-tested. Drift between prompt versions shows up in PR review as a diff, not as a behavior change in production.
+- **Evolution.** Adding a new role, a new workflow stage, or a new constraint means editing one fragment, not 14 skill files.
+
+### Structure
+
+```
+packages/core/prompts/
+  fragments/                   # shared reusable text blocks
+    project-context.ts         # what Superfield is, where the PRD lives
+    commit-standards.ts        # conventional commits, no `git add .`, no --no-verify
+    worktree-isolation.ts      # work only inside your assigned worktree
+    role.ts                    # primary vs speculative behavior
+    stop-conditions.ts         # when each role exits
+    tdd-outside-in.ts          # TDD workflow rules
+    blueprint-reference.ts     # how to consult the bundled blueprint
+  develop-issue.ts             # primary/speculative dev agent prompt
+  dev-scout.ts                 # scout agent prompt (stubs only, it.todo)
+  ci-failure.ts                # CI remediation agent prompt
+  feature-evaluate.ts          # `feature` command LLM call (emits IssueBody JSON)
+  replan-evaluate.ts           # `plan` command LLM call (emits Plan JSON)
+  issue-audit.ts               # planning loop step 2 (schema conformance)
+  blueprint-conformance.ts     # planning loop step 4 (advisory rule check)
+  doc-coverage.ts              # doc loop step 1 (coverage scan)
+  doc-canonical-sync.ts        # doc loop step 2 (canonical doc update)
+  doc-consistency.ts           # doc loop step 3 (cross-level consistency)
+  index.ts                     # public exports
+```
+
+### Prompt builder contract
+
+Every prompt builder is a function with this shape:
+
+```typescript
+export interface XxxContext { /* typed inputs */ }
+export function buildXxxPrompt(ctx: XxxContext): string;
+```
+
+The returned string is the complete prompt passed to `claude` via `spawnAgent`. Builders combine fragments using a small set of helpers (`joinSections`, `bullet`, etc.) — there is no template engine, no string interpolation library, just typed functions returning strings.
+
+### Mapping to workflow
+
+| Trigger | Prompt builder | Loop |
+|---|---|---|
+| Issue audit (schema check) | `buildIssueAuditPrompt` | Planning |
+| Blueprint conformance check | `buildBlueprintConformancePrompt` | Planning |
+| Dev-scout claimed | `buildDevScoutPrompt` | Dev |
+| Feature issue claimed | `buildDevelopIssuePrompt` (role: primary or speculative) | Dev |
+| `ci-failure` issue claimed | `buildCIFailurePrompt` | Dev |
+| Doc coverage scan | `buildDocCoveragePrompt` | Doc |
+| Canonical doc sync | `buildDocCanonicalSyncPrompt` | Doc |
+| Doc consistency check | `buildDocConsistencyPrompt` | Doc |
+| `feature` command | `buildFeatureEvaluatePrompt` | (one-shot) |
+| `plan` command | `buildReplanEvaluatePrompt` | (one-shot) |
+
+The orchestrator never assembles prompt strings inline — it always calls a typed builder.
+
+---
+
 ## Plan Issue
 
 One open issue per repository titled `Plan`. Written and owned by Superfield; humans read and comment but do not edit the body.

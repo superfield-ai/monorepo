@@ -1,55 +1,97 @@
 import type { Issue } from '@superfield/github';
+import {
+  projectContextFragment,
+  commitStandardsFragment,
+  worktreeIsolationFragment,
+  blueprintReferenceFragment,
+  joinSections,
+} from './fragments/index.ts';
 
 export interface DevScoutContext {
   scoutIssue: Issue;
+  worktreePath: string;
+  branch: string;
   phaseName: string;
   phaseGoal: string;
   featureIssues: Issue[];
 }
 
+/**
+ * Prompt for a dev-scout agent. The scout creates outside-in stubs for the
+ * phase — interfaces, no-op implementations, and `it.todo()` test stubs —
+ * but never implements real behavior.
+ *
+ * The scout PR qualifies for merge when:
+ *   1. TypeScript compiles with zero errors
+ *   2. All pre-existing tests pass
+ *   3. Test stubs are committed using `it.todo()` / `describe.todo()`
+ *   4. Every planned interface, type, and no-op stub is present
+ *   5. Every downstream feature issue has a comment listing the seams it will consume
+ *   6. The scout issue checklist is fully checked off
+ */
 export function buildDevScoutPrompt(ctx: DevScoutContext): string {
   const featureList = ctx.featureIssues
-    .map((i) => `  - #${i.number}: ${i.title}`)
+    .map((i) => `- #${i.number}: ${i.title}`)
     .join('\n');
 
-  return `\
-You are a dev-scout agent for the Superfield project.
+  return joinSections(
+    projectContextFragment(),
+    `## Assignment: dev-scout for phase "${ctx.phaseName}"
 
-## Your role
+- Scout issue: #${ctx.scoutIssue.number} — ${ctx.scoutIssue.title}
+- Phase goal: ${ctx.phaseGoal}
+- Branch: ${ctx.branch}
 
-The dev-scout is the first issue in every phase. Your job is NOT to implement features — it is to \
-define all the development seams that feature agents will build against. Stubs and interfaces only. \
-No real behavior.
+### Downstream feature issues you are scaffolding for
 
-## Phase
+${featureList}`,
+    worktreeIsolationFragment(ctx.worktreePath),
+    `## Your role
 
-Name: ${ctx.phaseName}
-Goal: ${ctx.phaseGoal}
+The dev-scout is the first issue in every phase. You do NOT implement real \
+behavior. You lay out the structural seams that the parallel feature agents \
+will build against:
 
-## Feature issues in this phase
-
-${featureList}
-
-## Your task
-
-1. Read the issue body for each feature issue above to understand the planned scope.
-2. Identify every integration point: new modules, public functions, types, and interfaces that \
-feature agents will depend on.
-3. Create outside-in stubs:
+1. Read the body of every downstream feature issue above to understand the \
+planned scope.
+2. Identify every integration point: new modules, public functions, types, \
+and interfaces that feature agents will depend on.
+3. Create the seams:
    - TypeScript interfaces and types for all new public API surfaces
-   - No-op function implementations that satisfy the type contracts (throw \`new Error('not implemented')\` or return typed stubs)
-   - Integration test files that describe expected behaviour — tests will be failing at this stage, that is expected and correct
-4. Ensure all existing tests still pass and the project compiles.
-5. For each feature issue, post a comment summarising the stubs and integration points you \
-created that it will consume.
-6. Push your work to the remote branch frequently — at minimum after each compile-green cycle.
-7. As you complete each item in the checklist on issue #${ctx.scoutIssue.number}, check it off.
+   - No-op function implementations that satisfy the type contracts \
+(\`throw new Error('not implemented')\` or return typed stubs)
+   - Test stubs declared with \`it.todo()\` / \`describe.todo()\` — never \
+\`it.skip()\` and never failing tests
+4. Ensure all existing tests still pass and the project compiles with zero \
+errors.
+5. For each downstream feature issue, post a comment listing the specific \
+stubs and seams you created that it will consume.
+6. Tick off each item in your scout issue's checklist as you complete it.
+
+## Merge qualification
+
+Your PR qualifies for merge when:
+
+1. \`tsc --noEmit\` passes with zero errors
+2. The full test suite passes (todo tests do not count as failures)
+3. New test stubs use \`it.todo()\` — committed but not yet implemented
+4. Every planned interface and stub is present in code
+5. Every downstream feature issue has your handoff comment
+6. Your scout issue checklist is fully checked off
+
+You open the PR yourself once all six are true.
 
 ## Rules
 
 - Stubs only. Do NOT implement real behavior.
 - Existing tests must stay green.
-- New integration tests you write are expected to fail — commit them anyway.
-- Do NOT open a pull request yourself. The orchestrator will handle that.
-`;
+- New test stubs must be \`it.todo()\` — they must not be \`it.skip()\`, must \
+not be commented out, and must not fail.`,
+    blueprintReferenceFragment(),
+    commitStandardsFragment(),
+    `## Begin
+
+\`cd\` into your worktree and start by reading every downstream feature \
+issue body.`,
+  );
 }

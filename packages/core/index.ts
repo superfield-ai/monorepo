@@ -7,11 +7,27 @@ export type { AgentOpts, AgentResult } from './agent.ts';
 export { getSession, upsertSession, deleteSession, findStaleSessions } from './sessions.ts';
 export type { AgentRole, AgentSession } from './sessions.ts';
 
-export { buildDevScoutPrompt } from './prompts/dev-scout.ts';
-export type { DevScoutContext } from './prompts/dev-scout.ts';
-
-export { buildFeaturePrompt } from './prompts/feature.ts';
-export type { FeatureContext } from './prompts/feature.ts';
-
-export { buildCIFailurePrompt } from './prompts/ci-failure.ts';
-export type { CIFailureContext } from './prompts/ci-failure.ts';
+export {
+  buildDevelopIssuePrompt,
+  buildDevScoutPrompt,
+  buildCIFailurePrompt,
+  buildFeatureEvaluatePrompt,
+  buildReplanEvaluatePrompt,
+  buildIssueAuditPrompt,
+  buildBlueprintConformancePrompt,
+  buildDocCoveragePrompt,
+  buildDocCanonicalSyncPrompt,
+  buildDocConsistencyPrompt,
+} from './prompts/index.ts';
+export type {
+  DevelopIssueContext,
+  DevScoutContext,
+  CIFailureContext,
+  FeatureEvaluateContext,
+  ReplanEvaluateContext,
+  IssueAuditContext,
+  BlueprintConformanceContext,
+  DocCoverageContext,
+  DocCanonicalSyncContext,
+  DocConsistencyContext,
+} from './prompts/index.ts';
