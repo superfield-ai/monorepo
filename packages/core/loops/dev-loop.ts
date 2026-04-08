@@ -26,11 +26,15 @@ export interface DevLoopOpts {
   spawn?: (opts: AgentOpts) => Promise<AgentResult>;
   /** How often to poll the Plan when no work is available. Default 30s. */
   idlePollMs?: number;
+  /** Total slot count (1 primary + N-1 speculative). Default 3. */
+  slotCount?: number;
 }
 
 export interface DevLoopTickResult {
   /** Issue number worked, or null if no work was available. */
   primaryIssue: number | null;
+  /** Speculative issue numbers worked in this tick. */
+  speculativeIssues: number[];
   /** True if the issue closed during this tick (success). */
   closed: boolean;
   /** True if no primary candidate exists (all done or all blocked). */
@@ -62,53 +66,86 @@ export async function tickDevLoop(opts: DevLoopOpts): Promise<DevLoopTickResult>
   // 1. Read the Plan
   const planIssues = await client.listIssues(owner, repo, ['plan']);
   if (planIssues.length === 0) {
-    return { primaryIssue: null, closed: false, idle: true, reason: 'no Plan issue exists' };
+    return { primaryIssue: null, speculativeIssues: [], closed: false, idle: true, reason: 'no Plan issue exists' };
   }
   const plan = parsePlan(planIssues[0]!.body ?? '');
 
   // 2. Select primary
   const primaryEntry = await selectPrimary(client, owner, repo, plan);
   if (!primaryEntry) {
-    return { primaryIssue: null, closed: false, idle: true, reason: 'no eligible primary' };
+    return { primaryIssue: null, speculativeIssues: [], closed: false, idle: true, reason: 'no eligible primary' };
   }
 
-  // 3. Fetch the full issue body
-  const issue = await client.getIssue(owner, repo, primaryEntry.number);
+  // 3. Select speculative candidates (only if scout is merged for the primary's phase)
+  const slotCount = Math.max(1, opts.slotCount ?? 3);
+  const speculative = await selectSpeculative(
+    client,
+    owner,
+    repo,
+    plan,
+    primaryEntry,
+    slotCount - 1,
+  );
+
+  // 4. Run primary slot to completion + speculative slots in parallel
+  const primaryPromise = runSlot(opts, plan, primaryEntry, 'primary', 1);
+  const speculativePromises = speculative.map((entry, idx) =>
+    runSlot(opts, plan, entry, 'speculative', idx + 2),
+  );
+
+  const [primaryResult] = await Promise.all([primaryPromise, ...speculativePromises]);
+
+  return {
+    primaryIssue: primaryEntry.number,
+    speculativeIssues: speculative.map((e) => e.number),
+    closed: primaryResult.closed,
+    idle: false,
+  };
+}
+
+/**
+ * Runs one slot end-to-end: prep worktree, claim session, spawn agent,
+ * update session, detect close.
+ */
+async function runSlot(
+  opts: DevLoopOpts,
+  plan: Plan,
+  entry: PlanIssueMetadata,
+  role: 'primary' | 'speculative',
+  slot: number,
+): Promise<{ closed: boolean }> {
+  const { client, owner, repo } = opts;
+
+  const issue = await client.getIssue(owner, repo, entry.number);
   if (issue.state === 'closed') {
-    // Issue was closed externally — clean up the session and try the next tick
     await deleteSession(client, owner, repo, issue.number);
-    return { primaryIssue: issue.number, closed: true, idle: false };
+    return { closed: true };
   }
 
-  // 4. Prep worktree
   const worktrees = opts.worktrees ?? new WorktreeManager();
-  const branch = branchForIssue(primaryEntry);
-  const slug = slugFromTitle(primaryEntry.title);
+  const branch = branchForIssue(entry);
+  const slug = slugFromTitle(entry.title);
   const wt = await worktrees.create({
     owner,
     repo,
-    issueNumber: primaryEntry.number,
+    issueNumber: entry.number,
     slug,
     branch,
     token: opts.token,
   });
 
-  // 5. Resume or start fresh
-  const existing = await getSession(client, owner, repo, primaryEntry.number);
+  const existing = await getSession(client, owner, repo, entry.number);
   const sessionId = existing?.session.sessionId;
 
-  // 6. Build prompt for the right kind
-  const prompt = buildPromptForKind(primaryEntry, issue, branch, wt, plan);
+  const prompt = buildPromptForKind(entry, issue, branch, wt, plan, role);
 
-  // 7. Claim the slot (write deadman switch BEFORE spawning)
-  await upsertSession(client, owner, repo, primaryEntry.number, {
+  await upsertSession(client, owner, repo, entry.number, {
     sessionId: sessionId ?? 'pending',
-    role: 'primary',
-    slot: 1,
+    role,
+    slot,
     startedAt: new Date().toISOString(),
   });
 
-  // 8. Spawn the agent
   const spawn = opts.spawn ?? spawnAgent;
   const agentResult = await spawn({
     prompt,
@@ -116,23 +153,60 @@ export async function tickDevLoop(opts: DevLoopOpts): Promise<DevLoopTickResult>
     sessionId,
   });
 
-  // 9. Update session with the real session ID (in case this was a fresh spawn)
-  await upsertSession(client, owner, repo, primaryEntry.number, {
+  await upsertSession(client, owner, repo, entry.number, {
     sessionId: agentResult.sessionId,
-    role: 'primary',
-    slot: 1,
+    role,
+    slot,
     startedAt: existing?.session.startedAt ?? new Date().toISOString(),
   });
 
-  // 10. Check if the issue closed
-  const updatedIssue = await client.getIssue(owner, repo, primaryEntry.number);
-  if (updatedIssue.state === 'closed') {
-    await deleteSession(client, owner, repo, primaryEntry.number);
-    return { primaryIssue: primaryEntry.number, closed: true, idle: false };
+  // Speculative agents exit when their checklist is complete; the issue
+  // does NOT close until the primary later opens and merges the PR. So we
+  // only check close on the primary slot.
+  if (role === 'primary') {
+    const updatedIssue = await client.getIssue(owner, repo, entry.number);
+    if (updatedIssue.state === 'closed') {
+      await deleteSession(client, owner, repo, entry.number);
+      return { closed: true };
+    }
   }
 
-  // Agent exited but issue is still open — do not clear session, will retry
-  return { primaryIssue: primaryEntry.number, closed: false, idle: false };
+  return { closed: false };
+}
+
+/**
+ * Selects up to `count` speculative candidates from the same phase as the
+ * primary. Speculative slots only open if the phase scout is CLOSED on `main`.
+ */
+async function selectSpeculative(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  plan: Plan,
+  primary: PlanIssueMetadata,
+  count: number,
+): Promise<PlanIssueMetadata[]> {
+  if (count <= 0) return [];
+  if (primary.kind === 'ci-failure') return []; // CI failures are never paired
+
+  const phase = plan.phases.find((p) => p.name === primary.phase);
+  if (!phase) return [];
+  if (phase.scoutGate === null) return [];
+
+  // Scout gate: scout must be CLOSED
+  const scoutIssue = await client.getIssue(owner, repo, phase.scoutGate);
+  if (scoutIssue.state !== 'closed') return [];
+
+  const candidates: PlanIssueMetadata[] = [];
+  for (const entry of phase.issues) {
+    if (candidates.length >= count) break;
+    if (entry.number === primary.number) continue;
+    if (entry.kind === 'dev-scout') continue;
+    if (await isEligible(client, owner, repo, entry)) {
+      candidates.push(entry);
+    }
+  }
+  return candidates;
 }
 
 /**
@@ -210,10 +284,9 @@ function buildPromptForKind(
   branch: string,
   wt: IssueWorktree,
   plan: Plan,
+  role: 'primary' | 'speculative',
 ): string {
   if (entry.kind === 'ci-failure') {
-    // Pull check info from issue body if present (canonical_docs section
-    // contains the check run URL by convention)
     return buildCIFailurePrompt({
       issue,
       checkName: extractCheckName(entry.title),
@@ -225,7 +298,6 @@ function buildPromptForKind(
   }
 
   if (entry.kind === 'dev-scout') {
-    // Find downstream features in the same phase
     const phase = plan.phases.find((p) => p.name === entry.phase);
     return buildDevScoutPrompt({
       scoutIssue: issue,
@@ -233,13 +305,13 @@ function buildPromptForKind(
       branch,
       phaseName: entry.phase,
       phaseGoal: phase?.goal ?? '',
-      featureIssues: [],  // Phase 7 doesn't fetch sibling bodies; Phase 8 will
+      featureIssues: [],
     });
   }
 
   return buildDevelopIssuePrompt({
     issue,
-    role: 'primary',
+    role,
     worktreePath: wt.path,
     branch,
     phaseName: entry.phase,

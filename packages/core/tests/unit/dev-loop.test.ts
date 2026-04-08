@@ -204,6 +204,128 @@ describe('tickDevLoop', () => {
     expect(body).toContain('"role": "primary"');
   });
 
+  it('runs speculative slot when scout is closed', async () => {
+    // Two features in the phase: #10 (primary) and #11 (speculative)
+    const planBody = `## Phase: Identity
+
+Goal: Build the auth seams.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+- #11 — feat: build the other thing [risk: 4]
+  <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+`;
+    await preCreateWorktree(10, 'build-the-thing');
+    await preCreateWorktree(11, 'build-the-other-thing');
+    const client = makeClient({
+      listIssues: vi
+        .fn()
+        .mockResolvedValueOnce([{ number: 99, body: planBody, labels: ['plan'], state: 'open' }]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: 'closed' }); // scout closed
+        return makeIssue({ number: n, state: 'open' });
+      }),
+    });
+    const spawn = fakeSpawn();
+    const result = await tickDevLoop({
+      client,
+      owner: 'o',
+      repo: 'r',
+      token: 't',
+      worktrees,
+      spawn,
+      slotCount: 3,
+    });
+
+    expect(result.primaryIssue).toBe(10);
+    expect(result.speculativeIssues).toEqual([11]);
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('does not open speculative slots when scout is still open', async () => {
+    const planBody = `## Phase: Identity
+
+Goal: Build the auth seams.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[],"parallel_safe":true} -->
+- #11 — feat: build the other thing [risk: 4]
+  <!-- superfield: {"number":11,"title":"feat: build the other thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[],"parallel_safe":true} -->
+`;
+    await preCreateWorktree(5, 'scout-identity');
+    const client = makeClient({
+      listIssues: vi
+        .fn()
+        .mockResolvedValueOnce([{ number: 99, body: planBody, labels: ['plan'], state: 'open' }]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        return makeIssue({ number: n, state: 'open' }); // scout still open
+      }),
+    });
+    const spawn = fakeSpawn();
+    const result = await tickDevLoop({
+      client,
+      owner: 'o',
+      repo: 'r',
+      token: 't',
+      worktrees,
+      spawn,
+      slotCount: 3,
+    });
+
+    // Primary should be the scout itself
+    expect(result.primaryIssue).toBe(5);
+    expect(result.speculativeIssues).toEqual([]);
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it('does not pair speculative work with a ci-failure primary', async () => {
+    const planBody = `- #999 — fix(repo): test:unit failed on main @ abc1234 [risk: 6]
+  <!-- superfield: {"number":999,"title":"fix(repo): test:unit failed on main @ abc1234","phase":"watchdog","kind":"ci-failure","risk":6,"dependencies":[],"parallel_safe":true} -->
+
+## Phase: Identity
+
+Goal: g.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[5],"parallel_safe":false} -->
+`;
+    await preCreateWorktree(999, 'fix-repo-test-unit-failed-on-main-abc1234');
+    const client = makeClient({
+      listIssues: vi
+        .fn()
+        .mockResolvedValueOnce([{ number: 99, body: planBody, labels: ['plan'], state: 'open' }]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        return makeIssue({ number: n, state: 'open' });
+      }),
+    });
+    const spawn = fakeSpawn();
+    const result = await tickDevLoop({
+      client,
+      owner: 'o',
+      repo: 'r',
+      token: 't',
+      worktrees,
+      spawn,
+      slotCount: 3,
+    });
+
+    expect(result.primaryIssue).toBe(999);
+    expect(result.speculativeIssues).toEqual([]);
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
   it('resumes existing session when session comment exists', async () => {
     await preCreateWorktree(10, 'build-the-thing');
     const existingSession = {
