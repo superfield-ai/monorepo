@@ -263,7 +263,7 @@ Pass `slotCount` when calling `runDevLoop` or `tickDevLoop`:
 runDevLoop({ client, owner, repo, token, slotCount: 1 });
 ```
 
-There is no CLI flag yet — it is code-configured. A `SUPERFIELD_SLOT_COUNT` environment variable will be added in a future phase when the configuration surface stabilises.
+There is no CLI flag yet. `slotCount` can be set directly when calling `runDevLoop` or `tickDevLoop`, and the CLI `superfield start` command also reads `SUPERFIELD_SLOT_COUNT` from the environment. Invalid values are ignored with a warning and the default slot count is used instead.
 
 #### Loop steps
 
