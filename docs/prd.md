@@ -150,15 +150,17 @@ Validation rules (enforced at plan-write time, not runtime):
 
 ### Parallelization and merging
 
-Development runs in parallel; merging is strictly sequential.
+Development runs in parallel within a phase; merging is strictly sequential.
 
 **Slots:**
 - **Slot 1 — primary**: always the highest-priority unmerged Plan issue. The primary agent drives implementation → CI → checklist → merge without stopping. It does not exit until the PR is merged and the issue is CLOSED.
-- **Slots 2..N — speculative**: issues whose dependencies are all CLOSED (eligible for early work). Speculative agents drive implementation and checklist to completion, mark the PR ready, then exit immediately to free the slot. They do not wait for CI and do not merge.
+- **Slots 2..N — speculative**: feature issues within the current phase whose phase scout is already CLOSED on `main`. Speculative agents drive implementation and checklist to completion then exit without opening a PR. They do not run CI and do not merge.
 
-**Sequential merge invariant**: a PR may only merge when all preceding Plan issues are CLOSED. After each merge the queue advances and any newly unblocked speculative PRs become eligible to merge.
+**Scout gate**: speculative slots remain empty until the phase's dev-scout issue is merged. The scout defines all development seams (outside-in stubs and interfaces) that the parallel feature agents build against. No speculative work begins before those seams exist on `main`.
 
-Default: 1 primary + 2 speculative (3 total slots).
+**Sequential merge invariant**: a PR may only merge when all preceding Plan issues are CLOSED. After each merge the queue advances and any newly unblocked work becomes eligible.
+
+Default: 1 primary + N-1 speculative. N defaults to 3.
 
 ---
 
@@ -193,13 +195,15 @@ Each Plan issue moves through these stages in order:
 #### Primary vs speculative agents
 
 - **Primary (slot 1)** — drives the highest-priority issue through all seven stages. Does not exit until the issue is CLOSED.
-- **Speculative (slots 2–3)** — drives eligible issues through stages 1–3 only. Pushes frequently; does not open a PR. Exits once the checklist is complete.
+- **Speculative (slots 2 to N)** — drives feature issues through stages 1–3 only, but only if the phase's dev-scout is already merged on `main`. Pushes frequently; does not open a PR. Exits once the checklist is complete.
 
 When an issue that was completed speculatively later becomes the primary, the primary agent picks up at stage 4 (PR open) rather than re-doing the development work.
 
 #### Loop steps
 
-1. **Select** — identify the primary issue and up to 2 speculative issues. The primary is always the top of the Plan: `ci-failure` issues inserted by the CI watchdog sit above all feature work, so a broken `main` is remediated before any new feature is advanced. If no primary: all work is done — stop.
+1. **Select** — identify the primary issue and up to N-1 speculative issues.
+   - Primary is always the top of the Plan. `ci-failure` issues sit above all feature work so a broken `main` is remediated first. If no primary: all work is done — stop.
+   - Speculative candidates are feature issues in the current phase whose phase scout is CLOSED on `main`. If the scout is not yet merged, speculative slots stay empty — the primary works alone until the scout is through.
 2. **Prep** — for each selected issue without an existing worktree, create one via `isomorphic-git` (no `git` binary).
 3. **Launch** — dispatch agents in parallel. Primary drives through merge and then exits; speculative agents drive through checklist completion then exit.
 4. Loop back to step 1 after the primary exits.
