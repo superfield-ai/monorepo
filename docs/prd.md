@@ -178,11 +178,31 @@ The outer loop feeds the Plan. It does not perform development work.
 
 ### Inner loop — development (Plan-driven)
 
-1. **Merge phase** — iterate open PRs in Plan order. For each: check merge readiness (CI green, checklist complete, all predecessors CLOSED). Merge when ready. After each merge, restart from the top. Stop when no PR is mergeable.
-2. **Select phase** — run `parallel-eligible` logic against the Plan. Identify the primary issue (slot 1) and up to 2 speculative issues (slots 2–3). If no primary: all Plan issues are CLOSED — stop.
-3. **Prep phase** — for each selected issue, prepare a dedicated worktree via `isomorphic-git` API calls (no `git` binary).
-4. **Launch phase** — dispatch one LLM agent per slot in parallel. Primary agent owns the issue through merge. Speculative agents exit after marking their PR ready.
-5. After the primary agent completes, loop back to step 1.
+#### Issue lifecycle
+
+Each Plan issue moves through these stages in order:
+
+1. **Branch** — dedicated worktree checked out from `main`
+2. **Develop** — agent works TDD outside-in; commits and pushes to the remote branch frequently for durability (no PR opened — no CI minutes consumed)
+3. **Checklist complete** — all feature deliverables and test plan items on the issue are checked off; because agents work TDD throughout, tests pass locally before this point
+4. **PR open** — PR opened immediately as ready for review (never draft); CI runs
+5. **CI pass** — all check runs succeed
+6. **Merge gate** — all preceding Plan issues are CLOSED
+7. **Merge** — merged to `main`; issue closed
+
+#### Primary vs speculative agents
+
+- **Primary (slot 1)** — drives the highest-priority issue through all seven stages. Does not exit until the issue is CLOSED.
+- **Speculative (slots 2–3)** — drives eligible issues through stages 1–3 only. Pushes frequently; does not open a PR. Exits once the checklist is complete.
+
+When an issue that was completed speculatively later becomes the primary, the primary agent picks up at stage 4 (PR open) rather than re-doing the development work.
+
+#### Loop steps
+
+1. **Select** — identify the primary issue (highest-priority unclosed issue whose predecessors are all CLOSED) and up to 2 speculative issues (any eligible issue with all dependencies CLOSED). If no primary: all work is done — stop.
+2. **Prep** — for each selected issue without an existing worktree, create one via `isomorphic-git` (no `git` binary).
+3. **Launch** — dispatch agents in parallel. Primary drives through merge and then exits; speculative agents drive through checklist completion then exit.
+4. Loop back to step 1 after the primary exits.
 
 The outer loop and inner loop run concurrently within the same process. The outer loop feeds the Plan; the inner loop drains it.
 
