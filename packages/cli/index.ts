@@ -2,7 +2,9 @@ import { githubCommand } from './commands/github.ts';
 import { startCommand } from './commands/start.ts';
 import { planCommand } from './commands/plan.ts';
 import { featureCommand } from './commands/feature.ts';
-import { BUILD_COMMIT, BUILD_DATE, BUILD_VERSION } from './build-info.ts';
+const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? 'dev';
+const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? 'unknown';
+const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? 'unknown';
 
 function usage(): string {
   return `
