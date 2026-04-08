@@ -70,12 +70,9 @@ export async function runIssueAudit(
 /** Scout seam for #53 label normalization and relabel flow. */
 export function listAuditableIssues(issues: Issue[]): Issue[] {
   // Skip the Plan issue itself and ci-failure issues (those have a
-  // watchdog-owned body we don't want to audit against the feature schema)
+  // watchdog-owned body we don't want to audit against the feature schema.
   return issues.filter(
-    (i) =>
-      !i.labels.includes("plan") &&
-      !i.labels.includes("ci-failure") &&
-      !i.labels.includes(NON_CONFORMANT_LABEL),
+    (i) => !i.labels.includes("plan") && !i.labels.includes("ci-failure"),
   );
 }
 
@@ -101,19 +98,42 @@ async function auditOne(
       return {
         issue_number: parsed.issue_number,
         conformant: parsed.conformant,
-        missing_sections: parsed.missing_sections ?? [],
-        forbidden_sections: parsed.forbidden_sections ?? [],
-        empty_sections: parsed.empty_sections ?? [],
-        fix_suggestions: parsed.fix_suggestions ?? [],
+        missing_sections: normalizeAuditStrings(parsed.missing_sections),
+        forbidden_sections: normalizeAuditStrings(parsed.forbidden_sections),
+        empty_sections: normalizeAuditStrings(parsed.empty_sections),
+        fix_suggestions: normalizeAuditStrings(parsed.fix_suggestions),
       };
     },
   );
 
   if (!result.conformant) {
     await postAuditFindings(client, owner, repo, issue.number, result);
+    if (!issue.labels.includes(NON_CONFORMANT_LABEL)) {
+      await client.addIssueLabel({
+        owner,
+        repo,
+        issue_number: issue.number,
+        label: NON_CONFORMANT_LABEL,
+      });
+    }
+  } else {
+    await clearAuditFindings(client, owner, repo, issue.number);
+    if (issue.labels.includes(NON_CONFORMANT_LABEL)) {
+      await client.removeIssueLabel({
+        owner,
+        repo,
+        issue_number: issue.number,
+        label: NON_CONFORMANT_LABEL,
+      });
+    }
   }
 
   return result;
+}
+
+function normalizeAuditStrings(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.filter((entry): entry is string => typeof entry === "string");
 }
 
 async function postAuditFindings(
@@ -124,17 +144,34 @@ async function postAuditFindings(
   report: IssueAuditReport,
 ): Promise<void> {
   const body = buildIssueAuditCommentBody(report);
-
-  const marker = "<!-- superfield-audit -->";
-
-  // Dedupe: find existing audit comment by marker, update rather than duplicate
-  const comments = await client.listIssueComments(owner, repo, issueNumber);
-  const existing = comments.find((c) => c.body.startsWith(marker));
+  const existing = await findAuditComment(client, owner, repo, issueNumber);
   if (existing) {
     await client.updateIssueComment(owner, repo, existing.id, body);
   } else {
     await client.createIssueComment(owner, repo, issueNumber, body);
   }
+}
+
+async function clearAuditFindings(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+): Promise<void> {
+  const existing = await findAuditComment(client, owner, repo, issueNumber);
+  if (existing) {
+    await client.deleteIssueComment(owner, repo, existing.id);
+  }
+}
+
+async function findAuditComment(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  issueNumber: number,
+): Promise<{ id: number; body: string } | undefined> {
+  const comments = await client.listIssueComments(owner, repo, issueNumber);
+  return comments.find((c) => c.body.startsWith("<!-- superfield-audit -->"));
 }
 
 export function buildIssueAuditCommentBody(report: IssueAuditReport): string {

@@ -21,6 +21,9 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
     listIssueComments: vi.fn().mockResolvedValue([]),
     createIssueComment: vi.fn().mockResolvedValue({ id: 1 }),
     updateIssueComment: vi.fn().mockResolvedValue(undefined),
+    addIssueLabel: vi.fn().mockResolvedValue(undefined),
+    removeIssueLabel: vi.fn().mockResolvedValue(undefined),
+    deleteIssueComment: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as GitHubClient;
 }
@@ -89,11 +92,21 @@ describe("runIssueAudit", () => {
     expect(body).toContain("## Features");
     expect(body).toContain("## Deliverables");
     expect(body).toContain("Rename Deliverables to Features");
+    expect(client.addIssueLabel).toHaveBeenCalledWith({
+      owner: "org",
+      repo: "repo",
+      issue_number: 10,
+      label: "non-conformant",
+    });
   });
 
-  it("updates existing audit comment instead of creating duplicate", async () => {
+  it("deletes stale audit findings and removes stale label when conformant", async () => {
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([
+          makeIssue({ number: 10, labels: ["non-conformant"] }),
+        ]),
       listIssueComments: vi
         .fn()
         .mockResolvedValue([
@@ -101,18 +114,20 @@ describe("runIssueAudit", () => {
         ]),
     });
     await runIssueAudit(client, "org", "repo", {
-      spawn: fakeSpawn(nonConformantResponse),
+      spawn: fakeSpawn(conformantResponse),
     });
-    expect(client.updateIssueComment).toHaveBeenCalledWith(
-      "org",
-      "repo",
-      500,
-      expect.any(String),
-    );
+    expect(client.removeIssueLabel).toHaveBeenCalledWith({
+      owner: "org",
+      repo: "repo",
+      issue_number: 10,
+      label: "non-conformant",
+    });
+    expect(client.deleteIssueComment).toHaveBeenCalledWith("org", "repo", 500);
+    expect(client.updateIssueComment).not.toHaveBeenCalled();
     expect(client.createIssueComment).not.toHaveBeenCalled();
   });
 
-  it("skips plan, ci-failure, and non-conformant labelled issues", async () => {
+  it("skips plan and ci-failure labelled issues", async () => {
     const client = makeClient({
       listIssues: vi
         .fn()
@@ -126,7 +141,7 @@ describe("runIssueAudit", () => {
     const result = await runIssueAudit(client, "org", "repo", {
       spawn: fakeSpawn(conformantResponse),
     });
-    expect(result.audited).toBe(1);
+    expect(result.audited).toBe(2);
   });
 
   it("listAuditableIssues returns only schema-auditable issues", () => {
@@ -137,7 +152,34 @@ describe("runIssueAudit", () => {
       makeIssue({ number: 22, labels: ["non-conformant"] }),
     ]);
 
-    expect(auditable.map((issue) => issue.number)).toEqual([10]);
+    expect(auditable.map((issue) => issue.number)).toEqual([10, 22]);
+  });
+
+  it("normalizes malformed audit arrays before posting findings", async () => {
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
+    });
+    const result = await runIssueAudit(client, "org", "repo", {
+      spawn: fakeSpawn({
+        issue_number: 10,
+        conformant: false,
+        missing_sections: ["## Features", 123, null],
+        forbidden_sections: "bad",
+        empty_sections: undefined,
+        fix_suggestions: ["Rename Deliverables", false],
+      }),
+    });
+
+    expect(result.reports[10]?.missing_sections).toEqual(["## Features"]);
+    expect(result.reports[10]?.forbidden_sections).toEqual([]);
+    expect(result.reports[10]?.fix_suggestions).toEqual([
+      "Rename Deliverables",
+    ]);
+    const body = (client.createIssueComment as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+    expect(body).toContain("## Features");
+    expect(body).toContain("Rename Deliverables");
+    expect(body).not.toContain("123");
   });
 
   it("throws when LLM response is missing required fields", async () => {
@@ -150,7 +192,4 @@ describe("runIssueAudit", () => {
       }),
     ).rejects.toThrow(/missing issue_number/);
   });
-
-  it.todo("applies the non-conformant label when audit finds violations");
-  it.todo("normalizes malformed audit arrays before posting or labelling");
 });
