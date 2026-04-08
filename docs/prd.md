@@ -46,6 +46,24 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 - **Skills are code.** Each calypso-agents skill is a TypeScript module with an explicit interface, typed inputs/outputs, and unit tests.
 - **API-first testing.** Both the git library and the GitHub client are tested extensively via MSW-intercepted API calls and golden response fixtures.
 
+## Superfield Blueprint
+
+The Superfield Blueprint is a compiled knowledge graph of design rules that ships bundled inside the `superfield` executable. It is the authoritative source of architectural constraints, security principles, design patterns, checklists, and antipatterns that all issues, proposed designs, and agent-generated code must conform to.
+
+The blueprint is sourced from `dot-matrix-labs/calypso-blueprint` (tracked as a git submodule at `blueprint/`). The compiled graph lives at `blueprint/rules/graph.yaml` — 1 231 nodes across domains including ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, and WORKER, with TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
+
+Each node in the graph carries:
+
+| Field | Values |
+|---|---|
+| `number` | Unique rule ID, e.g. `ARCH-P-001` |
+| `type` | `threat`, `principle`, `design_pattern`, `architecture`, `checklist`, `antipattern` |
+| `description` | Prose statement of the rule |
+| `links` | Typed edges to related nodes (`depends_on`, `mitigates`, `implements`, etc.) |
+| `deprecated` | Whether the rule is still active |
+
+The planning loop uses the blueprint to flag issues and proposed designs that violate active rules. Violations are posted as issue comments referencing the rule ID and description.
+
 ## Libraries
 
 | Concern | Library |
@@ -175,6 +193,7 @@ The continuous development loop. Runs indefinitely until killed (Ctrl-C).
 1. **CI watchdog** — query Check Runs for the latest commit on `main`. On any failed check, create a `ci-failure` issue and insert it at the top of the Plan (deduplicated by SHA + check name). A broken `main` always takes priority over new feature work.
 2. **Issue audit** — scan all open issues for schema conformance (required sections present, correct labels). Flag non-conforming issues with a label and a comment describing what is missing.
 3. **Plan coverage** — verify every open issue is referenced in the Plan. Append any missing issue in dependency order.
+4. **Blueprint conformance** — evaluate open issues and any proposed designs (issue body, acceptance criteria, technical approach) against the active rules in the bundled Superfield Blueprint. For each violation found, post a comment on the issue citing the rule ID, its description, and what in the issue conflicts with it. Does not block the issue from being worked — it informs the agent picking it up.
 
 The planning loop feeds the Plan. It does not perform development work.
 
