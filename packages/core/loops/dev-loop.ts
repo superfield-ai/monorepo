@@ -168,7 +168,9 @@ export async function tickDevLoop(
   return {
     primaryIssue: primaryEntry.number,
     speculativeIssues: speculative.map((e) => e.number),
-    mergeGateBlocked: blocked,
+    mergeGateBlocked: Array.from(
+      new Set([...blocked, ...primaryResult.mergeGateBlocked]),
+    ),
     reapedSessions: [],
     closed: primaryResult.closed,
     idle: false,
@@ -185,13 +187,13 @@ async function runSlot(
   entry: PlanIssueMetadata,
   role: "primary" | "speculative",
   slot: number,
-): Promise<{ closed: boolean }> {
+): Promise<{ closed: boolean; mergeGateBlocked: number[] }> {
   const { client, owner, repo } = opts;
 
   const issue = await client.getIssue(owner, repo, entry.number);
   if (issue.state === "closed") {
     await deleteSession(client, owner, repo, issue.number);
-    return { closed: true };
+    return { closed: true, mergeGateBlocked: [] };
   }
 
   const worktrees = opts.worktrees ?? new WorktreeManager();
@@ -246,14 +248,29 @@ async function runSlot(
   // does NOT close until the primary later opens and merges the PR. So we
   // only check close on the primary slot.
   if (role === "primary") {
+    const latestPlan = await loadCurrentPlan(client, owner, repo, plan);
+    const blockingPredecessors = await collectBlockingPredecessors(
+      client,
+      owner,
+      repo,
+      latestPlan,
+      entry.number,
+    );
+    if (blockingPredecessors.length > 0) {
+      console.warn(
+        `[${owner}/${repo}] merge gate blocked for #${entry.number}: waiting on ${blockingPredecessors.map((n) => `#${n}`).join(", ")}`,
+      );
+      return { closed: false, mergeGateBlocked: blockingPredecessors };
+    }
+
     const updatedIssue = await client.getIssue(owner, repo, entry.number);
     if (updatedIssue.state === "closed") {
       await deleteSession(client, owner, repo, entry.number);
-      return { closed: true };
+      return { closed: true, mergeGateBlocked: [] };
     }
   }
 
-  return { closed: false };
+  return { closed: false, mergeGateBlocked: [] };
 }
 
 /**
@@ -378,6 +395,38 @@ export async function predecessorsClosed(
     if (issue.state !== "closed") return false;
   }
   return true;
+}
+
+async function loadCurrentPlan(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  fallback: Plan,
+): Promise<Plan> {
+  const planIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
+  if (planIssues.length === 0) return fallback;
+  return parsePlan(planIssues[0]!.body ?? "");
+}
+
+async function collectBlockingPredecessors(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  plan: Plan,
+  issueNumber: number,
+): Promise<number[]> {
+  const blocked: number[] = [];
+  const order = planIssueOrder(plan);
+  const targetIndex = order.indexOf(issueNumber);
+  if (targetIndex < 0) return blocked;
+
+  for (let i = 0; i < targetIndex; i++) {
+    const predecessor = order[i]!;
+    const issue = await client.getIssue(owner, repo, predecessor);
+    if (issue.state !== "closed") blocked.push(predecessor);
+  }
+
+  return blocked;
 }
 
 async function collectMergeGateBlocked(
