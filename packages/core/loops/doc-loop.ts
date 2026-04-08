@@ -10,6 +10,7 @@ import {
   buildDocConsistencyPrompt,
 } from "../prompts/index.ts";
 import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
+import { runSupervisedLoop } from "../supervised-loop.ts";
 
 /**
  * The documentation loop. Triggered on every merge to `main`. Runs three
@@ -84,13 +85,20 @@ const DEFAULT_POLL_MS = 60_000;
 export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
   const pollMs = opts.pollIntervalMs ?? DEFAULT_POLL_MS;
   let lastSeenSha: string | null = null;
-  await runLoopForever(async () => {
-    const headSha = await opts.client.getHeadSha(opts.owner, opts.repo);
-    const result = await tickDocLoop({ ...opts, lastSeenSha, headSha });
-    if (result.triggered) {
-      lastSeenSha = headSha;
-    }
-  }, pollMs);
+  await runSupervisedLoop({
+    runOnce: async () => {
+      const headSha = await opts.client.getHeadSha(opts.owner, opts.repo);
+      const result = await tickDocLoop({ ...opts, lastSeenSha, headSha });
+      if (result.triggered) {
+        lastSeenSha = headSha;
+      }
+      return result;
+    },
+    delayMs: () => pollMs,
+    onError: (err) => {
+      console.error(`[${opts.owner}/${opts.repo}] doc loop failed:`, err);
+    },
+  });
 }
 
 export interface DocLoopTickOpts extends DocLoopOpts {
@@ -196,16 +204,6 @@ export async function tickDocLoop(
     consistencyFindings: consistencyResult,
     docPrNumber,
   };
-}
-
-async function runLoopForever(
-  tick: () => Promise<void>,
-  pollMs: number,
-): Promise<void> {
-  while (true) {
-    await tick();
-    await sleep(pollMs);
-  }
 }
 
 async function runCoverageScan(
@@ -439,8 +437,4 @@ async function applyPatchToFile(
     sha: current.sha,
   });
   return true;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

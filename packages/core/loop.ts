@@ -11,6 +11,7 @@ import {
   runBlueprintConformance,
   type BlueprintConformanceResult,
 } from "./steps/blueprint-conformance.ts";
+import { runSupervisedLoop } from "./supervised-loop.ts";
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -27,10 +28,13 @@ const POLL_INTERVAL_MS = 5_000;
  * See PRD §Command: start §Planning loop.
  */
 export async function runPlanningLoop(config: Config): Promise<void> {
-  while (true) {
-    await tickConfiguredRepositories(config);
-    await sleep(POLL_INTERVAL_MS);
-  }
+  await runSupervisedLoop({
+    runOnce: () => tickConfiguredRepositories(config),
+    delayMs: () => POLL_INTERVAL_MS,
+    onError: (err) => {
+      console.error("[planning] loop failed:", err);
+    },
+  });
 }
 
 /** Structured outcome of a single planning-loop tick per repository. */
@@ -237,8 +241,4 @@ async function runWatchdogStep(
     }
   }
   return watchdogIssuesCreated;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

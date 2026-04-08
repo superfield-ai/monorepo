@@ -9,6 +9,7 @@ import {
   type PlanIssueMetadata,
   type Plan,
 } from "../plan.ts";
+import { runSupervisedLoop } from "../supervised-loop.ts";
 import {
   buildDevelopIssuePrompt,
   buildDevScoutPrompt,
@@ -111,28 +112,34 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     );
   }
   let firstTick = true;
-  while (true) {
-    const result = await tickDevLoop({
-      ...opts,
-      circuit,
-      startupPrioritizedIssueNumbers: firstTick
-        ? startupHandoff.prioritizedIssueNumbers
-        : undefined,
-      startupReapedSessions: firstTick
-        ? startupHandoff.reapedSessions
-        : undefined,
-    });
-    firstTick = false;
-    if (result.idle) {
-      // Run maintenance on idle ticks — prune stale worktrees + stale sessions
-      try {
-        await runPrunePass(opts);
-      } catch (err) {
-        console.error(`[${opts.owner}/${opts.repo}] prune pass failed:`, err);
+  await runSupervisedLoop({
+    runOnce: async () => {
+      const result = await tickDevLoop({
+        ...opts,
+        circuit,
+        startupPrioritizedIssueNumbers: firstTick
+          ? startupHandoff.prioritizedIssueNumbers
+          : undefined,
+        startupReapedSessions: firstTick
+          ? startupHandoff.reapedSessions
+          : undefined,
+      });
+      firstTick = false;
+      if (result.idle) {
+        // Run maintenance on idle ticks — prune stale worktrees + stale sessions
+        try {
+          await runPrunePass(opts);
+        } catch (err) {
+          console.error(`[${opts.owner}/${opts.repo}] prune pass failed:`, err);
+        }
       }
-      await sleep(idleMs);
-    }
-  }
+      return result;
+    },
+    delayMs: (result) => (result.idle ? idleMs : 0),
+    onError: (err) => {
+      console.error(`[${opts.owner}/${opts.repo}] dev loop failed:`, err);
+    },
+  });
 }
 
 /** One iteration of the dev loop. Exported for testing. */
@@ -768,8 +775,4 @@ function slugFromPath(wtPath: string): string {
   const base = wtPath.split("/").pop() ?? "";
   const match = /^issue-\d+-(.+)$/.exec(base);
   return match?.[1] ?? base;
-}
-
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }
