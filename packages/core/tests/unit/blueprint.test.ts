@@ -6,6 +6,7 @@ import {
   pickCandidateDomains,
   filterActiveRules,
   scanGraphForDuplicateKeys,
+  resetBlueprintCache,
 } from "../../blueprint.ts";
 import * as path from "node:path";
 
@@ -212,9 +213,105 @@ describe("filterActiveRules", () => {
   });
 });
 
-describe("blueprint bundled module (scout)", () => {
-  it.todo(
-    "loadBlueprint returns singleton from bundled generated module (#78)",
-  );
-  it.todo("resetBlueprintCache forces reload (#78)");
+describe("blueprint bundled module", () => {
+  beforeEach(() => {
+    resetBlueprintCache();
+    delete process.env.SUPERFIELD_BLUEPRINT_DIR;
+  });
+
+  afterEach(() => {
+    resetBlueprintCache();
+    delete process.env.SUPERFIELD_BLUEPRINT_DIR;
+  });
+
+  it("loadBlueprint returns a singleton from the bundled generated module", async () => {
+    const a = await loadBlueprint();
+    const b = await loadBlueprint();
+    expect(a).toBe(b);
+    expect(a.nodes.length).toBeGreaterThan(100);
+    expect(a.domains.get("arch")).toBeDefined();
+  });
+
+  it("resetBlueprintCache forces a reload (new object identity)", async () => {
+    const a = await loadBlueprint();
+    resetBlueprintCache();
+    const b = await loadBlueprint();
+    expect(a).not.toBe(b);
+    expect(b.nodes.length).toBe(a.nodes.length);
+  });
+
+  it("production path does not touch the filesystem", async () => {
+    vi.resetModules();
+    const calls: unknown[][] = [];
+    vi.doMock("node:fs/promises", async () => {
+      const actual =
+        await vi.importActual<typeof import("node:fs/promises")>(
+          "node:fs/promises",
+        );
+      return {
+        ...actual,
+        default: actual,
+        readFile: (...args: unknown[]) => {
+          calls.push(args);
+          return (actual.readFile as unknown as (...a: unknown[]) => unknown)(
+            ...args,
+          );
+        },
+      };
+    });
+    try {
+      const mod = await import("../../blueprint.ts");
+      mod.resetBlueprintCache();
+      delete process.env.SUPERFIELD_BLUEPRINT_DIR;
+      await mod.loadBlueprint();
+      await mod.loadBlueprint();
+      await mod.loadBlueprint();
+      expect(calls.length).toBe(0);
+    } finally {
+      vi.doUnmock("node:fs/promises");
+      vi.resetModules();
+    }
+  });
+
+  it("three loadBlueprint calls build the graph only once", async () => {
+    resetBlueprintCache();
+    const a = await loadBlueprint();
+    const b = await loadBlueprint();
+    const c = await loadBlueprint();
+    expect(a).toBe(b);
+    expect(b).toBe(c);
+  });
+
+  it("SUPERFIELD_BLUEPRINT_DIR override reads from disk", async () => {
+    vi.resetModules();
+    const calls: unknown[][] = [];
+    vi.doMock("node:fs/promises", async () => {
+      const actual =
+        await vi.importActual<typeof import("node:fs/promises")>(
+          "node:fs/promises",
+        );
+      return {
+        ...actual,
+        default: actual,
+        readFile: (...args: unknown[]) => {
+          calls.push(args);
+          return (actual.readFile as unknown as (...a: unknown[]) => unknown)(
+            ...args,
+          );
+        },
+      };
+    });
+    try {
+      process.env.SUPERFIELD_BLUEPRINT_DIR = BLUEPRINT_DIR;
+      const mod = await import("../../blueprint.ts");
+      mod.resetBlueprintCache();
+      const bp = await mod.loadBlueprint();
+      expect(calls.length).toBeGreaterThan(0);
+      expect(bp.nodes.length).toBeGreaterThan(100);
+    } finally {
+      delete process.env.SUPERFIELD_BLUEPRINT_DIR;
+      vi.doUnmock("node:fs/promises");
+      vi.resetModules();
+    }
+  });
 });
