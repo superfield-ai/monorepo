@@ -6,6 +6,9 @@
   "scripts": {
     "build": "tsc"
   },
+  "dependencies": {
+    "isomorphic-git": "^1.37.5"
+  },
   "devDependencies": {
     "@types/node": "^20.0.0",
     "yaml": "^2.8.3"
