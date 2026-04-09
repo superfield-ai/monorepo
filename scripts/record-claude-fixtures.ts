@@ -117,6 +117,7 @@ const RECORDERS: Record<string, TaskRecorder> = {
             number: i.number,
             title: i.title,
           })),
+          candidateDomains: ["auth", "ux"],
         }),
         metadata: { repo: args.repo, scenario: "new-feature" },
       };
@@ -140,6 +141,7 @@ const RECORDERS: Record<string, TaskRecorder> = {
             number: i.number,
             title: i.title,
           })),
+          candidateDomains: ["auth", "ux"],
         }),
         metadata: {
           repo: args.repo,

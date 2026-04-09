@@ -1041,9 +1041,9 @@ Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source 
 
 When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
 
-## Task: feature-evaluate
+## Task: feature-evaluate (principles-first exploratory pass)
 
-Evaluate the following feature request and emit a structured \`IssueBody\` JSON object suitable for creating a GitHub issue.
+Evaluate the following feature request and emit a structured JSON object describing your decision and a candidate solution shape. A second narrowing pass will apply implementation rules to your chosen candidate.
 
 ### Feature request
 
@@ -1057,6 +1057,22 @@ Add a logout button to the navbar
 ### Open issues
 
 - #1: feat: existing
+
+## Blueprint principles (exploratory context — shape the solution freely)
+Apply these rules to your work. Cite the rule ID in your commit body if you deviate.
+
+### Principles
+- **AUTH-P-001** \`passkey-first-password-never\` [auth]: The system uses passkey-based authentication (FIDO2 WebAuthn) as the sole primary credential mechanism. Passwords are never offered. The private key never leaves the user's device, eliminating server-side credential theft, phishing, credential stuffing, and reuse attacks at the protocol level.
+- **AUTH-P-002** \`tokens-opaque-to-browsers\` [auth]: Session tokens are stored in HTTP-only, Secure, SameSite=Strict cookies and are never accessible to client-side JavaScript. This eliminates session hijacking as a consequence of XSS without depending on the application being XSS-free.
+- **AUTH-P-003** \`agent-credentials-scoped-and-short-lived\` [auth]: Every agent credential carries explicit scope claims and expires within 24 hours. Broad, long-lived agent tokens are never issued. Worker daemon service accounts are a distinct credential category with their own lifecycle; the short-lived constraint applies to per-task delegated user tokens.
+- **AUTH-P-004** \`credential-domains-stay-separate\` [auth]: The platform maintains distinct credential classes: end-user session credentials (prove identity), worker service credentials (prove which daemon), delegated authority tokens (prove who authorized a task-scoped action), and twin credentials (prove sandbox-only context). These classes must never collapse into one another.
+- **AUTH-P-005** \`auth-policy-enforced-through-deterministic-gates\` [auth]: Credential policy is enforced through machine-checkable gates, not prose. The workflow must define deterministic checks for accepted credential classes, allowed signing algorithms, revocation behavior, privileged-operation approval requirements, and sandbox boundary separation.
+- **AUTH-P-006** \`authority-and-execution-are-separate-facts\` [auth]: The system must preserve the distinction between the principal that had authority to perform an action and the actor that executed it. Both facts are recorded. "The agent acted on behalf of the user" is not the same as "the user executed the action personally."
+- **AUTH-P-007** \`no-single-actor-authorizes-privileged-operations\` [auth]: Operations touching root key material, bulk data exports, or authentication infrastructure require M-of-N approval from distinct human operators. This is a cryptographic constraint enforced through secret sharing, not a workflow preference.
+- **AUTH-P-008** \`authentication-is-self-hosted\` [auth]: The critical login path (credential verification, token issuance, session creation) runs on infrastructure the team owns. External identity providers may participate in federated flows but are never the sole authentication path. If the external provider goes down, users authenticate via the self-hosted passkey flow.
+- **AUTH-P-009** \`algorithm-pinned-not-negotiated\` [auth]: Token verification accepts exactly one signing algorithm, configured at deployment time and never read from the token header. Algorithm negotiation is the root cause of algorithm confusion attacks. Pinning makes these attacks structurally impossible. The same rule applies to consequential transaction signatures.
+
+**Exploratory instruction:** Propose a solution shape. Do not try to match specific implementation rules yet — those will be applied in a narrowing pass after you pick a candidate approach.
 
 ## Consulting the Blueprint
 
@@ -1073,11 +1089,11 @@ If a rule applies, follow it. If you choose to deviate, document why in the comm
 
 ## What you must decide
 
-1. **PRD alignment** — does this feature fit the product as defined in \`docs/prd.md\`? If it conflicts, say so in your output and propose either an alternative scope or a PRD amendment.
-2. **Blueprint fit** — check the blueprint domains relevant to this work (\`arch\`, \`auth\`, \`data\`, \`process\`, \`test\`, \`ux\`, \`worker\`). Cite any rule IDs that apply.
-3. **Duplicate detection** — search the open issues list above for exact duplicates, likely overlap, or improvement candidates of an existing issue. If this feature is substantially the same as an existing open issue, set \`duplicate_of\` to that issue number; otherwise set it to \`null\`.
-4. **Phase placement** — which phase does this belong to? If there's no appropriate phase yet, name a new one.
-5. **Smallest clear scope** — prefer the narrowest scope that satisfies the request.
+1. **PRD alignment** — does this feature fit the product as defined in \`docs/prd.md\`? If it conflicts, say so and propose either an alternative scope or a PRD amendment (set \`candidateApproach\` to \`null\` if out of scope).
+2. **Duplicate detection** — search the open issues list for exact duplicates or substantial overlap. If this feature is substantially the same as an existing open issue, set \`duplicate_of\` to that issue number and set \`candidateApproach\` to \`null\`; otherwise set \`duplicate_of\` to \`null\`.
+3. **Phase placement** — which phase does this belong to?
+4. **Smallest clear scope** — prefer the narrowest scope that satisfies the request.
+5. **Candidate approach** — in \`candidateApproach\`, describe in 1–3 sentences the solution shape you'd propose (the "how"). This string will be fed verbatim to the narrowing pass. Use \`null\` only if you're returning a duplicate or declaring the request out of scope.
 
 ## Output contract
 
@@ -1088,6 +1104,7 @@ Emit exactly one JSON object with this shape, and nothing else:
   "title": "feat: short conventional-commit-style title",
   "phase": "Phase name",
   "motivation": "1–3 sentences on why this work exists",
+  "candidateApproach": "1–3 sentences describing the proposed solution shape, or null",
   "features": [
     "First feature/deliverable",
     "Second feature/deliverable"
@@ -1105,7 +1122,7 @@ Emit exactly one JSON object with this shape, and nothing else:
 }
 \`\`\`
 
-If \`duplicate_of\` is non-null (issue number), the orchestrator will skip creating a new issue and report the duplicate to the user.
+If \`duplicate_of\` is non-null (issue number) or \`candidateApproach\` is \`null\` (out-of-scope), the orchestrator will skip the narrowing pass and report the result directly.
 
 ## Rules
 

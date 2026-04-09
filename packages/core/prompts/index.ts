@@ -10,6 +10,9 @@ export type { CIFailureContext } from "./ci-failure.ts";
 export { buildFeatureEvaluatePrompt } from "./feature-evaluate.ts";
 export type { FeatureEvaluateContext } from "./feature-evaluate.ts";
 
+export { buildFeatureNarrowPrompt } from "./feature-narrow.ts";
+export type { FeatureNarrowContext } from "./feature-narrow.ts";
+
 export { buildReplanEvaluatePrompt } from "./replan-evaluate.ts";
 export type { ReplanEvaluateContext } from "./replan-evaluate.ts";
 

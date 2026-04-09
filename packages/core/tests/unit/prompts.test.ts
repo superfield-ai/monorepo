@@ -223,6 +223,7 @@ describe("prompt builders — structural invariants", () => {
         request: "Add a logout button to the navbar",
         planBody: "## Phase: P\n",
         openIssueTitles: [{ number: 1, title: "feat: existing" }],
+        candidateDomains: ["auth"],
       });
       expect(out).toContain("Add a logout button to the navbar");
       expect(out).toContain('"features"');
@@ -427,6 +428,7 @@ describe("prompt builders — snapshots", () => {
         request: "Add a logout button to the navbar",
         planBody: "## Phase: P\n",
         openIssueTitles: [{ number: 1, title: "feat: existing" }],
+        candidateDomains: ["auth"],
       }),
     ).toMatchSnapshot();
   });
