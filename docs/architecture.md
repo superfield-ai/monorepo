@@ -42,9 +42,15 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 
 ## Superfield Blueprint
 
-The Superfield Blueprint is a compiled knowledge graph of design rules that ships bundled inside the `superfield` executable. It is the canonical reference for architectural constraints, security principles, design patterns, checklists, and antipatterns. Issues, proposed designs, and agent-generated code are checked against the blueprint and violations are surfaced as advisory comments — the blueprint informs but does not block.
+The Superfield Blueprint is a compiled knowledge graph of design rules — architectural constraints, security principles, design patterns, checklists, and antipatterns — sourced from `dot-matrix-labs/calypso-blueprint` and tracked as a git subtree at `blueprint/`. The compiled graph lives at `blueprint/rules/graph.yaml` (1 231 nodes across ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, WORKER), with domain bodies under `blueprint/rules/blueprints/*.yaml` and TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
 
-The blueprint is sourced from `dot-matrix-labs/calypso-blueprint` (tracked as a git subtree at `blueprint/`; kept in sync via bidirectional GitHub Actions workflows). The compiled graph lives at `blueprint/rules/graph.yaml` — 1 231 nodes across domains including ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, and WORKER, with TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
+**Current integration state:**
+
+- **Loaded at runtime from disk.** `packages/core/blueprint.ts` parses `graph.yaml` + domain files on demand. The loader resolves `blueprint/` relative to `process.cwd()`. The graph is **not bundled into the compiled `superfield` binary** — the executable only works when a `blueprint/` directory exists alongside the working directory.
+- **No in-memory cache.** Every planning-loop tick re-parses the graph from disk (~222 KB YAML).
+- **Advisory only, issue-level.** The planning loop's `runBlueprintConformance` (`packages/core/steps/blueprint-conformance.ts`) evaluates open issues against candidate domains and posts `<!-- superfield-blueprint -->`-marked comments citing violated rule IDs. It does **not** block issues from being worked, gate PRs, or fail CI.
+- **Not consulted during code generation.** Dev-loop agents (primary / speculative / scout) receive a short prompt fragment (`packages/core/prompts/fragments/blueprint-reference.ts`) that *advises* them to consult the blueprint, but no actual rule content is injected into prompts and no validation step checks generated code against the graph.
+- **Tested with fakeSpawn only.** `blueprint.test.ts` covers the loader; `blueprint-conformance.test.ts` uses hand-crafted `fakeSpawn()` responses. There are no recorded Claude fixtures under `tests/fixtures/claude/blueprint-*` and no `replaySpawn()` coverage.
 
 Each node in the graph carries:
 
@@ -55,8 +61,6 @@ Each node in the graph carries:
 | `description` | Prose statement of the rule                                                         |
 | `links`       | Typed edges to related nodes (`depends_on`, `mitigates`, `implements`, etc.)        |
 | `deprecated`  | Whether the rule is still active                                                    |
-
-The planning loop uses the blueprint to flag issues and proposed designs that violate active rules. Violations are posted as issue comments referencing the rule ID and description.
 
 ## GitHub Authentication
 

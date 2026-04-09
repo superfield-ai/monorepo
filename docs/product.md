@@ -15,6 +15,7 @@ The calypso-agents skill system requires a human (or LLM session) to interpret a
 ## Guiding Principles
 
 - **Forge as control plane.** Git and GitHub are the source of truth for all agent state, task ordering, and communication.
+- **Guardrails from a bundled knowledge graph.** Superfield ships with a compiled blueprint of design rules (architectural constraints, security threats, antipatterns, implementation rules). Dev-loop agents get narrow implementation rules + antipatterns on the first turn; principles and threats are layered in on later turns if the agent needs more context. Before opening a PR, the agent self-audits its work against the blueprint. Issues are also checked against the blueprint by the planning loop, which posts rule-cited advisory comments. See [`architecture.md`](./architecture.md#superfield-blueprint).
 - **No customization.** There are no workflow flags or configuration knobs. Superfield encodes one correct way to do things.
 - **No system binaries.** Never shell out to `git`, `gh`, `curl`, or any other system executable. All git operations go through a TypeScript git library; all GitHub operations go through a TypeScript GitHub API client. The sole exception is agent vendor CLIs (e.g. `claude`, `codex`) — these are spawned as subprocesses because they are the LLM execution layer, not system utilities.
 - **Skills are code.** Each calypso-agents skill is a TypeScript module with an explicit interface, typed inputs/outputs, and unit tests.
