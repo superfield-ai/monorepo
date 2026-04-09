@@ -913,3 +913,200 @@ Scout gate: #5
     );
   });
 });
+
+describe("tickDevLoop — blueprint escalation latch (#78)", () => {
+  const archPlanBody = `## Phase: Arch
+
+Goal: architecture module boundary.
+Depends on phases: None.
+Scout gate: null
+
+- #200 — refactor: architecture module boundary [risk: 4]
+  <!-- superfield: {"number":200,"title":"refactor: architecture module boundary","phase":"Arch","kind":"feature","risk":4,"dependencies":[],"parallel_safe":false} -->
+`;
+
+  function archIssue(): Issue {
+    return {
+      number: 200,
+      title: "refactor: architecture module boundary",
+      body: "## Phase\nArch\n\n## Motivation\nx\n\n## Features\n- [ ] x\n\n## Test Plan\n- [ ] y",
+      html_url: "",
+      state: "open",
+      labels: ["feature", "arch"],
+    };
+  }
+
+  function makeArchClient(sessionComments: {
+    getComments: () => { id: number; body: string }[];
+    onUpsert?: (body: string) => void;
+  }) {
+    const createIssueComment = vi
+      .fn()
+      .mockImplementation(async (_o, _r, _n, body: string) => {
+        sessionComments.onUpsert?.(body);
+        return { id: 1 };
+      });
+    const updateIssueComment = vi
+      .fn()
+      .mockImplementation(async (_o, _r, _id, body: string) => {
+        sessionComments.onUpsert?.(body);
+        return undefined;
+      });
+    return makeClient({
+      listIssues: vi
+        .fn()
+        .mockImplementation(async (_o, _r, labels?: string[]) => {
+          if (labels?.includes("plan")) {
+            return [
+              {
+                number: 99,
+                body: archPlanBody,
+                labels: ["plan"],
+                state: "open",
+              },
+            ];
+          }
+          return [];
+        }),
+      getIssue: vi
+        .fn()
+        .mockImplementation(async (_o, _r, n: number) =>
+          n === 200 ? archIssue() : archIssue(),
+        ),
+      listIssueComments: vi
+        .fn()
+        .mockImplementation(async () => sessionComments.getComments()),
+      createIssueComment,
+      updateIssueComment,
+    });
+  }
+
+  it("latches escalation on first true and persists for the next tick (#78)", async () => {
+    await preCreateWorktree(200, "architecture-module-boundary");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeArchClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        // Keep the latest session comment available for the next tick.
+        if (comments.length === 0) {
+          comments.push({ id: 1, body });
+        } else {
+          comments[0]!.body = body;
+        }
+      },
+    });
+
+    let callCount = 0;
+    const spawn = vi.fn(async (_opts: AgentOpts): Promise<AgentResult> => {
+      const current = callCount++;
+      return {
+        sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        output: "ok",
+        isError: false,
+        // Turn 1: agent requests escalation. Turn 2: no flag.
+        needsBlueprintEscalation: current === 0,
+      };
+    });
+
+    // Turn 1
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn.mock.calls[0]![0].prompt).not.toContain(
+      "expanded context — escalation",
+    );
+    // Turn 2 — latch should now persist via the session comment.
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(spawn.mock.calls[1]![0].prompt).toContain(
+      "## Blueprint rules (expanded context — escalation)",
+    );
+    // And the narrow fragment is still present — additive, not replacing.
+    expect(spawn.mock.calls[1]![0].prompt).toContain(
+      "## Blueprint rules (narrow context — first pass)",
+    );
+  });
+
+  it("does not escalate when agent never sets the flag (#78)", async () => {
+    await preCreateWorktree(200, "architecture-module-boundary");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeArchClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const spawn = fakeSpawn({
+      sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    });
+
+    for (let i = 0; i < 3; i++) {
+      await tickDevLoop({
+        client,
+        owner: "o",
+        repo: "r",
+        token: "t",
+        worktrees,
+        spawn,
+        slotCount: 1,
+      });
+    }
+    expect(spawn).toHaveBeenCalledTimes(3);
+    for (const call of spawn.mock.calls) {
+      expect(call[0].prompt).not.toContain("expanded context — escalation");
+    }
+  });
+
+  it("is idempotent across repeated escalation signals — one-shot latch (#78)", async () => {
+    await preCreateWorktree(200, "architecture-module-boundary");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeArchClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    // Agent keeps asking for escalation on every turn.
+    const spawn = fakeSpawn({
+      sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      needsBlueprintEscalation: true,
+    });
+    const log = vi.spyOn(console, "log").mockImplementation(() => {});
+
+    for (let i = 0; i < 3; i++) {
+      await tickDevLoop({
+        client,
+        owner: "o",
+        repo: "r",
+        token: "t",
+        worktrees,
+        spawn,
+        slotCount: 1,
+      });
+    }
+
+    // Latch-fired log line should appear exactly once.
+    const latchLogs = log.mock.calls.filter((c) =>
+      String(c[0] ?? "").includes("blueprint escalation latched"),
+    );
+    expect(latchLogs.length).toBe(1);
+    log.mockRestore();
+  });
+});
