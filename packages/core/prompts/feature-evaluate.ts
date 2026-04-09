@@ -3,6 +3,7 @@ import {
   blueprintReferenceFragment,
   joinSections,
 } from "./fragments/index.ts";
+import { buildBlueprintContextFragment } from "./fragments/blueprint-context.ts";
 
 export interface FeatureEvaluateContext {
   /** The raw natural-language feature request from the user. */
@@ -11,15 +12,22 @@ export interface FeatureEvaluateContext {
   planBody: string | null;
   /** Open issues for duplicate detection. */
   openIssueTitles: { number: number; title: string }[];
+  /**
+   * Candidate blueprint domains for the request, used to scope the
+   * principles-only blueprint fragment. See `pickCandidateDomains()`.
+   */
+  candidateDomains: string[];
 }
 
 /**
- * Prompt for the `feature` command's LLM call. Evaluates a feature request
- * against the PRD, the blueprint, the current Plan, and existing issues,
- * then emits a structured `IssueBody` JSON object.
+ * Prompt for the `feature` command's first (exploratory) LLM pass.
  *
- * Replaces calypso-agents `feature-evaluate` SKILL.md, adapted to Superfield's
- * unified `IssueBody` schema (no more `behaviour`, `scope`, `issue_kind`).
+ * Principles-first flow (#83): this initial prompt includes blueprint
+ * **principles only** — no implementation rules, antipatterns, or threats —
+ * so the evaluator can explore solution shape without being prematurely
+ * constrained by specific TS rules. A subsequent narrowing pass
+ * (`buildFeatureNarrowPrompt`) layers in implementation rules for the
+ * candidate approach the evaluator picks here.
  */
 export function buildFeatureEvaluatePrompt(
   ctx: FeatureEvaluateContext,
@@ -28,12 +36,21 @@ export function buildFeatureEvaluatePrompt(
     ? ctx.openIssueTitles.map((i) => `- #${i.number}: ${i.title}`).join("\n")
     : "(none)";
 
+  const principlesFragment = buildBlueprintContextFragment({
+    domains: ctx.candidateDomains,
+    ruleTypes: ["principle"],
+    budgetBytes: 4096,
+    header:
+      "## Blueprint principles (exploratory context — shape the solution freely)",
+  });
+
   return joinSections(
     projectContextFragment(),
-    `## Task: feature-evaluate
+    `## Task: feature-evaluate (principles-first exploratory pass)
 
-Evaluate the following feature request and emit a structured \`IssueBody\` \
-JSON object suitable for creating a GitHub issue.
+Evaluate the following feature request and emit a structured JSON object \
+describing your decision and a candidate solution shape. A second narrowing \
+pass will apply implementation rules to your chosen candidate.
 
 ### Feature request
 
@@ -46,23 +63,28 @@ ${ctx.planBody ?? "(no Plan issue exists yet)"}
 ### Open issues
 
 ${issueList}`,
+    principlesFragment,
+    `**Exploratory instruction:** Propose a solution shape. Do not try to match \
+specific implementation rules yet — those will be applied in a narrowing pass \
+after you pick a candidate approach.`,
     blueprintReferenceFragment(),
     `## What you must decide
 
 1. **PRD alignment** — does this feature fit the product as defined in \
-\`docs/prd.md\`? If it conflicts, say so in your output and propose either an \
-alternative scope or a PRD amendment.
-2. **Blueprint fit** — check the blueprint domains relevant to this work \
-(\`arch\`, \`auth\`, \`data\`, \`process\`, \`test\`, \`ux\`, \`worker\`). Cite \
-any rule IDs that apply.
-3. **Duplicate detection** — search the open issues list above for exact \
-duplicates, likely overlap, or improvement candidates of an existing issue. If \
-this feature is substantially the same as an existing open issue, set \
-\`duplicate_of\` to that issue number; otherwise set it to \`null\`.
-4. **Phase placement** — which phase does this belong to? If there's no \
-appropriate phase yet, name a new one.
-5. **Smallest clear scope** — prefer the narrowest scope that satisfies the \
+\`docs/prd.md\`? If it conflicts, say so and propose either an alternative \
+scope or a PRD amendment (set \`candidateApproach\` to \`null\` if out of \
+scope).
+2. **Duplicate detection** — search the open issues list for exact duplicates \
+or substantial overlap. If this feature is substantially the same as an \
+existing open issue, set \`duplicate_of\` to that issue number and set \
+\`candidateApproach\` to \`null\`; otherwise set \`duplicate_of\` to \`null\`.
+3. **Phase placement** — which phase does this belong to?
+4. **Smallest clear scope** — prefer the narrowest scope that satisfies the \
 request.
+5. **Candidate approach** — in \`candidateApproach\`, describe in 1–3 \
+sentences the solution shape you'd propose (the "how"). This string will be \
+fed verbatim to the narrowing pass. Use \`null\` only if you're returning a \
+duplicate or declaring the request out of scope.
 
 ## Output contract
 
@@ -73,6 +95,7 @@ Emit exactly one JSON object with this shape, and nothing else:
   "title": "feat: short conventional-commit-style title",
   "phase": "Phase name",
   "motivation": "1–3 sentences on why this work exists",
+  "candidateApproach": "1–3 sentences describing the proposed solution shape, or null",
   "features": [
     "First feature/deliverable",
     "Second feature/deliverable"
@@ -90,8 +113,9 @@ Emit exactly one JSON object with this shape, and nothing else:
 }
 \`\`\`
 
-If \`duplicate_of\` is non-null (issue number), the orchestrator will skip \
-creating a new issue and report the duplicate to the user.
+If \`duplicate_of\` is non-null (issue number) or \`candidateApproach\` is \
+\`null\` (out-of-scope), the orchestrator will skip the narrowing pass and \
+report the result directly.
 
 ## Rules
 
