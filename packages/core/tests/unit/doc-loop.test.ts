@@ -76,7 +76,7 @@ function multiSpawn(
 }
 
 describe("pickMergedDocCandidate", () => {
-  it("returns the newest merged PR when no watermark is present", () => {
+  it("returns the first PR in the list (most recently merged)", () => {
     const merged = [
       makePR({ number: 42, merged_at: "2026-04-08T02:00:00Z" }),
       makePR({ number: 41, merged_at: "2026-04-08T01:00:00Z" }),
@@ -85,21 +85,8 @@ describe("pickMergedDocCandidate", () => {
     expect(pickMergedDocCandidate(merged)).toMatchObject({ number: 42 });
   });
 
-  it("returns the first PR newer than the legacy watermark", () => {
-    const merged = [
-      makePR({ number: 42, merged_at: "2026-04-08T02:00:00Z" }),
-      makePR({ number: 41, merged_at: "2026-04-08T01:00:00Z" }),
-    ];
-
-    expect(
-      pickMergedDocCandidate(merged, "2026-04-08T01:30:00Z"),
-    ).toMatchObject({ number: 42 });
-  });
-
-  it("returns null when no merged PR is newer than the legacy watermark", () => {
-    const merged = [makePR({ number: 41, merged_at: "2026-04-08T01:00:00Z" })];
-
-    expect(pickMergedDocCandidate(merged, "2026-04-08T03:00:00Z")).toBeNull();
+  it("returns null when the merged list is empty", () => {
+    expect(pickMergedDocCandidate([])).toBeNull();
   });
 });
 
@@ -184,6 +171,52 @@ describe("tickDocLoop", () => {
     expect(result.docPrNumber).toBeNull();
   });
 
+  it("executes coverage → canonical sync → consistency in order", async () => {
+    const client = makeClient({
+      getHeadSha: vi.fn().mockResolvedValue("newsha"),
+      listMergedPullRequests: vi.fn().mockResolvedValue([makePR()]),
+      listPullRequestFiles: vi.fn().mockResolvedValue(["packages/core/foo.ts"]),
+    });
+    const callOrder: string[] = [];
+    const spawn = vi.fn().mockImplementation(async (opts: AgentOpts) => {
+      if (opts.prompt.includes("doc-coverage")) {
+        callOrder.push("coverage");
+        return {
+          sessionId: "coverage",
+          output: JSON.stringify({ missing_docs: [] }),
+          isError: false,
+        };
+      }
+      if (opts.prompt.includes("doc-canonical-sync")) {
+        callOrder.push("canonical");
+        return {
+          sessionId: "canonical",
+          output: JSON.stringify({
+            significant: false,
+            prd_patches: [],
+            readme_patches: [],
+          }),
+          isError: false,
+        };
+      }
+      callOrder.push("consistency");
+      return {
+        sessionId: "consistency",
+        output: JSON.stringify({ inconsistencies: [] }),
+        isError: false,
+      };
+    });
+    await tickDocLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      repoPath: tmpRepo,
+      lastSeenSha: "oldsha",
+      spawn,
+    });
+    expect(callOrder).toEqual(["coverage", "canonical", "consistency"]);
+  });
+
   it("opens a doc PR when canonical sync produces patches", async () => {
     const client = makeClient({
       listMergedPullRequests: vi.fn().mockResolvedValue([makePR()]),
@@ -230,7 +263,7 @@ describe("tickDocLoop", () => {
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T01:00:00Z",
+      lastSeenSha: "oldsha",
       spawn,
     });
     expect(result.docPrNumber).toBe(999);
@@ -267,7 +300,7 @@ describe("tickDocLoop", () => {
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T01:00:00Z",
+      lastSeenSha: "oldsha",
       spawn,
     });
     expect(result.docPrNumber).toBeNull();
@@ -294,7 +327,7 @@ describe("tickDocLoop", () => {
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T01:00:00Z",
+      lastSeenSha: "oldsha",
       spawn,
     });
     // Only canonical sync runs (1 LLM call)
@@ -322,7 +355,7 @@ describe("tickDocLoop", () => {
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T01:00:00Z",
+      lastSeenSha: "oldsha",
       spawn,
     });
     // Only coverage scan fires — no LLM call for canonical sync or consistency
@@ -353,7 +386,7 @@ describe("tickDocLoop", () => {
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T01:00:00Z",
+      lastSeenSha: "oldsha",
       spawn,
     });
     // All 3 tasks still run since README.md exists
@@ -405,7 +438,7 @@ describe("tickDocLoop", () => {
       owner: "o",
       repo: "r",
       repoPath: tmpRepo,
-      lastProcessedAt: "2026-04-08T01:00:00Z",
+      lastSeenSha: "oldsha",
       spawn,
     });
     expect(coveragePromptFiles).toEqual(["packages/core/foo.ts"]);

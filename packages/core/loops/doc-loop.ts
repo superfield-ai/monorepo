@@ -106,15 +106,13 @@ export interface DocLoopTickOpts extends DocLoopOpts {
   lastSeenSha?: string | null;
   /** Current main SHA when already known by the caller. */
   headSha?: string;
-  /** Legacy merge watermark retained for test compatibility. */
-  lastProcessedAt?: string;
 }
 
 /** One iteration of the doc loop. Exported for testing. */
 export async function tickDocLoop(
   opts: DocLoopTickOpts,
 ): Promise<DocLoopTickResult> {
-  const { client, owner, repo, lastProcessedAt } = opts;
+  const { client, owner, repo } = opts;
   const headSha = opts.headSha ?? (await client.getHeadSha(owner, repo));
   const lastSeenSha = opts.lastSeenSha ?? null;
 
@@ -131,9 +129,9 @@ export async function tickDocLoop(
     };
   }
 
-  // 1. Find the most-recently merged PR after the watermark
+  // 1. Find the most-recently merged PR
   const merged = await client.listMergedPullRequests(owner, repo);
-  const candidate = pickMergedDocCandidate(merged, lastProcessedAt);
+  const candidate = pickMergedDocCandidate(merged);
   if (!candidate) {
     return {
       pr: null,
@@ -155,7 +153,8 @@ export async function tickDocLoop(
   );
   const sourceFiles = filterDocSourceFiles(changedFiles);
 
-  // 3. Run the three doc tasks in parallel.
+  // 3. Run the three doc tasks in order: coverage scan → canonical sync →
+  //    consistency check, as specified in PRD §Documentation loop.
   //    Canonical sync and consistency require at least one canonical doc
   //    (docs/prd.md or README.md) to be present. Skip both gracefully when
   //    neither exists — an LLM call with zero canonical content is useless.
@@ -163,16 +162,13 @@ export async function tickDocLoop(
   const hasReadme = await fileExists(opts.repoPath, "README.md");
   const hasCanonicalDocs = hasPrd || hasReadme;
 
-  const [coverageResult, canonicalResult, consistencyResult] =
-    await Promise.all([
-      runCoverageScan(opts, candidate.number, sourceFiles),
-      hasCanonicalDocs
-        ? runCanonicalSync(opts, candidate, changedFiles)
-        : Promise.resolve(null),
-      hasCanonicalDocs
-        ? runConsistencyCheck(opts, sourceFiles)
-        : Promise.resolve([]),
-    ]);
+  const coverageResult = await runCoverageScan(opts, candidate.number, sourceFiles);
+  const canonicalResult = hasCanonicalDocs
+    ? await runCanonicalSync(opts, candidate, changedFiles)
+    : null;
+  const consistencyResult = hasCanonicalDocs
+    ? await runConsistencyCheck(opts, sourceFiles)
+    : [];
 
   const hasChanges =
     (canonicalResult?.prd_patches.length ?? 0) > 0 ||
@@ -201,14 +197,14 @@ export async function tickDocLoop(
   };
 }
 
+/**
+ * Returns the most recently merged PR from the list, or null if the list is
+ * empty. Trigger decisions are handled upstream via SHA comparison.
+ */
 export function pickMergedDocCandidate(
   merged: PullRequest[],
-  lastProcessedAt?: string,
 ): PullRequest | null {
-  return lastProcessedAt
-    ? (merged.find((pr) => pr.merged_at && pr.merged_at > lastProcessedAt) ??
-        null)
-    : (merged[0] ?? null);
+  return merged[0] ?? null;
 }
 
 export function filterDocSourceFiles(changedFiles: string[]): string[] {
