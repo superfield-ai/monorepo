@@ -30,8 +30,16 @@ export function buildBlueprintContextFragment(opts: {
   ruleTypes: BlueprintRuleType[];
   budgetBytes: number;
   blueprint?: Blueprint;
+  /**
+   * Optional header override. Defaults to the narrow first-pass header.
+   * Escalation callers (#78) pass a distinct header so the expanded
+   * fragment sits alongside the narrow one rather than replacing it.
+   */
+  header?: string;
 }): string {
   const { domains, ruleTypes, budgetBytes } = opts;
+  const header =
+    opts.header ?? "## Blueprint rules (narrow context — first pass)";
   if (domains.length === 0 || ruleTypes.length === 0 || budgetBytes <= 0) {
     return "";
   }
@@ -64,7 +72,7 @@ export function buildBlueprintContextFragment(opts: {
     .map((x) => x.i);
 
   const dropped = new Set<number>();
-  let rendered = render(entries, dropped, ruleTypes, 0);
+  let rendered = render(entries, dropped, ruleTypes, 0, header);
   let di = 0;
   while (
     Buffer.byteLength(rendered, "utf8") > budgetBytes &&
@@ -72,7 +80,7 @@ export function buildBlueprintContextFragment(opts: {
   ) {
     dropped.add(dropOrder[di]!);
     di++;
-    rendered = render(entries, dropped, ruleTypes, dropped.size);
+    rendered = render(entries, dropped, ruleTypes, dropped.size, header);
   }
 
   return rendered;
@@ -83,9 +91,10 @@ function render(
   dropped: Set<number>,
   ruleTypes: BlueprintRuleType[],
   omittedCount: number,
+  header: string,
 ): string {
   const lines: string[] = [];
-  lines.push("## Blueprint rules (narrow context — first pass)");
+  lines.push(header);
   lines.push(
     "Apply these rules to your work. Cite the rule ID in your commit body if you deviate.",
   );

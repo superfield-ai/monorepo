@@ -40,6 +40,73 @@ describe("prompt builders — structural invariants", () => {
       expect(out).toContain("#42");
     });
 
+    it("first-turn prompt does not contain principle or threat rules (#78)", () => {
+      const out = buildDevelopIssuePrompt({
+        issue: {
+          ...issue,
+          number: 200,
+          title: "refactor: architecture module boundary",
+          body: "## Phase\nArch\n\n## Motivation\nx\n\n## Features\n- [ ] x",
+          labels: ["feature", "arch"],
+        },
+        role: "primary",
+        worktreePath: "/tmp/wt",
+        branch: "feat/200",
+        phaseName: "Arch",
+      });
+      expect(out).not.toContain("expanded context — escalation");
+      expect(out).not.toContain("### Principles");
+      expect(out).not.toContain("### Threats");
+      expect(out).toContain("narrow context — first pass");
+    });
+
+    it("second-turn prompt with escalated=true contains principles + threats (#78)", () => {
+      const out = buildDevelopIssuePrompt({
+        issue: {
+          ...issue,
+          number: 200,
+          title: "refactor: architecture module boundary",
+          body: "## Phase\nArch\n\n## Motivation\nx\n\n## Features\n- [ ] x",
+          labels: ["feature", "arch"],
+        },
+        role: "primary",
+        worktreePath: "/tmp/wt",
+        branch: "feat/200",
+        phaseName: "Arch",
+        escalated: true,
+      });
+      expect(out).toContain(
+        "## Blueprint rules (expanded context — escalation)",
+      );
+      // The arch domain has both principle and threat rules.
+      expect(out).toMatch(/### Principles|### Threats/);
+    });
+
+    it("first-turn narrow fragment is still present when escalated=true (#78)", () => {
+      const out = buildDevelopIssuePrompt({
+        issue: {
+          ...issue,
+          number: 200,
+          title: "refactor: architecture module boundary",
+          body: "## Phase\nArch\n\n## Motivation\nx\n\n## Features\n- [ ] x",
+          labels: ["feature", "arch"],
+        },
+        role: "primary",
+        worktreePath: "/tmp/wt",
+        branch: "feat/200",
+        phaseName: "Arch",
+        escalated: true,
+      });
+      expect(out).toContain("## Blueprint rules (narrow context — first pass)");
+      expect(out).toContain(
+        "## Blueprint rules (expanded context — escalation)",
+      );
+      // Narrow fragment appears before the expanded one (additive, not replacing).
+      expect(out.indexOf("narrow context")).toBeLessThan(
+        out.indexOf("expanded context"),
+      );
+    });
+
     it("speculative variant excludes PR-opening duty", () => {
       const out = buildDevelopIssuePrompt({
         issue,
@@ -73,6 +140,41 @@ describe("prompt builders — structural invariants", () => {
       expect(out).toContain("#51");
       expect(out).toContain("Build the auth seams");
       expect(out.indexOf("#50")).toBeLessThan(out.indexOf("#51"));
+    });
+
+    it("dev-scout escalated=true layers expanded blueprint fragment (#78)", () => {
+      const archScout: Issue = {
+        ...issue,
+        number: 300,
+        title: "chore: scout architecture module boundary",
+        body: "## Phase\nArch\n\n## Motivation\nrefactor package boundary",
+        labels: ["dev-scout", "arch"],
+      };
+      const out = buildDevScoutPrompt({
+        scoutIssue: archScout,
+        worktreePath: "/tmp/wt",
+        branch: "chore/scout",
+        phaseName: "Arch",
+        phaseGoal: "scout",
+        featureIssues: [],
+        escalated: true,
+      });
+      expect(out).toContain("## Blueprint rules (narrow context — first pass)");
+      expect(out).toContain(
+        "## Blueprint rules (expanded context — escalation)",
+      );
+    });
+
+    it("dev-scout default does not contain expanded fragment (#78)", () => {
+      const out = buildDevScoutPrompt({
+        scoutIssue: issue,
+        worktreePath: "/tmp/wt",
+        branch: "chore/scout",
+        phaseName: "Identity",
+        phaseGoal: "x",
+        featureIssues: [],
+      });
+      expect(out).not.toContain("expanded context — escalation");
     });
 
     it("dev-scout handoff includes every downstream feature issue in phase order", () => {

@@ -18,6 +18,14 @@ export interface DevelopIssueContext {
   worktreePath: string;
   branch: string;
   phaseName: string;
+  /**
+   * When true, layer an expanded blueprint context fragment
+   * (domain-filtered `principle` + `threat` rules) on top of the narrow
+   * first-turn fragment. Set by the dev-loop runner after an agent
+   * returns `needsBlueprintEscalation: true` on a previous turn. One-shot
+   * latch — stays true for the remainder of the issue (#78).
+   */
+  escalated?: boolean;
 }
 
 /**
@@ -39,6 +47,14 @@ export function buildDevelopIssuePrompt(ctx: DevelopIssueContext): string {
     ruleTypes: ["implementation", "antipattern"],
     budgetBytes: 4096,
   });
+  const expandedContext = ctx.escalated
+    ? buildBlueprintContextFragment({
+        domains,
+        ruleTypes: ["principle", "threat"],
+        budgetBytes: 4096,
+        header: "## Blueprint rules (expanded context — escalation)",
+      })
+    : "";
   return joinSections(
     projectContextFragment(),
     `## Assignment
@@ -54,6 +70,7 @@ ${ctx.issue.body ?? "(no body)"}`,
     roleFragment(ctx.role),
     tddOutsideInFragment(),
     narrowContext,
+    expandedContext,
     blueprintReferenceFragment(),
     commitStandardsFragment(),
     `## Begin

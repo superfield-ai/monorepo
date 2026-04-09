@@ -16,6 +16,13 @@ export interface DevScoutContext {
   phaseName: string;
   phaseGoal: string;
   featureIssues: Array<Pick<Issue, "number" | "title">>;
+  /**
+   * When true, layer an expanded blueprint context fragment
+   * (domain-filtered `principle` + `threat` rules) on top of the narrow
+   * first-turn fragment. One-shot latch managed by the dev-loop runner
+   * (#78).
+   */
+  escalated?: boolean;
 }
 
 /**
@@ -59,6 +66,14 @@ export function buildDevScoutPrompt(ctx: DevScoutContext): string {
     ruleTypes: ["implementation", "antipattern"],
     budgetBytes: 4096,
   });
+  const expandedContext = ctx.escalated
+    ? buildBlueprintContextFragment({
+        domains: [...domainSet],
+        ruleTypes: ["principle", "threat"],
+        budgetBytes: 4096,
+        header: "## Blueprint rules (expanded context — escalation)",
+      })
+    : "";
 
   return joinSections(
     projectContextFragment(),
@@ -114,6 +129,7 @@ You open the PR yourself once all six are true.
 - New test stubs must be \`it.todo()\` — they must not be \`it.skip()\`, must \
 not be commented out, and must not fail.`,
     narrowContext,
+    expandedContext,
     blueprintReferenceFragment(),
     commitStandardsFragment(),
     `## Begin
