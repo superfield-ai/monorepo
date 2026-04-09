@@ -162,7 +162,11 @@ export async function tickDocLoop(
   const hasReadme = await fileExists(opts.repoPath, "README.md");
   const hasCanonicalDocs = hasPrd || hasReadme;
 
-  const coverageResult = await runCoverageScan(opts, candidate.number, sourceFiles);
+  const coverageResult = await runCoverageScan(
+    opts,
+    candidate.number,
+    sourceFiles,
+  );
   const canonicalResult = hasCanonicalDocs
     ? await runCanonicalSync(opts, candidate, changedFiles)
     : null;
