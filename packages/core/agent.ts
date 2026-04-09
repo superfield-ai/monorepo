@@ -47,7 +47,13 @@ export interface AgentResult {
   /** Approximate cost in USD, if reported. */
   costUsd?: number;
   /**
-   * Set by agent to request expanded blueprint context on next turn (issue #80).
+   * Escalation signal from the agent (#78). When true, the next turn's
+   * dev-loop prompt will layer in domain-filtered `principle` + `threat`
+   * rules on top of the first-turn narrow context (implementation +
+   * antipattern). Escalation is one-shot — once expanded, context stays
+   * expanded for the remainder of the issue and the flag is not consulted
+   * again. Agents should set this only when they have insufficient
+   * context to implement confidently.
    */
   needsBlueprintEscalation?: boolean;
 }
