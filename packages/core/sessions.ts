@@ -7,6 +7,13 @@ export interface AgentSession {
   role: AgentRole;
   slot: number;
   startedAt: string;
+  /**
+   * One-shot escalation latch (#78). Set to true after the agent first
+   * returns `needsBlueprintEscalation: true`. Once latched, subsequent
+   * dev-loop turns on this issue always build the prompt with the
+   * expanded blueprint context fragment and never re-escalate.
+   */
+  blueprintEscalated?: boolean;
 }
 
 export interface IssueSession {

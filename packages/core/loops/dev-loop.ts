@@ -270,13 +270,26 @@ async function runSlot(
       ? rawSessionId
       : undefined;
 
-  const prompt = buildPromptForKind(entry, issue, branch, wt, plan, role);
+  // Escalation latch (#78): once an earlier turn returned
+  // needsBlueprintEscalation, the session record carries blueprintEscalated,
+  // and every subsequent prompt on this issue layers in principles + threats.
+  const escalated = existing?.session.blueprintEscalated === true;
+  const prompt = buildPromptForKind(
+    entry,
+    issue,
+    branch,
+    wt,
+    plan,
+    role,
+    escalated,
+  );
 
   await upsertSession(client, owner, repo, entry.number, {
     sessionId: sessionId ?? "pending",
     role,
     slot,
     startedAt: new Date().toISOString(),
+    blueprintEscalated: escalated || undefined,
   });
 
   const spawnFn = opts.spawn ?? spawnAgent;
@@ -290,11 +303,23 @@ async function runSlot(
     { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
   );
 
+  // Latch escalation on the first true and persist. The latch is one-shot:
+  // once set it stays set for the remainder of the issue even if the agent
+  // stops requesting it, and we do not re-invoke expansion logic.
+  const nextEscalated =
+    escalated || agentResult.needsBlueprintEscalation === true;
+  if (!escalated && nextEscalated) {
+    console.log(
+      `[${owner}/${repo}] blueprint escalation latched for #${entry.number} — subsequent turns will include expanded context`,
+    );
+  }
+
   await upsertSession(client, owner, repo, entry.number, {
     sessionId: agentResult.sessionId,
     role,
     slot,
     startedAt: existing?.session.startedAt ?? new Date().toISOString(),
+    blueprintEscalated: nextEscalated || undefined,
   });
 
   // Speculative agents exit when their checklist is complete; the issue
@@ -590,6 +615,7 @@ function buildPromptForKind(
   wt: IssueWorktree,
   plan: Plan,
   role: "primary" | "speculative",
+  escalated: boolean,
 ): string {
   if (entry.kind === "ci-failure") {
     return buildCIFailurePrompt({
@@ -611,6 +637,7 @@ function buildPromptForKind(
       phaseName: entry.phase,
       phaseGoal: phase?.goal ?? "",
       featureIssues: listPhaseFeatureEntries(plan, entry.phase),
+      escalated,
     });
   }
 
@@ -620,6 +647,7 @@ function buildPromptForKind(
     worktreePath: wt.path,
     branch,
     phaseName: entry.phase,
+    escalated,
   });
 }
 
