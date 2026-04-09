@@ -24,18 +24,30 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
   } as unknown as GitHubClient;
 }
 
-function fakeSpawn(response: unknown) {
-  return async (_opts: AgentOpts): Promise<AgentResult> => ({
-    sessionId: "sess",
-    output: JSON.stringify(response),
-    isError: false,
-  });
+/**
+ * Two-step fakeSpawn: returns `responses[0]` on the first call (evaluator),
+ * `responses[1]` on the second (narrow), and reuses the last entry for any
+ * further calls. A single response is a shorthand that acts as both calls.
+ */
+function fakeSpawn(...responses: unknown[]) {
+  let i = 0;
+  return async (_opts: AgentOpts): Promise<AgentResult> => {
+    const r = responses[Math.min(i, responses.length - 1)];
+    i++;
+    return {
+      sessionId: "sess",
+      output: JSON.stringify(r),
+      isError: false,
+    };
+  };
 }
 
 const validEvaluation = {
   title: "feat: add logout button",
   phase: "Identity",
   motivation: "Users need to log out cleanly.",
+  candidateApproach:
+    "Add a NavBar button that calls authService.signOut() and redirects to /login.",
   features: ["Add button to navbar", "Wire up signOut handler"],
   test_plan: ["Click button → session cleared", "Redirect to login"],
   canonical_docs: ["docs/prd.md"],
@@ -43,21 +55,33 @@ const validEvaluation = {
   blueprint_rules_cited: ["AUTH-P-001"],
 };
 
+const validNarrow = {
+  title: "feat: add logout button",
+  phase: "Identity",
+  motivation: "Users need to log out cleanly.",
+  features: ["Add button to navbar", "Wire up signOut handler"],
+  test_plan: ["Click button → session cleared", "Redirect to login"],
+  canonical_docs: ["docs/prd.md"],
+  blueprint_rules_cited: ["AUTH-I-001"],
+};
+
 describe("runFeatureCommand", () => {
-  it("creates issue and Plan when both are absent", async () => {
+  it("creates issue and Plan when both are absent (two-step flow)", async () => {
     const client = makeClient();
     const result = await runFeatureCommand({
       client,
       owner: "o",
       repo: "r",
       request: "add a logout button",
-      spawn: fakeSpawn(validEvaluation),
+      spawn: fakeSpawn(validEvaluation, validNarrow),
     });
 
     expect(result.duplicateOf).toBeNull();
     expect(result.issueCreated).toBe(100);
     expect(result.planCreated).toBe(true);
-    expect(result.blueprintRulesCited).toEqual(["AUTH-P-001"]);
+    expect(result.blueprintRulesCited).toEqual(
+      expect.arrayContaining(["AUTH-P-001", "AUTH-I-001"]),
+    );
 
     // createIssue called twice: feature issue + plan issue
     expect(client.createIssue).toHaveBeenCalledTimes(2);
@@ -98,7 +122,7 @@ Scout gate: #5
       owner: "o",
       repo: "r",
       request: "x",
-      spawn: fakeSpawn(validEvaluation),
+      spawn: fakeSpawn(validEvaluation, validNarrow),
     });
 
     expect(result.planUpdated).toBe(true);
@@ -112,7 +136,16 @@ Scout gate: #5
     expect(updateBody).toContain("feat: add logout button");
   });
 
-  it("returns duplicate without creating issue or updating Plan", async () => {
+  it("single-step flow: evaluator returns duplicate → narrowing pass skipped → no issue created", async () => {
+    const spawn = vi.fn(async (_opts: AgentOpts) => ({
+      sessionId: "s",
+      output: JSON.stringify({
+        ...validEvaluation,
+        duplicate_of: 50,
+        candidateApproach: null,
+      }),
+      isError: false,
+    }));
     const client = makeClient({
       listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 50 })]),
     });
@@ -121,13 +154,69 @@ Scout gate: #5
       owner: "o",
       repo: "r",
       request: "x",
-      spawn: fakeSpawn({ ...validEvaluation, duplicate_of: 50 }),
+      spawn,
     });
 
     expect(result.duplicateOf).toBe(50);
+    expect(result.outOfScope).toBe(false);
     expect(result.issueCreated).toBeNull();
     expect(client.createIssue).not.toHaveBeenCalled();
     expect(client.updateIssueBody).not.toHaveBeenCalled();
+    // Exactly one LLM call — narrowing pass skipped.
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("single-step flow: evaluator returns null candidate (out of scope) → narrowing pass skipped → user informed", async () => {
+    const spawn = vi.fn(async (_opts: AgentOpts) => ({
+      sessionId: "s",
+      output: JSON.stringify({
+        ...validEvaluation,
+        candidateApproach: null,
+      }),
+      isError: false,
+    }));
+    const client = makeClient();
+    const result = await runFeatureCommand({
+      client,
+      owner: "o",
+      repo: "r",
+      request: "x",
+      spawn,
+    });
+
+    expect(result.outOfScope).toBe(true);
+    expect(result.duplicateOf).toBeNull();
+    expect(result.issueCreated).toBeNull();
+    expect(client.createIssue).not.toHaveBeenCalled();
+    expect(spawn).toHaveBeenCalledTimes(1);
+  });
+
+  it("two-step flow: evaluator returns candidate → narrowing pass runs → IssueBody created", async () => {
+    const spawn = vi.fn();
+    spawn.mockResolvedValueOnce({
+      sessionId: "s",
+      output: JSON.stringify(validEvaluation),
+      isError: false,
+    });
+    spawn.mockResolvedValueOnce({
+      sessionId: "s",
+      output: JSON.stringify(validNarrow),
+      isError: false,
+    });
+    const client = makeClient();
+    const result = await runFeatureCommand({
+      client,
+      owner: "o",
+      repo: "r",
+      request: "add a logout button",
+      spawn,
+    });
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+    // Second call's prompt should reference the candidate approach verbatim.
+    const narrowPrompt = spawn.mock.calls[1]![0].prompt as string;
+    expect(narrowPrompt).toContain(validEvaluation.candidateApproach);
+    expect(result.issueCreated).toBe(100);
   });
 
   it("throws when duplicate_of is not a number or null", async () => {
@@ -163,7 +252,10 @@ Scout gate: #5
       owner: "o",
       repo: "r",
       request: "add a logout button",
-      spawn: fakeSpawn({ ...validEvaluation, dependencies: [5, 10] }),
+      spawn: fakeSpawn(
+        { ...validEvaluation, dependencies: [5, 10] },
+        { ...validNarrow, dependencies: [5, 10] },
+      ),
     });
 
     const planBody = (
@@ -179,7 +271,7 @@ Scout gate: #5
       owner: "o",
       repo: "r",
       request: "add a logout button",
-      spawn: fakeSpawn(validEvaluation), // validEvaluation has no dependencies field
+      spawn: fakeSpawn(validEvaluation, validNarrow),
     });
 
     const planBody = (
@@ -188,17 +280,16 @@ Scout gate: #5
     expect(planBody).toContain('"dependencies":[]');
   });
 
-  it("uses LLM-supplied risk score in the Plan entry", async () => {
+  it("uses narrow-pass risk score in the Plan entry", async () => {
     const client = makeClient();
     await runFeatureCommand({
       client,
       owner: "o",
       repo: "r",
       request: "add a logout button",
-      spawn: fakeSpawn({ ...validEvaluation, risk: 7 }),
+      spawn: fakeSpawn(validEvaluation, { ...validNarrow, risk: 7 }),
     });
 
-    // The Plan issue body should contain risk: 7
     const planBody = (
       client.createIssue as ReturnType<typeof vi.fn>
     ).mock.calls.find((c) => c[0].labels?.includes("plan"))?.[0].body as string;
@@ -206,17 +297,13 @@ Scout gate: #5
   });
 
   it("defaults risk to 3 when LLM omits the field", async () => {
-    const evaluationNoRisk = { ...validEvaluation };
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    delete (evaluationNoRisk as any).risk;
-
     const client = makeClient();
     await runFeatureCommand({
       client,
       owner: "o",
       repo: "r",
       request: "add a logout button",
-      spawn: fakeSpawn(evaluationNoRisk),
+      spawn: fakeSpawn(validEvaluation, validNarrow),
     });
 
     const planBody = (
@@ -225,8 +312,18 @@ Scout gate: #5
     expect(planBody).toContain('"risk":3');
   });
 
-  it("passes open issue titles to the prompt for duplicate detection", async () => {
-    let receivedPrompt = "";
+  it("passes open issue titles to the evaluator prompt for duplicate detection", async () => {
+    const spawn = vi.fn();
+    spawn.mockResolvedValueOnce({
+      sessionId: "s",
+      output: JSON.stringify(validEvaluation),
+      isError: false,
+    });
+    spawn.mockResolvedValueOnce({
+      sessionId: "s",
+      output: JSON.stringify(validNarrow),
+      isError: false,
+    });
     const client = makeClient({
       listIssues: vi
         .fn()
@@ -240,16 +337,27 @@ Scout gate: #5
       owner: "o",
       repo: "r",
       request: "x",
-      spawn: async (opts: AgentOpts) => {
-        receivedPrompt = opts.prompt;
-        return {
-          sessionId: "s",
-          output: JSON.stringify(validEvaluation),
-          isError: false,
-        };
-      },
+      spawn,
     });
-    expect(receivedPrompt).toContain("feat: thing one");
-    expect(receivedPrompt).toContain("feat: thing two");
+    const evaluatorPrompt = spawn.mock.calls[0]![0].prompt as string;
+    expect(evaluatorPrompt).toContain("feat: thing one");
+    expect(evaluatorPrompt).toContain("feat: thing two");
+  });
+
+  it("surfaces implementationConflicts from the narrowing pass", async () => {
+    const client = makeClient();
+    const result = await runFeatureCommand({
+      client,
+      owner: "o",
+      repo: "r",
+      request: "x",
+      spawn: fakeSpawn(validEvaluation, {
+        ...validNarrow,
+        implementationConflicts: ["AUTH-I-001: legacy session store"],
+      }),
+    });
+    expect(result.implementationConflicts).toEqual([
+      "AUTH-I-001: legacy session store",
+    ]);
   });
 });
