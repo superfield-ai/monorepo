@@ -28,8 +28,4 @@ export type {
 } from "./spawn.ts";
 
 export { buildDevLoopHarness } from "./harness.ts";
-export type {
-  DevLoopHarness,
-  HarnessOpts,
-  RecordedPrompt,
-} from "./harness.ts";
+export type { DevLoopHarness, HarnessOpts, RecordedPrompt } from "./harness.ts";
