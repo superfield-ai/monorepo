@@ -69,7 +69,7 @@ subject area, that rule is not violated.
 
 ${
   ctx.previousViolations && ctx.previousViolations.length > 0
-    ? "You are in a remediation round. Address each item in the \"Pending blueprint remediation\" section above explicitly — either fix the diff or, if the prior verdict was wrong, explain why in the verdict comment.\n\n"
+    ? 'You are in a remediation round. Address each item in the "Pending blueprint remediation" section above explicitly — either fix the diff or, if the prior verdict was wrong, explain why in the verdict comment.\n\n'
     : ""
 }\
 Emit your verdict as a single JSON object with this exact shape:
@@ -110,7 +110,9 @@ on your diff. Resolve each one before re-emitting a verdict:",
   );
   lines.push("");
   for (const v of violations) {
-    lines.push(`- **${v.rule_id}** \`${v.rule_name}\` (${v.rule_type}, ${v.domain}): ${v.concern}`);
+    lines.push(
+      `- **${v.rule_id}** \`${v.rule_name}\` (${v.rule_type}, ${v.domain}): ${v.concern}`,
+    );
   }
   return lines.join("\n");
 }

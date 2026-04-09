@@ -356,11 +356,7 @@ async function runSlot(
   let nextPendingViolations: BlueprintViolation[] | undefined =
     remediationViolations;
   let auditFailed = false;
-  if (
-    role === "primary" &&
-    entry.kind === "feature" &&
-    !agentResult.isError
-  ) {
+  if (role === "primary" && entry.kind === "feature" && !agentResult.isError) {
     let auditResult: PrePRSelfAuditResult | null = null;
     try {
       auditResult = await runPrePRSelfAudit({
