@@ -20,11 +20,14 @@ export interface ClaudeFixture {
   output: string;
   isError?: boolean;
   costUsd?: number;
+  needsBlueprintEscalation?: boolean;
   /** Recording metadata; ignored by replaySpawn. */
   _metadata?: {
     captured_at?: string;
     prompt_builder?: string;
+    scenario?: string;
     input_summary?: string;
+    hand_authored?: boolean;
   };
 }
 
@@ -55,5 +58,36 @@ export async function replaySpawn(
     output: fixture.output,
     isError: fixture.isError ?? false,
     costUsd: fixture.costUsd,
+    needsBlueprintEscalation: fixture.needsBlueprintEscalation,
   });
+}
+
+/**
+ * Sequence multiple recorded fixtures into a single spawn function. Each
+ * spawn invocation consumes the next fixture in order; the last fixture is
+ * reused for any further calls. Useful for integration tests that drive a
+ * step which makes multiple LLM calls (e.g. feature-evaluate then narrow).
+ */
+export async function replaySpawnSequence(
+  names: string[],
+  fixturesDir: string = DEFAULT_FIXTURES_DIR,
+): Promise<(opts: AgentOpts) => Promise<AgentResult>> {
+  if (names.length === 0) {
+    throw new Error("replaySpawnSequence requires at least one fixture name");
+  }
+  const fixtures = await Promise.all(
+    names.map((n) => loadClaudeFixture(n, fixturesDir)),
+  );
+  let i = 0;
+  return async (_opts: AgentOpts) => {
+    const f = fixtures[Math.min(i, fixtures.length - 1)]!;
+    i++;
+    return {
+      sessionId: f.sessionId,
+      output: f.output,
+      isError: f.isError ?? false,
+      costUsd: f.costUsd,
+      needsBlueprintEscalation: f.needsBlueprintEscalation,
+    };
+  };
 }

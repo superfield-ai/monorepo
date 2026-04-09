@@ -1,0 +1,13 @@
+{
+  "sessionId": "01JCONFORMANTBP00000000",
+  "output": "{\"issue_number\":10,\"violations\":[]}",
+  "isError": false,
+  "costUsd": 0.004,
+  "_metadata": {
+    "captured_at": "2026-04-09T00:00:00Z",
+    "prompt_builder": "buildBlueprintConformancePrompt",
+    "scenario": "conformant",
+    "hand_authored": true,
+    "input_summary": "Issue with no blueprint violations across the candidate domains."
+  }
+}

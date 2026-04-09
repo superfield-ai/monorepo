@@ -1,0 +1,13 @@
+{
+  "sessionId": "01JFEATEVAL00000000000",
+  "output": "{\"title\":\"feat: add logout button to navbar\",\"phase\":\"Identity\",\"motivation\":\"Users currently have no clean way to end their session from the UI.\",\"features\":[\"Add a logout button to the navbar\",\"Wire it to the existing signOut handler\"],\"test_plan\":[\"Click logout -> session cleared\",\"Redirected to /login\"],\"canonical_docs\":[\"docs/prd.md\"],\"risk\":2,\"dependencies\":[],\"duplicate_of\":null,\"candidateApproach\":\"Add a NavBar button that calls authService.signOut() and navigates to /login.\",\"blueprint_rules_cited\":[\"AUTH-P-001\"]}",
+  "isError": false,
+  "costUsd": 0.008,
+  "_metadata": {
+    "captured_at": "2026-04-09T00:00:00Z",
+    "prompt_builder": "buildFeatureEvaluatePrompt",
+    "scenario": "exploratory-first-pass",
+    "hand_authored": true,
+    "input_summary": "Principles-first exploratory evaluation that returns a non-null candidateApproach."
+  }
+}

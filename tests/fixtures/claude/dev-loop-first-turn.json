@@ -1,0 +1,14 @@
+{
+  "sessionId": "01JDEVTURN10000000000",
+  "output": "{\"status\":\"working\",\"notes\":\"wrote outermost failing test against narrow blueprint context\"}",
+  "isError": false,
+  "needsBlueprintEscalation": true,
+  "costUsd": 0.012,
+  "_metadata": {
+    "captured_at": "2026-04-09T00:00:00Z",
+    "prompt_builder": "buildDevelopIssuePrompt",
+    "scenario": "first-turn-narrow",
+    "hand_authored": true,
+    "input_summary": "First dev-loop turn: agent has narrow context (implementation + antipattern) and signals it needs escalation."
+  }
+}

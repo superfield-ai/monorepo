@@ -30,10 +30,13 @@ import {
   buildIssueAuditPrompt,
   buildBlueprintConformancePrompt,
   buildFeatureEvaluatePrompt,
+  buildFeatureNarrowPrompt,
   buildReplanEvaluatePrompt,
   buildDocCoveragePrompt,
   buildDocCanonicalSyncPrompt,
   buildDocConsistencyPrompt,
+  buildDevelopIssuePrompt,
+  buildPrePRSelfAuditPrompt,
 } from "../packages/core/prompts/index.ts";
 
 const FIXTURES_DIR = path.resolve(
@@ -207,6 +210,163 @@ const RECORDERS: Record<string, TaskRecorder> = {
           readmeContent: "# Superfield\n",
         }),
         metadata: { scenario: "significant-new-command", repo: args.repo },
+      };
+    },
+  },
+
+  "blueprint-conformance-conformant": {
+    description: "Blueprint conformance check expected to find zero violations",
+    async build(args) {
+      const issue = await fetchIssue(args);
+      return {
+        prompt: buildBlueprintConformancePrompt({
+          issue,
+          candidateDomains: ["arch"],
+        }),
+        metadata: {
+          repo: args.repo,
+          issue_number: issue.number,
+          scenario: "conformant",
+        },
+      };
+    },
+  },
+
+  "blueprint-conformance-violating": {
+    description: "Blueprint conformance check expected to flag a violation",
+    async build(args) {
+      const issue = await fetchIssue(args);
+      return {
+        prompt: buildBlueprintConformancePrompt({
+          issue,
+          candidateDomains: ["arch"],
+        }),
+        metadata: {
+          repo: args.repo,
+          issue_number: issue.number,
+          scenario: "violating",
+        },
+      };
+    },
+  },
+
+  "blueprint-self-audit-conformant": {
+    description: "Pre-PR self-audit on a conforming diff",
+    async build(args) {
+      const issue = await fetchIssue(args);
+      return {
+        prompt: buildPrePRSelfAuditPrompt({
+          issueNumber: issue.number,
+          issueTitle: issue.title,
+          issueBody: issue.body ?? "",
+          candidateDomains: ["arch"],
+          diffSummary: "- modified: packages/core/agent.ts",
+        }),
+        metadata: {
+          repo: args.repo,
+          issue_number: issue.number,
+          scenario: "self-audit-conformant",
+        },
+      };
+    },
+  },
+
+  "blueprint-self-audit-violating": {
+    description: "Pre-PR self-audit on a non-conforming diff",
+    async build(args) {
+      const issue = await fetchIssue(args);
+      return {
+        prompt: buildPrePRSelfAuditPrompt({
+          issueNumber: issue.number,
+          issueTitle: issue.title,
+          issueBody: issue.body ?? "",
+          candidateDomains: ["test"],
+          diffSummary: "- added: packages/core/tests/unit/foo.test.ts",
+        }),
+        metadata: {
+          repo: args.repo,
+          issue_number: issue.number,
+          scenario: "self-audit-violating",
+        },
+      };
+    },
+  },
+
+  "feature-evaluate-exploratory": {
+    description:
+      "Feature-evaluate first (exploratory) pass — returns non-null candidateApproach",
+    async build(args) {
+      return {
+        prompt: buildFeatureEvaluatePrompt({
+          request: "Add a logout button to the navbar that clears the session",
+          planBody: null,
+          openIssueTitles: [],
+          candidateDomains: ["auth", "ux"],
+        }),
+        metadata: { repo: args.repo, scenario: "exploratory-first-pass" },
+      };
+    },
+  },
+
+  "feature-evaluate-narrowed": {
+    description:
+      "Feature-narrow second pass — refines the exploratory candidate into a final IssueBody",
+    async build(args) {
+      return {
+        prompt: buildFeatureNarrowPrompt({
+          request: "Add a logout button to the navbar that clears the session",
+          planBody: null,
+          openIssueTitles: [],
+          candidateDomains: ["auth", "ux"],
+          candidateApproach:
+            "Add a NavBar button that calls authService.signOut() and navigates to /login.",
+        }),
+        metadata: { repo: args.repo, scenario: "narrow-second-pass" },
+      };
+    },
+  },
+
+  "dev-loop-first-turn": {
+    description:
+      "Dev-loop first turn — narrow blueprint context (implementation + antipattern)",
+    async build(args) {
+      const issue = await fetchIssue(args);
+      return {
+        prompt: buildDevelopIssuePrompt({
+          issue,
+          role: "primary",
+          worktreePath: "/tmp/worktree",
+          branch: "issue-1",
+          phaseName: "Phase 1",
+        }),
+        metadata: {
+          repo: args.repo,
+          issue_number: issue.number,
+          scenario: "first-turn-narrow",
+        },
+      };
+    },
+  },
+
+  "dev-loop-escalated": {
+    description:
+      "Dev-loop second turn after escalation — adds principles + threats",
+    async build(args) {
+      const issue = await fetchIssue(args);
+      return {
+        prompt: buildDevelopIssuePrompt({
+          issue,
+          role: "primary",
+          worktreePath: "/tmp/worktree",
+          branch: "issue-1",
+          phaseName: "Phase 1",
+          escalated: true,
+        }),
+        metadata: {
+          repo: args.repo,
+          issue_number: issue.number,
+          scenario: "escalated-second-turn",
+        },
       };
     },
   },

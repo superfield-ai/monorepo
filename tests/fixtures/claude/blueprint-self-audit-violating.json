@@ -1,0 +1,13 @@
+{
+  "sessionId": "01JSELFAUDITBAD00000000",
+  "output": "{\"conformant\":false,\"violations\":[{\"rule_id\":\"TEST-A-002\",\"rule_name\":\"no-mocks-of-own-logic\",\"rule_type\":\"antipattern\",\"domain\":\"test\",\"concern\":\"Added a mock that shadows the production parser instead of exercising the real implementation.\"}]}",
+  "isError": false,
+  "costUsd": 0.006,
+  "_metadata": {
+    "captured_at": "2026-04-09T00:00:00Z",
+    "prompt_builder": "buildPrePRSelfAuditPrompt",
+    "scenario": "self-audit-violating",
+    "hand_authored": true,
+    "input_summary": "Pre-PR self-audit verdict for a non-conforming diff."
+  }
+}
