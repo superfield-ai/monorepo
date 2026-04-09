@@ -238,4 +238,48 @@ describe("planning loop — end to end", () => {
       expect(result.blueprintConformance.issuesWithViolations).toEqual([3]);
     }
   });
+
+  it("watchdog error does not crash the planning loop — remaining steps still run", async () => {
+    // Regression: a watchdog failure must be isolated so that issue-audit,
+    // plan-coverage, and blueprint-conformance still execute in the same tick.
+    const client = makeClient({
+      // Cause the watchdog to throw by making getHeadSha reject
+      getHeadSha: vi.fn().mockRejectedValue(new Error("network failure")),
+    });
+
+    const audit = fakeAudit({ nonConformant: [7] });
+    const coverage = fakeCoverage({ appended: [2] });
+    const blueprint = fakeBlueprint({ issuesWithViolations: [7] });
+
+    const result = await tickRepositoryForTesting(client, "org", "repo", {
+      issueAudit: audit,
+      blueprintConformance: blueprint,
+      planCoverage: coverage,
+    });
+
+    // Watchdog failed but must not crash the tick
+    expect(result.watchdog.ok).toBe(false);
+    if (!result.watchdog.ok) {
+      expect(result.watchdog.error).toContain("network failure");
+    }
+
+    // All remaining steps must have executed successfully
+    expect(audit).toHaveBeenCalledOnce();
+    expect(coverage).toHaveBeenCalledOnce();
+    expect(blueprint).toHaveBeenCalledOnce();
+
+    expect(result.issueAudit.ok).toBe(true);
+    expect(result.planCoverage.ok).toBe(true);
+    expect(result.blueprintConformance.ok).toBe(true);
+
+    if (result.issueAudit.ok) {
+      expect(result.issueAudit.nonConformant).toEqual([7]);
+    }
+    if (result.planCoverage.ok) {
+      expect(result.planCoverage.appended).toEqual([2]);
+    }
+    if (result.blueprintConformance.ok) {
+      expect(result.blueprintConformance.issuesWithViolations).toEqual([7]);
+    }
+  });
 });
