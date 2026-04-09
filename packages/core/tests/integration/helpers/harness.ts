@@ -16,7 +16,12 @@ import {
   type GitHubState,
   type SeedGitHubOpts,
 } from "./github-msw.ts";
-import { replayDevLoopSpawn, type DevLoopScenario } from "./spawn.ts";
+import {
+  replayDevLoopSpawn,
+  detectStage,
+  type DevLoopScenario,
+  type DevLoopStage,
+} from "./spawn.ts";
 
 /**
  * Dev-loop e2e harness (#93).
@@ -44,6 +49,11 @@ export interface HarnessOpts {
   slotCount?: number;
 }
 
+export interface RecordedPrompt {
+  stage: DevLoopStage;
+  prompt: string;
+}
+
 export interface DevLoopHarness {
   tickOnce(): Promise<DevLoopTickResult>;
   dispose(): Promise<void>;
@@ -53,6 +63,12 @@ export interface DevLoopHarness {
   /** Exposed so tests that need direct Octokit access can round-trip. */
   owner: string;
   repo: string;
+  /**
+   * Every prompt seen by the scenario spawn helper, in the order it was
+   * spawned. Populated by a recording proxy wired into the harness spawn —
+   * test seam only, never touches production code.
+   */
+  recordedPrompts: RecordedPrompt[];
 }
 
 export async function buildDevLoopHarness(
@@ -135,13 +151,24 @@ export async function buildDevLoopHarness(
       root: worktreeRoot,
       baseUrl: remote.baseUrl,
     });
-    const spawn = replayDevLoopSpawn(opts.scenario);
+    const innerSpawn = replayDevLoopSpawn(opts.scenario);
+    const recordedPrompts: RecordedPrompt[] = [];
+    const spawn = async (
+      spawnOpts: Parameters<typeof innerSpawn>[0],
+    ): ReturnType<typeof innerSpawn> => {
+      recordedPrompts.push({
+        stage: detectStage(spawnOpts.prompt),
+        prompt: spawnOpts.prompt,
+      });
+      return innerSpawn(spawnOpts);
+    };
 
     const harness: DevLoopHarness = {
       state: seeded.state,
       worktreeRoot,
       owner: opts.github.owner,
       repo: opts.github.repo,
+      recordedPrompts,
       tickOnce: () =>
         tickDevLoop({
           client,
