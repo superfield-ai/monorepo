@@ -195,6 +195,7 @@ Each Plan issue moves through these stages in order:
 1. **Branch** — dedicated worktree checked out from `main`
 2. **Develop** — agent works TDD outside-in; commits and pushes to the remote branch frequently for durability (no PR opened — no CI minutes consumed)
 3. **Checklist complete** — all feature deliverables and test plan items on the issue are checked off; because agents work TDD throughout, tests pass locally before this point
+   3a. **Pre-PR blueprint self-audit (#81)** — the agent reads its own diff against the full blueprint context (implementation rules + principles + threats + antipatterns for the issue's candidate domains) and emits a structured `{ conformant, violations }` verdict. On `conformant: true` the loop proceeds to stage 4. On `conformant: false` the loop persists the violations on the session comment, bumps the remediation counter, and loops back to stage 2 (develop) with the violations injected as explicit fix instructions. Remediation is capped at 3 passes per issue — the fourth non-conformant verdict logs an error and exits the slot without opening a PR (manual intervention required). The counter persists across dev-loop restarts via the session comment.
 4. **PR open** — PR opened immediately as ready for review (never draft); CI runs
 5. **CI pass** — all check runs succeed
 6. **Merge gate** — all preceding Plan issues are CLOSED

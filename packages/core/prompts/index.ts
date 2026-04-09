@@ -22,6 +22,9 @@ export type { IssueAuditContext } from "./issue-audit.ts";
 export { buildBlueprintConformancePrompt } from "./blueprint-conformance.ts";
 export type { BlueprintConformanceContext } from "./blueprint-conformance.ts";
 
+export { buildPrePRSelfAuditPrompt } from "./pre-pr-self-audit.ts";
+export type { PrePRSelfAuditPromptContext } from "./pre-pr-self-audit.ts";
+
 export { buildDocCoveragePrompt } from "./doc-coverage.ts";
 export type { DocCoverageContext } from "./doc-coverage.ts";
 

@@ -76,15 +76,35 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
   } as unknown as GitHubClient;
 }
 
+/** Spawn calls excluding the pre-PR self-audit (#81) calls. */
+function developCallList(spawn: ReturnType<typeof vi.fn>): { 0: AgentOpts }[] {
+  return spawn.mock.calls.filter(
+    (c: unknown[]) =>
+      !(c[0] as AgentOpts).prompt.includes("Pre-PR blueprint self-audit"),
+  ) as unknown as { 0: AgentOpts }[];
+}
+function developCalls(spawn: ReturnType<typeof vi.fn>): number {
+  return developCallList(spawn).length;
+}
+
 function fakeSpawn(result: Partial<AgentResult> = {}) {
-  return vi.fn(
-    async (_opts: AgentOpts): Promise<AgentResult> => ({
+  return vi.fn(async (opts: AgentOpts): Promise<AgentResult> => {
+    // Pre-PR self-audit (#81) calls spawn via runLLMTask. Default to a
+    // conformant verdict so existing tests don't trip the new stage.
+    if (opts.prompt.includes("Pre-PR blueprint self-audit")) {
+      return {
+        sessionId: "sess-audit",
+        output: '{"conformant": true, "violations": []}',
+        isError: false,
+      };
+    }
+    return {
       sessionId: "sess-new",
       output: "done",
       isError: false,
       ...result,
-    }),
-  );
+    };
+  });
 }
 
 async function preCreateWorktree(issueNumber: number, slug: string) {
@@ -145,7 +165,7 @@ describe("tickDevLoop", () => {
     expect(result.idle).toBe(false);
     expect(result.mergeGateBlocked).toEqual([]);
     expect(result.reapedSessions).toEqual([]);
-    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(developCalls(spawn)).toBe(1);
   });
 
   it("passes downstream feature issues into the dev-scout prompt in plan order", async () => {
@@ -433,7 +453,7 @@ Scout gate: #5
 
     expect(result.primaryIssue).toBe(10);
     expect(result.speculativeIssues).toEqual([11]);
-    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(developCalls(spawn)).toBe(2);
   });
 
   it("does not open speculative slots when scout is still open", async () => {
@@ -568,7 +588,7 @@ Scout gate: #5
     expect(result.primaryIssue).toBe(10);
     expect(result.speculativeIssues).toEqual([11, 12]);
     expect(result.speculativeIssues).not.toContain(10);
-    expect(spawn).toHaveBeenCalledTimes(3);
+    expect(developCalls(spawn)).toBe(3);
   });
 
   it("excludes speculative candidates whose dependencies are still open", async () => {
@@ -616,7 +636,7 @@ Scout gate: #5
     expect(result.primaryIssue).toBe(10);
     expect(result.speculativeIssues).toEqual([11]);
     expect(result.speculativeIssues).not.toContain(12);
-    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(developCalls(spawn)).toBe(2);
   });
 
   it("resumes existing session when session comment exists", async () => {
@@ -656,8 +676,8 @@ Scout gate: #5
       worktrees,
       spawn,
     });
-    expect(spawn).toHaveBeenCalledTimes(1);
-    const spawnArgs = spawn.mock.calls[0]![0];
+    expect(developCalls(spawn)).toBe(1);
+    const spawnArgs = developCallList(spawn)[0]![0];
     expect(spawnArgs.sessionId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
   });
 
@@ -725,8 +745,8 @@ Scout gate: #5
 
     expect(result.primaryIssue).toBe(11);
     expect(result.reapedSessions).toEqual([]);
-    expect(spawn).toHaveBeenCalledTimes(1);
-    expect(spawn.mock.calls[0]![0].sessionId).toBe(
+    expect(developCalls(spawn)).toBe(1);
+    expect(developCallList(spawn)[0]![0].sessionId).toBe(
       "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     );
   });
@@ -1018,8 +1038,8 @@ Scout gate: null
       spawn,
       slotCount: 1,
     });
-    expect(spawn).toHaveBeenCalledTimes(1);
-    expect(spawn.mock.calls[0]![0].prompt).not.toContain(
+    expect(developCalls(spawn)).toBe(1);
+    expect(developCallList(spawn)[0]![0].prompt).not.toContain(
       "expanded context — escalation",
     );
     // Turn 2 — latch should now persist via the session comment.
@@ -1032,12 +1052,12 @@ Scout gate: null
       spawn,
       slotCount: 1,
     });
-    expect(spawn).toHaveBeenCalledTimes(2);
-    expect(spawn.mock.calls[1]![0].prompt).toContain(
+    expect(developCalls(spawn)).toBe(2);
+    expect(developCallList(spawn)[1]![0].prompt).toContain(
       "## Blueprint rules (expanded context — escalation)",
     );
     // And the narrow fragment is still present — additive, not replacing.
-    expect(spawn.mock.calls[1]![0].prompt).toContain(
+    expect(developCallList(spawn)[1]![0].prompt).toContain(
       "## Blueprint rules (narrow context — first pass)",
     );
   });
@@ -1067,8 +1087,8 @@ Scout gate: null
         slotCount: 1,
       });
     }
-    expect(spawn).toHaveBeenCalledTimes(3);
-    for (const call of spawn.mock.calls) {
+    expect(developCalls(spawn)).toBe(3);
+    for (const call of developCallList(spawn)) {
       expect(call[0].prompt).not.toContain("expanded context — escalation");
     }
   });
@@ -1108,5 +1128,291 @@ Scout gate: null
     );
     expect(latchLogs.length).toBe(1);
     log.mockRestore();
+  });
+});
+
+describe("tickDevLoop — pre-PR blueprint self-audit (#81)", () => {
+  const auditPlanBody = `## Phase: Identity
+
+Goal: Build the auth seams.
+Depends on phases: None.
+Scout gate: null
+
+- #10 — feat: build the thing [risk: 4]
+  <!-- superfield: {"number":10,"title":"feat: build the thing","phase":"Identity","kind":"feature","risk":4,"dependencies":[],"parallel_safe":false} -->
+`;
+
+  function makeAuditClient(sessionComments: {
+    getComments: () => { id: number; body: string }[];
+    onUpsert?: (body: string) => void;
+  }) {
+    const createIssueComment = vi
+      .fn()
+      .mockImplementation(async (_o, _r, _n, body: string) => {
+        sessionComments.onUpsert?.(body);
+        return { id: 1 };
+      });
+    const updateIssueComment = vi
+      .fn()
+      .mockImplementation(async (_o, _r, _id, body: string) => {
+        sessionComments.onUpsert?.(body);
+        return undefined;
+      });
+    return makeClient({
+      listIssues: vi
+        .fn()
+        .mockImplementation(async (_o, _r, labels?: string[]) => {
+          if (labels?.includes("plan")) {
+            return [
+              {
+                number: 99,
+                body: auditPlanBody,
+                labels: ["plan"],
+                state: "open",
+              },
+            ];
+          }
+          return [];
+        }),
+      getIssue: vi
+        .fn()
+        .mockImplementation(async (_o, _r, n: number) =>
+          makeIssue({ number: n, state: "open" }),
+        ),
+      listIssueComments: vi
+        .fn()
+        .mockImplementation(async () => sessionComments.getComments()),
+      createIssueComment,
+      updateIssueComment,
+    });
+  }
+
+  function auditingSpawn(verdict: {
+    conformant: boolean;
+    violations: object[];
+  }) {
+    return vi.fn(async (opts: AgentOpts): Promise<AgentResult> => {
+      if (opts.prompt.includes("Pre-PR blueprint self-audit")) {
+        return {
+          sessionId: "audit-sess",
+          output: JSON.stringify(verdict),
+          isError: false,
+        };
+      }
+      return {
+        sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        output: "develop done",
+        isError: false,
+      };
+    });
+  }
+
+  const sampleViolation = {
+    rule_id: "ARCH-T-001",
+    rule_name: "server-code-in-browser-bundle",
+    rule_type: "threat",
+    domain: "arch",
+    concern: "Sample violation concern.",
+  };
+
+  it("first-time self-audit has no previousViolations in the prompt", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeAuditClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const spawn = auditingSpawn({ conformant: true, violations: [] });
+
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+
+    const auditCall = spawn.mock.calls.find((c) =>
+      (c[0] as AgentOpts).prompt.includes("Pre-PR blueprint self-audit"),
+    );
+    expect(auditCall).toBeDefined();
+    expect((auditCall![0] as AgentOpts).prompt).not.toContain(
+      "## Pending blueprint remediation",
+    );
+  });
+
+  it("progresses to PR open path on conformant self-audit", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeAuditClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const spawn = auditingSpawn({ conformant: true, violations: [] });
+
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+
+    expect(result.primaryIssue).toBe(10);
+    // Conformant audit means no remediation state persisted on the session.
+    expect(comments[0]!.body).not.toContain("selfAuditPendingViolations");
+    expect(comments[0]!.body).not.toContain("selfAuditRemediationCount");
+  });
+
+  it("loops back to develop on a violating self-audit with remediationViolations populated", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeAuditClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spawn = auditingSpawn({
+      conformant: false,
+      violations: [sampleViolation],
+    });
+
+    // Tick 1: violating audit → persists remediation state.
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+    expect(comments[0]!.body).toContain("selfAuditPendingViolations");
+    expect(comments[0]!.body).toContain("ARCH-T-001");
+    expect(comments[0]!.body).toContain('"selfAuditRemediationCount": 1');
+
+    // Tick 2: develop prompt should now contain the remediation section.
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+    const developCallsList = developCallList(spawn);
+    expect(developCallsList.length).toBeGreaterThanOrEqual(2);
+    const secondDevelopPrompt = developCallsList[1]![0].prompt;
+    expect(secondDevelopPrompt).toContain("## Pending blueprint remediation");
+    expect(secondDevelopPrompt).toContain("ARCH-T-001");
+    warn.mockRestore();
+  });
+
+  it("enforces the remediation cap at 3", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeAuditClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const errLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spawn = auditingSpawn({
+      conformant: false,
+      violations: [sampleViolation],
+    });
+
+    // Run enough ticks to blow past the cap.
+    for (let i = 0; i < 5; i++) {
+      await tickDevLoop({
+        client,
+        owner: "o",
+        repo: "r",
+        token: "t",
+        worktrees,
+        spawn,
+        slotCount: 1,
+      });
+    }
+
+    // Develop should have been called at most SELF_AUDIT_REMEDIATION_CAP
+    // times — once we hit the cap the slot returns early without spawning.
+    expect(developCalls(spawn)).toBeLessThanOrEqual(3);
+    // The cap-exceeded error should have been logged.
+    const capErrors = errLog.mock.calls.filter((c) =>
+      String(c[0] ?? "").includes("remediation cap exceeded"),
+    );
+    expect(capErrors.length).toBeGreaterThanOrEqual(1);
+    errLog.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("persists the remediation count across a dev-loop restart via the session comment", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeAuditClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spawn = auditingSpawn({
+      conformant: false,
+      violations: [sampleViolation],
+    });
+
+    // Two ticks before "restart".
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+    expect(comments[0]!.body).toContain('"selfAuditRemediationCount": 2');
+
+    // Simulate a restart: a fresh tickDevLoop call reads the same session
+    // comment and bumps the count to 3 on its next non-conformant audit.
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+    expect(comments[0]!.body).toContain('"selfAuditRemediationCount": 3');
+    warn.mockRestore();
   });
 });

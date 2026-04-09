@@ -1,4 +1,5 @@
 import type { GitHubClientPort as GitHubClient } from "@superfield/github";
+import type { BlueprintViolation } from "./steps/blueprint-conformance.ts";
 
 export type AgentRole = "primary" | "speculative";
 
@@ -14,6 +15,23 @@ export interface AgentSession {
    * expanded blueprint context fragment and never re-escalate.
    */
   blueprintEscalated?: boolean;
+  /**
+   * Pre-PR blueprint self-audit remediation count (#81). Incremented every
+   * time the self-audit returns a `conformant: false` verdict. Capped at 3
+   * remediation passes per issue — on the 4th non-conformant verdict the
+   * dev-loop logs an error and exits the slot without opening a PR.
+   *
+   * Persists across dev-loop restarts via the session comment so a crash
+   * mid-remediation does not silently reset the counter.
+   */
+  selfAuditRemediationCount?: number;
+  /**
+   * Violations from the most recent non-conformant self-audit (#81). The
+   * next develop turn injects them into the prompt under "Pending
+   * blueprint remediation" so the agent has explicit fix instructions.
+   * Cleared once the audit returns conformant.
+   */
+  selfAuditPendingViolations?: BlueprintViolation[];
 }
 
 export interface IssueSession {

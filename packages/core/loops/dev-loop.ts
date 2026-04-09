@@ -23,6 +23,14 @@ import {
   deleteSession,
 } from "../sessions.ts";
 import { withRetry, CircuitBreaker } from "../retry.ts";
+import {
+  runPrePRSelfAudit,
+  type PrePRSelfAuditResult,
+} from "../steps/pre-pr-self-audit.ts";
+import type { BlueprintViolation } from "../steps/blueprint-conformance.ts";
+
+/** Cap on remediation passes per issue (#81). */
+export const SELF_AUDIT_REMEDIATION_CAP = 3;
 
 /**
  * The dev loop — drives one primary issue at a time through the 7-stage
@@ -274,6 +282,25 @@ async function runSlot(
   // needsBlueprintEscalation, the session record carries blueprintEscalated,
   // and every subsequent prompt on this issue layers in principles + threats.
   const escalated = existing?.session.blueprintEscalated === true;
+
+  // Pre-PR self-audit remediation state (#81). If a previous tick's audit
+  // returned non-conformant we persisted the violations on the session and
+  // bumped the count. Inject the violations into the next develop prompt
+  // so the agent has explicit fix instructions, and short-circuit the
+  // entire slot if the cap has already been hit.
+  const remediationCount = existing?.session.selfAuditRemediationCount ?? 0;
+  if (
+    role === "primary" &&
+    entry.kind === "feature" &&
+    remediationCount >= SELF_AUDIT_REMEDIATION_CAP
+  ) {
+    console.error(
+      `[${owner}/${repo}] blueprint self-audit remediation cap exceeded for #${entry.number} — manual intervention required (${remediationCount}/${SELF_AUDIT_REMEDIATION_CAP} passes)`,
+    );
+    return { closed: false, mergeGateBlocked: [] };
+  }
+  const remediationViolations = existing?.session.selfAuditPendingViolations;
+
   const prompt = buildPromptForKind(
     entry,
     issue,
@@ -282,6 +309,7 @@ async function runSlot(
     plan,
     role,
     escalated,
+    remediationViolations,
   );
 
   await upsertSession(client, owner, repo, entry.number, {
@@ -290,6 +318,8 @@ async function runSlot(
     slot,
     startedAt: new Date().toISOString(),
     blueprintEscalated: escalated || undefined,
+    selfAuditRemediationCount: remediationCount || undefined,
+    selfAuditPendingViolations: remediationViolations,
   });
 
   const spawnFn = opts.spawn ?? spawnAgent;
@@ -314,13 +344,70 @@ async function runSlot(
     );
   }
 
+  // Stage 3a — pre-PR blueprint self-audit (#81). Inserted between
+  // "checklist complete" and "PR open" on the primary feature path. The
+  // agent reads its own diff against the full blueprint context for the
+  // issue's candidate domains and emits a verdict. On non-conformant we
+  // persist the violations + bump the remediation count and exit the slot
+  // (the next tick re-runs develop with the violations injected). On
+  // conformant we clear pending state and continue normal post-run checks.
+  // Skipped for ci-failure and dev-scout — those have their own loops.
+  let nextRemediationCount = remediationCount;
+  let nextPendingViolations: BlueprintViolation[] | undefined =
+    remediationViolations;
+  let auditFailed = false;
+  if (role === "primary" && entry.kind === "feature" && !agentResult.isError) {
+    let auditResult: PrePRSelfAuditResult | null = null;
+    try {
+      auditResult = await runPrePRSelfAudit({
+        issue,
+        repoPath: wt.path,
+        previousViolations: remediationViolations,
+        spawn: spawnFn,
+      });
+    } catch (err) {
+      console.error(
+        `[${owner}/${repo}] blueprint self-audit failed for #${entry.number}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+    }
+
+    if (auditResult) {
+      if (auditResult.conformant) {
+        nextPendingViolations = undefined;
+      } else {
+        nextRemediationCount = remediationCount + 1;
+        nextPendingViolations = auditResult.violations;
+        auditFailed = true;
+        if (nextRemediationCount >= SELF_AUDIT_REMEDIATION_CAP) {
+          console.error(
+            `[${owner}/${repo}] blueprint self-audit remediation cap exceeded for #${entry.number} — manual intervention required (${nextRemediationCount}/${SELF_AUDIT_REMEDIATION_CAP} passes)`,
+          );
+        } else {
+          console.warn(
+            `[${owner}/${repo}] blueprint self-audit non-conformant for #${entry.number} (remediation ${nextRemediationCount}/${SELF_AUDIT_REMEDIATION_CAP}) — looping back to develop with violations`,
+          );
+        }
+      }
+    }
+  }
+
   await upsertSession(client, owner, repo, entry.number, {
     sessionId: agentResult.sessionId,
     role,
     slot,
     startedAt: existing?.session.startedAt ?? new Date().toISOString(),
     blueprintEscalated: nextEscalated || undefined,
+    selfAuditRemediationCount: nextRemediationCount || undefined,
+    selfAuditPendingViolations: nextPendingViolations,
   });
+
+  // On a non-conformant audit, do NOT proceed to the merge-gate / close
+  // checks — the agent has work to redo. The next tick will re-enter this
+  // slot, see the pending violations on the session, and inject them into
+  // the next develop prompt as remediation instructions.
+  if (auditFailed) {
+    return { closed: false, mergeGateBlocked: [] };
+  }
 
   // Speculative agents exit when their checklist is complete; the issue
   // does NOT close until the primary later opens and merges the PR. So we
@@ -616,6 +703,7 @@ function buildPromptForKind(
   plan: Plan,
   role: "primary" | "speculative",
   escalated: boolean,
+  remediationViolations?: BlueprintViolation[],
 ): string {
   if (entry.kind === "ci-failure") {
     return buildCIFailurePrompt({
@@ -648,6 +736,7 @@ function buildPromptForKind(
     branch,
     phaseName: entry.phase,
     escalated,
+    remediationViolations,
   });
 }
 

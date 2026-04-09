@@ -1,5 +1,6 @@
 import type { Issue } from "@superfield/github";
 import type { AgentRole } from "../sessions.ts";
+import type { BlueprintViolation } from "../steps/blueprint-conformance.ts";
 import { pickCandidateDomains } from "../blueprint.ts";
 import {
   projectContextFragment,
@@ -26,6 +27,13 @@ export interface DevelopIssueContext {
    * latch — stays true for the remainder of the issue (#78).
    */
   escalated?: boolean;
+  /**
+   * Violations carried over from a non-conformant pre-PR self-audit (#81).
+   * When present, the prompt renders a "Pending blueprint remediation"
+   * section instructing the agent to address each item before re-running
+   * the audit. Cleared by the dev-loop once the audit returns conformant.
+   */
+  remediationViolations?: BlueprintViolation[];
 }
 
 /**
@@ -71,6 +79,7 @@ ${ctx.issue.body ?? "(no body)"}`,
     tddOutsideInFragment(),
     narrowContext,
     expandedContext,
+    renderRemediationSection(ctx.remediationViolations),
     blueprintReferenceFragment(),
     commitStandardsFragment(),
     `## Begin
@@ -78,4 +87,22 @@ ${ctx.issue.body ?? "(no body)"}`,
 \`cd\` into your worktree and start by re-reading the issue. Then write the \
 outermost failing test.`,
   );
+}
+
+function renderRemediationSection(
+  violations: BlueprintViolation[] | undefined,
+): string {
+  if (!violations || violations.length === 0) return "";
+  const lines: string[] = ["## Pending blueprint remediation", ""];
+  lines.push(
+    "Your previous turn produced a diff that failed the pre-PR blueprint \
+self-audit. Address each violation below before re-running the audit:",
+  );
+  lines.push("");
+  for (const v of violations) {
+    lines.push(
+      `- **${v.rule_id}** \`${v.rule_name}\` (${v.rule_type}, ${v.domain}): ${v.concern}`,
+    );
+  }
+  return lines.join("\n");
 }
