@@ -1,5 +1,6 @@
 import type { Issue } from "@superfield/github";
 import type { AgentRole } from "../sessions.ts";
+import { pickCandidateDomains } from "../blueprint.ts";
 import {
   projectContextFragment,
   commitStandardsFragment,
@@ -7,6 +8,7 @@ import {
   roleFragment,
   tddOutsideInFragment,
   blueprintReferenceFragment,
+  buildBlueprintContextFragment,
   joinSections,
 } from "./fragments/index.ts";
 
@@ -27,6 +29,16 @@ export interface DevelopIssueContext {
  * Superfield's 7-stage dev-loop lifecycle and the unified IssueBody schema.
  */
 export function buildDevelopIssuePrompt(ctx: DevelopIssueContext): string {
+  const domains = pickCandidateDomains({
+    title: ctx.issue.title,
+    body: ctx.issue.body ?? null,
+    labels: ctx.issue.labels ?? [],
+  });
+  const narrowContext = buildBlueprintContextFragment({
+    domains,
+    ruleTypes: ["implementation", "antipattern"],
+    budgetBytes: 4096,
+  });
   return joinSections(
     projectContextFragment(),
     `## Assignment
@@ -41,6 +53,7 @@ ${ctx.issue.body ?? "(no body)"}`,
     worktreeIsolationFragment(ctx.worktreePath),
     roleFragment(ctx.role),
     tddOutsideInFragment(),
+    narrowContext,
     blueprintReferenceFragment(),
     commitStandardsFragment(),
     `## Begin

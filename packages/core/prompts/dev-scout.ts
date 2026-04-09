@@ -1,9 +1,11 @@
 import type { Issue } from "@superfield/github";
+import { pickCandidateDomains } from "../blueprint.ts";
 import {
   projectContextFragment,
   commitStandardsFragment,
   worktreeIsolationFragment,
   blueprintReferenceFragment,
+  buildBlueprintContextFragment,
   joinSections,
 } from "./fragments/index.ts";
 
@@ -33,6 +35,30 @@ export function buildDevScoutPrompt(ctx: DevScoutContext): string {
   const featureList = ctx.featureIssues
     .map((i) => `- #${i.number}: ${i.title}`)
     .join("\n");
+
+  // Aggregate candidate domains across the scout issue and every downstream
+  // feature issue so the scout sees rules for every seam it will scaffold.
+  const domainSet = new Set<string>(
+    pickCandidateDomains({
+      title: ctx.scoutIssue.title,
+      body: ctx.scoutIssue.body ?? null,
+      labels: ctx.scoutIssue.labels ?? [],
+    }),
+  );
+  for (const f of ctx.featureIssues) {
+    for (const d of pickCandidateDomains({
+      title: f.title,
+      body: (f as { body?: string | null }).body ?? null,
+      labels: (f as { labels?: string[] }).labels ?? [],
+    })) {
+      domainSet.add(d);
+    }
+  }
+  const narrowContext = buildBlueprintContextFragment({
+    domains: [...domainSet],
+    ruleTypes: ["implementation", "antipattern"],
+    budgetBytes: 4096,
+  });
 
   return joinSections(
     projectContextFragment(),
@@ -87,6 +113,7 @@ You open the PR yourself once all six are true.
 - Existing tests must stay green.
 - New test stubs must be \`it.todo()\` — they must not be \`it.skip()\`, must \
 not be commented out, and must not fail.`,
+    narrowContext,
     blueprintReferenceFragment(),
     commitStandardsFragment(),
     `## Begin
