@@ -73,3 +73,13 @@ Fixture names:
 
 The `test-sample.json` file is a synthetic fixture used only by the
 `helpers/replay` unit tests; do not use it in real integration tests.
+
+## Dev-loop e2e fixtures (issue #93)
+
+Hand-authored fixtures backing the `tickDevLoop` happy-path e2e harness in
+`packages/core/tests/integration/dev-loop.test.ts`. Live under
+`tests/fixtures/claude/dev-loop-e2e/` and are referenced by
+`replayDevLoopSpawn` as `dev-loop-e2e/<name>`:
+
+- `dev-loop-e2e/develop-checklist-complete.json` — primary develop turn
+  that reports the checklist complete and clears to the self-audit stage.

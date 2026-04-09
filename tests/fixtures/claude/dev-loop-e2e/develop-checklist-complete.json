@@ -1,0 +1,13 @@
+{
+  "sessionId": "01JE2EDEVDONE0000000001",
+  "output": "{\"status\":\"complete\",\"notes\":\"all checklist items satisfied; opening PR\"}",
+  "isError": false,
+  "costUsd": 0.008,
+  "_metadata": {
+    "captured_at": "2026-04-09T00:00:00Z",
+    "prompt_builder": "buildDevelopIssuePrompt",
+    "scenario": "e2e-happy-path-primary-complete",
+    "hand_authored": true,
+    "input_summary": "Happy-path primary develop turn: agent reports checklist complete and will open a PR. Used by the tickDevLoop e2e harness (#93)."
+  }
+}
