@@ -27,7 +27,14 @@ export type BlueprintRuleType =
   | "design_pattern"
   | "architecture"
   | "checklist"
-  | "antipattern";
+  | "antipattern"
+  // "implementation" rules come from `blueprint/rules/implementations/ts/*.yaml`.
+  // These are language-specific (TypeScript) concretions of the abstract
+  // per-domain rules and are folded into their parent domain at load time so
+  // that `pickCandidateDomains()` + domain-keyed lookups transparently surface
+  // them alongside the rest of the rules. See issue #80 (narrow first-turn
+  // context) for the primary consumer.
+  | "implementation";
 
 export interface BlueprintGraphNode {
   hash: string;
@@ -150,6 +157,42 @@ function buildFromBundled(): Blueprint {
         deprecated: r.deprecated,
       })),
     });
+  }
+  // Fold implementation rules into their parent domain so lookups stay
+  // domain-keyed. Filename convention: `<domain>-ts.yaml`. Parse the embedded
+  // YAML body and append each rule (marked `type: implementation`) to the
+  // matching domain's rules list.
+  for (const [filename, body] of Object.entries(
+    BLUEPRINT_DATA.implementations ?? {},
+  )) {
+    const domainName = filename.replace(/-ts\.ya?ml$/i, "").toLowerCase();
+    const domain = domains.get(domainName);
+    if (!domain) continue;
+    try {
+      const parsed = parseYaml(body) as {
+        rules?: Array<{
+          number: string;
+          hash: string;
+          name: string;
+          type?: string;
+          description: string;
+          deprecated?: boolean;
+        }>;
+      };
+      for (const r of parsed.rules ?? []) {
+        domain.rules.push({
+          number: r.number,
+          hash: r.hash,
+          name: r.name,
+          type: "implementation",
+          description: r.description,
+          deprecated: r.deprecated ?? false,
+        });
+      }
+    } catch {
+      // Ignore malformed implementation files — this is codegen'd content and
+      // a parse error here would be caught by the compile step, not runtime.
+    }
   }
   return {
     corpusVersion: BLUEPRINT_DATA.corpusVersion,
