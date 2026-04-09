@@ -191,7 +191,7 @@ const RECORDERS: Record<string, TaskRecorder> = {
     description: "Canonical sync on a PR that adds a new CLI command",
     async build(args) {
       const prdContent = await fs.readFile(
-        path.resolve(import.meta.dirname, "../docs/prd.md"),
+        path.resolve(import.meta.dirname, "../docs/product.md"),
         "utf8",
       );
       return {
@@ -213,7 +213,7 @@ const RECORDERS: Record<string, TaskRecorder> = {
     description: "Doc consistency check across canonical and inline samples",
     async build(args) {
       const prd = await fs.readFile(
-        path.resolve(import.meta.dirname, "../docs/prd.md"),
+        path.resolve(import.meta.dirname, "../docs/product.md"),
         "utf8",
       );
       const agentTs = await fs.readFile(

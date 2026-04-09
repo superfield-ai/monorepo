@@ -1,10 +1,6 @@
-# Superfield — Product Requirements Document
+# Superfield — Architecture
 
-## Overview
-
-Superfield is an opinionated GitOps AI orchestrator. Git and the forge (GitHub initially) are the control plane — not a side effect. Issues are the task queue. The Plan issue is orchestration state. PRs are change proposals. Superfield reads from and writes to this control plane to drive autonomous development loops.
-
-It replaces calypso-agents entirely, re-encoding every skill and workflow as TypeScript. Hard type contracts and deterministic code replace the soft guardrails of hand-authored markdown skill files and shell scripts. Prompts to the LLM still exist, but they are generated from typed TypeScript builders, not loose markdown on disk. The result is a self-contained, testable runtime that treats the forge as the single source of truth for all agent state.
+Technical and implementation details for Superfield. Product scope lives in [`product.md`](./product.md); build order lives in [`roadmap.md`](./roadmap.md); test strategy lives in [`testing.md`](./testing.md).
 
 ## GitOps Control Plane
 
@@ -21,11 +17,7 @@ All orchestration state lives in the forge. The only local state is `~/.superfie
 
 Superfield is stateless at the process level. Any instance can resume from the forge alone. Killing and restarting the process loses nothing. The sole local exception is `~/.superfield/config.yaml` (credentials and repo assignments). All orchestration state — including active agent sessions — lives in the forge.
 
-## Problem
-
-The calypso-agents skill system requires a human (or LLM session) to interpret and direct execution. For autonomous continuous loops this model is too fragile: drift, misinterpretation, and context loss compound over time. Shell scripts add a second failure surface — they depend on system binaries, environment state, and implicit PATH. Superfield eliminates both: skills become typed TypeScript modules, all external interaction goes through direct API calls, and the forge owns all state.
-
-## Architecture
+## Calypso Mapping
 
 Superfield is a direct replacement for the calypso-agents + shell script stack:
 
@@ -38,13 +30,15 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 | Plan rebuild / replan                  | `superfield plan`                                                                       |
 | Plan issue (GitHub)                    | Plan issue (GitHub, same format)                                                        |
 
-## Guiding Principles
+## Libraries
 
-- **Forge as control plane.** Git and GitHub are the source of truth for all agent state, task ordering, and communication.
-- **No customization.** There are no workflow flags or configuration knobs. Superfield encodes one correct way to do things.
-- **No system binaries.** Never shell out to `git`, `gh`, `curl`, or any other system executable. All git operations go through a TypeScript git library; all GitHub operations go through a TypeScript GitHub API client. The sole exception is agent vendor CLIs (e.g. `claude`, `codex`) — these are spawned as subprocesses because they are the LLM execution layer, not system utilities.
-- **Skills are code.** Each calypso-agents skill is a TypeScript module with an explicit interface, typed inputs/outputs, and unit tests.
-- **API-first testing.** Both the git library and the GitHub client are tested extensively via MSW-intercepted API calls and golden response fixtures.
+| Concern                   | Library                                                        |
+| ------------------------- | -------------------------------------------------------------- |
+| GitHub API                | `@octokit/rest` — typed REST client, first-class TS support    |
+| Git operations            | `isomorphic-git` — pure JS/TS git, no binary dependency        |
+| HTTP interception (tests) | `msw` — intercepts at the `fetch` level, covers both libraries |
+
+**No system binaries.** Never shell out to `git`, `gh`, `curl`, or any other system executable. All git operations go through a TypeScript git library; all GitHub operations go through a TypeScript GitHub API client. The sole exception is agent vendor CLIs (e.g. `claude`, `codex`) — these are spawned as subprocesses because they are the LLM execution layer, not system utilities.
 
 ## Superfield Blueprint
 
@@ -63,14 +57,6 @@ Each node in the graph carries:
 | `deprecated`  | Whether the rule is still active                                                    |
 
 The planning loop uses the blueprint to flag issues and proposed designs that violate active rules. Violations are posted as issue comments referencing the rule ID and description.
-
-## Libraries
-
-| Concern                   | Library                                                        |
-| ------------------------- | -------------------------------------------------------------- |
-| GitHub API                | `@octokit/rest` — typed REST client, first-class TS support    |
-| Git operations            | `isomorphic-git` — pure JS/TS git, no binary dependency        |
-| HTTP interception (tests) | `msw` — intercepts at the `fetch` level, covers both libraries |
 
 ## GitHub Authentication
 
@@ -98,25 +84,6 @@ Subsequent runs of `superfield github add` skip any step that is already satisfi
 There is no API to uninstall a GitHub App using a user-to-server token — it requires either a browser visit or the app's RSA private key (which is never embedded in the CLI binary). `superfield github forget` clears local credentials and prints a browser URL for the user to complete the uninstall. The URL is account-type-aware: `https://github.com/organizations/{org}/settings/installations/{id}` for org installations, `https://github.com/settings/installations/{id}` for personal accounts. If the installation ID cannot be fetched, it falls back to `https://github.com/settings/installations`.
 
 The app itself is part of the product infrastructure and must be created and configured before the CLI onboarding flow can be considered complete.
-
----
-
-## CLI Commands
-
-Superfield has exactly three operational commands plus github subcommands. There are no flags to modify their behavior.
-
-```
-superfield github add       # authenticate, install app, and register the current repo
-superfield github forget    # remove credentials and print the app uninstall link
-
-superfield start [slotCount]  # begin the continuous development loop (foreground)
-superfield plan             # sync all open issues into the Plan tracking issue
-superfield feature          # ticket a new feature issue and update the Plan
-```
-
-### Concurrency model
-
-`start` can be running in one terminal while `plan` or `feature` is invoked in another. There is no local IPC or shared process state. Coordination happens through the forge: `plan` and `feature` write to GitHub; `start` picks up their changes on the next poll cycle. This is a direct consequence of the forge-as-control-plane design.
 
 ---
 
@@ -200,7 +167,7 @@ Default: 1 primary + N-1 speculative. N defaults to 3.
 
 ---
 
-## Command: `start`
+## Command: `start` internals
 
 The continuous development loop. Runs indefinitely until killed (Ctrl-C).
 
@@ -305,7 +272,7 @@ CI jobs are gated on changes to source code and config files. Documentation-only
 
 ---
 
-## Command: `plan`
+## Command: `plan` internals
 
 A one-shot replan. Does not start a loop.
 
@@ -337,7 +304,7 @@ Rules: strict total order, no checkboxes, no step numbers, no parallel group ann
 
 ---
 
-## Command: `feature`
+## Command: `feature` internals
 
 Tickets a new feature issue and registers it in the Plan.
 
@@ -528,92 +495,3 @@ Active agent sessions are stored in the forge as hidden comments on the issue be
 ```
 
 This comment is updated on each resumption and deleted when the issue closes. On startup, Superfield scans open issues for this comment to detect and resume in-progress sessions — the deadman switch. A stale session comment (agent gone, issue still open) is detected by comparing `startedAt` against a configurable timeout; the orchestrator re-claims and resumes.
-
----
-
-## Testing Strategy
-
-Both `@octokit/rest` and `isomorphic-git` make HTTP calls under the hood. MSW intercepts at the `fetch` level, so both libraries are covered by the same interception layer.
-
-### Golden Responses
-
-Real API responses are recorded to `tests/fixtures/` as JSON:
-
-```
-tests/fixtures/
-  github/    # GitHub REST API responses (check runs, issues, PRs, etc.)
-  git/       # git HTTP smart protocol responses (clone, fetch, push)
-```
-
-These files are the source of truth for MSW handlers. Fixtures are recorded from real GitHub API responses using `bun record-fixtures` (runs `scripts/record-github-fixtures.ts`). The recorder hits live endpoints, trims each response to the fields the client and tests depend on, and writes the matching fixture file based on the detected installation state. Run it once per state (no installations, personal-selected, org-selected, all-repos) to build the full fixture set. Fixtures are committed and updated deliberately.
-
-### Test Layers
-
-**Unit** — single function or skill module, all network calls mocked via fixtures.
-
-**Integration** — multiple modules composed together (e.g. planning loop: poll → failed check → create issue → update Plan), network mocked, real TypeScript execution.
-
-No tests against real GitHub in Phase 1.
-
-### Coverage Targets
-
-| Scenario                                                         | Layer       |
-| ---------------------------------------------------------------- | ----------- |
-| Planning loop: no failures — nothing created                     | Unit        |
-| Planning loop: check failed — issue created, Plan updated        | Integration |
-| Planning loop: duplicate failure — no second issue               | Unit        |
-| Planning loop: non-conforming issue — label + comment added      | Unit        |
-| Planning loop: issue missing from Plan — appended                | Unit        |
-| `plan`: all issues present in Plan body                          | Integration |
-| `plan`: missing issues appended in phase order                   | Unit        |
-| `feature`: duplicate detected — user warned, no issue created    | Unit        |
-| `feature`: new issue created and appended to Plan                | Integration |
-| Plan absent — created on first write                             | Unit        |
-| Multiple repos, each with own assigned user                      | Unit        |
-| `superfield github add` writes config correctly                  | Unit        |
-| Octokit: endpoint, auth header, request shape                    | Unit        |
-| `isomorphic-git`: fetch, HEAD resolution, branch lookup          | Unit        |
-| Planning loop: blueprint violation — comment posted with rule ID | Unit        |
-| Dev loop: primary selected from top of Plan                      | Unit        |
-| Dev loop: speculative slots stay empty until scout merged        | Unit        |
-| Dev loop: agent spawned with correct prompt per role             | Unit        |
-| Agent session: upsert creates comment on first claim             | Unit        |
-| Agent session: upsert updates existing comment on resume         | Unit        |
-| Agent session: delete removes comment on issue close             | Unit        |
-| Agent session: stale session detected via deadman timeout        | Unit        |
-| Scout merge qualification: compile + existing tests + todo stubs | Integration |
-| Documentation loop: doc-only change does not trigger CI          | Unit        |
-
----
-
-## Roadmap
-
-| Phase | Scope                                                                                                                                             |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1     | Foundation: config, GitHub client, git client, MSW test harness, golden fixtures, `github add`, `github forget`                                   |
-| 2     | Planning loop — CI watchdog: detect failed checks on `main`, create deduplicated `ci-failure` issues, insert at top of Plan                       |
-| 3     | Planning loop — issue audit and Plan coverage: schema conformance scan, append missing issues to Plan                                             |
-| 4     | Planning loop — blueprint conformance: load `blueprint/rules/graph.yaml`, evaluate open issues against active rules, post advisory comments       |
-| 5     | Agent infrastructure: `claude` / `codex` CLI spawner, prompt builders (dev-scout, feature, ci-failure), forge-stored sessions with deadman switch |
-| 6     | `plan` command — LLM-driven phase grouping, scout creation, Plan rendering with `<!-- superfield: -->` metadata                                   |
-| 7     | Dev loop — primary agent only: select top of Plan, prep worktree, run agent through 7-stage lifecycle to merge                                    |
-| 8     | Dev loop — speculative slots: scout-gated parallel feature work (slots 2..N)                                                                      |
-| 9     | `feature` command — interactive issue creation with PRD/duplicate evaluation                                                                      |
-| 10    | Documentation loop — coverage scan, canonical sync, consistency check, doc PR creation                                                            |
-
-Phases describe build order. Each phase delivers a working slice and is testable in isolation.
-
----
-
-## Out of Scope (entire roadmap)
-
-- Slack / webhook notifications
-- Web UI
-- Forges other than GitHub
-- Self-hosted LLM backends (Claude and Codex CLIs are supported)
-
----
-
-## Open Questions
-
-1. **Plan issue ownership**: always created under `assignedUser`'s token, or is there ever a separate service account concept?
