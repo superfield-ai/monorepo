@@ -25,13 +25,25 @@ export interface IssueWorktree {
 export interface WorktreeManagerOptions {
   /** Root directory for all worktrees. Defaults to /tmp/superfield-worktrees. */
   root?: string;
+  /**
+   * Override the base URL used when constructing the clone URL. Defaults to
+   * `https://github.com`. Used exclusively by the in-tree bare git remote
+   * fixture (see `packages/core/tests/integration/helpers/git-remote.ts`)
+   * so the dev-loop e2e harness can point clone traffic at a localhost
+   * smart-HTTP server instead of hitting github.com over the network.
+   *
+   * The final URL is always `${baseUrl}/${owner}/${repo}.git`.
+   */
+  baseUrl?: string;
 }
 
 export class WorktreeManager {
   private root: string;
+  private baseUrl: string;
 
   constructor(options: WorktreeManagerOptions = {}) {
     this.root = options.root ?? "/tmp/superfield-worktrees";
+    this.baseUrl = (options.baseUrl ?? "https://github.com").replace(/\/$/, "");
   }
 
   /** Returns the directory a worktree would live at, without creating it. */
@@ -96,7 +108,7 @@ export class WorktreeManager {
 
     // Try to clone the issue branch directly. If it doesn't exist remotely
     // yet, fall back to base (main) and let the agent create the branch.
-    const url = `https://github.com/${opts.owner}/${opts.repo}.git`;
+    const url = `${this.baseUrl}/${opts.owner}/${opts.repo}.git`;
     const base = opts.base ?? "main";
 
     let ref = opts.branch;
