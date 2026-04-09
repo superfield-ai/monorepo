@@ -32,11 +32,7 @@ export function buildBlueprintContextFragment(opts: {
   blueprint?: Blueprint;
 }): string {
   const { domains, ruleTypes, budgetBytes } = opts;
-  if (
-    domains.length === 0 ||
-    ruleTypes.length === 0 ||
-    budgetBytes <= 0
-  ) {
+  if (domains.length === 0 || ruleTypes.length === 0 || budgetBytes <= 0) {
     return "";
   }
 

@@ -242,6 +242,42 @@ describe("prompt builders — snapshots", () => {
     ).toMatchSnapshot();
   });
 
+  it("buildDevelopIssuePrompt arch-domain issue matches snapshot", () => {
+    expect(
+      buildDevelopIssuePrompt({
+        issue: {
+          ...issue,
+          number: 200,
+          title: "refactor: architecture module boundary",
+          body: "## Phase\nArch\n\n## Motivation\nRestructure package boundary\n\n## Features\n- [ ] Split package",
+          labels: ["feature", "arch"],
+        },
+        role: "primary",
+        worktreePath: "/tmp/wt",
+        branch: "feat/200",
+        phaseName: "Arch",
+      }),
+    ).toMatchSnapshot();
+  });
+
+  it("buildDevelopIssuePrompt auth-domain issue matches snapshot", () => {
+    expect(
+      buildDevelopIssuePrompt({
+        issue: {
+          ...issue,
+          number: 201,
+          title: "feat: add oauth login session",
+          body: "## Phase\nAuth\n\n## Motivation\nUsers need login\n\n## Features\n- [ ] oauth token",
+          labels: ["feature", "auth"],
+        },
+        role: "primary",
+        worktreePath: "/tmp/wt",
+        branch: "feat/201",
+        phaseName: "Auth",
+      }),
+    ).toMatchSnapshot();
+  });
+
   it("buildDevelopIssuePrompt speculative matches snapshot", () => {
     expect(
       buildDevelopIssuePrompt({
