@@ -38,5 +38,38 @@ the `build` prefix and `Prompt` suffix:
 - `doc-canonical-sync-significant.json`
 - `doc-consistency-clean.json`
 
+## Blueprint integration fixtures (issue #82)
+
+The following fixtures back the Layer-2 integration tests for the Blueprint
+integration phase. **They were hand-authored on 2026-04-09** because the
+recorder requires real Claude credentials and network access that were
+unavailable in the worktree where this batch was added. Each fixture
+carries `_metadata.hand_authored: true` so it is obvious. Refresh them by
+running the recorder against a real Claude session — for example:
+
+```bash
+bun record-claude-fixtures blueprint-conformance-conformant --repo owner/repo --issue 10
+bun record-claude-fixtures blueprint-conformance-violating --repo owner/repo --issue 10
+bun record-claude-fixtures blueprint-self-audit-conformant --repo owner/repo --issue 10
+bun record-claude-fixtures blueprint-self-audit-violating --repo owner/repo --issue 10
+bun record-claude-fixtures feature-evaluate-exploratory
+bun record-claude-fixtures feature-evaluate-narrowed
+bun record-claude-fixtures feature-evaluate-duplicate
+bun record-claude-fixtures dev-loop-first-turn --repo owner/repo --issue 10
+bun record-claude-fixtures dev-loop-escalated --repo owner/repo --issue 10
+```
+
+Fixture names:
+
+- `blueprint-conformance-conformant.json`
+- `blueprint-conformance-violating.json`
+- `blueprint-self-audit-conformant.json`
+- `blueprint-self-audit-violating.json`
+- `feature-evaluate-exploratory.json`
+- `feature-evaluate-narrowed.json`
+- `feature-evaluate-duplicate.json`
+- `dev-loop-first-turn.json`
+- `dev-loop-escalated.json`
+
 The `test-sample.json` file is a synthetic fixture used only by the
 `helpers/replay` unit tests; do not use it in real integration tests.

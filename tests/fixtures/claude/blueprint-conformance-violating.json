@@ -1,0 +1,13 @@
+{
+  "sessionId": "01JVIOLATINGBP000000000",
+  "output": "{\"issue_number\":10,\"violations\":[{\"rule_id\":\"ARCH-P-001\",\"rule_name\":\"boundaries-are-physical-not-conceptual\",\"rule_type\":\"principle\",\"domain\":\"arch\",\"concern\":\"This change blurs the server/client boundary by importing browser-only modules from a server entrypoint.\"}]}",
+  "isError": false,
+  "costUsd": 0.005,
+  "_metadata": {
+    "captured_at": "2026-04-09T00:00:00Z",
+    "prompt_builder": "buildBlueprintConformancePrompt",
+    "scenario": "arch-violation",
+    "hand_authored": true,
+    "input_summary": "Issue that should trip ARCH-P-001."
+  }
+}
