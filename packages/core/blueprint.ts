@@ -1,6 +1,7 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { parse as parseYaml } from "yaml";
+import { BLUEPRINT_DATA } from "./blueprint-data.generated.ts";
 
 /**
  * Loader for the Superfield Blueprint at `blueprint/rules/graph.yaml`
@@ -118,18 +119,74 @@ export function scanGraphForDuplicateKeys(rawYaml: string): string[] {
   return [...duplicates];
 }
 
+let cached: Promise<Blueprint> | undefined;
+
 /**
- * Loads the Superfield Blueprint from disk. Returns an indexed graph plus
- * all loaded domain rules.
+ * Clears the memoised singleton returned by `loadBlueprint()`. Intended for
+ * tests; production code should not need this.
+ */
+export function resetBlueprintCache(): void {
+  cached = undefined;
+}
+
+/**
+ * Builds a `Blueprint` from the codegen'd `BLUEPRINT_DATA` constant. This is
+ * the production path — it performs zero filesystem I/O, so the bundled
+ * `superfield` binary can run without shipping a `blueprint/` asset dir.
+ */
+function buildFromBundled(): Blueprint {
+  const domains = new Map<string, BlueprintDomain>();
+  for (const d of BLUEPRINT_DATA.domains) {
+    domains.set(d.name, {
+      name: d.name,
+      title: d.title,
+      vision: d.vision,
+      rules: d.rules.map((r) => ({
+        number: r.number,
+        hash: r.hash,
+        name: r.name,
+        type: r.type,
+        description: r.description,
+        deprecated: r.deprecated,
+      })),
+    });
+  }
+  return {
+    corpusVersion: BLUEPRINT_DATA.corpusVersion,
+    generated: BLUEPRINT_DATA.generated,
+    ruleCount: BLUEPRINT_DATA.ruleCount,
+    nodes: BLUEPRINT_DATA.nodes.map((n) => ({ ...n })),
+    domains,
+  };
+}
+
+/**
+ * Loads the Superfield Blueprint. In production this is a zero-I/O call that
+ * returns a cached singleton built from the codegen'd
+ * `blueprint-data.generated.ts` module. The only remaining filesystem path is
+ * the explicit `blueprintDir` argument (used by unit tests) or the
+ * `SUPERFIELD_BLUEPRINT_DIR` environment variable (dev-only override).
  *
  * Pre-scans `graph.yaml` for duplicate keys and logs a warning per
- * collision. Set `SUPERFIELD_BLUEPRINT_STRICT=1` to throw instead of warn.
- *
- * @param blueprintDir Absolute path to the `blueprint/` directory. Defaults
- *                     to `<cwd>/blueprint`.
+ * collision when reading from disk. Set `SUPERFIELD_BLUEPRINT_STRICT=1` to
+ * throw instead of warn.
  */
 export async function loadBlueprint(blueprintDir?: string): Promise<Blueprint> {
-  const dir = blueprintDir ?? path.resolve(process.cwd(), "blueprint");
+  const envOverride = process.env.SUPERFIELD_BLUEPRINT_DIR;
+  const dir =
+    blueprintDir ?? (envOverride ? path.resolve(envOverride) : undefined);
+
+  if (dir === undefined) {
+    if (!cached) {
+      cached = Promise.resolve(buildFromBundled());
+    }
+    return cached;
+  }
+
+  return loadBlueprintFromDisk(dir);
+}
+
+async function loadBlueprintFromDisk(dir: string): Promise<Blueprint> {
   const graphPath = path.join(dir, "rules", "graph.yaml");
   const rawGraph = await fs.readFile(graphPath, "utf8");
 
