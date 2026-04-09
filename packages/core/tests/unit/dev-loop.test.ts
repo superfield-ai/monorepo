@@ -76,15 +76,37 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
   } as unknown as GitHubClient;
 }
 
+/** Spawn calls excluding the pre-PR self-audit (#81) calls. */
+function developCallList(
+  spawn: ReturnType<typeof vi.fn>,
+): { 0: AgentOpts }[] {
+  return spawn.mock.calls.filter(
+    (c: unknown[]) =>
+      !(c[0] as AgentOpts).prompt.includes("Pre-PR blueprint self-audit"),
+  ) as { 0: AgentOpts }[];
+}
+function developCalls(spawn: ReturnType<typeof vi.fn>): number {
+  return developCallList(spawn).length;
+}
+
 function fakeSpawn(result: Partial<AgentResult> = {}) {
-  return vi.fn(
-    async (_opts: AgentOpts): Promise<AgentResult> => ({
+  return vi.fn(async (opts: AgentOpts): Promise<AgentResult> => {
+    // Pre-PR self-audit (#81) calls spawn via runLLMTask. Default to a
+    // conformant verdict so existing tests don't trip the new stage.
+    if (opts.prompt.includes("Pre-PR blueprint self-audit")) {
+      return {
+        sessionId: "sess-audit",
+        output: '{"conformant": true, "violations": []}',
+        isError: false,
+      };
+    }
+    return {
       sessionId: "sess-new",
       output: "done",
       isError: false,
       ...result,
-    }),
-  );
+    };
+  });
 }
 
 async function preCreateWorktree(issueNumber: number, slug: string) {
@@ -145,7 +167,7 @@ describe("tickDevLoop", () => {
     expect(result.idle).toBe(false);
     expect(result.mergeGateBlocked).toEqual([]);
     expect(result.reapedSessions).toEqual([]);
-    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(developCalls(spawn)).toBe(1);
   });
 
   it("passes downstream feature issues into the dev-scout prompt in plan order", async () => {
@@ -433,7 +455,7 @@ Scout gate: #5
 
     expect(result.primaryIssue).toBe(10);
     expect(result.speculativeIssues).toEqual([11]);
-    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(developCalls(spawn)).toBe(2);
   });
 
   it("does not open speculative slots when scout is still open", async () => {
@@ -568,7 +590,7 @@ Scout gate: #5
     expect(result.primaryIssue).toBe(10);
     expect(result.speculativeIssues).toEqual([11, 12]);
     expect(result.speculativeIssues).not.toContain(10);
-    expect(spawn).toHaveBeenCalledTimes(3);
+    expect(developCalls(spawn)).toBe(3);
   });
 
   it("excludes speculative candidates whose dependencies are still open", async () => {
@@ -616,7 +638,7 @@ Scout gate: #5
     expect(result.primaryIssue).toBe(10);
     expect(result.speculativeIssues).toEqual([11]);
     expect(result.speculativeIssues).not.toContain(12);
-    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(developCalls(spawn)).toBe(2);
   });
 
   it("resumes existing session when session comment exists", async () => {
@@ -656,8 +678,8 @@ Scout gate: #5
       worktrees,
       spawn,
     });
-    expect(spawn).toHaveBeenCalledTimes(1);
-    const spawnArgs = spawn.mock.calls[0]![0];
+    expect(developCalls(spawn)).toBe(1);
+    const spawnArgs = developCallList(spawn)[0]![0];
     expect(spawnArgs.sessionId).toBe("a1b2c3d4-e5f6-7890-abcd-ef1234567890");
   });
 
@@ -725,8 +747,8 @@ Scout gate: #5
 
     expect(result.primaryIssue).toBe(11);
     expect(result.reapedSessions).toEqual([]);
-    expect(spawn).toHaveBeenCalledTimes(1);
-    expect(spawn.mock.calls[0]![0].sessionId).toBe(
+    expect(developCalls(spawn)).toBe(1);
+    expect(developCallList(spawn)[0]![0].sessionId).toBe(
       "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
     );
   });
@@ -1018,8 +1040,8 @@ Scout gate: null
       spawn,
       slotCount: 1,
     });
-    expect(spawn).toHaveBeenCalledTimes(1);
-    expect(spawn.mock.calls[0]![0].prompt).not.toContain(
+    expect(developCalls(spawn)).toBe(1);
+    expect(developCallList(spawn)[0]![0].prompt).not.toContain(
       "expanded context — escalation",
     );
     // Turn 2 — latch should now persist via the session comment.
@@ -1032,12 +1054,12 @@ Scout gate: null
       spawn,
       slotCount: 1,
     });
-    expect(spawn).toHaveBeenCalledTimes(2);
-    expect(spawn.mock.calls[1]![0].prompt).toContain(
+    expect(developCalls(spawn)).toBe(2);
+    expect(developCallList(spawn)[1]![0].prompt).toContain(
       "## Blueprint rules (expanded context — escalation)",
     );
     // And the narrow fragment is still present — additive, not replacing.
-    expect(spawn.mock.calls[1]![0].prompt).toContain(
+    expect(developCallList(spawn)[1]![0].prompt).toContain(
       "## Blueprint rules (narrow context — first pass)",
     );
   });
@@ -1067,8 +1089,8 @@ Scout gate: null
         slotCount: 1,
       });
     }
-    expect(spawn).toHaveBeenCalledTimes(3);
-    for (const call of spawn.mock.calls) {
+    expect(developCalls(spawn)).toBe(3);
+    for (const call of developCallList(spawn)) {
       expect(call[0].prompt).not.toContain("expanded context — escalation");
     }
   });
