@@ -127,6 +127,7 @@ export function scanGraphForDuplicateKeys(rawYaml: string): string[] {
 }
 
 let cached: Promise<Blueprint> | undefined;
+let cachedSync: Blueprint | undefined;
 
 /**
  * Clears the memoised singleton returned by `loadBlueprint()`. Intended for
@@ -134,6 +135,19 @@ let cached: Promise<Blueprint> | undefined;
  */
 export function resetBlueprintCache(): void {
   cached = undefined;
+  cachedSync = undefined;
+}
+
+/**
+ * Synchronous accessor for the bundled blueprint. Zero I/O, safe to call
+ * during prompt assembly. Does not honour `SUPERFIELD_BLUEPRINT_DIR` — that
+ * dev-only override is async-only.
+ */
+export function loadBlueprintSync(): Blueprint {
+  if (!cachedSync) {
+    cachedSync = buildFromBundled();
+  }
+  return cachedSync;
 }
 
 /**

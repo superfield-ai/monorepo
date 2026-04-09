@@ -4,6 +4,7 @@ export { worktreeIsolationFragment } from "./worktree-isolation.ts";
 export { roleFragment } from "./role.ts";
 export { tddOutsideInFragment } from "./tdd-outside-in.ts";
 export { blueprintReferenceFragment } from "./blueprint-reference.ts";
+export { buildBlueprintContextFragment } from "./blueprint-context.ts";
 
 /** Joins prompt sections with a blank line between each. */
 export function joinSections(
