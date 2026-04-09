@@ -81,7 +81,7 @@ function developCallList(spawn: ReturnType<typeof vi.fn>): { 0: AgentOpts }[] {
   return spawn.mock.calls.filter(
     (c: unknown[]) =>
       !(c[0] as AgentOpts).prompt.includes("Pre-PR blueprint self-audit"),
-  ) as { 0: AgentOpts }[];
+  ) as unknown as { 0: AgentOpts }[];
 }
 function developCalls(spawn: ReturnType<typeof vi.fn>): number {
   return developCallList(spawn).length;
