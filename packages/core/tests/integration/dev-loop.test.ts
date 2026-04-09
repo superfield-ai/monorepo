@@ -36,3 +36,15 @@ describe("dev loop — speculative slots end to end", () => {
   it.todo("keeps speculative slots empty when scout is still open");
   it.todo("does not pair speculative work with a ci-failure primary");
 });
+
+describe("dev loop — e2e harness scenarios", () => {
+  it.todo(
+    "happy path: scout merged, primary feature drives all 8 stages to merge (#93)",
+  );
+  it.todo(
+    "happy path: speculative slot opens when scout already CLOSED on main (#93)",
+  );
+  it.todo("escalation latch persists across remediation loop (#94)");
+  it.todo("remediation loop progresses after one violating audit (#94)");
+  it.todo("remediation cap aborts after 3 violating audits (#94)");
+});
