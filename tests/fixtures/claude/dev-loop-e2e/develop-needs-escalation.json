@@ -1,0 +1,14 @@
+{
+  "sessionId": "01JE2EDEVESCAL00000000001",
+  "output": "{\"status\":\"in_progress\",\"notes\":\"need expanded blueprint context to proceed safely\"}",
+  "isError": false,
+  "costUsd": 0.009,
+  "needsBlueprintEscalation": true,
+  "_metadata": {
+    "captured_at": "2026-04-09T00:00:00Z",
+    "prompt_builder": "buildDevelopIssuePrompt",
+    "scenario": "e2e-escalation-turn-1",
+    "hand_authored": true,
+    "input_summary": "Primary develop turn 1 that requests blueprint escalation; dev loop latches the flag and the next turn's prompt must carry the expanded context fragment. Used by the escalation-remediation e2e test (#94)."
+  }
+}

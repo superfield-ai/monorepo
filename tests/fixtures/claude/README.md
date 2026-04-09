@@ -83,3 +83,7 @@ Hand-authored fixtures backing the `tickDevLoop` happy-path e2e harness in
 
 - `dev-loop-e2e/develop-checklist-complete.json` — primary develop turn
   that reports the checklist complete and clears to the self-audit stage.
+- `dev-loop-e2e/develop-needs-escalation.json` — primary develop turn 1
+  that requests blueprint escalation via `needsBlueprintEscalation: true`.
+  Used by the escalation + remediation e2e tests (#94) to drive the
+  one-shot escalation latch across ticks.
