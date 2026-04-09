@@ -211,3 +211,10 @@ describe("filterActiveRules", () => {
     ).toBe(true);
   });
 });
+
+describe("blueprint bundled module (scout)", () => {
+  it.todo(
+    "loadBlueprint returns singleton from bundled generated module (#78)",
+  );
+  it.todo("resetBlueprintCache forces reload (#78)");
+});
