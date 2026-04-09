@@ -46,6 +46,10 @@ export interface AgentResult {
   isError: boolean;
   /** Approximate cost in USD, if reported. */
   costUsd?: number;
+  /**
+   * Set by agent to request expanded blueprint context on next turn (issue #80).
+   */
+  needsBlueprintEscalation?: boolean;
 }
 
 class AgentRateLimitError extends Error {
