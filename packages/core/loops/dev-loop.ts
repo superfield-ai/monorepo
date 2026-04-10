@@ -53,6 +53,8 @@ export interface DevLoopOpts {
   slotCount?: number;
   /** Sessions older than this are considered stale. Default 4h. */
   staleSessionTimeoutMs?: number;
+  /** Wall-clock interval between periodic prune passes. Default 15min. */
+  pruneIntervalMs?: number;
   /**
    * Circuit breaker shared across all slots. If omitted, a default instance
    * (trips at 5 consecutive failures, 5min reset) is created internally.
@@ -62,6 +64,10 @@ export interface DevLoopOpts {
   startupPrioritizedIssueNumbers?: number[];
   /** One-time startup handoff from runDevLoop to the first tick only. */
   startupReapedSessions?: number[];
+  /** @internal Test seam — override the prune function used by runDevLoop. */
+  _pruneFn?: (opts: DevLoopOpts) => Promise<PruneResult>;
+  /** @internal Test seam — override the tick function used by runDevLoop. */
+  _tickFn?: (opts: DevLoopOpts) => Promise<DevLoopTickResult>;
 }
 
 export interface PruneResult {
@@ -88,6 +94,7 @@ export interface DevLoopTickResult {
 }
 
 const DEFAULT_IDLE_MS = 30_000;
+const DEFAULT_PRUNE_INTERVAL_MS = 15 * 60 * 1000;
 
 /**
  * Runs the dev loop forever. Selects the top-of-Plan issue, prepares its
@@ -96,6 +103,8 @@ const DEFAULT_IDLE_MS = 30_000;
  */
 export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   const idleMs = opts.idlePollMs ?? DEFAULT_IDLE_MS;
+  const pruneFn = opts._pruneFn ?? runPrunePass;
+  const tickFn = opts._tickFn ?? tickDevLoop;
   // Shared circuit breaker across all slots in this loop instance
   const circuit =
     opts.circuit ?? new CircuitBreaker({ tripAt: 5, resetMs: 5 * 60 * 1000 });
@@ -112,7 +121,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     );
   }
   try {
-    await runPrunePass(opts);
+    await pruneFn(opts);
   } catch (err) {
     console.error(
       `[${opts.owner}/${opts.repo}] startup prune pass failed:`,
@@ -120,9 +129,11 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     );
   }
   let firstTick = true;
+  const pruneIntervalMs = opts.pruneIntervalMs ?? DEFAULT_PRUNE_INTERVAL_MS;
+  let lastPruneAt = Date.now();
   await runSupervisedLoop({
     runOnce: async () => {
-      const result = await tickDevLoop({
+      const result = await tickFn({
         ...opts,
         circuit,
         startupPrioritizedIssueNumbers: firstTick
@@ -136,10 +147,22 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
       if (result.idle) {
         // Run maintenance on idle ticks — prune stale worktrees + stale sessions
         try {
-          await runPrunePass(opts);
+          await pruneFn(opts);
+          lastPruneAt = Date.now();
         } catch (err) {
           console.error(`[${opts.owner}/${opts.repo}] prune pass failed:`, err);
         }
+      } else if (Date.now() - lastPruneAt >= pruneIntervalMs) {
+        // Wall-clock interval prune — ensures pruning even during long busy streaks
+        try {
+          await pruneFn(opts);
+        } catch (err) {
+          console.error(
+            `[${opts.owner}/${opts.repo}] periodic prune pass failed:`,
+            err,
+          );
+        }
+        lastPruneAt = Date.now();
       }
       return result;
     },
