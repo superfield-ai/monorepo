@@ -15,6 +15,7 @@ const sampleSession: AgentSession = {
   role: "primary",
   slot: 1,
   startedAt: "2026-04-08T01:00:00.000Z",
+  version: 0,
 };
 
 function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
@@ -50,6 +51,18 @@ describe("getSession", () => {
     expect(found?.commentId).toBe(2);
   });
 
+  it("defaults version to 0 for legacy comments without version field", async () => {
+    const legacySession = { ...sampleSession };
+    delete (legacySession as Record<string, unknown>).version;
+    const client = makeClient({
+      listIssueComments: vi.fn().mockResolvedValue([
+        { id: 1, body: sessionCommentBody(legacySession) },
+      ]),
+    });
+    const found = await getSession(client, "o", "r", 10);
+    expect(found?.session.version).toBe(0);
+  });
+
   it("skips malformed session comments", async () => {
     const client = makeClient({
       listIssueComments: vi
@@ -63,17 +76,13 @@ describe("getSession", () => {
 });
 
 describe("upsertSession", () => {
-  it("creates a new comment when none exists", async () => {
+  it("creates a new comment with version 1 when none exists", async () => {
     const client = makeClient();
     await upsertSession(client, "o", "r", 10, sampleSession);
     expect(client.createIssueComment).toHaveBeenCalledTimes(1);
     const args = (client.createIssueComment as ReturnType<typeof vi.fn>).mock
       .calls[0]!;
-    expect(args[0]).toBe("o");
-    expect(args[1]).toBe("r");
-    expect(args[2]).toBe(10);
-    expect(args[3]).toContain("<!-- superfield-session:");
-    expect(args[3]).toContain('"sessionId": "01JNSESSION"');
+    expect(args[3]).toContain('"version": 1');
   });
 
   it("updates an existing comment when one exists", async () => {
@@ -92,6 +101,105 @@ describe("upsertSession", () => {
       expect.any(String),
     );
     expect(client.createIssueComment).not.toHaveBeenCalled();
+  });
+
+  it("increments version sequentially 0→1→2", async () => {
+    // Start with no comment, then track creates/updates
+    let storedBody: string | null = null;
+    const client = makeClient({
+      listIssueComments: vi.fn().mockImplementation(() => {
+        if (!storedBody) return Promise.resolve([]);
+        return Promise.resolve([{ id: 42, body: storedBody }]);
+      }),
+      createIssueComment: vi.fn().mockImplementation((_o, _r, _n, body) => {
+        storedBody = body;
+        return Promise.resolve({ id: 42 });
+      }),
+      updateIssueComment: vi.fn().mockImplementation((_o, _r, _id, body) => {
+        storedBody = body;
+        return Promise.resolve(undefined);
+      }),
+    });
+
+    // First upsert: no existing → creates with version 1
+    await upsertSession(client, "o", "r", 10, sampleSession);
+    expect(storedBody).toContain('"version": 1');
+
+    // Second upsert: existing version 1 → updates with version 2
+    await upsertSession(client, "o", "r", 10, sampleSession);
+    expect(storedBody).toContain('"version": 2');
+  });
+
+  it("retries on version conflict and succeeds", async () => {
+    // Simulate: first read returns version 1, recheck returns version 2
+    // (someone else wrote), second attempt reads version 2, recheck matches.
+    const v1Body = sessionCommentBody({ ...sampleSession, version: 1 });
+    const v2Body = sessionCommentBody({ ...sampleSession, version: 2 });
+    const listMock = vi
+      .fn()
+      // attempt 0: initial read → v1
+      .mockResolvedValueOnce([{ id: 42, body: v1Body }])
+      // attempt 0: recheck → v2 (conflict!)
+      .mockResolvedValueOnce([{ id: 42, body: v2Body }])
+      // attempt 1: initial read → v2
+      .mockResolvedValueOnce([{ id: 42, body: v2Body }])
+      // attempt 1: recheck → v2 (match)
+      .mockResolvedValueOnce([{ id: 42, body: v2Body }]);
+
+    const client = makeClient({
+      listIssueComments: listMock,
+    });
+
+    await upsertSession(client, "o", "r", 10, sampleSession);
+    // Should have called updateIssueComment once (on the successful retry)
+    expect(client.updateIssueComment).toHaveBeenCalledTimes(1);
+    const body = (client.updateIssueComment as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+    expect(body).toContain('"version": 3');
+  });
+
+  it("falls back to last-writer-wins after 3 conflicts", async () => {
+    // Every recheck returns a higher version than initial read
+    const listMock = vi.fn();
+    for (let i = 0; i < 4; i++) {
+      const readV = i + 1;
+      const recheckV = i + 2;
+      listMock
+        .mockResolvedValueOnce([
+          { id: 42, body: sessionCommentBody({ ...sampleSession, version: readV }) },
+        ])
+        .mockResolvedValueOnce([
+          { id: 42, body: sessionCommentBody({ ...sampleSession, version: recheckV }) },
+        ]);
+    }
+
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const client = makeClient({ listIssueComments: listMock });
+
+    await upsertSession(client, "o", "r", 10, sampleSession);
+    expect(client.updateIssueComment).toHaveBeenCalledTimes(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("exhausted"),
+    );
+    warnSpy.mockRestore();
+  });
+
+  it("treats legacy comments without version as version 0", async () => {
+    // Session without version field
+    const legacySession = { ...sampleSession };
+    delete (legacySession as Record<string, unknown>).version;
+    const legacyBody = sessionCommentBody(legacySession);
+    const client = makeClient({
+      listIssueComments: vi
+        .fn()
+        .mockResolvedValue([{ id: 42, body: legacyBody }]),
+    });
+
+    await upsertSession(client, "o", "r", 10, sampleSession);
+    const body = (client.updateIssueComment as ReturnType<typeof vi.fn>).mock
+      .calls[0]![3] as string;
+    // Legacy version 0 → write version 1
+    expect(body).toContain('"version": 1');
   });
 });
 
