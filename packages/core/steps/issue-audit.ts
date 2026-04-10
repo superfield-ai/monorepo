@@ -86,7 +86,7 @@ async function auditOne(
   const prompt = buildIssueAuditPrompt({ issue });
 
   const { result } = await runLLMTask<IssueAuditReport>(
-    { prompt, spawn: opts.spawn, cwd: opts.cwd },
+    { prompt, spawn: opts.spawn, cwd: opts.cwd, model: "haiku" },
     (json) => {
       const parsed = JSON.parse(json) as Partial<IssueAuditReport>;
       if (typeof parsed.issue_number !== "number") {

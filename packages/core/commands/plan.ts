@@ -113,7 +113,7 @@ export async function runPlanCommand(
   });
 
   const { result: proposal } = await runLLMTask<PlanProposal>(
-    { prompt, spawn: opts.spawn, cwd: opts.cwd },
+    { prompt, spawn: opts.spawn, cwd: opts.cwd, model: "opus" },
     parseProposal,
   );
 

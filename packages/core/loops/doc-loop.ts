@@ -231,7 +231,7 @@ async function runCoverageScan(
     changedFiles: sourceFiles,
   });
   const { result } = await runLLMTask<{ missing_docs: DocCoverageMissing[] }>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath },
+    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet" },
     (json) => {
       const parsed = JSON.parse(json) as {
         missing_docs?: DocCoverageMissing[];
@@ -258,7 +258,7 @@ async function runCanonicalSync(
     readmeContent: readmeContent ?? "",
   });
   const { result } = await runLLMTask<DocSyncProposal>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath },
+    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet" },
     (json) => {
       const parsed = JSON.parse(json) as Partial<DocSyncProposal>;
       return {
@@ -292,7 +292,7 @@ async function runConsistencyCheck(
   });
   const { result } = await runLLMTask<{
     inconsistencies: DocConsistencyFinding[];
-  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath }, (json) => {
+  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet" }, (json) => {
     const parsed = JSON.parse(json) as {
       inconsistencies?: DocConsistencyFinding[];
     };

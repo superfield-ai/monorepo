@@ -122,6 +122,8 @@ function buildArgs(backend: AgentBackend, opts: AgentOpts): string[] {
       String(opts.maxTurns ?? 50),
     ];
 
+    args.push("--effort", "medium");
+
     if (opts.model) {
       args.push("--model", opts.model);
     }

@@ -403,7 +403,7 @@ async function executeAgentWithAudit(
 
   const agentResult = await withRetry(
     () => {
-      const call = () => spawnFn({ prompt, worktreePath: wt.path, sessionId });
+      const call = () => spawnFn({ prompt, worktreePath: wt.path, sessionId, model: "sonnet" });
       return circuit ? circuit.call(call) : call();
     },
     { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },

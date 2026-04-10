@@ -24,6 +24,8 @@ export interface LLMTaskOpts {
   maxTurns?: number;
   /** Explicit backend override. Defaults to the shared agent selection logic. */
   provider?: AgentMode;
+  /** Model alias to pass to the agent (e.g. "opus", "sonnet", "haiku"). */
+  model?: string;
   /** Injectable spawn function for testing. */
   spawn?: (opts: AgentOpts) => Promise<AgentResult>;
 }
@@ -45,6 +47,7 @@ export async function runLLMTask<T>(
     sessionId: opts.sessionId,
     maxTurns: opts.maxTurns ?? 10,
     provider: opts.provider,
+    model: opts.model,
   });
 
   if (res.isError) {

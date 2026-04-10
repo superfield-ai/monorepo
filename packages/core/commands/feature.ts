@@ -128,7 +128,7 @@ export async function runFeatureCommand(
   });
 
   const { result: evaluation } = await runLLMTask<FeatureEvaluation>(
-    { prompt: evaluatePrompt, spawn: opts.spawn, cwd: opts.cwd },
+    { prompt: evaluatePrompt, spawn: opts.spawn, cwd: opts.cwd, model: "opus" },
     parseFeatureEvaluation,
   );
 
@@ -168,7 +168,7 @@ export async function runFeatureCommand(
   });
 
   const { result: narrowed } = await runLLMTask<FeatureNarrowResult>(
-    { prompt: narrowPrompt, spawn: opts.spawn, cwd: opts.cwd },
+    { prompt: narrowPrompt, spawn: opts.spawn, cwd: opts.cwd, model: "opus" },
     parseFeatureNarrow,
   );
 
