@@ -157,7 +157,10 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
         try {
           await pruneFn(opts);
         } catch (err) {
-          console.error(`[${opts.owner}/${opts.repo}] periodic prune pass failed:`, err);
+          console.error(
+            `[${opts.owner}/${opts.repo}] periodic prune pass failed:`,
+            err,
+          );
         }
         lastPruneAt = Date.now();
       }

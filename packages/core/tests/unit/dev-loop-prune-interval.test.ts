@@ -27,44 +27,69 @@ import { runDevLoop } from "../../loops/dev-loop.ts";
 import { runSupervisedLoop } from "../../supervised-loop.ts";
 
 let capturedRunOnce: (() => Promise<DevLoopTickResult>) | undefined;
-const mockPruneFn = vi.fn().mockResolvedValue({ prunedWorktrees: [], reapedSessions: [] });
+const mockPruneFn = vi
+  .fn()
+  .mockResolvedValue({ prunedWorktrees: [], reapedSessions: [] });
 const mockTickFn = vi.fn<() => Promise<DevLoopTickResult>>();
 
 beforeEach(() => {
   vi.clearAllMocks();
   capturedRunOnce = undefined;
 
-  vi.mocked(runSupervisedLoop).mockImplementation(async (opts: SupervisedLoopOpts<any>) => {
-    capturedRunOnce = opts.runOnce;
-  });
+  vi.mocked(runSupervisedLoop).mockImplementation(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    async (opts: SupervisedLoopOpts<any>) => {
+      capturedRunOnce = opts.runOnce;
+    },
+  );
 });
 
 function makeClient() {
   return {
     listIssues: vi.fn().mockResolvedValue([]),
-    getIssue: vi.fn().mockResolvedValue({ number: 1, state: "open", title: "", body: null, html_url: "", labels: [] }),
+    getIssue: vi.fn().mockResolvedValue({
+      number: 1,
+      state: "open",
+      title: "",
+      body: null,
+      html_url: "",
+      labels: [],
+    }),
     listIssueComments: vi.fn().mockResolvedValue([]),
     deleteIssueComment: vi.fn().mockResolvedValue(undefined),
     createIssueComment: vi.fn().mockResolvedValue({ id: 1 }),
     updateIssueComment: vi.fn().mockResolvedValue(undefined),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
 
 function busyResult(): DevLoopTickResult {
   return {
-    primaryIssue: 1, speculativeIssues: [], mergeGateBlocked: [],
-    reapedSessions: [], closed: false, idle: false,
+    primaryIssue: 1,
+    speculativeIssues: [],
+    mergeGateBlocked: [],
+    reapedSessions: [],
+    closed: false,
+    idle: false,
   };
 }
 
 function idleResult(): DevLoopTickResult {
   return {
-    primaryIssue: null, speculativeIssues: [], mergeGateBlocked: [],
-    reapedSessions: [], closed: false, idle: true, reason: "no eligible primary",
+    primaryIssue: null,
+    speculativeIssues: [],
+    mergeGateBlocked: [],
+    reapedSessions: [],
+    closed: false,
+    idle: true,
+    reason: "no eligible primary",
   };
 }
 
-async function initLoop(pruneIntervalMs: number | undefined, tickResult: DevLoopTickResult) {
+async function initLoop(
+  pruneIntervalMs: number | undefined,
+  tickResult: DevLoopTickResult,
+) {
   mockTickFn.mockResolvedValue(tickResult);
 
   await runDevLoop({
