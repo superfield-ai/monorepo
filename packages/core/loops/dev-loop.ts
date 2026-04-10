@@ -371,13 +371,15 @@ async function runSlot(
       );
       auditResult = {
         conformant: false,
-        violations: [{
-          rule_id: "INFRA-AUDIT-FAILURE",
-          rule_name: "self-audit infrastructure error",
-          rule_type: "infrastructure",
-          domain: "infra",
-          concern: err instanceof Error ? err.message : String(err),
-        }],
+        violations: [
+          {
+            rule_id: "INFRA-AUDIT-FAILURE",
+            rule_name: "self-audit infrastructure error",
+            rule_type: "infrastructure",
+            domain: "infra",
+            concern: err instanceof Error ? err.message : String(err),
+          },
+        ],
         diffSummary: "",
       };
     }
