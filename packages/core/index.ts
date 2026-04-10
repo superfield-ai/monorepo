@@ -81,7 +81,6 @@ export {
   loadBlueprint,
   pickCandidateDomains,
   filterActiveRules,
-  scanGraphForDuplicateKeys,
 } from "./blueprint.ts";
 export type {
   Blueprint,
