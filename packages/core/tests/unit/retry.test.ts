@@ -4,7 +4,11 @@
  * Issue #8: retry/backoff with circuit breaker for transient agent failures.
  */
 import { describe, it, expect, vi } from "vitest";
-import { withRetry, CircuitBreaker } from "../../retry.ts";
+import {
+  withRetry,
+  CircuitBreaker,
+  CircuitBreakerOpenError,
+} from "../../retry.ts";
 
 // --- withRetry ---
 
@@ -101,6 +105,15 @@ describe("CircuitBreaker", () => {
     expect(cb.isOpen).toBe(true);
   });
 
+  it("throws CircuitBreakerOpenError when the circuit is open", async () => {
+    const cb = new CircuitBreaker({ tripAt: 2, resetMs: 10_000 });
+    const fn = vi.fn().mockRejectedValue(new Error("err"));
+
+    await expect(cb.call(fn)).rejects.toThrow();
+    await expect(cb.call(fn)).rejects.toThrow();
+    await expect(cb.call(fn)).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+  });
+
   it("rejects immediately when the circuit is open", async () => {
     const cb = new CircuitBreaker({ tripAt: 2, resetMs: 10_000 });
     const fn = vi.fn().mockRejectedValue(new Error("err"));
@@ -128,5 +141,73 @@ describe("CircuitBreaker", () => {
     const passing = vi.fn().mockResolvedValue("ok");
     const result = await cb.call(passing);
     expect(result).toBe("ok");
+  });
+});
+
+// --- withRetry + CircuitBreaker integration ---
+
+describe("withRetry + CircuitBreaker", () => {
+  it("circuit open → withRetry throws immediately, no sleep", async () => {
+    const cb = new CircuitBreaker({ tripAt: 2, resetMs: 60_000 });
+    const fn = vi.fn().mockRejectedValue(new Error("err"));
+    const sleepSpy = vi.fn().mockResolvedValue(undefined);
+
+    // Trip the circuit
+    await expect(cb.call(fn)).rejects.toThrow();
+    await expect(cb.call(fn)).rejects.toThrow();
+    expect(cb.isOpen).toBe(true);
+
+    // withRetry should rethrow CircuitBreakerOpenError immediately
+    await expect(
+      withRetry(() => cb.call(fn), {
+        maxAttempts: 5,
+        initialDelayMs: 1000,
+        sleep: sleepSpy,
+      }),
+    ).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+
+    // No sleep should have been called
+    expect(sleepSpy).not.toHaveBeenCalled();
+  });
+
+  it("circuit closed, transient failure → retries as before", async () => {
+    const cb = new CircuitBreaker({ tripAt: 10, resetMs: 60_000 });
+    let calls = 0;
+    const fn = vi.fn(async () => {
+      calls++;
+      if (calls < 3) throw new Error("transient");
+      return "ok";
+    });
+    const sleepSpy = vi.fn().mockResolvedValue(undefined);
+
+    const result = await withRetry(() => cb.call(fn), {
+      maxAttempts: 5,
+      initialDelayMs: 100,
+      sleep: sleepSpy,
+    });
+
+    expect(result).toBe("ok");
+    expect(fn).toHaveBeenCalledTimes(3);
+    expect(sleepSpy).toHaveBeenCalledTimes(2);
+  });
+
+  it("circuit transitions closed→open mid-retry → remaining retries abort immediately", async () => {
+    const cb = new CircuitBreaker({ tripAt: 2, resetMs: 60_000 });
+    const fn = vi.fn().mockRejectedValue(new Error("fail"));
+    const sleepSpy = vi.fn().mockResolvedValue(undefined);
+
+    // Circuit trips after 2 failures, then 3rd attempt sees open circuit
+    await expect(
+      withRetry(() => cb.call(fn), {
+        maxAttempts: 5,
+        initialDelayMs: 100,
+        sleep: sleepSpy,
+      }),
+    ).rejects.toBeInstanceOf(CircuitBreakerOpenError);
+
+    // fn called twice (tripping the circuit), then circuit.call throws open error
+    expect(fn).toHaveBeenCalledTimes(2);
+    // Sleep called between attempt 1→2 and 2→3, but not after the open error
+    expect(sleepSpy).toHaveBeenCalledTimes(2);
   });
 });

@@ -4,6 +4,17 @@
  * transient process-spawn errors.
  */
 
+/**
+ * Thrown by CircuitBreaker.call() when the circuit is open.
+ * withRetry rethrows this immediately without sleeping or decrementing attempts.
+ */
+export class CircuitBreakerOpenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "CircuitBreakerOpenError";
+  }
+}
+
 export interface RetryOpts {
   /** Maximum number of attempts (including the first). Default: 3 */
   maxAttempts?: number;
@@ -36,6 +47,9 @@ export async function withRetry<T>(
     try {
       return await fn();
     } catch (err) {
+      if (err instanceof CircuitBreakerOpenError) {
+        throw err;
+      }
       lastError = err;
       if (attempt < maxAttempts) {
         await sleepFn(delayMs);
@@ -85,7 +99,7 @@ export class CircuitBreaker {
    */
   async call<T>(fn: () => Promise<T>): Promise<T> {
     if (this.isOpen) {
-      throw new Error(
+      throw new CircuitBreakerOpenError(
         `Circuit open — too many consecutive failures. Retrying after ${new Date(this.openUntil).toISOString()}.`,
       );
     }
