@@ -9,6 +9,11 @@
  * sidecar asset directory.
  *
  * Run with: bun run blueprint:compile
+ *
+ * CI staleness guard: the "Blueprint freshness" job in .github/workflows/build.yml
+ * re-runs this script and fails if the generated file differs from what is
+ * committed. This ensures graph.yaml / domain file changes are always accompanied
+ * by a regenerated blueprint-data.generated.ts.
  */
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
