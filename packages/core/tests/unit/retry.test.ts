@@ -4,7 +4,11 @@
  * Issue #8: retry/backoff with circuit breaker for transient agent failures.
  */
 import { describe, it, expect, vi } from "vitest";
-import { withRetry, CircuitBreaker, CircuitBreakerOpenError } from "../../retry.ts";
+import {
+  withRetry,
+  CircuitBreaker,
+  CircuitBreakerOpenError,
+} from "../../retry.ts";
 
 // --- withRetry ---
 
