@@ -55,9 +55,11 @@ describe("getSession", () => {
     const legacySession = { ...sampleSession };
     delete (legacySession as Record<string, unknown>).version;
     const client = makeClient({
-      listIssueComments: vi.fn().mockResolvedValue([
-        { id: 1, body: sessionCommentBody(legacySession) },
-      ]),
+      listIssueComments: vi
+        .fn()
+        .mockResolvedValue([
+          { id: 1, body: sessionCommentBody(legacySession) },
+        ]),
     });
     const found = await getSession(client, "o", "r", 10);
     expect(found?.session.version).toBe(0);
@@ -166,10 +168,16 @@ describe("upsertSession", () => {
       const recheckV = i + 2;
       listMock
         .mockResolvedValueOnce([
-          { id: 42, body: sessionCommentBody({ ...sampleSession, version: readV }) },
+          {
+            id: 42,
+            body: sessionCommentBody({ ...sampleSession, version: readV }),
+          },
         ])
         .mockResolvedValueOnce([
-          { id: 42, body: sessionCommentBody({ ...sampleSession, version: recheckV }) },
+          {
+            id: 42,
+            body: sessionCommentBody({ ...sampleSession, version: recheckV }),
+          },
         ]);
     }
 
@@ -178,9 +186,7 @@ describe("upsertSession", () => {
 
     await upsertSession(client, "o", "r", 10, sampleSession);
     expect(client.updateIssueComment).toHaveBeenCalledTimes(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("exhausted"),
-    );
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining("exhausted"));
     warnSpy.mockRestore();
   });
 
