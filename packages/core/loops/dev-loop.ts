@@ -261,23 +261,47 @@ export async function tickDevLoop(
   };
 }
 
+/** Context produced by prepareWorktreeAndSession for downstream stages. */
+interface SlotContext {
+  issue: Issue;
+  wt: IssueWorktree;
+  branch: string;
+  sessionId: string | undefined;
+  escalated: boolean;
+  remediationCount: number;
+  remediationViolations: BlueprintViolation[] | undefined;
+  existingSession: Awaited<ReturnType<typeof getSession>>;
+}
+
+/** Check whether the remediation cap has been exceeded. */
+function isRemediationCapExceeded(
+  role: "primary" | "speculative",
+  kind: string,
+  remediationCount: number,
+): boolean {
+  return (
+    role === "primary" &&
+    kind === "feature" &&
+    remediationCount >= SELF_AUDIT_REMEDIATION_CAP
+  );
+}
+
 /**
- * Runs one slot end-to-end: prep worktree, claim session, spawn agent,
- * update session, detect close.
+ * Stage 1: worktree creation, session read, escalation latch read,
+ * remediation state read, remediation cap pre-check.
+ * Returns null if the issue is already closed or remediation cap exceeded.
  */
-async function runSlot(
+async function prepareWorktreeAndSession(
   opts: DevLoopOpts,
-  plan: Plan,
   entry: PlanIssueMetadata,
   role: "primary" | "speculative",
-  slot: number,
-): Promise<{ closed: boolean; mergeGateBlocked: number[] }> {
+): Promise<SlotContext | null> {
   const { client, owner, repo } = opts;
 
   const issue = await client.getIssue(owner, repo, entry.number);
   if (issue.state === "closed") {
     await deleteSession(client, owner, repo, issue.number);
-    return { closed: true, mergeGateBlocked: [] };
+    return null;
   }
 
   const worktrees = opts.worktrees ?? new WorktreeManager();
@@ -306,23 +330,52 @@ async function runSlot(
   // and every subsequent prompt on this issue layers in principles + threats.
   const escalated = existing?.session.blueprintEscalated === true;
 
-  // Pre-PR self-audit remediation state (#81). If a previous tick's audit
-  // returned non-conformant we persisted the violations on the session and
-  // bumped the count. Inject the violations into the next develop prompt
-  // so the agent has explicit fix instructions, and short-circuit the
-  // entire slot if the cap has already been hit.
+  // Pre-PR self-audit remediation state (#81).
   const remediationCount = existing?.session.selfAuditRemediationCount ?? 0;
-  if (
-    role === "primary" &&
-    entry.kind === "feature" &&
-    remediationCount >= SELF_AUDIT_REMEDIATION_CAP
-  ) {
+  if (isRemediationCapExceeded(role, entry.kind, remediationCount)) {
     console.error(
       `[${owner}/${repo}] blueprint self-audit remediation cap exceeded for #${entry.number} — manual intervention required (${remediationCount}/${SELF_AUDIT_REMEDIATION_CAP} passes)`,
     );
-    return { closed: false, mergeGateBlocked: [] };
+    return null;
   }
   const remediationViolations = existing?.session.selfAuditPendingViolations;
+
+  return {
+    issue,
+    wt,
+    branch,
+    sessionId,
+    escalated,
+    remediationCount,
+    remediationViolations,
+    existingSession: existing,
+  };
+}
+
+/**
+ * Stage 2: prompt building, agent spawn, post-spawn session update,
+ * self-audit, remediation loopback decision.
+ * Returns whether to proceed to merge gate (true) or loop back (false).
+ */
+async function executeAgentWithAudit(
+  opts: DevLoopOpts,
+  plan: Plan,
+  entry: PlanIssueMetadata,
+  role: "primary" | "speculative",
+  slot: number,
+  ctx: SlotContext,
+): Promise<{ proceedToMerge: boolean }> {
+  const { client, owner, repo } = opts;
+  const {
+    issue,
+    wt,
+    branch,
+    sessionId,
+    escalated,
+    remediationCount,
+    remediationViolations,
+    existingSession: existing,
+  } = ctx;
 
   const prompt = buildPromptForKind(
     entry,
@@ -356,9 +409,7 @@ async function runSlot(
     { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
   );
 
-  // Latch escalation on the first true and persist. The latch is one-shot:
-  // once set it stays set for the remainder of the issue even if the agent
-  // stops requesting it, and we do not re-invoke expansion logic.
+  // Latch escalation on the first true and persist.
   const nextEscalated =
     escalated || agentResult.needsBlueprintEscalation === true;
   if (!escalated && nextEscalated) {
@@ -367,14 +418,7 @@ async function runSlot(
     );
   }
 
-  // Stage 3a — pre-PR blueprint self-audit (#81). Inserted between
-  // "checklist complete" and "PR open" on the primary feature path. The
-  // agent reads its own diff against the full blueprint context for the
-  // issue's candidate domains and emits a verdict. On non-conformant we
-  // persist the violations + bump the remediation count and exit the slot
-  // (the next tick re-runs develop with the violations injected). On
-  // conformant we clear pending state and continue normal post-run checks.
-  // Skipped for ci-failure and dev-scout — those have their own loops.
+  // Stage 3a — pre-PR blueprint self-audit (#81).
   let nextRemediationCount = remediationCount;
   let nextPendingViolations: BlueprintViolation[] | undefined =
     remediationViolations;
@@ -414,7 +458,7 @@ async function runSlot(
         nextRemediationCount = remediationCount + 1;
         nextPendingViolations = auditResult.violations;
         auditFailed = true;
-        if (nextRemediationCount >= SELF_AUDIT_REMEDIATION_CAP) {
+        if (isRemediationCapExceeded(role, entry.kind, nextRemediationCount)) {
           console.error(
             `[${owner}/${repo}] blueprint self-audit remediation cap exceeded for #${entry.number} — manual intervention required (${nextRemediationCount}/${SELF_AUDIT_REMEDIATION_CAP} passes)`,
           );
@@ -437,38 +481,81 @@ async function runSlot(
     selfAuditPendingViolations: nextPendingViolations,
   });
 
-  // On a non-conformant audit, do NOT proceed to the merge-gate / close
-  // checks — the agent has work to redo. The next tick will re-enter this
-  // slot, see the pending violations on the session, and inject them into
-  // the next develop prompt as remediation instructions.
-  if (auditFailed) {
+  return { proceedToMerge: !auditFailed };
+}
+
+/**
+ * Stage 3: predecessor check and merge eligibility (primary slot only).
+ * Returns merge-gate blocked predecessors and whether the issue closed.
+ */
+async function attemptMergeGate(
+  opts: DevLoopOpts,
+  plan: Plan,
+  entry: PlanIssueMetadata,
+): Promise<{ closed: boolean; mergeGateBlocked: number[] }> {
+  const { client, owner, repo } = opts;
+
+  const latestPlan = await loadCurrentPlan(client, owner, repo, plan);
+  const blockingPredecessors = await collectBlockingPredecessors(
+    client,
+    owner,
+    repo,
+    latestPlan,
+    entry.number,
+  );
+  if (blockingPredecessors.length > 0) {
+    console.warn(
+      `[${owner}/${repo}] merge gate blocked for #${entry.number}: waiting on ${blockingPredecessors.map((n) => `#${n}`).join(", ")}`,
+    );
+    return { closed: false, mergeGateBlocked: blockingPredecessors };
+  }
+
+  const updatedIssue = await client.getIssue(owner, repo, entry.number);
+  if (updatedIssue.state === "closed") {
+    await deleteSession(client, owner, repo, entry.number);
+    return { closed: true, mergeGateBlocked: [] };
+  }
+
+  return { closed: false, mergeGateBlocked: [] };
+}
+
+/**
+ * Runs one slot end-to-end: prep worktree, claim session, spawn agent,
+ * update session, detect close.
+ */
+async function runSlot(
+  opts: DevLoopOpts,
+  plan: Plan,
+  entry: PlanIssueMetadata,
+  role: "primary" | "speculative",
+  slot: number,
+): Promise<{ closed: boolean; mergeGateBlocked: number[] }> {
+  // Stage 1: worktree + session setup
+  const ctx = await prepareWorktreeAndSession(opts, entry, role);
+  if (!ctx) {
+    // Issue already closed or remediation cap exceeded
+    const { client, owner, repo } = opts;
+    const issue = await client.getIssue(owner, repo, entry.number);
+    return { closed: issue.state === "closed", mergeGateBlocked: [] };
+  }
+
+  // Stage 2: agent spawn + audit
+  const { proceedToMerge } = await executeAgentWithAudit(
+    opts,
+    plan,
+    entry,
+    role,
+    slot,
+    ctx,
+  );
+
+  if (!proceedToMerge) {
     return { closed: false, mergeGateBlocked: [] };
   }
 
-  // Speculative agents exit when their checklist is complete; the issue
-  // does NOT close until the primary later opens and merges the PR. So we
-  // only check close on the primary slot.
+  // Stage 3: merge gate (primary only)
   if (role === "primary") {
-    const latestPlan = await loadCurrentPlan(client, owner, repo, plan);
-    const blockingPredecessors = await collectBlockingPredecessors(
-      client,
-      owner,
-      repo,
-      latestPlan,
-      entry.number,
-    );
-    if (blockingPredecessors.length > 0) {
-      console.warn(
-        `[${owner}/${repo}] merge gate blocked for #${entry.number}: waiting on ${blockingPredecessors.map((n) => `#${n}`).join(", ")}`,
-      );
-      return { closed: false, mergeGateBlocked: blockingPredecessors };
-    }
-
-    const updatedIssue = await client.getIssue(owner, repo, entry.number);
-    if (updatedIssue.state === "closed") {
-      await deleteSession(client, owner, repo, entry.number);
-      return { closed: true, mergeGateBlocked: [] };
-    }
+    return attemptMergeGate(opts, plan, entry);
   }
 
   return { closed: false, mergeGateBlocked: [] };
