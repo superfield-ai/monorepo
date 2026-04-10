@@ -366,9 +366,22 @@ async function runSlot(
         spawn: spawnFn,
       });
     } catch (err) {
-      console.error(
+      console.warn(
         `[${owner}/${repo}] blueprint self-audit failed for #${entry.number}: ${err instanceof Error ? err.message : String(err)}`,
       );
+      auditResult = {
+        conformant: false,
+        violations: [
+          {
+            rule_id: "INFRA-AUDIT-FAILURE",
+            rule_name: "self-audit infrastructure error",
+            rule_type: "infrastructure",
+            domain: "infra",
+            concern: err instanceof Error ? err.message : String(err),
+          },
+        ],
+        diffSummary: "",
+      };
     }
 
     if (auditResult) {

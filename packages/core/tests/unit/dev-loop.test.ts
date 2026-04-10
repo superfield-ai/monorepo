@@ -1415,4 +1415,133 @@ Scout gate: null
     expect(comments[0]!.body).toContain('"selfAuditRemediationCount": 3');
     warn.mockRestore();
   });
+
+  // --- #105 fail-closed on audit infrastructure error ---
+
+  /** Spawn that throws when the prompt contains the self-audit marker. */
+  function throwingAuditSpawn() {
+    return vi.fn(async (opts: AgentOpts): Promise<AgentResult> => {
+      if (opts.prompt.includes("Pre-PR blueprint self-audit")) {
+        throw new Error("LLM provider timeout");
+      }
+      return {
+        sessionId: "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+        output: "develop done",
+        isError: false,
+      };
+    });
+  }
+
+  it("audit throw → slot does NOT open PR", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeAuditClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const errLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spawn = throwingAuditSpawn();
+
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+
+    // The session should show non-conformant state (no PR opened).
+    expect(comments[0]!.body).toContain("selfAuditPendingViolations");
+    expect(comments[0]!.body).toContain("INFRA-AUDIT-FAILURE");
+    errLog.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("audit throw → synthetic violation in next develop turn's remediationViolations", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeAuditClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const errLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spawn = throwingAuditSpawn();
+
+    // Tick 1: audit throws → synthetic violation persisted.
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+
+    // Tick 2: develop prompt should contain the INFRA-AUDIT-FAILURE violation.
+    await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn,
+      slotCount: 1,
+    });
+
+    const devCalls = developCallList(spawn);
+    expect(devCalls.length).toBeGreaterThanOrEqual(2);
+    const secondPrompt = devCalls[1]![0].prompt;
+    expect(secondPrompt).toContain("## Pending blueprint remediation");
+    expect(secondPrompt).toContain("INFRA-AUDIT-FAILURE");
+    errLog.mockRestore();
+    warn.mockRestore();
+  });
+
+  it("3 consecutive audit throws → remediation cap fires", async () => {
+    await preCreateWorktree(10, "build-the-thing");
+    const comments: { id: number; body: string }[] = [];
+    const client = makeAuditClient({
+      getComments: () => comments,
+      onUpsert: (body) => {
+        if (comments.length === 0) comments.push({ id: 1, body });
+        else comments[0]!.body = body;
+      },
+    });
+    const errLog = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const spawn = throwingAuditSpawn();
+
+    for (let i = 0; i < 5; i++) {
+      await tickDevLoop({
+        client,
+        owner: "o",
+        repo: "r",
+        token: "t",
+        worktrees,
+        spawn,
+        slotCount: 1,
+      });
+    }
+
+    // Develop should have been called at most 3 times (cap).
+    expect(developCalls(spawn)).toBeLessThanOrEqual(3);
+    // Cap-exceeded error should have been logged.
+    const capErrors = errLog.mock.calls.filter((c) =>
+      String(c[0] ?? "").includes("remediation cap exceeded"),
+    );
+    expect(capErrors.length).toBeGreaterThanOrEqual(1);
+    errLog.mockRestore();
+    warn.mockRestore();
+  });
 });
