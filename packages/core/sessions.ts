@@ -1,6 +1,8 @@
 import type { GitHubClientPort as GitHubClient } from "@superfield/github";
 import type { BlueprintViolation } from "./steps/blueprint-conformance.ts";
 
+const logger = { warn: (...args: unknown[]) => console.warn(...args) };
+
 export type AgentRole = "primary" | "speculative";
 
 export interface AgentSession {
@@ -32,6 +34,11 @@ export interface AgentSession {
    * Cleared once the audit returns conformant.
    */
   selfAuditPendingViolations?: BlueprintViolation[];
+  /**
+   * Monotonic optimistic-locking version (#103). Incremented on every
+   * successful upsert. Legacy comments without this field parse as 0.
+   */
+  version?: number;
 }
 
 export interface IssueSession {
@@ -73,6 +80,8 @@ export async function getSession(
       const session = JSON.parse(
         comment.body.slice(jsonStart, jsonEnd).trim(),
       ) as AgentSession;
+      // Legacy comments without a version field default to 0.
+      if (session.version === undefined) session.version = 0;
       return { session, commentId: comment.id };
     } catch {
       // malformed — skip
@@ -149,9 +158,17 @@ export async function classifyStartupSessions(
   };
 }
 
+/** Exponential backoff delays for optimistic-locking retries. */
+const RETRY_DELAYS_MS = [100, 200, 400];
+
 /**
  * Creates or updates the session comment on the issue.
  * Called when an agent claims an issue and on each resumption.
+ *
+ * Uses optimistic locking via a monotonic `version` field to detect
+ * concurrent writes. On conflict the full read-modify-write cycle is
+ * retried up to 3 times with exponential backoff. If conflicts persist,
+ * the write proceeds anyway (last-writer-wins — no worse than before).
  */
 export async function upsertSession(
   client: GitHubClient,
@@ -160,12 +177,45 @@ export async function upsertSession(
   issueNumber: number,
   session: AgentSession,
 ): Promise<void> {
-  const body = `${MARKER}\n${JSON.stringify(session, null, 2)}\n${MARKER_END}`;
-  const existing = await getSession(client, owner, repo, issueNumber);
-  if (existing) {
+  for (let attempt = 0; ; attempt++) {
+    const existing = await getSession(client, owner, repo, issueNumber);
+    const expectedVersion = existing?.session.version ?? 0;
+    const nextVersion = expectedVersion + 1;
+
+    const stamped = { ...session, version: nextVersion };
+    const body = `${MARKER}\n${JSON.stringify(stamped, null, 2)}\n${MARKER_END}`;
+
+    if (!existing) {
+      // No comment yet — create with version 1.
+      await client.createIssueComment(owner, repo, issueNumber, body);
+      return;
+    }
+
+    // Re-read to detect interleaved writes.
+    const recheck = await getSession(client, owner, repo, issueNumber);
+    const storedVersion = recheck?.session.version ?? 0;
+
+    if (storedVersion > expectedVersion) {
+      // Conflict detected — another writer incremented the version.
+      if (attempt < RETRY_DELAYS_MS.length) {
+        const delay = RETRY_DELAYS_MS[attempt]!;
+        logger.warn(
+          `[sessions] version conflict on issue #${issueNumber} ` +
+            `(expected ${expectedVersion}, found ${storedVersion}), ` +
+            `retry ${attempt + 1}/${RETRY_DELAYS_MS.length} after ${delay}ms`,
+        );
+        await new Promise((r) => setTimeout(r, delay));
+        continue; // retry full cycle
+      }
+      // Exhausted retries — fall through and write anyway.
+      logger.warn(
+        `[sessions] exhausted ${RETRY_DELAYS_MS.length} retries on issue ` +
+          `#${issueNumber}, writing anyway (last-writer-wins)`,
+      );
+    }
+
     await client.updateIssueComment(owner, repo, existing.commentId, body);
-  } else {
-    await client.createIssueComment(owner, repo, issueNumber, body);
+    return;
   }
 }
 
