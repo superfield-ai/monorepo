@@ -438,13 +438,14 @@ function logInvocationStart(
   logger: AgentLogger,
 ): void {
   const resume = opts.sessionId ? `resume(${opts.sessionId})` : "new-session";
-  logger.emit("info", `invoke ${resume} backend=${backend}`);
+  const task = extractTaskType(opts.prompt);
+  logger.emit("info", `invoke ${resume} backend=${backend} task=${task}`);
   logger.emit(
-    "info",
+    "debug",
     `model=${opts.model ?? "default"} max_turns=${opts.maxTurns ?? 50} cwd=${opts.worktreePath}`,
   );
   logger.emit(
-    "info",
+    "debug",
     `prompt:\n${prettyPromptPreview(opts.prompt)}`,
   );
 }
@@ -488,6 +489,12 @@ function looksStuckOrUnhelpful(output: string): boolean {
 
 function toSingleLine(value: string): string {
   return value.replace(/\s+/g, " ").trim();
+}
+
+function extractTaskType(prompt: string): string {
+  const match = /^\s*##\s*Task:\s*(.+)\s*$/m.exec(prompt);
+  if (!match) return "unknown";
+  return match[1]!.trim().toLowerCase();
 }
 
 function readTextField(obj: Record<string, unknown>): string {
