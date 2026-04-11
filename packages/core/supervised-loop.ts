@@ -3,6 +3,7 @@ export interface SupervisedLoopOpts<T> {
   delayMs: (result: T) => number;
   sleep?: (ms: number) => Promise<void>;
   onError?: (error: unknown) => void;
+  stopOnError?: (error: unknown) => boolean;
   initialErrorDelayMs?: number;
   maxErrorDelayMs?: number;
 }
@@ -27,6 +28,9 @@ export async function runSupervisedLoop<T>(
       nextDelayMs = Math.max(0, opts.delayMs(result));
     } catch (error) {
       opts.onError?.(error);
+      if (opts.stopOnError?.(error)) {
+        throw error;
+      }
       nextDelayMs = errorDelayMs;
       errorDelayMs = Math.min(errorDelayMs * 2, maxErrorDelayMs);
     }

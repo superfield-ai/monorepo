@@ -7,8 +7,19 @@
  */
 import { describe, it, expect, vi } from "vitest";
 import { startCommand, type StartDeps } from "../../commands/start.ts";
+import type { DevLoopOpts } from "@superfield/core/loops/dev-loop";
 
 function makeDeps(overrides: Partial<StartDeps> = {}): StartDeps {
+  const listIssues = vi.fn().mockResolvedValue([
+    {
+      number: 99,
+      title: "Plan",
+      body: "",
+      html_url: "",
+      state: "open",
+      labels: ["plan"],
+    },
+  ]);
   return {
     loadConfig: vi.fn().mockResolvedValue({
       users: [{ handle: "alice", token: "ghp_tok" }],
@@ -18,6 +29,9 @@ function makeDeps(overrides: Partial<StartDeps> = {}): StartDeps {
     runPlanningLoop: vi.fn().mockResolvedValue(undefined),
     runDevLoop: vi.fn().mockResolvedValue(undefined),
     runDocLoop: vi.fn().mockResolvedValue(undefined),
+    createClient: vi.fn().mockReturnValue({
+      listIssues,
+    } as unknown as DevLoopOpts["client"]),
     env: {},
     log: vi.fn(),
     warn: vi.fn(),
@@ -122,5 +136,23 @@ describe("startCommand", () => {
     });
     await startCommand("/home/user/project", deps);
     expect(exit).toHaveBeenCalledWith(1);
+  });
+
+  it("exits with error when no open Plan issue exists", async () => {
+    const exit = vi.fn() as unknown as StartDeps["exit"];
+    const deps = makeDeps({
+      createClient: vi.fn().mockReturnValue({
+        listIssues: vi
+          .fn()
+          .mockResolvedValueOnce([])
+          .mockResolvedValueOnce([]),
+      } as unknown as DevLoopOpts["client"]),
+      exit,
+    });
+    await startCommand("/home/user/project", deps);
+    expect(exit).toHaveBeenCalledWith(1);
+    expect(deps.runPlanningLoop).not.toHaveBeenCalled();
+    expect(deps.runDevLoop).not.toHaveBeenCalled();
+    expect(deps.runDocLoop).not.toHaveBeenCalled();
   });
 });

@@ -93,6 +93,13 @@ export interface DevLoopTickResult {
   reason?: string;
 }
 
+class FatalDevLoopError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "FatalDevLoopError";
+  }
+}
+
 const DEFAULT_IDLE_MS = 30_000;
 const DEFAULT_PRUNE_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -103,6 +110,15 @@ const DEFAULT_PRUNE_INTERVAL_MS = 15 * 60 * 1000;
  */
 export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   console.log(`[${opts.owner}/${opts.repo}] dev loop started`);
+  const startupPlan = await findOpenPlanIssue(opts.client, opts.owner, opts.repo);
+  if (!startupPlan) {
+    throw new FatalDevLoopError(
+      `No open Plan issue found for ${opts.owner}/${opts.repo}. Run 'superfield plan <repo-path>' before 'superfield start'.`,
+    );
+  }
+  console.log(
+    `[dev] plan issue ready: #${startupPlan.number} ${startupPlan.title}`,
+  );
   const idleMs = opts.idlePollMs ?? DEFAULT_IDLE_MS;
   const pruneFn = opts._pruneFn ?? runPrunePass;
   const tickFn = opts._tickFn ?? tickDevLoop;
@@ -144,6 +160,11 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           : undefined,
       });
       if (result.idle) {
+        if (result.reason === "no Plan issue exists") {
+          throw new FatalDevLoopError(
+            `Plan issue disappeared for ${opts.owner}/${opts.repo}. Stopping start command.`,
+          );
+        }
         console.log(
           `[${opts.owner}/${opts.repo}] dev tick idle: ${result.reason ?? "no eligible work"}`,
         );
@@ -184,6 +205,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
         `[error] [${opts.owner}/${opts.repo}] dev loop failed: ${formatError(err)}`,
       );
     },
+    stopOnError: (err) => err instanceof FatalDevLoopError,
   });
 }
 
@@ -195,8 +217,8 @@ export async function tickDevLoop(
   const startupReapedSessions = opts.startupReapedSessions ?? [];
 
   // 1. Read the Plan
-  const planIssues = await client.listIssues(owner, repo, ["plan"]);
-  if (planIssues.length === 0) {
+  const planIssue = await findOpenPlanIssue(client, owner, repo);
+  if (!planIssue) {
     return {
       primaryIssue: null,
       speculativeIssues: [],
@@ -207,7 +229,7 @@ export async function tickDevLoop(
       reason: "no Plan issue exists",
     };
   }
-  const plan = parsePlan(planIssues[0]!.body ?? "");
+  const plan = parsePlan(planIssue.body ?? "");
 
   // 2. Select primary
   const startupEntry = await selectStartupPrimary(
@@ -720,9 +742,9 @@ async function loadCurrentPlan(
   repo: string,
   fallback: Plan,
 ): Promise<Plan> {
-  const planIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
-  if (planIssues.length === 0) return fallback;
-  return parsePlan(planIssues[0]!.body ?? "");
+  const planIssue = await findOpenPlanIssue(client, owner, repo);
+  if (!planIssue) return fallback;
+  return parsePlan(planIssue.body ?? "");
 }
 
 /** Scout seam for dev-scout downstream issue hydration in #51. */
@@ -896,6 +918,23 @@ function extractCheckUrl(body: string | null): string {
 
 function formatError(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
+}
+
+async function findOpenPlanIssue(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+): Promise<Issue | null> {
+  const labeledPlanIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
+  if (labeledPlanIssues.length > 0) return labeledPlanIssues[0]!;
+
+  const allOpenIssues = (await client.listIssues(owner, repo)) ?? [];
+  const fallback = allOpenIssues.find(
+    (issue) =>
+      issue.labels.some((label) => label.toLowerCase() === "plan") ||
+      /^plan\b/i.test(issue.title),
+  );
+  return fallback ?? null;
 }
 
 async function buildStartupSessionHandoff(

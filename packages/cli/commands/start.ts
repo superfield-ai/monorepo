@@ -106,23 +106,16 @@ export async function startCommand(
   const envSlotCount = slotCount ?? resolveEnvSlotCount(env, emit);
   if (envSlotCount !== undefined) emit("debug", `Using slot count: ${envSlotCount}`);
   else emit("trace", "Using default slot count");
-  try {
-    const planIssues = await client.listIssues(owner, repo, ["plan"]);
-    if (planIssues.length === 0) {
-      emit(
-        "warn",
-        `No open Plan issue found for ${owner}/${repo}; dev loop will stay idle until a plan issue exists`,
-      );
-    } else {
-      const plan = planIssues[0]!;
-      emit("info", `Plan issue detected: #${plan.number} ${plan.title}`);
-    }
-  } catch (err) {
+  const planIssue = await findOpenPlanIssue(client, owner, repo);
+  if (!planIssue) {
     emit(
-      "warn",
-      `Unable to verify Plan issue before starting loops: ${err instanceof Error ? err.message : String(err)}`,
+      "error",
+      `No open Plan issue found for ${owner}/${repo}. Run 'superfield plan <repo-path>' first.`,
     );
+    exit(1);
+    return;
   }
+  emit("info", `Plan issue detected: #${planIssue.number} ${planIssue.title}`);
   emit("info", "Starting planning/dev/doc loops");
   emit(
     "info",
@@ -183,4 +176,27 @@ function resolveLogLevel(
     )}; using "info"`,
   );
   return "info";
+}
+
+async function findOpenPlanIssue(
+  client: DevLoopOpts["client"],
+  owner: string,
+  repo: string,
+): Promise<{ number: number; title: string } | null> {
+  const labeledPlanIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
+  if (labeledPlanIssues.length > 0) {
+    return {
+      number: labeledPlanIssues[0]!.number,
+      title: labeledPlanIssues[0]!.title,
+    };
+  }
+
+  const allOpenIssues = (await client.listIssues(owner, repo)) ?? [];
+  const fallback = allOpenIssues.find(
+    (issue) =>
+      issue.labels.some((label) => label.toLowerCase() === "plan") ||
+      /^plan\b/i.test(issue.title),
+  );
+  if (!fallback) return null;
+  return { number: fallback.number, title: fallback.title };
 }
