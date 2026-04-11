@@ -200,14 +200,16 @@ export class GitHubClient implements GitHubClientPort {
     repo: string,
     labels?: string[],
   ): Promise<Issue[]> {
-    const { data } = await this.octokit.issues.listForRepo({
+    const data = await this.octokit.paginate(this.octokit.issues.listForRepo, {
       owner,
       repo,
       state: "open",
       labels: labels?.join(","),
       per_page: 100,
     });
-    return data.map((issue) => ({
+    return data
+      .filter((issue) => !("pull_request" in issue))
+      .map((issue) => ({
       number: issue.number,
       title: issue.title,
       body: issue.body ?? null,
@@ -216,7 +218,7 @@ export class GitHubClient implements GitHubClientPort {
       labels: issue.labels
         .map((l) => (typeof l === "string" ? l : (l.name ?? "")))
         .filter(Boolean),
-    }));
+      }));
   }
 
   async createIssue(params: CreateIssueParams): Promise<Issue> {

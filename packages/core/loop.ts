@@ -28,11 +28,17 @@ const POLL_INTERVAL_MS = 5_000;
  * See PRD §Command: start §Planning loop.
  */
 export async function runPlanningLoop(config: Config): Promise<void> {
+  console.log(
+    `[planning] loop started for ${config.repositories.length} repository(ies)`,
+  );
   await runSupervisedLoop({
-    runOnce: () => tickConfiguredRepositories(config),
+    runOnce: async () => {
+      console.log("[planning] tick start");
+      await tickConfiguredRepositories(config);
+    },
     delayMs: () => POLL_INTERVAL_MS,
     onError: (err) => {
-      console.error("[planning] loop failed:", err);
+      console.error(`[error] [planning] loop failed: ${formatError(err)}`);
     },
   });
 }
@@ -104,7 +110,7 @@ async function tickRepository(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     watchdogOutcome = { ok: false, error: msg, issuesCreated: [] };
-    console.error(`[${owner}/${repo}] watchdog failed:`, err);
+    console.error(`[error] [${owner}/${repo}] watchdog failed: ${msg}`);
   }
 
   // Step 2: Issue audit — validate open issues against the IssueBody schema
@@ -120,7 +126,7 @@ async function tickRepository(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     issueAuditOutcome = { ok: false, error: msg };
-    console.error(`[${owner}/${repo}] issue-audit failed:`, err);
+    console.error(`[error] [${owner}/${repo}] issue-audit failed: ${msg}`);
   }
 
   // Step 3: Plan coverage — append open issues not yet referenced in Plan
@@ -143,7 +149,7 @@ async function tickRepository(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     planCoverageOutcome = { ok: false, error: msg };
-    console.error(`[${owner}/${repo}] plan-coverage failed:`, err);
+    console.error(`[error] [${owner}/${repo}] plan-coverage failed: ${msg}`);
   }
 
   // Step 4: Blueprint conformance — advisory check of issues against blueprint rules
@@ -164,7 +170,9 @@ async function tickRepository(
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     blueprintConformanceOutcome = { ok: false, error: msg };
-    console.error(`[${owner}/${repo}] blueprint-conformance failed:`, err);
+    console.error(
+      `[error] [${owner}/${repo}] blueprint-conformance failed: ${msg}`,
+    );
   }
 
   return {
@@ -203,15 +211,27 @@ async function tickConfiguredRepositories(
       }
 
       try {
-        await tickRepositoryFn(
+        const result = await tickRepositoryFn(
           createClient(user.token),
           repoConfig.owner,
           repoConfig.repo,
         );
+        const auditSummary = result.issueAudit.ok
+          ? `${result.issueAudit.nonConformant.length} non-conformant`
+          : "error";
+        const coverageSummary = result.planCoverage.ok
+          ? `${result.planCoverage.appended.length} appended`
+          : "error";
+        const conformanceSummary = result.blueprintConformance.ok
+          ? `${result.blueprintConformance.issuesWithViolations.length} with violations`
+          : "error";
+        console.log(
+          `[${repoConfig.owner}/${repoConfig.repo}] planning tick complete: watchdog=${result.watchdogIssuesCreated.length}, issueAudit=${auditSummary}, planCoverage=${coverageSummary}, blueprint=${conformanceSummary}`,
+        );
       } catch (err) {
+        const msg = formatError(err);
         console.error(
-          `[${repoConfig.owner}/${repoConfig.repo}] planning tick failed:`,
-          err,
+          `[error] [${repoConfig.owner}/${repoConfig.repo}] planning tick failed: ${msg}`,
         );
       }
     }),
@@ -241,4 +261,8 @@ async function runWatchdogStep(
     }
   }
   return watchdogIssuesCreated;
+}
+
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }

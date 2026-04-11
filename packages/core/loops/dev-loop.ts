@@ -102,6 +102,7 @@ const DEFAULT_PRUNE_INTERVAL_MS = 15 * 60 * 1000;
  * existing session via the deadman switch.
  */
 export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
+  console.log(`[${opts.owner}/${opts.repo}] dev loop started`);
   const idleMs = opts.idlePollMs ?? DEFAULT_IDLE_MS;
   const pruneFn = opts._pruneFn ?? runPrunePass;
   const tickFn = opts._tickFn ?? tickDevLoop;
@@ -116,16 +117,14 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     startupHandoff = await buildStartupSessionHandoff(opts);
   } catch (err) {
     console.error(
-      `[${opts.owner}/${opts.repo}] startup session scan failed:`,
-      err,
+      `[error] [${opts.owner}/${opts.repo}] startup session scan failed: ${formatError(err)}`,
     );
   }
   try {
     await pruneFn(opts);
   } catch (err) {
     console.error(
-      `[${opts.owner}/${opts.repo}] startup prune pass failed:`,
-      err,
+      `[error] [${opts.owner}/${opts.repo}] startup prune pass failed: ${formatError(err)}`,
     );
   }
   let firstTick = true;
@@ -133,6 +132,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   let lastPruneAt = Date.now();
   await runSupervisedLoop({
     runOnce: async () => {
+      console.log(`[${opts.owner}/${opts.repo}] dev tick start`);
       const result = await tickFn({
         ...opts,
         circuit,
@@ -143,6 +143,17 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           ? startupHandoff.reapedSessions
           : undefined,
       });
+      if (result.idle) {
+        console.log(
+          `[${opts.owner}/${opts.repo}] dev tick idle: ${result.reason ?? "no eligible work"}`,
+        );
+      } else {
+        const speculativeCount = result.speculativeIssues.length;
+        const blockedCount = result.mergeGateBlocked.length;
+        console.log(
+          `[${opts.owner}/${opts.repo}] dev tick: primary=#${result.primaryIssue} closed=${result.closed} speculative=${speculativeCount} blocked=${blockedCount}`,
+        );
+      }
       firstTick = false;
       if (result.idle) {
         // Run maintenance on idle ticks — prune stale worktrees + stale sessions
@@ -150,7 +161,9 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           await pruneFn(opts);
           lastPruneAt = Date.now();
         } catch (err) {
-          console.error(`[${opts.owner}/${opts.repo}] prune pass failed:`, err);
+          console.error(
+            `[error] [${opts.owner}/${opts.repo}] prune pass failed: ${formatError(err)}`,
+          );
         }
       } else if (Date.now() - lastPruneAt >= pruneIntervalMs) {
         // Wall-clock interval prune — ensures pruning even during long busy streaks
@@ -158,8 +171,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           await pruneFn(opts);
         } catch (err) {
           console.error(
-            `[${opts.owner}/${opts.repo}] periodic prune pass failed:`,
-            err,
+            `[error] [${opts.owner}/${opts.repo}] periodic prune pass failed: ${formatError(err)}`,
           );
         }
         lastPruneAt = Date.now();
@@ -168,7 +180,9 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     },
     delayMs: (result) => (result.idle ? idleMs : 0),
     onError: (err) => {
-      console.error(`[${opts.owner}/${opts.repo}] dev loop failed:`, err);
+      console.error(
+        `[error] [${opts.owner}/${opts.repo}] dev loop failed: ${formatError(err)}`,
+      );
     },
   });
 }
@@ -878,6 +892,10 @@ function extractCheckUrl(body: string | null): string {
   if (!body) return "";
   const match = /(https:\/\/github\.com\/[^\s)]+\/runs\/\d+)/.exec(body);
   return match?.[1] ?? "";
+}
+
+function formatError(err: unknown): string {
+  return err instanceof Error ? err.message : String(err);
 }
 
 async function buildStartupSessionHandoff(

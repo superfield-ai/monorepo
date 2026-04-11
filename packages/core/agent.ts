@@ -3,6 +3,15 @@ import { spawn } from "node:child_process";
 export type AgentBackend = "claude" | "codex";
 export type AgentMode = AgentBackend | "auto";
 
+type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
+const LOG_LEVEL_RANK: Record<LogLevel, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+  trace: 4,
+};
+
 // Shape of the JSON object Claude Code emits with --output-format json
 interface ClaudeJsonResult {
   type: string;
@@ -20,6 +29,11 @@ interface CliRunResult {
   code: number | null;
   stdout: string;
   stderr: string;
+}
+
+interface AgentLogger {
+  emit: (level: LogLevel, message: string) => void;
+  currentLevel: LogLevel;
 }
 
 export interface AgentOpts {
@@ -76,11 +90,20 @@ class AgentRateLimitError extends Error {
  */
 export async function spawnAgent(opts: AgentOpts): Promise<AgentResult> {
   const backend = resolveBackend(opts.provider);
+  const logger = makeAgentLogger();
   try {
-    return await spawnAgentBackend(backend, opts);
+    return await spawnAgentBackend(backend, opts, logger);
   } catch (err) {
     if (backend === "claude" && isRetryableRateLimitError(err)) {
-      return spawnAgentBackend("codex", { ...opts, sessionId: undefined });
+      logger.emit(
+        "warn",
+        "[agent/claude] rate limited; falling back to codex for this run",
+      );
+      return spawnAgentBackend(
+        "codex",
+        { ...opts, sessionId: undefined },
+        logger,
+      );
     }
     throw err;
   }
@@ -97,18 +120,22 @@ function resolveBackend(provider?: AgentMode): AgentBackend {
 async function spawnAgentBackend(
   backend: AgentBackend,
   opts: AgentOpts,
+  logger: AgentLogger,
 ): Promise<AgentResult> {
+  logInvocationStart(backend, opts, logger);
   const run = await runCli(
     backend === "claude" ? "claude" : "codex",
     buildArgs(backend, opts),
     opts.worktreePath,
+    logger,
   );
+  logRawCliResult(backend, run, logger);
 
   if (backend === "claude") {
-    return parseClaudeRun(run);
+    return parseClaudeRun(run, logger);
   }
 
-  return parseCodexRun(run);
+  return parseCodexRun(run, logger);
 }
 
 function buildArgs(backend: AgentBackend, opts: AgentOpts): string[] {
@@ -166,6 +193,7 @@ async function runCli(
   command: string,
   args: string[],
   cwd: string,
+  logger: AgentLogger,
 ): Promise<CliRunResult> {
   return new Promise<CliRunResult>((resolve, reject) => {
     const proc = spawn(command, args, {
@@ -181,6 +209,10 @@ async function runCli(
     proc.stderr.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
     proc.on("error", (err) => {
+      logger.emit(
+        "error",
+        `[agent/${command}] invocation failed before start: ${err.message}`,
+      );
       reject(new Error(`Failed to spawn ${command}: ${err.message}`));
     });
 
@@ -194,7 +226,7 @@ async function runCli(
   });
 }
 
-function parseClaudeRun(run: CliRunResult): AgentResult {
+function parseClaudeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
   let parsed: ClaudeJsonResult;
   try {
     parsed = JSON.parse(run.stdout) as ClaudeJsonResult;
@@ -205,6 +237,10 @@ function parseClaudeRun(run: CliRunResult): AgentResult {
         `claude was rate limited: ${truncateForError(run.stderr || run.stdout)}`,
       );
     }
+    logger.emit(
+      "error",
+      `[agent/claude] invocation did not return structured JSON (no session started)`,
+    );
     throw new Error(
       `claude exited with code ${run.code} and produced non-JSON output.\n` +
         `stdout: ${run.stdout.slice(0, 500)}\n` +
@@ -222,6 +258,10 @@ function parseClaudeRun(run: CliRunResult): AgentResult {
         `claude was rate limited: ${truncateForError(parsed.error ?? run.stderr)}`,
       );
     }
+    logger.emit(
+      "error",
+      `[agent/claude] response missing session_id (no agent was started)`,
+    );
     throw new Error(
       `claude response missing session_id: ${run.stdout.slice(0, 500)}`,
     );
@@ -235,6 +275,24 @@ function parseClaudeRun(run: CliRunResult): AgentResult {
     );
   }
 
+  if (parsed.is_error) {
+    logger.emit(
+      "warn",
+      `[agent/claude] agent session ${parsed.session_id} returned error output`,
+    );
+  } else if (looksStuckOrUnhelpful(output)) {
+    logger.emit(
+      "warn",
+      `[agent/claude] agent session ${parsed.session_id} produced low-signal output (possible stuck/unhelpful run)`,
+    );
+  }
+  logger.emit(
+    "debug",
+    `[agent/claude] parsed response: session=${parsed.session_id} is_error=${parsed.is_error} turns=${parsed.num_turns ?? "?"} duration_ms=${parsed.duration_ms ?? "?"} cost_usd=${parsed.cost_usd ?? "?"} output_preview=${toSingleLine(
+      output.slice(0, 300),
+    )}`,
+  );
+
   return {
     sessionId: parsed.session_id,
     output,
@@ -243,7 +301,7 @@ function parseClaudeRun(run: CliRunResult): AgentResult {
   };
 }
 
-function parseCodexRun(run: CliRunResult): AgentResult {
+function parseCodexRun(run: CliRunResult, logger: AgentLogger): AgentResult {
   const lines = run.stdout
     .split(/\r?\n/)
     .filter((line) => line.trim().length > 0);
@@ -299,12 +357,133 @@ function parseCodexRun(run: CliRunResult): AgentResult {
         `codex was rate limited: ${truncateForError(run.stderr || run.stdout)}`,
       );
     }
+    logger.emit(
+      "error",
+      "[agent/codex] response missing thread_id (no agent was started)",
+    );
     throw new Error(
       `codex response missing thread_id: ${run.stdout.slice(0, 500)}\nstderr: ${run.stderr.slice(0, 500)}`,
     );
   }
 
+  if (isError || looksStuckOrUnhelpful(output)) {
+    logger.emit(
+      "warn",
+      `[agent/codex] agent session ${sessionId} returned ${isError ? "error" : "low-signal"} output`,
+    );
+  }
+  logger.emit(
+    "debug",
+    `[agent/codex] parsed response: session=${sessionId} is_error=${isError} output_preview=${toSingleLine(
+      output.slice(0, 300),
+    )}`,
+  );
+
   return { sessionId, output, isError, costUsd };
+}
+
+function makeAgentLogger(): AgentLogger {
+  const currentLevel = resolveLogLevel();
+  return {
+    currentLevel,
+    emit: (level, message) => {
+      const line = `[${level}] ${message}`;
+      if (level === "error") {
+        console.error(line);
+        return;
+      }
+      if (level === "warn") {
+        console.warn(line);
+        return;
+      }
+      if (LOG_LEVEL_RANK[level] <= LOG_LEVEL_RANK[currentLevel]) {
+        console.log(line);
+      }
+    },
+  };
+}
+
+function resolveLogLevel(): LogLevel {
+  const raw = (
+    process.env.SUPERFIELD_LOG_LEVEL ??
+    process.env.LOG_LEVEL ??
+    "info"
+  )
+    .trim()
+    .toLowerCase();
+  if (
+    raw === "error" ||
+    raw === "warn" ||
+    raw === "info" ||
+    raw === "debug" ||
+    raw === "trace"
+  ) {
+    return raw;
+  }
+  console.warn(
+    `[warn] [agent] Ignoring invalid SUPERFIELD_LOG_LEVEL=${JSON.stringify(
+      process.env.SUPERFIELD_LOG_LEVEL ?? process.env.LOG_LEVEL,
+    )}; using "info"`,
+  );
+  return "info";
+}
+
+function logInvocationStart(
+  backend: AgentBackend,
+  opts: AgentOpts,
+  logger: AgentLogger,
+): void {
+  const resume = opts.sessionId ? `resume(${opts.sessionId})` : "new-session";
+  logger.emit("info", `[agent/${backend}] invoke ${resume}`);
+  logger.emit(
+    "info",
+    `[agent/${backend}] model=${opts.model ?? "default"} max_turns=${opts.maxTurns ?? 50} cwd=${opts.worktreePath}`,
+  );
+  logger.emit(
+    "info",
+    `[agent/${backend}] prompt:\n${prettyPromptPreview(opts.prompt)}`,
+  );
+}
+
+function logRawCliResult(
+  backend: AgentBackend,
+  run: CliRunResult,
+  logger: AgentLogger,
+): void {
+  if (logger.currentLevel !== "debug" && logger.currentLevel !== "trace") {
+    return;
+  }
+  logger.emit(
+    "debug",
+    `[agent/${backend}] cli response: exit_code=${run.code} stdout=${toSingleLine(
+      run.stdout.slice(0, 500),
+    )} stderr=${toSingleLine(run.stderr.slice(0, 500))}`,
+  );
+}
+
+function prettyPromptPreview(prompt: string): string {
+  const lines = prompt
+    .split(/\r?\n/)
+    .map((line) => line.trimEnd())
+    .slice(0, 8);
+  const joined = lines.join("\n");
+  const clipped = joined.length > 700 ? `${joined.slice(0, 700)}\n...` : joined;
+  return clipped
+    .split("\n")
+    .map((line) => `  | ${line}`)
+    .join("\n");
+}
+
+function looksStuckOrUnhelpful(output: string): boolean {
+  const text = output.trim().toLowerCase();
+  if (!text) return true;
+  return /max turns|cannot proceed|unable to continue|stuck|insufficient context|no changes made/.test(
+    text,
+  );
+}
+
+function toSingleLine(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function readTextField(obj: Record<string, unknown>): string {

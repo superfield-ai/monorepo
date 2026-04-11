@@ -41,7 +41,7 @@ export async function runCLI(args: string[]): Promise<void> {
     const slotCount = parseSlotCount(third);
     if (third !== undefined && slotCount === null) {
       console.warn(
-        `Ignoring invalid slot count ${JSON.stringify(third)}; using the default slot count`,
+        `[warn] Ignoring invalid slot count ${JSON.stringify(third)}; using the default slot count`,
       );
     }
     await startCommand(sub, {

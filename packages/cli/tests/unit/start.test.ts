@@ -20,6 +20,7 @@ function makeDeps(overrides: Partial<StartDeps> = {}): StartDeps {
     runDocLoop: vi.fn().mockResolvedValue(undefined),
     env: {},
     log: vi.fn(),
+    warn: vi.fn(),
     error: vi.fn(),
     exit: vi.fn() as unknown as StartDeps["exit"],
     ...overrides,
@@ -88,8 +89,8 @@ describe("startCommand", () => {
       const deps = makeDeps({ env: { SUPERFIELD_SLOT_COUNT: raw } });
       await startCommand("/home/user/project", deps);
 
-      expect(deps.error).toHaveBeenCalledWith(
-        `Ignoring invalid SUPERFIELD_SLOT_COUNT=${JSON.stringify(raw)}; using the default slot count`,
+      expect(deps.warn).toHaveBeenCalledWith(
+        `[warn] Ignoring invalid SUPERFIELD_SLOT_COUNT=${JSON.stringify(raw)}; using the default slot count`,
       );
       const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
         .calls[0][0];
