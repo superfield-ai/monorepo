@@ -3,6 +3,7 @@ import {
   type AgentOpts,
   type AgentResult,
   type AgentMode,
+  type AgentLoop,
 } from "./agent.ts";
 
 /**
@@ -26,6 +27,8 @@ export interface LLMTaskOpts {
   provider?: AgentMode;
   /** Model alias to pass to the agent (e.g. "opus", "sonnet", "haiku"). */
   model?: string;
+  /** Optional loop context for logging. */
+  loop?: AgentLoop;
   /** Injectable spawn function for testing. */
   spawn?: (opts: AgentOpts) => Promise<AgentResult>;
 }
@@ -48,6 +51,7 @@ export async function runLLMTask<T>(
     maxTurns: opts.maxTurns ?? 10,
     provider: opts.provider,
     model: opts.model,
+    loop: opts.loop,
   });
 
   if (res.isError) {

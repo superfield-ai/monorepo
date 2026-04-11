@@ -83,25 +83,25 @@ const DEFAULT_POLL_MS = 60_000;
  * in memory; on restart, only processes PRs merged after the process started.
  */
 export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
-  console.log(`[${opts.owner}/${opts.repo}] doc loop started`);
+  console.log("[doc] loop started");
   const pollMs = opts.pollIntervalMs ?? DEFAULT_POLL_MS;
   let lastSeenSha: string | null = null;
   await runSupervisedLoop({
     runOnce: async () => {
-      console.log(`[${opts.owner}/${opts.repo}] doc tick start`);
+      console.log("[doc] tick start");
       const headSha = await opts.client.getHeadSha(opts.owner, opts.repo);
       const result = await tickDocLoop({ ...opts, lastSeenSha, headSha });
       if (!result.triggered) {
         console.log(
-          `[${opts.owner}/${opts.repo}] doc tick idle: no new merged PRs on main`,
+          "[doc] tick idle: no new merged PRs on main",
         );
       } else if (result.docPrNumber) {
         console.log(
-          `[${opts.owner}/${opts.repo}] doc tick: processed PR #${result.pr}, opened doc PR #${result.docPrNumber}`,
+          `[doc] tick: processed PR #${result.pr}, opened doc PR #${result.docPrNumber}`,
         );
       } else {
         console.log(
-          `[${opts.owner}/${opts.repo}] doc tick: processed PR #${result.pr}, no doc changes required`,
+          `[doc] tick: processed PR #${result.pr}, no doc changes required`,
         );
       }
       if (result.triggered) {
@@ -112,7 +112,7 @@ export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
     delayMs: () => pollMs,
     onError: (err) => {
       console.error(
-        `[error] [${opts.owner}/${opts.repo}] doc loop failed: ${formatError(err)}`,
+        `[error] [doc] loop failed: ${formatError(err)}`,
       );
     },
   });
@@ -248,7 +248,7 @@ async function runCoverageScan(
     changedFiles: sourceFiles,
   });
   const { result } = await runLLMTask<{ missing_docs: DocCoverageMissing[] }>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet" },
+    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc" },
     (json) => {
       const parsed = JSON.parse(json) as {
         missing_docs?: DocCoverageMissing[];
@@ -275,7 +275,7 @@ async function runCanonicalSync(
     readmeContent: readmeContent ?? "",
   });
   const { result } = await runLLMTask<DocSyncProposal>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet" },
+    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc" },
     (json) => {
       const parsed = JSON.parse(json) as Partial<DocSyncProposal>;
       return {
@@ -309,7 +309,7 @@ async function runConsistencyCheck(
   });
   const { result } = await runLLMTask<{
     inconsistencies: DocConsistencyFinding[];
-  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet" }, (json) => {
+  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc" }, (json) => {
     const parsed = JSON.parse(json) as {
       inconsistencies?: DocConsistencyFinding[];
     };

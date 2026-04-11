@@ -12,6 +12,8 @@ import type { DevLoopOpts } from "@superfield/core/loops/dev-loop";
 import type { DocLoopOpts } from "@superfield/core/loops/doc-loop";
 
 type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
+export type StartLoop = "plan" | "dev" | "doc";
+const DEFAULT_LOOPS: StartLoop[] = ["plan", "dev", "doc"];
 
 const LOG_LEVEL_RANK: Record<LogLevel, number> = {
   error: 0,
@@ -28,6 +30,7 @@ export interface StartDeps {
   runDevLoop?: (opts: DevLoopOpts) => Promise<void>;
   runDocLoop?: (opts: DocLoopOpts) => Promise<void>;
   createClient?: (token: string) => DevLoopOpts["client"];
+  loops?: StartLoop[];
   slotCount?: number;
   env?: NodeJS.ProcessEnv;
   log?: (msg: string) => void;
@@ -47,6 +50,7 @@ export async function startCommand(
     runDevLoop = defaultRunDevLoop,
     runDocLoop = defaultRunDocLoop,
     createClient = (token) => new GitHubClient(token),
+    loops = DEFAULT_LOOPS,
     slotCount,
     env = process.env,
     log = console.log,
@@ -94,7 +98,10 @@ export async function startCommand(
     return;
   }
 
-  emit("info", `Starting superfield for ${owner}/${repo} (user: ${assignedUser})`);
+  emit(
+    "info",
+    `[start] Starting superfield (user: ${assignedUser})`,
+  );
 
   const effectiveConfig: Config = {
     users: config.users,
@@ -102,38 +109,51 @@ export async function startCommand(
   };
 
   const client = createClient(user.token);
+  const selectedLoops = normalizeLoops(loops);
   const worktrees = new WorktreeManager();
   const envSlotCount = slotCount ?? resolveEnvSlotCount(env, emit);
   if (envSlotCount !== undefined) emit("debug", `Using slot count: ${envSlotCount}`);
   else emit("trace", "Using default slot count");
-  const planIssue = await findOpenPlanIssue(client, owner, repo);
-  if (!planIssue) {
+  if (selectedLoops.includes("dev")) {
+    const planIssue = await findOpenPlanIssue(client, owner, repo);
+    if (!planIssue) {
+      emit(
+        "error",
+        `No open Plan issue found for ${owner}/${repo}. Run 'superfield plan <repo-path>' first.`,
+      );
+      exit(1);
+      return;
+    }
     emit(
-      "error",
-      `No open Plan issue found for ${owner}/${repo}. Run 'superfield plan <repo-path>' first.`,
+      "info",
+      `[start] Plan issue detected: #${planIssue.number} ${planIssue.title}`,
     );
-    exit(1);
-    return;
   }
-  emit("info", `Plan issue detected: #${planIssue.number} ${planIssue.title}`);
-  emit("info", "Starting planning/dev/doc loops");
+  emit("info", `[start] Starting loops: ${selectedLoops.join(", ")}`);
   emit(
     "info",
-    "Loop cadence: planning=5s, dev(idle)=30s, docs=60s. Set SUPERFIELD_LOG_LEVEL=debug|trace for more detail.",
+    "[start] Loop cadence: plan=5s, dev(idle)=30s, doc=60s. Set SUPERFIELD_LOG_LEVEL=debug|trace for more detail.",
   );
-
-  await Promise.all([
-    runPlanningLoop(effectiveConfig),
-    runDevLoop({
-      client,
-      owner,
-      repo,
-      token: user.token,
-      worktrees,
-      ...(envSlotCount !== undefined ? { slotCount: envSlotCount } : {}),
-    }),
-    runDocLoop({ client, owner, repo, repoPath: dir }),
-  ]);
+  const tasks: Array<Promise<void>> = [];
+  if (selectedLoops.includes("plan")) {
+    tasks.push(runPlanningLoop(effectiveConfig));
+  }
+  if (selectedLoops.includes("dev")) {
+    tasks.push(
+      runDevLoop({
+        client,
+        owner,
+        repo,
+        token: user.token,
+        worktrees,
+        ...(envSlotCount !== undefined ? { slotCount: envSlotCount } : {}),
+      }),
+    );
+  }
+  if (selectedLoops.includes("doc")) {
+    tasks.push(runDocLoop({ client, owner, repo, repoPath: dir }));
+  }
+  await Promise.all(tasks);
 }
 
 async function defaultResolveRepo(
@@ -176,6 +196,11 @@ function resolveLogLevel(
     )}; using "info"`,
   );
   return "info";
+}
+
+function normalizeLoops(loops: StartLoop[]): StartLoop[] {
+  const set = new Set<StartLoop>(loops);
+  return DEFAULT_LOOPS.filter((loop) => set.has(loop));
 }
 
 async function findOpenPlanIssue(

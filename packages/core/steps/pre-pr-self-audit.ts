@@ -80,7 +80,7 @@ export async function runPrePRSelfAudit(
   const { result } = await runLLMTask<{
     conformant: boolean;
     violations: PrePRSelfAuditViolation[];
-  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet" }, (json) => {
+  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "dev" }, (json) => {
     const parsed = JSON.parse(json) as RawVerdict;
     if (typeof parsed.conformant !== "boolean") {
       throw new Error("missing boolean `conformant` field");

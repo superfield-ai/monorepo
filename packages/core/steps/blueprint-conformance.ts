@@ -104,7 +104,7 @@ async function checkOne(
   const prompt = buildBlueprintConformancePrompt({ issue, candidateDomains });
 
   const { result } = await runLLMTask<BlueprintConformanceReport>(
-    { prompt, spawn: opts.spawn, cwd: opts.cwd, model: "sonnet" },
+    { prompt, spawn: opts.spawn, cwd: opts.cwd, model: "sonnet", loop: "plan" },
     (json) => {
       const parsed = JSON.parse(json) as Partial<BlueprintConformanceReport>;
       if (typeof parsed.issue_number !== "number") {

@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 
 export type AgentBackend = "claude" | "codex";
 export type AgentMode = AgentBackend | "auto";
+export type AgentLoop = "plan" | "dev" | "doc";
 
 type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
 const LOG_LEVEL_RANK: Record<LogLevel, number> = {
@@ -49,6 +50,8 @@ export interface AgentOpts {
   maxTurns?: number;
   /** Explicit backend override. Defaults to the env setting or auto. */
   provider?: AgentMode;
+  /** Optional loop context for logging (plan/dev/doc). */
+  loop?: AgentLoop;
 }
 
 export interface AgentResult {
@@ -90,14 +93,14 @@ class AgentRateLimitError extends Error {
  */
 export async function spawnAgent(opts: AgentOpts): Promise<AgentResult> {
   const backend = resolveBackend(opts.provider);
-  const logger = makeAgentLogger();
+  const logger = makeAgentLogger(opts.loop);
   try {
     return await spawnAgentBackend(backend, opts, logger);
   } catch (err) {
     if (backend === "claude" && isRetryableRateLimitError(err)) {
       logger.emit(
         "warn",
-        "[agent/claude] rate limited; falling back to codex for this run",
+        "rate limited; falling back to codex for this run",
       );
       return spawnAgentBackend(
         "codex",
@@ -211,7 +214,7 @@ async function runCli(
     proc.on("error", (err) => {
       logger.emit(
         "error",
-        `[agent/${command}] invocation failed before start: ${err.message}`,
+        `invocation failed before start (backend=${command}): ${err.message}`,
       );
       reject(new Error(`Failed to spawn ${command}: ${err.message}`));
     });
@@ -239,7 +242,7 @@ function parseClaudeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
     }
     logger.emit(
       "error",
-      `[agent/claude] invocation did not return structured JSON (no session started)`,
+      "invocation did not return structured JSON (backend=claude, no session started)",
     );
     throw new Error(
       `claude exited with code ${run.code} and produced non-JSON output.\n` +
@@ -260,7 +263,7 @@ function parseClaudeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
     }
     logger.emit(
       "error",
-      `[agent/claude] response missing session_id (no agent was started)`,
+      "response missing session_id (backend=claude, no agent was started)",
     );
     throw new Error(
       `claude response missing session_id: ${run.stdout.slice(0, 500)}`,
@@ -278,17 +281,17 @@ function parseClaudeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
   if (parsed.is_error) {
     logger.emit(
       "warn",
-      `[agent/claude] agent session ${parsed.session_id} returned error output`,
+      `session ${parsed.session_id} returned error output (backend=claude)`,
     );
   } else if (looksStuckOrUnhelpful(output)) {
     logger.emit(
       "warn",
-      `[agent/claude] agent session ${parsed.session_id} produced low-signal output (possible stuck/unhelpful run)`,
+      `session ${parsed.session_id} produced low-signal output (backend=claude, possible stuck/unhelpful run)`,
     );
   }
   logger.emit(
     "debug",
-    `[agent/claude] parsed response: session=${parsed.session_id} is_error=${parsed.is_error} turns=${parsed.num_turns ?? "?"} duration_ms=${parsed.duration_ms ?? "?"} cost_usd=${parsed.cost_usd ?? "?"} output_preview=${toSingleLine(
+    `parsed response (backend=claude): session=${parsed.session_id} is_error=${parsed.is_error} turns=${parsed.num_turns ?? "?"} duration_ms=${parsed.duration_ms ?? "?"} cost_usd=${parsed.cost_usd ?? "?"} output_preview=${toSingleLine(
       output.slice(0, 300),
     )}`,
   );
@@ -359,7 +362,7 @@ function parseCodexRun(run: CliRunResult, logger: AgentLogger): AgentResult {
     }
     logger.emit(
       "error",
-      "[agent/codex] response missing thread_id (no agent was started)",
+      "response missing thread_id (backend=codex, no agent was started)",
     );
     throw new Error(
       `codex response missing thread_id: ${run.stdout.slice(0, 500)}\nstderr: ${run.stderr.slice(0, 500)}`,
@@ -369,12 +372,12 @@ function parseCodexRun(run: CliRunResult, logger: AgentLogger): AgentResult {
   if (isError || looksStuckOrUnhelpful(output)) {
     logger.emit(
       "warn",
-      `[agent/codex] agent session ${sessionId} returned ${isError ? "error" : "low-signal"} output`,
+      `session ${sessionId} returned ${isError ? "error" : "low-signal"} output (backend=codex)`,
     );
   }
   logger.emit(
     "debug",
-    `[agent/codex] parsed response: session=${sessionId} is_error=${isError} output_preview=${toSingleLine(
+    `parsed response (backend=codex): session=${sessionId} is_error=${isError} output_preview=${toSingleLine(
       output.slice(0, 300),
     )}`,
   );
@@ -382,12 +385,13 @@ function parseCodexRun(run: CliRunResult, logger: AgentLogger): AgentResult {
   return { sessionId, output, isError, costUsd };
 }
 
-function makeAgentLogger(): AgentLogger {
+function makeAgentLogger(loop?: AgentLoop): AgentLogger {
   const currentLevel = resolveLogLevel();
+  const scope = loop ? `[${loop}] [agent]` : "[agent]";
   return {
     currentLevel,
     emit: (level, message) => {
-      const line = `[${level}] ${message}`;
+      const line = `[${level}] ${scope} ${message}`;
       if (level === "error") {
         console.error(line);
         return;
@@ -434,14 +438,14 @@ function logInvocationStart(
   logger: AgentLogger,
 ): void {
   const resume = opts.sessionId ? `resume(${opts.sessionId})` : "new-session";
-  logger.emit("info", `[agent/${backend}] invoke ${resume}`);
+  logger.emit("info", `invoke ${resume} backend=${backend}`);
   logger.emit(
     "info",
-    `[agent/${backend}] model=${opts.model ?? "default"} max_turns=${opts.maxTurns ?? 50} cwd=${opts.worktreePath}`,
+    `model=${opts.model ?? "default"} max_turns=${opts.maxTurns ?? 50} cwd=${opts.worktreePath}`,
   );
   logger.emit(
     "info",
-    `[agent/${backend}] prompt:\n${prettyPromptPreview(opts.prompt)}`,
+    `prompt:\n${prettyPromptPreview(opts.prompt)}`,
   );
 }
 
@@ -455,7 +459,7 @@ function logRawCliResult(
   }
   logger.emit(
     "debug",
-    `[agent/${backend}] cli response: exit_code=${run.code} stdout=${toSingleLine(
+    `cli response (backend=${backend}): exit_code=${run.code} stdout=${toSingleLine(
       run.stdout.slice(0, 500),
     )} stderr=${toSingleLine(run.stderr.slice(0, 500))}`,
   );

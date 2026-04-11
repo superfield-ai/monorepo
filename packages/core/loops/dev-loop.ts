@@ -109,7 +109,7 @@ const DEFAULT_PRUNE_INTERVAL_MS = 15 * 60 * 1000;
  * existing session via the deadman switch.
  */
 export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
-  console.log(`[${opts.owner}/${opts.repo}] dev loop started`);
+  console.log("[dev] loop started");
   const startupPlan = await findOpenPlanIssue(opts.client, opts.owner, opts.repo);
   if (!startupPlan) {
     throw new FatalDevLoopError(
@@ -133,14 +133,14 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     startupHandoff = await buildStartupSessionHandoff(opts);
   } catch (err) {
     console.error(
-      `[error] [${opts.owner}/${opts.repo}] startup session scan failed: ${formatError(err)}`,
+      `[error] [dev] startup session scan failed: ${formatError(err)}`,
     );
   }
   try {
     await pruneFn(opts);
   } catch (err) {
     console.error(
-      `[error] [${opts.owner}/${opts.repo}] startup prune pass failed: ${formatError(err)}`,
+      `[error] [dev] startup prune pass failed: ${formatError(err)}`,
     );
   }
   let firstTick = true;
@@ -148,7 +148,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   let lastPruneAt = Date.now();
   await runSupervisedLoop({
     runOnce: async () => {
-      console.log(`[${opts.owner}/${opts.repo}] dev tick start`);
+      console.log("[dev] tick start");
       const result = await tickFn({
         ...opts,
         circuit,
@@ -166,13 +166,13 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           );
         }
         console.log(
-          `[${opts.owner}/${opts.repo}] dev tick idle: ${result.reason ?? "no eligible work"}`,
+          `[dev] tick idle: ${result.reason ?? "no eligible work"}`,
         );
       } else {
         const speculativeCount = result.speculativeIssues.length;
         const blockedCount = result.mergeGateBlocked.length;
         console.log(
-          `[${opts.owner}/${opts.repo}] dev tick: primary=#${result.primaryIssue} closed=${result.closed} speculative=${speculativeCount} blocked=${blockedCount}`,
+          `[dev] tick: primary=#${result.primaryIssue} closed=${result.closed} speculative=${speculativeCount} blocked=${blockedCount}`,
         );
       }
       firstTick = false;
@@ -183,7 +183,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           lastPruneAt = Date.now();
         } catch (err) {
           console.error(
-            `[error] [${opts.owner}/${opts.repo}] prune pass failed: ${formatError(err)}`,
+            `[error] [dev] prune pass failed: ${formatError(err)}`,
           );
         }
       } else if (Date.now() - lastPruneAt >= pruneIntervalMs) {
@@ -192,7 +192,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           await pruneFn(opts);
         } catch (err) {
           console.error(
-            `[error] [${opts.owner}/${opts.repo}] periodic prune pass failed: ${formatError(err)}`,
+            `[error] [dev] periodic prune pass failed: ${formatError(err)}`,
           );
         }
         lastPruneAt = Date.now();
@@ -202,7 +202,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     delayMs: (result) => (result.idle ? idleMs : 0),
     onError: (err) => {
       console.error(
-        `[error] [${opts.owner}/${opts.repo}] dev loop failed: ${formatError(err)}`,
+        `[error] [dev] loop failed: ${formatError(err)}`,
       );
     },
     stopOnError: (err) => err instanceof FatalDevLoopError,
@@ -370,7 +370,7 @@ async function prepareWorktreeAndSession(
   const remediationCount = existing?.session.selfAuditRemediationCount ?? 0;
   if (isRemediationCapExceeded(role, entry.kind, remediationCount)) {
     console.error(
-      `[${owner}/${repo}] blueprint self-audit remediation cap exceeded for #${entry.number} — manual intervention required (${remediationCount}/${SELF_AUDIT_REMEDIATION_CAP} passes)`,
+      `[error] [dev] blueprint self-audit remediation cap exceeded for #${entry.number} — manual intervention required (${remediationCount}/${SELF_AUDIT_REMEDIATION_CAP} passes)`,
     );
     return null;
   }
@@ -439,7 +439,14 @@ async function executeAgentWithAudit(
 
   const agentResult = await withRetry(
     () => {
-      const call = () => spawnFn({ prompt, worktreePath: wt.path, sessionId, model: "sonnet" });
+      const call = () =>
+        spawnFn({
+          prompt,
+          worktreePath: wt.path,
+          sessionId,
+          model: "sonnet",
+          loop: "dev",
+        });
       return circuit ? circuit.call(call) : call();
     },
     { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
@@ -450,7 +457,7 @@ async function executeAgentWithAudit(
     escalated || agentResult.needsBlueprintEscalation === true;
   if (!escalated && nextEscalated) {
     console.log(
-      `[${owner}/${repo}] blueprint escalation latched for #${entry.number} — subsequent turns will include expanded context`,
+      `[dev] blueprint escalation latched for #${entry.number} — subsequent turns will include expanded context`,
     );
   }
 
@@ -470,7 +477,7 @@ async function executeAgentWithAudit(
       });
     } catch (err) {
       console.warn(
-        `[${owner}/${repo}] blueprint self-audit failed for #${entry.number}: ${err instanceof Error ? err.message : String(err)}`,
+        `[warn] [dev] blueprint self-audit failed for #${entry.number}: ${err instanceof Error ? err.message : String(err)}`,
       );
       auditResult = {
         conformant: false,
@@ -496,11 +503,11 @@ async function executeAgentWithAudit(
         auditFailed = true;
         if (isRemediationCapExceeded(role, entry.kind, nextRemediationCount)) {
           console.error(
-            `[${owner}/${repo}] blueprint self-audit remediation cap exceeded for #${entry.number} — manual intervention required (${nextRemediationCount}/${SELF_AUDIT_REMEDIATION_CAP} passes)`,
+            `[error] [dev] blueprint self-audit remediation cap exceeded for #${entry.number} — manual intervention required (${nextRemediationCount}/${SELF_AUDIT_REMEDIATION_CAP} passes)`,
           );
         } else {
           console.warn(
-            `[${owner}/${repo}] blueprint self-audit non-conformant for #${entry.number} (remediation ${nextRemediationCount}/${SELF_AUDIT_REMEDIATION_CAP}) — looping back to develop with violations`,
+            `[warn] [dev] blueprint self-audit non-conformant for #${entry.number} (remediation ${nextRemediationCount}/${SELF_AUDIT_REMEDIATION_CAP}) — looping back to develop with violations`,
           );
         }
       }
@@ -541,7 +548,7 @@ async function attemptMergeGate(
   );
   if (blockingPredecessors.length > 0) {
     console.warn(
-      `[${owner}/${repo}] merge gate blocked for #${entry.number}: waiting on ${blockingPredecessors.map((n) => `#${n}`).join(", ")}`,
+      `[warn] [dev] merge gate blocked for #${entry.number}: waiting on ${blockingPredecessors.map((n) => `#${n}`).join(", ")}`,
     );
     return { closed: false, mergeGateBlocked: blockingPredecessors };
   }

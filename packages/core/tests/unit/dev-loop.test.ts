@@ -375,7 +375,7 @@ Scout gate: #5
     expect(result.mergeGateBlocked).toEqual([999]);
     expect(client.deleteIssueComment).not.toHaveBeenCalled();
     expect(warn).toHaveBeenCalledWith(
-      "[o/r] merge gate blocked for #10: waiting on #999",
+      "[warn] [dev] merge gate blocked for #10: waiting on #999",
     );
     warn.mockRestore();
   });

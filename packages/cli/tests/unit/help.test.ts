@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { runCLI, parseSlotCount } from "../../index.ts";
+import { runCLI, parseSlotCount, parseStartArgs } from "../../index.ts";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -26,5 +26,25 @@ describe("parseSlotCount", () => {
   it("rejects invalid slot counts", () => {
     expect(parseSlotCount("0")).toBeNull();
     expect(parseSlotCount("abc")).toBeNull();
+  });
+});
+
+describe("parseStartArgs", () => {
+  it("defaults to all loops when no loop flags are provided", () => {
+    const parsed = parseStartArgs(["/tmp/repo", "2"]);
+    expect(parsed.repoPath).toBe("/tmp/repo");
+    expect(parsed.slotCountRaw).toBe("2");
+    expect(parsed.loops).toEqual(["plan", "dev", "doc"]);
+    expect(parsed.unknown).toEqual([]);
+  });
+
+  it("parses selected loop flags", () => {
+    const parsed = parseStartArgs(["/tmp/repo", "--dev", "--plan"]);
+    expect(parsed.loops).toEqual(["dev", "plan"]);
+  });
+
+  it("captures unknown flags", () => {
+    const parsed = parseStartArgs(["/tmp/repo", "--wat"]);
+    expect(parsed.unknown).toEqual(["--wat"]);
   });
 });
