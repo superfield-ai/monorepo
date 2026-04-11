@@ -52,6 +52,8 @@ export interface AgentOpts {
   provider?: AgentMode;
   /** Optional loop context for logging (plan/dev/doc). */
   loop?: AgentLoop;
+  /** Task type for logging (e.g. "feature", "dev-scout", "ci-failure"). */
+  task?: string;
 }
 
 export interface AgentResult {
@@ -142,12 +144,28 @@ async function spawnAgentBackend(
   logger: AgentLogger,
 ): Promise<AgentResult> {
   logInvocationStart(backend, opts, logger);
-  const run = await runCli(
-    backend === "claude" ? "claude" : "codex",
-    buildArgs(backend, opts, logger),
-    opts.worktreePath,
-    logger,
-  );
+  const startMs = Date.now();
+  const issueNumber = extractIssueNumber(opts.prompt);
+  const issuePart = issueNumber === null ? "" : ` issue=#${issueNumber}`;
+  const taskPart = opts.task ? ` task=${opts.task}` : "";
+  const heartbeat = setInterval(() => {
+    const elapsedS = Math.round((Date.now() - startMs) / 1000);
+    logger.emit(
+      "info",
+      `agent still running${issuePart}${taskPart} elapsed=${elapsedS}s backend=${backend}`,
+    );
+  }, 60_000);
+  let run: CliRunResult;
+  try {
+    run = await runCli(
+      backend === "claude" ? "claude" : "codex",
+      buildArgs(backend, opts, logger),
+      opts.worktreePath,
+      logger,
+    );
+  } finally {
+    clearInterval(heartbeat);
+  }
   logRawCliResult(backend, run, logger);
 
   if (backend === "claude") {
@@ -485,7 +503,7 @@ function logInvocationStart(
   logger: AgentLogger,
 ): void {
   const resume = opts.sessionId ? `resume(${opts.sessionId})` : "new-session";
-  const task = extractTaskType(opts.prompt);
+  const task = opts.task ?? extractTaskType(opts.prompt);
   const issueNumber = extractIssueNumber(opts.prompt);
   const issuePart = issueNumber === null ? "" : ` issue=#${issueNumber}`;
   logger.emit(

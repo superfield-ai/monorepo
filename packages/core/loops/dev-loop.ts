@@ -105,6 +105,45 @@ class FatalDevLoopError extends Error {
 const DEFAULT_IDLE_MS = 30_000;
 const DEFAULT_PRUNE_INTERVAL_MS = 15 * 60 * 1000;
 
+type DevLogLevel = "error" | "warn" | "info" | "debug" | "trace";
+const DEV_LOG_LEVEL_RANK: Record<DevLogLevel, number> = {
+  error: 0,
+  warn: 1,
+  info: 2,
+  debug: 3,
+  trace: 4,
+};
+
+function resolveDevLogLevel(): DevLogLevel {
+  const raw = (
+    process.env.SUPERFIELD_LOG_LEVEL ??
+    process.env.LOG_LEVEL ??
+    "info"
+  )
+    .trim()
+    .toLowerCase();
+  if (
+    raw === "error" ||
+    raw === "warn" ||
+    raw === "info" ||
+    raw === "debug" ||
+    raw === "trace"
+  ) {
+    return raw;
+  }
+  return "info";
+}
+
+function devLog(level: DevLogLevel, message: string): void {
+  const line = `[${level}] [dev] ${message}`;
+  if (level === "error") return console.error(line);
+  if (level === "warn") return console.warn(line);
+  const current = resolveDevLogLevel();
+  if (DEV_LOG_LEVEL_RANK[level] <= DEV_LOG_LEVEL_RANK[current]) {
+    console.log(line);
+  }
+}
+
 /**
  * Runs the dev loop forever. Selects the top-of-Plan issue, prepares its
  * worktree, spawns the agent, and waits for it to exit. Resumes any
@@ -131,13 +170,19 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     prioritizedIssueNumbers: number[];
     reapedSessions: number[];
   } = { prioritizedIssueNumbers: [], reapedSessions: [] };
+  console.log("[dev] scanning existing sessions...");
   try {
     startupHandoff = await buildStartupSessionHandoff(opts, startupPlan);
+    const { prioritizedIssueNumbers: p, reapedSessions: r } = startupHandoff;
+    console.log(
+      `[dev] session scan done: ${p.length} prioritized, ${r.length} stale reaped`,
+    );
   } catch (err) {
     console.error(
       `[error] [dev] startup session scan failed: ${formatError(err)}`,
     );
   }
+  console.log("[dev] running startup prune pass...");
   try {
     await pruneFn(opts);
   } catch (err) {
@@ -151,6 +196,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   await runSupervisedLoop({
     runOnce: async () => {
       console.log("[dev] tick start");
+      const tickStartMs = Date.now();
       const result = await tickFn({
         ...opts,
         circuit,
@@ -194,12 +240,14 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
       } else {
         const speculativeCount = result.speculativeIssues.length;
         const blockedCount = result.mergeGateBlocked.length;
+        const elapsedS = Math.round((Date.now() - tickStartMs) / 1000);
         console.log(
-          `[dev] tick: primary=#${result.primaryIssue} closed=${result.closed} speculative=${speculativeCount} blocked=${blockedCount}`,
+          `[dev] tick: primary=#${result.primaryIssue} closed=${result.closed} speculative=${speculativeCount} blocked=${blockedCount} elapsed=${elapsedS}s`,
         );
       }
       firstTick = false;
       if (result.idle) {
+        console.log(`[dev] idle — next check in ${idleMs / 1000}s`);
         // Run maintenance on idle ticks — prune stale worktrees + stale sessions
         try {
           await pruneFn(opts);
@@ -255,10 +303,35 @@ export async function tickDevLoop(
     };
   }
   const plan = parsePlan(planIssue.body ?? "");
+  const allPlanNumbers = [
+    ...plan.ciFailures.map((e) => e.number),
+    ...plan.phases.flatMap((p) => p.issues.map((e) => e.number)),
+  ];
+  devLog(
+    "debug",
+    `plan has ${plan.phases.length} phase(s), ${allPlanNumbers.length} issue(s) total`,
+  );
 
-  // 2. Select primary
+  // 2. Prefetch all plan issue states in parallel so selection helpers don't
+  //    make O(N²) sequential API calls.
+  devLog("info", `prefetching ${allPlanNumbers.length} plan issue(s)...`);
+  const issueCache = new Map<number, Issue>();
+  await Promise.all(
+    allPlanNumbers.map(async (n) => {
+      try {
+        const issue = await client.getIssue(owner, repo, n);
+        issueCache.set(n, issue);
+      } catch {
+        // leave uncached — selection helpers will fall through to a live fetch
+      }
+    }),
+  );
+  const cachedClient = withIssueCache(client, issueCache);
+
+  // 3. Select primary
+  devLog("info", "selecting primary issue...");
   const startupEntry = await selectStartupPrimary(
-    client,
+    cachedClient,
     owner,
     repo,
     plan,
@@ -268,19 +341,19 @@ export async function tickDevLoop(
     ? {
         entry: startupEntry,
         blocked: await collectMergeGateBlocked(
-          client,
+          cachedClient,
           owner,
           repo,
           plan,
           startupEntry.number,
         ),
       }
-    : await selectPrimary(client, owner, repo, plan);
+    : await selectPrimary(cachedClient, owner, repo, plan);
   if (!primaryEntry) {
     const noPrimaryReason =
       blocked.length > 0
         ? "merge gate blocked"
-        : await diagnoseNoPrimaryReason(client, owner, repo, plan);
+        : await diagnoseNoPrimaryReason(cachedClient, owner, repo, plan);
     return {
       primaryIssue: null,
       speculativeIssues: [],
@@ -291,19 +364,37 @@ export async function tickDevLoop(
       reason: noPrimaryReason,
     };
   }
+  devLog(
+    "info",
+    `picked primary issue #${primaryEntry.number} kind=${primaryEntry.kind} phase=${primaryEntry.phase}`,
+  );
+  if (blocked.length > 0) {
+    devLog(
+      "debug",
+      `current merge-gate blocked issues while picking primary: ${blocked.map((n) => `#${n}`).join(", ")}`,
+    );
+  }
 
-  // 3. Select speculative candidates (only if scout is merged for the primary's phase)
+  // 4. Select speculative candidates (only if scout is merged for the primary's phase)
   const slotCount = Math.max(1, opts.slotCount ?? 3);
   const speculative = await selectSpeculative(
-    client,
+    cachedClient,
     owner,
     repo,
     plan,
     primaryEntry,
     slotCount - 1,
   );
+  if (speculative.length > 0) {
+    devLog(
+      "info",
+      `picked speculative issues: ${speculative.map((entry) => `#${entry.number}`).join(", ")}`,
+    );
+  } else {
+    devLog("debug", "no speculative issues picked for this tick");
+  }
 
-  // 4. Run primary slot to completion + speculative slots in parallel
+  // 5. Run primary slot to completion + speculative slots in parallel
   const primaryPromise = runSlot(opts, plan, primaryEntry, "primary", 1);
   const speculativePromises = speculative.map((entry, idx) =>
     runSlot(opts, plan, entry, "speculative", idx + 2),
@@ -362,6 +453,10 @@ async function prepareWorktreeAndSession(
   role: "primary" | "speculative",
 ): Promise<SlotContext | null> {
   const { client, owner, repo } = opts;
+  devLog(
+    "info",
+    `slot ${slotTag(role)} preparing issue #${entry.number} (${entry.kind})`,
+  );
 
   const issue = await client.getIssue(owner, repo, entry.number);
   if (issue.state === "closed") {
@@ -389,6 +484,10 @@ async function prepareWorktreeAndSession(
     rawSessionId && /^[0-9a-f-]{36}$/i.test(rawSessionId)
       ? rawSessionId
       : undefined;
+  devLog(
+    "debug",
+    `slot ${slotTag(role)} issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`,
+  );
 
   // Escalation latch (#78): once an earlier turn returned
   // needsBlueprintEscalation, the session record carries blueprintEscalated,
@@ -462,6 +561,10 @@ async function executeAgentWithAudit(
     selfAuditRemediationCount: remediationCount || undefined,
     selfAuditPendingViolations: remediationViolations,
   });
+  devLog(
+    "debug",
+    `slot ${slotTag(role)} issue #${entry.number} session claimed role=${role} slot=${slot}`,
+  );
 
   const spawnFn = opts.spawn ?? spawnAgent;
   const circuit = opts.circuit;
@@ -475,10 +578,15 @@ async function executeAgentWithAudit(
           sessionId,
           model: "sonnet",
           loop: "dev",
+          task: entry.kind,
         });
       return circuit ? circuit.call(call) : call();
     },
     { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
+  );
+  devLog(
+    "info",
+    `slot ${slotTag(role)} issue #${entry.number} agent run finished is_error=${agentResult.isError}`,
   );
 
   // Latch escalation on the first true and persist.
@@ -602,12 +710,20 @@ async function runSlot(
   role: "primary" | "speculative",
   slot: number,
 ): Promise<{ closed: boolean; mergeGateBlocked: number[] }> {
+  devLog(
+    "info",
+    `slot ${slotTag(role)} start issue #${entry.number}`,
+  );
   // Stage 1: worktree + session setup
   const ctx = await prepareWorktreeAndSession(opts, entry, role);
   if (!ctx) {
     // Issue already closed or remediation cap exceeded
     const { client, owner, repo } = opts;
     const issue = await client.getIssue(owner, repo, entry.number);
+    devLog(
+      "debug",
+      `slot ${slotTag(role)} issue #${entry.number} skipped before spawn (closed=${issue.state === "closed"})`,
+    );
     return { closed: issue.state === "closed", mergeGateBlocked: [] };
   }
 
@@ -622,15 +738,32 @@ async function runSlot(
   );
 
   if (!proceedToMerge) {
+    devLog(
+      "warn",
+      `slot ${slotTag(role)} issue #${entry.number} halted after self-audit; waiting for remediation`,
+    );
     return { closed: false, mergeGateBlocked: [] };
   }
 
   // Stage 3: merge gate (primary only)
   if (role === "primary") {
-    return attemptMergeGate(opts, plan, entry);
+    const mergeResult = await attemptMergeGate(opts, plan, entry);
+    devLog(
+      "info",
+      `slot ${slotTag(role)} issue #${entry.number} merge-gate result closed=${mergeResult.closed} blocked=${mergeResult.mergeGateBlocked.length}`,
+    );
+    return mergeResult;
   }
 
+  devLog(
+    "debug",
+    `slot ${slotTag(role)} issue #${entry.number} completed (speculative path)`,
+  );
   return { closed: false, mergeGateBlocked: [] };
+}
+
+function slotTag(role: "primary" | "speculative"): string {
+  return role === "primary" ? "primary" : "spec";
 }
 
 /**
@@ -1000,6 +1133,32 @@ function formatError(err: unknown): string {
   return singleLine;
 }
 
+/**
+ * Returns a thin proxy over `base` that serves `getIssue` from `cache`.
+ * Misses fall through to the real client and populate the cache.
+ * All other methods are delegated to `base` unchanged.
+ */
+function withIssueCache(
+  base: GitHubClient,
+  cache: Map<number, Issue>,
+): GitHubClient {
+  return new Proxy(base, {
+    get(target, prop, receiver) {
+      if (prop === "getIssue") {
+        return async (owner: string, repo: string, n: number): Promise<Issue> => {
+          const hit = cache.get(n);
+          if (hit) return hit;
+          const issue = await target.getIssue(owner, repo, n);
+          cache.set(n, issue);
+          return issue;
+        };
+      }
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === "function" ? value.bind(target) : value;
+    },
+  });
+}
+
 async function findOpenPlanIssue(
   client: GitHubClient,
   owner: string,
@@ -1140,6 +1299,15 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
       }
     }),
   );
+
+  if (prunedWorktrees.length > 0 || reapedSessions.length > 0) {
+    devLog(
+      "info",
+      `prune pass: pruned ${prunedWorktrees.length} worktree(s) (${prunedWorktrees.map((n) => `#${n}`).join(", ") || "none"}), reaped ${reapedSessions.length} stale session(s)`,
+    );
+  } else {
+    devLog("debug", "prune pass: nothing to prune");
+  }
 
   return { prunedWorktrees, reapedSessions };
 }
