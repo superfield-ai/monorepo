@@ -455,11 +455,12 @@ async function prepareWorktreeAndSession(
   opts: DevLoopOpts,
   entry: PlanIssueMetadata,
   role: "primary" | "speculative",
+  slot: number,
 ): Promise<SlotContext | null> {
   const { client, owner, repo } = opts;
   devLog(
     "info",
-    `slot ${slotTag(role)} preparing issue #${entry.number} (${entry.kind})`,
+    `slot ${slotTag(role, slot)} preparing issue #${entry.number} (${entry.kind})`,
   );
 
   const issue = await client.getIssue(owner, repo, entry.number);
@@ -493,12 +494,12 @@ async function prepareWorktreeAndSession(
     const ageMin = Math.round(ageMs / 60_000);
     devLog(
       "info",
-      `slot ${slotTag(role)} issue #${entry.number} resuming session ${sessionId} started ${ageMin}m ago`,
+      `slot ${slotTag(role, slot)} issue #${entry.number} resuming session ${sessionId} started ${ageMin}m ago`,
     );
   }
   devLog(
     "debug",
-    `slot ${slotTag(role)} issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`,
+    `slot ${slotTag(role, slot)} issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`,
   );
 
   // Escalation latch (#78): once an earlier turn returned
@@ -575,7 +576,7 @@ async function executeAgentWithAudit(
   });
   devLog(
     "debug",
-    `slot ${slotTag(role)} issue #${entry.number} session claimed role=${role} slot=${slot}`,
+    `slot ${slotTag(role, slot)} issue #${entry.number} session claimed role=${role} slot=${slot}`,
   );
 
   const spawnFn = opts.spawn ?? spawnAgent;
@@ -598,7 +599,7 @@ async function executeAgentWithAudit(
   );
   devLog(
     "info",
-    `slot ${slotTag(role)} issue #${entry.number} agent run finished is_error=${agentResult.isError}`,
+    `slot ${slotTag(role, slot)} issue #${entry.number} agent run finished is_error=${agentResult.isError}`,
   );
 
   // Latch escalation on the first true and persist.
@@ -724,17 +725,17 @@ async function runSlot(
 ): Promise<{ closed: boolean; mergeGateBlocked: number[] }> {
   devLog(
     "info",
-    `slot ${slotTag(role)} start issue #${entry.number}`,
+    `slot ${slotTag(role, slot)} start issue #${entry.number}`,
   );
   // Stage 1: worktree + session setup
-  const ctx = await prepareWorktreeAndSession(opts, entry, role);
+  const ctx = await prepareWorktreeAndSession(opts, entry, role, slot);
   if (!ctx) {
     // Issue already closed or remediation cap exceeded
     const { client, owner, repo } = opts;
     const issue = await client.getIssue(owner, repo, entry.number);
     devLog(
       "debug",
-      `slot ${slotTag(role)} issue #${entry.number} skipped before spawn (closed=${issue.state === "closed"})`,
+      `slot ${slotTag(role, slot)} issue #${entry.number} skipped before spawn (closed=${issue.state === "closed"})`,
     );
     return { closed: issue.state === "closed", mergeGateBlocked: [] };
   }
@@ -752,7 +753,7 @@ async function runSlot(
   if (!proceedToMerge) {
     devLog(
       "warn",
-      `slot ${slotTag(role)} issue #${entry.number} halted after self-audit; waiting for remediation`,
+      `slot ${slotTag(role, slot)} issue #${entry.number} halted after self-audit; waiting for remediation`,
     );
     return { closed: false, mergeGateBlocked: [] };
   }
@@ -761,16 +762,16 @@ async function runSlot(
   if (role === "primary") {
     const mergeResult = await attemptMergeGate(opts, plan, entry);
     if (mergeResult.closed) {
-      devLog("info", `slot ${slotTag(role)} issue #${entry.number} merge-gate result closed=true`);
+      devLog("info", `slot ${slotTag(role, slot)} issue #${entry.number} merge-gate result closed=true`);
     } else if (mergeResult.mergeGateBlocked.length > 0) {
       devLog(
         "info",
-        `slot ${slotTag(role)} issue #${entry.number} merge-gate result closed=false blocked=${mergeResult.mergeGateBlocked.map((n) => `#${n}`).join(",")}`,
+        `slot ${slotTag(role, slot)} issue #${entry.number} merge-gate result closed=false blocked=${mergeResult.mergeGateBlocked.map((n) => `#${n}`).join(",")}`,
       );
     } else {
       devLog(
         "info",
-        `slot ${slotTag(role)} issue #${entry.number} merge-gate result closed=false blocked=0 — issue still open, likely waiting on CI or PR merge`,
+        `slot ${slotTag(role, slot)} issue #${entry.number} merge-gate result closed=false blocked=0 — issue still open, likely waiting on CI or PR merge`,
       );
     }
     return mergeResult;
@@ -778,13 +779,14 @@ async function runSlot(
 
   devLog(
     "debug",
-    `slot ${slotTag(role)} issue #${entry.number} completed (speculative path)`,
+    `slot ${slotTag(role, slot)} issue #${entry.number} completed (speculative path)`,
   );
   return { closed: false, mergeGateBlocked: [] };
 }
 
-function slotTag(role: "primary" | "speculative"): string {
-  return role === "primary" ? "primary" : "spec";
+function slotTag(role: "primary" | "speculative", slot?: number): string {
+  const label = role === "primary" ? "primary" : "spec";
+  return slot !== undefined ? `slot${slot}(${label})` : label;
 }
 
 /**
