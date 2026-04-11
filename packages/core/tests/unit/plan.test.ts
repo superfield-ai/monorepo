@@ -116,6 +116,41 @@ Scout gate: #1
     const plan = parsePlan(body);
     expect(plan.phases[0]?.issues).toEqual([scoutEntry]);
   });
+
+  it("parses legacy calypso metadata and dash entry format", () => {
+    const body = `## Phase: Identity foundation
+
+Goal: legacy format.
+Depends on phases: None.
+Scout gate: #196
+
+- #196 - scout identity
+  <!-- calypso: {"number":196,"phase":"Identity foundation","kind":"dev-scout","dependencies":[],"parallel_safe":false} -->
+- #201 - feat: build user authentication
+  <!-- calypso: {"number":201,"phase":"Identity foundation","kind":"feature","dependencies":[196],"parallel_safe":false} -->
+`;
+    const plan = parsePlan(body);
+    expect(plan.phases).toHaveLength(1);
+    expect(plan.phases[0]?.issues).toHaveLength(2);
+    expect(plan.phases[0]?.issues[0]).toMatchObject({
+      number: 196,
+      title: "scout identity",
+      kind: "dev-scout",
+      phase: "Identity foundation",
+      dependencies: [],
+      parallel_safe: false,
+      risk: 3,
+    });
+    expect(plan.phases[0]?.issues[1]).toMatchObject({
+      number: 201,
+      title: "feat: build user authentication",
+      kind: "feature",
+      phase: "Identity foundation",
+      dependencies: [196],
+      parallel_safe: false,
+      risk: 3,
+    });
+  });
 });
 
 describe("serializePlan", () => {

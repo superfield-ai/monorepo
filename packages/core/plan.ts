@@ -43,8 +43,10 @@ export interface Plan {
   phases: PlanPhase[];
 }
 
-const METADATA_RE = /<!--\s*superfield:\s*(\{.*?\})\s*-->/;
-const ENTRY_RE = /^\s*-\s+#(\d+)\s+—\s+(.+?)\s+\[risk:\s*(\d+)\]\s*$/;
+const SUPERFIELD_METADATA_RE = /<!--\s*superfield:\s*(\{.*?\})\s*-->/;
+const CALYPSO_METADATA_RE = /<!--\s*calypso:\s*(\{.*?\})\s*-->/;
+const ENTRY_RE =
+  /^\s*-\s+#(\d+)\s+[—-]\s+(.+?)(?:\s+\[risk:\s*(\d+)\])?\s*$/;
 const PHASE_HEADER_RE = /^##\s+Phase:\s+(.+?)\s*$/;
 const GOAL_RE = /^Goal:\s*(.*)$/;
 const DEPENDS_ON_RE = /^Depends on phases:\s*(.*)$/;
@@ -96,25 +98,60 @@ export function parsePlan(body: string): Plan {
     const entryMatch = ENTRY_RE.exec(line);
     if (entryMatch) {
       const nextLine = lines[i + 1] ?? "";
-      const metadataMatch = METADATA_RE.exec(nextLine);
+      const metadataMatch =
+        SUPERFIELD_METADATA_RE.exec(nextLine) ??
+        CALYPSO_METADATA_RE.exec(nextLine);
       if (!metadataMatch) {
         // Orphan entry line without metadata — skip silently
         continue;
       }
 
-      let metadata: PlanIssueMetadata;
+      let metadata: Partial<PlanIssueMetadata>;
       try {
-        metadata = JSON.parse(metadataMatch[1]!) as PlanIssueMetadata;
+        metadata = JSON.parse(metadataMatch[1]!) as Partial<PlanIssueMetadata>;
       } catch {
         continue;
       }
 
+      const issueNumber = Number(entryMatch[1]!);
+      const lineTitle = entryMatch[2]!.trim();
+      const riskFromLine = Number(entryMatch[3] ?? 3);
+      const normalized: PlanIssueMetadata = {
+        number:
+          typeof metadata.number === "number" ? metadata.number : issueNumber,
+        title:
+          typeof metadata.title === "string" && metadata.title.trim().length > 0
+            ? metadata.title
+            : lineTitle,
+        phase:
+          typeof metadata.phase === "string" ? metadata.phase : "",
+        kind:
+          metadata.kind === "dev-scout" ||
+          metadata.kind === "feature" ||
+          metadata.kind === "ci-failure"
+            ? metadata.kind
+            : "feature",
+        risk:
+          typeof metadata.risk === "number" && Number.isFinite(metadata.risk)
+            ? metadata.risk
+            : riskFromLine,
+        dependencies: Array.isArray(metadata.dependencies)
+          ? metadata.dependencies.filter(
+              (n): n is number => typeof n === "number" && Number.isFinite(n),
+            )
+          : [],
+        parallel_safe:
+          typeof metadata.parallel_safe === "boolean"
+            ? metadata.parallel_safe
+            : true,
+      };
+
       if (currentPhase) {
-        currentPhase.issues.push(metadata);
+        currentPhase.issues.push(normalized);
       } else {
         // No phase header seen yet — these are top-of-plan ci-failures
-        if (metadata.kind === "ci-failure") {
-          ciFailures.push(metadata);
+        if (normalized.kind === "ci-failure") {
+          ciFailures.push(normalized);
         }
       }
       i++; // skip the metadata line
