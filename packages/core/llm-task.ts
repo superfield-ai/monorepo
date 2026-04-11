@@ -29,6 +29,8 @@ export interface LLMTaskOpts {
   model?: string;
   /** Optional loop context for logging. */
   loop?: AgentLoop;
+  /** Task type for logging (e.g. "self-audit", "planning"). */
+  task?: string;
   /** Injectable spawn function for testing. */
   spawn?: (opts: AgentOpts) => Promise<AgentResult>;
 }
@@ -52,6 +54,7 @@ export async function runLLMTask<T>(
     provider: opts.provider,
     model: opts.model,
     loop: opts.loop,
+    task: opts.task,
   });
 
   if (res.isError) {

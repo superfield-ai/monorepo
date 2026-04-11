@@ -241,8 +241,12 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
         const speculativeCount = result.speculativeIssues.length;
         const blockedCount = result.mergeGateBlocked.length;
         const elapsedS = Math.round((Date.now() - tickStartMs) / 1000);
+        const blockedPart =
+          blockedCount > 0
+            ? ` blocked=${blockedCount}(${result.mergeGateBlocked.map((n) => `#${n}`).join(",")})`
+            : " blocked=0";
         console.log(
-          `[dev] tick: primary=#${result.primaryIssue} closed=${result.closed} speculative=${speculativeCount} blocked=${blockedCount} elapsed=${elapsedS}s`,
+          `[dev] tick: primary=#${result.primaryIssue} closed=${result.closed} speculative=${speculativeCount}${blockedPart} elapsed=${elapsedS}s`,
         );
       }
       firstTick = false;
@@ -484,6 +488,14 @@ async function prepareWorktreeAndSession(
     rawSessionId && /^[0-9a-f-]{36}$/i.test(rawSessionId)
       ? rawSessionId
       : undefined;
+  if (sessionId && existing?.session.startedAt) {
+    const ageMs = Date.now() - new Date(existing.session.startedAt).getTime();
+    const ageMin = Math.round(ageMs / 60_000);
+    devLog(
+      "info",
+      `slot ${slotTag(role)} issue #${entry.number} resuming session ${sessionId} started ${ageMin}m ago`,
+    );
+  }
   devLog(
     "debug",
     `slot ${slotTag(role)} issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`,
@@ -748,10 +760,19 @@ async function runSlot(
   // Stage 3: merge gate (primary only)
   if (role === "primary") {
     const mergeResult = await attemptMergeGate(opts, plan, entry);
-    devLog(
-      "info",
-      `slot ${slotTag(role)} issue #${entry.number} merge-gate result closed=${mergeResult.closed} blocked=${mergeResult.mergeGateBlocked.length}`,
-    );
+    if (mergeResult.closed) {
+      devLog("info", `slot ${slotTag(role)} issue #${entry.number} merge-gate result closed=true`);
+    } else if (mergeResult.mergeGateBlocked.length > 0) {
+      devLog(
+        "info",
+        `slot ${slotTag(role)} issue #${entry.number} merge-gate result closed=false blocked=${mergeResult.mergeGateBlocked.map((n) => `#${n}`).join(",")}`,
+      );
+    } else {
+      devLog(
+        "info",
+        `slot ${slotTag(role)} issue #${entry.number} merge-gate result closed=false blocked=0 — issue still open, likely waiting on CI or PR merge`,
+      );
+    }
     return mergeResult;
   }
 
@@ -1259,6 +1280,7 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
   );
 
   // --- Step 2: Reap stale session comments on open issues ---
+  const reapedSessionDetails: Array<{ issueNumber: number; ageMin: number }> = [];
   const openIssues = await client.listIssues(owner, repo);
   await Promise.all(
     openIssues.map(async (issue) => {
@@ -1293,6 +1315,7 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
         if (age > staleMs) {
           await client.deleteIssueComment(owner, repo, sessionComment.id);
           reapedSessions.push(issue.number);
+          reapedSessionDetails.push({ issueNumber: issue.number, ageMin: Math.round(age / 60_000) });
         }
       } catch {
         // Skip if comments cannot be fetched
@@ -1301,9 +1324,13 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
   );
 
   if (prunedWorktrees.length > 0 || reapedSessions.length > 0) {
+    const reapedPart =
+      reapedSessionDetails.length > 0
+        ? reapedSessionDetails.map((s) => `#${s.issueNumber}(${s.ageMin}m)`).join(", ")
+        : "none";
     devLog(
       "info",
-      `prune pass: pruned ${prunedWorktrees.length} worktree(s) (${prunedWorktrees.map((n) => `#${n}`).join(", ") || "none"}), reaped ${reapedSessions.length} stale session(s)`,
+      `prune pass: pruned ${prunedWorktrees.length} worktree(s) (${prunedWorktrees.map((n) => `#${n}`).join(", ") || "none"}) reason=closed, reaped ${reapedSessions.length} stale session(s) (${reapedPart})`,
     );
   } else {
     devLog("debug", "prune pass: nothing to prune");
