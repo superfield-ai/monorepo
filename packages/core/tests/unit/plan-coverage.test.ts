@@ -53,10 +53,7 @@ describe("runPlanCoverage", () => {
       }),
     ];
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [];
-        return issues;
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue(issues),
       createIssue: vi.fn().mockResolvedValue({ number: 99, title: "Plan" }),
     });
 
@@ -92,10 +89,7 @@ describe("runPlanCoverage", () => {
       }),
     ];
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [];
-        return issues;
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue(issues),
       createIssue: vi.fn().mockResolvedValue({ number: 99, title: "Plan" }),
     });
 
@@ -145,10 +139,7 @@ Scout gate: #5
       }),
     ];
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [planIssue];
-        return openIssues;
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue([planIssue, ...openIssues]),
       updateIssueBody: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -190,10 +181,7 @@ Scout gate: #5
       }),
     ];
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [planIssue];
-        return openIssues;
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue([planIssue, ...openIssues]),
       updateIssueBody: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -238,10 +226,7 @@ Scout gate: #5
       }),
     ];
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [planIssue];
-        return openIssues;
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue([planIssue, ...openIssues]),
       updateIssueBody: vi.fn().mockResolvedValue(undefined),
     });
 
@@ -267,10 +252,7 @@ Scout gate: #5
       }),
     ];
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [];
-        return issues;
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue(issues),
     });
 
     await expect(runPlanCoverage(client, "org", "repo")).rejects.toThrow(
@@ -300,10 +282,7 @@ Scout gate: #5
       makeIssue({ number: 99, title: "Plan", labels: ["plan"] }),
     ];
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [];
-        return openIssues;
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue(openIssues),
       createIssue: vi.fn().mockResolvedValue({ number: 100 }),
     });
 
@@ -322,10 +301,7 @@ Scout gate: #5
       }),
     ];
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [];
-        return openIssues;
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue(openIssues),
       createIssue: vi.fn().mockResolvedValue({ number: 100 }),
     });
 
@@ -338,10 +314,9 @@ Scout gate: #5
 
   it("fails clearly when issue bodies do not provide phase placement", async () => {
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [];
-        return [makeIssue({ number: 10, title: "feat: one", body: null })];
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([makeIssue({ number: 10, title: "feat: one", body: null })]),
     });
 
     await expect(runPlanCoverage(client, "org", "repo")).rejects.toThrow(
@@ -357,16 +332,19 @@ Depends on phases: None.
 Scout gate: pending
 `;
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [{ number: 99, body: planBody }];
-        return [
-          makeIssue({
-            number: 10,
-            title: "feat: one",
-            body: makeIssueBody("Identity foundation"),
-          }),
-        ];
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({
+          number: 99,
+          title: "Plan",
+          labels: ["plan"],
+          body: planBody,
+        }),
+        makeIssue({
+          number: 10,
+          title: "feat: one",
+          body: makeIssueBody("Identity foundation"),
+        }),
+      ]),
     });
 
     await expect(runPlanCoverage(client, "org", "repo")).rejects.toThrow(
@@ -385,10 +363,15 @@ Scout gate: pending
   <!-- superfield: {"number":10,"title":"feat: one","phase":"Backlog","kind":"feature","risk":3,"dependencies":[],"parallel_safe":true} -->
 `;
     const client = makeClient({
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) return [{ number: 99, body: planBody }];
-        return [makeIssue({ number: 10 })];
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({
+          number: 99,
+          title: "Plan",
+          labels: ["plan"],
+          body: planBody,
+        }),
+        makeIssue({ number: 10 }),
+      ]),
       updateIssueBody: vi.fn(),
     });
 

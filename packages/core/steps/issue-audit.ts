@@ -28,6 +28,8 @@ export interface IssueAuditOpts {
   cwd?: string;
   /** Max concurrent audit calls (default: 3). */
   concurrency?: number;
+  /** Optional pre-fetched open issues snapshot for this tick. */
+  issues?: Issue[];
 }
 
 export const NON_CONFORMANT_LABEL = "non-conformant";
@@ -46,7 +48,7 @@ export async function runIssueAudit(
   repo: string,
   opts: IssueAuditOpts = {},
 ): Promise<IssueAuditResult> {
-  const allIssues = await client.listIssues(owner, repo);
+  const allIssues = opts.issues ?? (await client.listIssues(owner, repo));
   const candidates = listAuditableIssues(allIssues);
 
   const concurrency = Math.max(1, opts.concurrency ?? 3);

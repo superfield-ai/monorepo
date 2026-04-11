@@ -102,11 +102,27 @@ export async function spawnAgent(opts: AgentOpts): Promise<AgentResult> {
         "warn",
         "rate limited; falling back to codex for this run",
       );
-      return spawnAgentBackend(
-        "codex",
-        { ...opts, sessionId: undefined },
-        logger,
-      );
+      const mappedModel = mapClaudeModelAliasToCodex(opts.model, logger);
+      try {
+        return await spawnAgentBackend(
+          "codex",
+          { ...opts, sessionId: undefined, model: mappedModel },
+          logger,
+        );
+      } catch (fallbackErr) {
+        if (mappedModel && isUnsupportedModelError(fallbackErr)) {
+          logger.emit(
+            "warn",
+            `codex rejected model ${mappedModel}; retrying with codex default model`,
+          );
+          return spawnAgentBackend(
+            "codex",
+            { ...opts, sessionId: undefined, model: undefined },
+            logger,
+          );
+        }
+        throw fallbackErr;
+      }
     }
     throw err;
   }
@@ -128,7 +144,7 @@ async function spawnAgentBackend(
   logInvocationStart(backend, opts, logger);
   const run = await runCli(
     backend === "claude" ? "claude" : "codex",
-    buildArgs(backend, opts),
+    buildArgs(backend, opts, logger),
     opts.worktreePath,
     logger,
   );
@@ -141,7 +157,11 @@ async function spawnAgentBackend(
   return parseCodexRun(run, logger);
 }
 
-function buildArgs(backend: AgentBackend, opts: AgentOpts): string[] {
+function buildArgs(
+  backend: AgentBackend,
+  opts: AgentOpts,
+  logger: AgentLogger,
+): string[] {
   if (backend === "claude") {
     const args: string[] = [
       "--print",
@@ -179,8 +199,9 @@ function buildArgs(backend: AgentBackend, opts: AgentOpts): string[] {
     args.splice(2, 0, "--ephemeral");
   }
 
-  if (opts.model) {
-    args.push("--model", opts.model);
+  const codexModel = normalizeCodexModel(opts.model, logger);
+  if (codexModel) {
+    args.push("--model", codexModel);
   }
 
   if (opts.sessionId) {
@@ -190,6 +211,32 @@ function buildArgs(backend: AgentBackend, opts: AgentOpts): string[] {
   }
 
   return args;
+}
+
+function normalizeCodexModel(
+  model: string | undefined,
+  logger: AgentLogger,
+): string | undefined {
+  if (!model) return undefined;
+  return model;
+}
+
+function mapClaudeModelAliasToCodex(
+  model: string | undefined,
+  logger: AgentLogger,
+): string | undefined {
+  if (!model) return undefined;
+  const normalized = model.trim().toLowerCase();
+  let mapped: string | undefined;
+  if (normalized === "haiku") mapped = "gpt-5.4-mini";
+  else if (normalized === "sonnet") mapped = "gpt-5.4";
+  else if (normalized === "opus") mapped = "gpt-5.4";
+  if (!mapped) return model;
+  logger.emit(
+    "info",
+    `codex fallback model mapping: ${model} -> ${mapped}`,
+  );
+  return mapped;
 }
 
 async function runCli(
@@ -439,7 +486,12 @@ function logInvocationStart(
 ): void {
   const resume = opts.sessionId ? `resume(${opts.sessionId})` : "new-session";
   const task = extractTaskType(opts.prompt);
-  logger.emit("info", `invoke ${resume} backend=${backend} task=${task}`);
+  const issueNumber = extractIssueNumber(opts.prompt);
+  const issuePart = issueNumber === null ? "" : ` issue=#${issueNumber}`;
+  logger.emit(
+    "info",
+    `invoke ${resume} backend=${backend} task=${task}${issuePart}`,
+  );
   logger.emit(
     "debug",
     `model=${opts.model ?? "default"} max_turns=${opts.maxTurns ?? 50} cwd=${opts.worktreePath}`,
@@ -497,6 +549,16 @@ function extractTaskType(prompt: string): string {
   return match[1]!.trim().toLowerCase();
 }
 
+function extractIssueNumber(prompt: string): number | null {
+  const headingMatch = /^\s*###\s+Issue\s+#(\d+)\b/m.exec(prompt);
+  if (headingMatch) return Number(headingMatch[1]);
+
+  const bodyMatch = /\bissue\s+#(\d+)\b/i.exec(prompt);
+  if (bodyMatch) return Number(bodyMatch[1]);
+
+  return null;
+}
+
 function readTextField(obj: Record<string, unknown>): string {
   if (typeof obj.text === "string") return obj.text;
   if (typeof obj.error === "string") return obj.error;
@@ -506,7 +568,7 @@ function readTextField(obj: Record<string, unknown>): string {
 }
 
 function isRetryableRateLimit(value: string): boolean {
-  return /rate limit|rate-limit|429|too many requests|quota exceeded|temporarily unavailable|throttl/i.test(
+  return /rate limit|rate-limit|429|too many requests|quota exceeded|temporarily unavailable|throttl|hit your limit|usage limit|resets?\s+\d/i.test(
     value,
   );
 }
@@ -515,6 +577,11 @@ function isRetryableRateLimitError(err: unknown): boolean {
   if (err instanceof AgentRateLimitError) return true;
   if (err instanceof Error) return isRetryableRateLimit(err.message);
   return false;
+}
+
+function isUnsupportedModelError(err: unknown): boolean {
+  if (!(err instanceof Error)) return false;
+  return /model.+not supported|invalid_request_error/i.test(err.message);
 }
 
 function truncateForError(text: string): string {

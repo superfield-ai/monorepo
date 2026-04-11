@@ -115,7 +115,14 @@ export async function startCommand(
   if (envSlotCount !== undefined) emit("debug", `Using slot count: ${envSlotCount}`);
   else emit("trace", "Using default slot count");
   if (selectedLoops.includes("dev")) {
-    const planIssue = await findOpenPlanIssue(client, owner, repo);
+    let planIssue: { number: number; title: string } | null = null;
+    try {
+      planIssue = await findOpenPlanIssue(client, owner, repo);
+    } catch (err) {
+      emit("error", `[start] Failed to read open issues: ${formatError(err)}`);
+      exit(1);
+      return;
+    }
     if (!planIssue) {
       emit(
         "error",
@@ -208,20 +215,36 @@ async function findOpenPlanIssue(
   owner: string,
   repo: string,
 ): Promise<{ number: number; title: string } | null> {
-  const labeledPlanIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
-  if (labeledPlanIssues.length > 0) {
-    return {
-      number: labeledPlanIssues[0]!.number,
-      title: labeledPlanIssues[0]!.title,
-    };
-  }
-
   const allOpenIssues = (await client.listIssues(owner, repo)) ?? [];
-  const fallback = allOpenIssues.find(
+  const planIssue = allOpenIssues.find(
     (issue) =>
       issue.labels.some((label) => label.toLowerCase() === "plan") ||
       /^plan\b/i.test(issue.title),
   );
-  if (!fallback) return null;
-  return { number: fallback.number, title: fallback.title };
+  if (planIssue) return { number: planIssue.number, title: planIssue.title };
+
+  // Backward-compatible fallback for adapters/mocks that only respect
+  // label-filtered issue listing.
+  if (allOpenIssues.length === 0) {
+    const labeledPlanIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
+    const first = labeledPlanIssues[0];
+    if (first) return { number: first.number, title: first.title };
+  }
+  return null;
+}
+
+function formatError(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const singleLine = raw.replace(/\s+/g, " ").trim();
+  if (
+    /rate limit exceeded|api rate limit exceeded|too many requests|secondary rate limit/i.test(
+      singleLine,
+    )
+  ) {
+    const requestId = /request id ([A-Z0-9:]+)/i.exec(singleLine)?.[1];
+    return requestId
+      ? `GitHub API rate limit exceeded (request id: ${requestId})`
+      : "GitHub API rate limit exceeded";
+  }
+  return singleLine;
 }

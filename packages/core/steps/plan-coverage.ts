@@ -17,6 +17,11 @@ export interface PlanCoverageResult {
   planCreated: boolean;
 }
 
+export interface PlanCoverageOpts {
+  /** Optional pre-fetched open issues snapshot for this tick. */
+  issues?: PlanCoverageSourceIssue[];
+}
+
 export interface PlanCoverageSourceIssue {
   number: number;
   title: string;
@@ -39,8 +44,9 @@ export async function runPlanCoverage(
   client: GitHubClient,
   owner: string,
   repo: string,
+  opts: PlanCoverageOpts = {},
 ): Promise<PlanCoverageResult> {
-  const allIssues = await client.listIssues(owner, repo);
+  const allIssues = opts.issues ?? (await client.listIssues(owner, repo));
 
   // Exclude the Plan issue itself (label: plan) and ci-failure issues
   // (the watchdog owns those)
@@ -48,15 +54,19 @@ export async function runPlanCoverage(
     (i) => !i.labels.includes("plan") && !i.labels.includes("ci-failure"),
   );
 
-  const plans = await client.listIssues(owner, repo, ["plan"]);
+  const planIssue =
+    allIssues.find(
+      (issue) =>
+        issue.labels.includes("plan") || /^plan\b/i.test(issue.title),
+    ) ?? null;
   let plan: Plan;
   let planCreated = false;
 
-  if (plans.length === 0) {
+  if (!planIssue) {
     plan = { ciFailures: [], phases: [] };
     planCreated = true;
   } else {
-    plan = parsePlan(plans[0]!.body ?? "");
+    plan = parsePlan(planIssue.body ?? "");
   }
 
   const uncoveredEntries: Array<PlanIssueMetadata & { originalIndex: number }> =
@@ -107,10 +117,13 @@ export async function runPlanCoverage(
         labels: ["plan"],
       });
     } else {
+      if (!planIssue) {
+        throw new Error("plan coverage invariant: expected existing Plan issue");
+      }
       await client.updateIssueBody({
         owner,
         repo,
-        issue_number: plans[0]!.number,
+        issue_number: planIssue.number,
         body,
       });
     }

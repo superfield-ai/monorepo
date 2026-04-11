@@ -148,4 +148,149 @@ describe("spawnAgent", () => {
     expect(result.sessionId).toBe("codex-thread");
     expect(result.output).toBe('{"answer":42}');
   });
+
+  it("falls back to codex when claude says you've hit your limit", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    spawnMock.mockImplementation((command: string, args: string[]) => {
+      calls.push({ command, args });
+      const proc = makeProc();
+      queueMicrotask(() => {
+        if (calls.length === 1) {
+          finish(
+            proc,
+            JSON.stringify({
+              type: "result",
+              subtype: "error",
+              is_error: true,
+              session_id: "claude-sess",
+              error: "You've hit your limit · resets 8pm (UTC)",
+            }),
+          );
+          return;
+        }
+
+        finish(
+          proc,
+          [
+            '{"type":"thread.started","thread_id":"codex-thread"}',
+            '{"type":"turn.started"}',
+            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\\"answer\\":42}"}}',
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}',
+          ].join("\n"),
+        );
+      });
+      return proc;
+    });
+
+    const result = await spawnAgent({
+      worktreePath: "/tmp/work",
+      prompt: "hello",
+    });
+
+    expect(calls.map((call) => call.command)).toEqual(["claude", "codex"]);
+    expect(result.sessionId).toBe("codex-thread");
+    expect(result.output).toBe('{"answer":42}');
+  });
+
+  it("maps claude model alias when falling back to codex", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    spawnMock.mockImplementation((command: string, args: string[]) => {
+      calls.push({ command, args });
+      const proc = makeProc();
+      queueMicrotask(() => {
+        if (calls.length === 1) {
+          finish(
+            proc,
+            JSON.stringify({
+              type: "result",
+              subtype: "error",
+              is_error: true,
+              session_id: "claude-sess",
+              error: "You've hit your limit · resets 8pm (UTC)",
+            }),
+          );
+          return;
+        }
+
+        finish(
+          proc,
+          [
+            '{"type":"thread.started","thread_id":"codex-thread"}',
+            '{"type":"turn.started"}',
+            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ok"}}',
+            '{"type":"turn.completed"}',
+          ].join("\n"),
+        );
+      });
+      return proc;
+    });
+
+    await spawnAgent({
+      worktreePath: "/tmp/work",
+      prompt: "hello",
+      model: "haiku",
+    });
+
+    expect(calls.map((call) => call.command)).toEqual(["claude", "codex"]);
+    expect(calls[1]!.args).toContain("--model");
+    expect(calls[1]!.args).toContain("gpt-5.4-mini");
+  });
+
+  it("retries codex fallback without model if mapped model is rejected", async () => {
+    const calls: Array<{ command: string; args: string[] }> = [];
+    spawnMock.mockImplementation((command: string, args: string[]) => {
+      calls.push({ command, args });
+      const proc = makeProc();
+      queueMicrotask(() => {
+        if (calls.length === 1) {
+          finish(
+            proc,
+            JSON.stringify({
+              type: "result",
+              subtype: "error",
+              is_error: true,
+              session_id: "claude-sess",
+              error: "You've hit your limit · resets 8pm (UTC)",
+            }),
+          );
+          return;
+        }
+        if (calls.length === 2) {
+          finish(
+            proc,
+            '{"type":"error","status":400,"error":{"type":"invalid_request_error","message":"model is not supported"}}',
+            "",
+            1,
+          );
+          return;
+        }
+        finish(
+          proc,
+          [
+            '{"type":"thread.started","thread_id":"codex-thread"}',
+            '{"type":"turn.started"}',
+            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ok"}}',
+            '{"type":"turn.completed"}',
+          ].join("\n"),
+        );
+      });
+      return proc;
+    });
+
+    const result = await spawnAgent({
+      worktreePath: "/tmp/work",
+      prompt: "hello",
+      model: "haiku",
+    });
+
+    expect(calls.map((call) => call.command)).toEqual([
+      "claude",
+      "codex",
+      "codex",
+    ]);
+    expect(calls[1]!.args).toContain("--model");
+    expect(calls[1]!.args).toContain("gpt-5.4-mini");
+    expect(calls[2]!.args).not.toContain("--model");
+    expect(result.sessionId).toBe("codex-thread");
+  });
 });

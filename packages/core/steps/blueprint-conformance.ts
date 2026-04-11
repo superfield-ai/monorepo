@@ -35,6 +35,8 @@ export interface BlueprintConformanceOpts {
   concurrency?: number;
   /** Pre-loaded blueprint. If omitted, loaded from `cwd`/blueprint. */
   blueprint?: Blueprint;
+  /** Optional pre-fetched open issues snapshot for this tick. */
+  issues?: Issue[];
 }
 
 const MARKER = "<!-- superfield-blueprint -->";
@@ -54,7 +56,7 @@ export async function runBlueprintConformance(
 ): Promise<BlueprintConformanceResult> {
   const blueprint = opts.blueprint ?? (await loadBlueprint());
 
-  const allIssues = await client.listIssues(owner, repo);
+  const allIssues = opts.issues ?? (await client.listIssues(owner, repo));
   const candidates = allIssues.filter(
     (i) => !i.labels.includes("plan") && !i.labels.includes("ci-failure"),
   );

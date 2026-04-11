@@ -131,6 +131,77 @@ describe("tickDevLoop", () => {
     expect(result.reapedSessions).toEqual([]);
   });
 
+  it("returns granular idle reason when Plan has no entries", async () => {
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({ number: 10, state: "open" }),
+        makeIssue({ number: 11, state: "open" }),
+      ]),
+    });
+
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn: fakeSpawn(),
+      startupPlanIssue: makeIssue({
+        number: 99,
+        title: "Plan",
+        body: "",
+        labels: ["plan"],
+        state: "open",
+      }),
+    });
+
+    expect(result.idle).toBe(true);
+    expect(result.reason).toBe(
+      "plan has no entries (cannot select a primary issue)",
+    );
+  });
+
+  it("returns granular idle reason when open issues are not referenced in Plan", async () => {
+    const planWithClosedOnly = `## Phase: Identity
+
+Goal: Build auth seams.
+Depends on phases: None.
+Scout gate: #5
+
+- #5 — [dev-scout] scout identity [risk: 5]
+  <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
+`;
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({ number: 10, state: "open" }),
+        makeIssue({ number: 11, state: "open" }),
+      ]),
+      getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
+        if (n === 5) return makeIssue({ number: 5, state: "closed" });
+        throw new Error(`unexpected getIssue ${n}`);
+      }),
+    });
+
+    const result = await tickDevLoop({
+      client,
+      owner: "o",
+      repo: "r",
+      token: "t",
+      worktrees,
+      spawn: fakeSpawn(),
+      startupPlanIssue: makeIssue({
+        number: 99,
+        title: "Plan",
+        body: planWithClosedOnly,
+        labels: ["plan"],
+        state: "open",
+      }),
+    });
+
+    expect(result.idle).toBe(true);
+    expect(result.reason).toContain("open issues are not referenced in Plan");
+  });
+
   it("selects the top of plan and spawns the agent", async () => {
     await preCreateWorktree(10, "build-the-thing");
     const client = makeClient({

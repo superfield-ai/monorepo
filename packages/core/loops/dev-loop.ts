@@ -64,6 +64,8 @@ export interface DevLoopOpts {
   startupPrioritizedIssueNumbers?: number[];
   /** One-time startup handoff from runDevLoop to the first tick only. */
   startupReapedSessions?: number[];
+  /** Startup plan issue preloaded by runDevLoop for first tick/session scan. */
+  startupPlanIssue?: Issue;
   /** @internal Test seam — override the prune function used by runDevLoop. */
   _pruneFn?: (opts: DevLoopOpts) => Promise<PruneResult>;
   /** @internal Test seam — override the tick function used by runDevLoop. */
@@ -130,7 +132,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     reapedSessions: number[];
   } = { prioritizedIssueNumbers: [], reapedSessions: [] };
   try {
-    startupHandoff = await buildStartupSessionHandoff(opts);
+    startupHandoff = await buildStartupSessionHandoff(opts, startupPlan);
   } catch (err) {
     console.error(
       `[error] [dev] startup session scan failed: ${formatError(err)}`,
@@ -152,6 +154,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
       const result = await tickFn({
         ...opts,
         circuit,
+        startupPlanIssue: firstTick ? startupPlan : undefined,
         startupPrioritizedIssueNumbers: firstTick
           ? startupHandoff.prioritizedIssueNumbers
           : undefined,
@@ -165,9 +168,29 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
             `Plan issue disappeared for ${opts.owner}/${opts.repo}. Stopping start command.`,
           );
         }
-        console.log(
-          `[dev] tick idle: ${result.reason ?? "no eligible work"}`,
-        );
+        if (result.reason?.startsWith("plan has no entries")) {
+          console.error(
+            `[error] [dev] tick idle: ${result.reason}`,
+          );
+        } else if (
+          result.reason?.startsWith("open issues are not referenced in Plan")
+        ) {
+          console.error(
+            `[error] [dev] tick idle: ${result.reason}`,
+          );
+        } else if (result.reason === "merge gate blocked") {
+          const blockedText =
+            result.mergeGateBlocked.length > 0
+              ? result.mergeGateBlocked.map((n) => `#${n}`).join(", ")
+              : "unknown";
+          console.warn(
+            `[warn] [dev] tick idle: merge gate blocked. Waiting on: ${blockedText}`,
+          );
+        } else {
+          console.log(
+            `[dev] tick idle: ${result.reason ?? "no eligible work"}`,
+          );
+        }
       } else {
         const speculativeCount = result.speculativeIssues.length;
         const blockedCount = result.mergeGateBlocked.length;
@@ -217,7 +240,9 @@ export async function tickDevLoop(
   const startupReapedSessions = opts.startupReapedSessions ?? [];
 
   // 1. Read the Plan
-  const planIssue = await findOpenPlanIssue(client, owner, repo);
+  const planIssue =
+    opts.startupPlanIssue ??
+    (await findOpenPlanIssue(client, owner, repo));
   if (!planIssue) {
     return {
       primaryIssue: null,
@@ -252,6 +277,10 @@ export async function tickDevLoop(
       }
     : await selectPrimary(client, owner, repo, plan);
   if (!primaryEntry) {
+    const noPrimaryReason =
+      blocked.length > 0
+        ? "merge gate blocked"
+        : await diagnoseNoPrimaryReason(client, owner, repo, plan);
     return {
       primaryIssue: null,
       speculativeIssues: [],
@@ -259,7 +288,7 @@ export async function tickDevLoop(
       reapedSessions: startupReapedSessions,
       closed: false,
       idle: true,
-      reason: blocked.length > 0 ? "merge gate blocked" : "no eligible primary",
+      reason: noPrimaryReason,
     };
   }
 
@@ -684,6 +713,38 @@ async function selectPrimary(
   return { entry: null, blocked };
 }
 
+async function diagnoseNoPrimaryReason(
+  client: GitHubClient,
+  owner: string,
+  repo: string,
+  plan: Plan,
+): Promise<string> {
+  const planEntries = planIssueOrder(plan);
+  if (planEntries.length === 0) {
+    return "plan has no entries (cannot select a primary issue)";
+  }
+
+  const openIssues = await client.listIssues(owner, repo);
+  const openWorkIssues = openIssues.filter((issue) => !issue.labels.includes("plan"));
+  if (openWorkIssues.length === 0) {
+    return "no open issues in repository";
+  }
+
+  const planSet = new Set(planEntries);
+  const openReferenced = openWorkIssues.filter((issue) =>
+    planSet.has(issue.number),
+  );
+  if (openReferenced.length === 0) {
+    const sample = openWorkIssues
+      .slice(0, 5)
+      .map((issue) => `#${issue.number}`)
+      .join(", ");
+    return `open issues are not referenced in Plan (sample open issues: ${sample})`;
+  }
+
+  return "no eligible primary (all plan-referenced issues are currently non-runnable)";
+}
+
 async function selectStartupPrimary(
   client: GitHubClient,
   owner: string,
@@ -924,7 +985,19 @@ function extractCheckUrl(body: string | null): string {
 }
 
 function formatError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  const raw = err instanceof Error ? err.message : String(err);
+  const singleLine = raw.replace(/\s+/g, " ").trim();
+  if (
+    /rate limit exceeded|api rate limit exceeded|too many requests|secondary rate limit/i.test(
+      singleLine,
+    )
+  ) {
+    const requestId = /request id ([A-Z0-9:]+)/i.exec(singleLine)?.[1];
+    return requestId
+      ? `GitHub API rate limit exceeded (request id: ${requestId})`
+      : "GitHub API rate limit exceeded";
+  }
+  return singleLine;
 }
 
 async function findOpenPlanIssue(
@@ -932,25 +1005,31 @@ async function findOpenPlanIssue(
   owner: string,
   repo: string,
 ): Promise<Issue | null> {
-  const labeledPlanIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
-  if (labeledPlanIssues.length > 0) return labeledPlanIssues[0]!;
-
   const allOpenIssues = (await client.listIssues(owner, repo)) ?? [];
   const fallback = allOpenIssues.find(
     (issue) =>
       issue.labels.some((label) => label.toLowerCase() === "plan") ||
       /^plan\b/i.test(issue.title),
   );
-  return fallback ?? null;
+  if (fallback) return fallback;
+
+  // Backward-compatible fallback for adapters/mocks that only respect
+  // label-filtered issue listing.
+  if (allOpenIssues.length === 0) {
+    const labeledPlanIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
+    return labeledPlanIssues[0] ?? null;
+  }
+  return null;
 }
 
 async function buildStartupSessionHandoff(
   opts: DevLoopOpts,
+  startupPlanIssue?: Issue,
 ): Promise<{ prioritizedIssueNumbers: number[]; reapedSessions: number[] }> {
   const { client, owner, repo } = opts;
-  const planIssues = await client.listIssues(owner, repo, ["plan"]);
-  const plan =
-    planIssues.length > 0 ? parsePlan(planIssues[0]!.body ?? "") : emptyPlan();
+  const planIssue =
+    startupPlanIssue ?? (await findOpenPlanIssue(client, owner, repo));
+  const plan = planIssue ? parsePlan(planIssue.body ?? "") : emptyPlan();
   const classified = await classifyStartupSessions(
     client,
     owner,

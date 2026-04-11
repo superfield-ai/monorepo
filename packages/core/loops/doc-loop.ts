@@ -339,7 +339,19 @@ async function fileExists(repoPath: string, relPath: string): Promise<boolean> {
 }
 
 function formatError(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+  const raw = err instanceof Error ? err.message : String(err);
+  const singleLine = raw.replace(/\s+/g, " ").trim();
+  if (
+    /rate limit exceeded|api rate limit exceeded|too many requests|secondary rate limit/i.test(
+      singleLine,
+    )
+  ) {
+    const requestId = /request id ([A-Z0-9:]+)/i.exec(singleLine)?.[1];
+    return requestId
+      ? `GitHub API rate limit exceeded (request id: ${requestId})`
+      : "GitHub API rate limit exceeded";
+  }
+  return singleLine;
 }
 
 async function collectCanonicalSnippets(

@@ -132,7 +132,12 @@ describe("tickRepository — all four planning-loop steps are wired", () => {
       planCoverage: coverage,
     });
     expect(coverage).toHaveBeenCalledOnce();
-    expect(coverage).toHaveBeenCalledWith(client, "org", "repo");
+    expect(coverage).toHaveBeenCalledWith(
+      client,
+      "org",
+      "repo",
+      expect.any(Object),
+    );
   });
 
   it("runIssueAudit failure does not abort the tick", async () => {

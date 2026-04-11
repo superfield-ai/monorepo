@@ -123,20 +123,15 @@ describe("planning loop — end to end", () => {
   it("CI watchdog detects failed check and inserts ci-failure at top of Plan", async () => {
     const client = makeClient({
       getCheckRuns: vi.fn().mockResolvedValue([makeCheckRun()]),
-      // Plan issue exists
-      listIssues: vi.fn(async (_o, _r, labels?: string[]) => {
-        if (labels?.includes("plan")) {
-          return [
-            makeIssue({
-              number: 99,
-              title: "Plan",
-              labels: ["plan"],
-              body: conformantPlanBody,
-            }),
-          ];
-        }
-        return [makeIssue()];
-      }) as unknown as GitHubClient["listIssues"],
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({
+          number: 99,
+          title: "Plan",
+          labels: ["plan"],
+          body: conformantPlanBody,
+        }),
+        makeIssue(),
+      ]),
       // planContainsIssue check and plan update
       updateIssueBody: vi.fn().mockResolvedValue(undefined),
     });
@@ -237,6 +232,29 @@ describe("planning loop — end to end", () => {
     if (result.blueprintConformance.ok) {
       expect(result.blueprintConformance.issuesWithViolations).toEqual([3]);
     }
+  });
+
+  it("reuses one open-issues snapshot across planning steps", async () => {
+    const client = makeClient({
+      getCheckRuns: vi.fn().mockResolvedValue([]),
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({
+          number: 99,
+          title: "Plan",
+          labels: ["plan"],
+          body: conformantPlanBody,
+        }),
+        makeIssue({ number: 7 }),
+      ]),
+    });
+
+    await tickRepositoryForTesting(client, "org", "repo", {
+      issueAudit: fakeAudit(),
+      blueprintConformance: fakeBlueprint(),
+      planCoverage: fakeCoverage(),
+    });
+
+    expect(client.listIssues).toHaveBeenCalledTimes(1);
   });
 
   it("watchdog error does not crash the planning loop — remaining steps still run", async () => {
