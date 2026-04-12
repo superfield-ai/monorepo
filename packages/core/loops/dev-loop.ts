@@ -315,7 +315,7 @@ export async function tickDevLoop(
     ...plan.phases.flatMap((p) => p.issues.map((e) => e.number)),
   ];
   devLog(
-    "debug",
+    "trace",
     `plan has ${plan.phases.length} phase(s), ${allPlanNumbers.length} issue(s) total`,
   );
 
@@ -494,7 +494,7 @@ async function prepareWorktreeAndSession(
     const ageMin = Math.round(ageMs / 60_000);
     devLog("info", `issue #${entry.number} resuming session ${sessionId} started ${ageMin}m ago`, slot);
   }
-  devLog("debug", `issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`, slot);
+  devLog("trace", `issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`, slot);
 
   // Escalation latch (#78): once an earlier turn returned
   // needsBlueprintEscalation, the session record carries blueprintEscalated,
@@ -568,7 +568,7 @@ async function executeAgentWithAudit(
     selfAuditRemediationCount: remediationCount || undefined,
     selfAuditPendingViolations: remediationViolations,
   });
-  devLog("debug", `issue #${entry.number} session claimed role=${role}`, slot);
+  devLog("trace", `issue #${entry.number} session claimed role=${role}`, slot);
 
   const spawnFn = opts.spawn ?? spawnAgent;
   const circuit = opts.circuit;
@@ -770,7 +770,7 @@ async function runSlot(
     return mergeResult;
   }
 
-  devLog("debug", `issue #${entry.number} completed (speculative path)`, slot);
+  devLog("trace", `issue #${entry.number} completed (speculative path)`, slot);
   return { closed: false, mergeGateBlocked: [] };
 }
 

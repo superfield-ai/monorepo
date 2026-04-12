@@ -535,7 +535,7 @@ function logInvocationStart(
     `model=${opts.model ?? "default"} max_turns=${opts.maxTurns ?? 50} cwd=${opts.worktreePath}`,
   );
   logger.emit(
-    "debug",
+    "trace",
     `prompt:\n${prettyPromptPreview(opts.prompt)}`,
   );
 }
@@ -545,11 +545,8 @@ function logRawCliResult(
   run: CliRunResult,
   logger: AgentLogger,
 ): void {
-  if (logger.currentLevel !== "debug" && logger.currentLevel !== "trace") {
-    return;
-  }
   logger.emit(
-    "debug",
+    "trace",
     `cli response (backend=${backend}): exit_code=${run.code} stdout=${toSingleLine(
       run.stdout.slice(0, 500),
     )} stderr=${toSingleLine(run.stderr.slice(0, 500))}`,
