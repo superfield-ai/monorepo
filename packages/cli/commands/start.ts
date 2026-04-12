@@ -2,6 +2,8 @@ import * as path from "node:path";
 import {
   loadConfig as defaultLoadConfig,
   runPlanningLoop as defaultRunPlanningLoop,
+  initFileLogger,
+  currentLogFile,
 } from "@superfield/core";
 import { runDevLoop as defaultRunDevLoop } from "@superfield/core/loops/dev-loop";
 import { runDocLoop as defaultRunDocLoop } from "@superfield/core/loops/doc-loop";
@@ -59,6 +61,7 @@ export async function startCommand(
     exit = process.exit,
   } = deps;
   const logLevel = resolveLogLevel(env, warn);
+  initFileLogger();
   const emit = (level: LogLevel, message: string): void => {
     const formatted = `[${level}] ${message}`;
     if (level === "error") {
@@ -100,7 +103,7 @@ export async function startCommand(
 
   emit(
     "info",
-    `[start] Starting superfield (user: ${assignedUser})`,
+    `[start] Starting superfield (user: ${assignedUser}) log=${currentLogFile() ?? "none"}`,
   );
 
   const effectiveConfig: Config = {

@@ -16,6 +16,7 @@ import {
   buildCIFailurePrompt,
 } from "../prompts/index.ts";
 import { spawnAgent, StaleSessionError, type AgentOpts, type AgentResult } from "../agent.ts";
+import { writeToLog } from "../file-logger.ts";
 import {
   classifyStartupSessions,
   getSession,
@@ -137,6 +138,7 @@ function resolveDevLogLevel(): DevLogLevel {
 function devLog(level: DevLogLevel, message: string, slot?: number): void {
   const scope = slot !== undefined ? `[dev ${slot}]` : "[dev]";
   const line = `[${level}] ${scope} ${message}`;
+  writeToLog(line);
   if (level === "error") return console.error(line);
   if (level === "warn") return console.warn(line);
   const current = resolveDevLogLevel();

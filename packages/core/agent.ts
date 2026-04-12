@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { writeToLog } from "./file-logger.ts";
 
 export type AgentBackend = "claude" | "codex";
 export type AgentMode = AgentBackend | "auto";
@@ -475,6 +476,7 @@ function makeAgentLogger(loop?: AgentLoop): AgentLogger {
     currentLevel,
     emit: (level, message) => {
       const line = `[${level}] ${scope} ${message}`;
+      writeToLog(line);
       if (level === "error") {
         console.error(line);
         return;

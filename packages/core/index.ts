@@ -99,6 +99,8 @@ export type {
 } from "./agent.ts";
 
 export { withRetry, CircuitBreaker } from "./retry.ts";
+
+export { initFileLogger, currentLogFile } from "./file-logger.ts";
 export type { RetryOpts, CircuitBreakerOpts } from "./retry.ts";
 
 export {
