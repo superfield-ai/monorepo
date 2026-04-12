@@ -24,26 +24,37 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
     addIssueLabel: vi.fn().mockResolvedValue(undefined),
     removeIssueLabel: vi.fn().mockResolvedValue(undefined),
     deleteIssueComment: vi.fn().mockResolvedValue(undefined),
+    updateIssueBody: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   } as unknown as GitHubClient;
 }
 
-const conformantResponse = {
-  issue_number: 10,
-  conformant: true,
-  missing_sections: [],
-  forbidden_sections: [],
-  empty_sections: [],
-  fix_suggestions: [],
+const conformantBatchResponse = {
+  reports: [
+    {
+      issue_number: 10,
+      conformant: true,
+      missing_sections: [],
+      forbidden_sections: [],
+      empty_sections: [],
+      quality_issues: [],
+    },
+  ],
 };
 
-const nonConformantResponse = {
-  issue_number: 10,
-  conformant: false,
-  missing_sections: ["## Features"],
-  forbidden_sections: ["## Deliverables"],
-  empty_sections: [],
-  fix_suggestions: ["Rename Deliverables to Features"],
+const nonConformantBatchResponse = {
+  reports: [
+    {
+      issue_number: 10,
+      conformant: false,
+      missing_sections: ["## Features"],
+      forbidden_sections: ["## Deliverables"],
+      empty_sections: [],
+      quality_issues: ["Test plan item 1 is vague"],
+      proposed_body:
+        "## Phase\nFoundation\n\n## Motivation\nBecause.\n\n## Canonical docs\n- docs/prd.md\n\n## Features\n- [ ] Replace Deliverables with scoped features\n\n## Test Plan\n- [ ] Add a targeted assertion",
+    },
+  ],
 };
 
 function fakeSpawn(response: unknown) {
@@ -58,7 +69,7 @@ describe("runIssueAudit", () => {
   it("returns empty result when no candidate issues", async () => {
     const client = makeClient();
     const result = await runIssueAudit(client, "org", "repo", {
-      spawn: fakeSpawn(conformantResponse),
+      spawn: fakeSpawn(conformantBatchResponse),
     });
     expect(result.audited).toBe(0);
     expect(result.nonConformant).toEqual([]);
@@ -69,35 +80,43 @@ describe("runIssueAudit", () => {
       listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
     });
     const result = await runIssueAudit(client, "org", "repo", {
-      spawn: fakeSpawn(conformantResponse),
+      spawn: fakeSpawn(conformantBatchResponse),
     });
     expect(result.audited).toBe(1);
     expect(result.nonConformant).toEqual([]);
     expect(result.reports[10]?.conformant).toBe(true);
+    expect(client.updateIssueBody).not.toHaveBeenCalled();
     expect(client.createIssueComment).not.toHaveBeenCalled();
   });
 
-  it("posts findings comment on non-conformant issues", async () => {
+  it("rewrites non-conformant issue bodies and applies the label", async () => {
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({
+          number: 10,
+          body: "## Motivation\nBecause.",
+        }),
+      ]),
     });
     const result = await runIssueAudit(client, "org", "repo", {
-      spawn: fakeSpawn(nonConformantResponse),
+      spawn: fakeSpawn(nonConformantBatchResponse),
     });
     expect(result.nonConformant).toEqual([10]);
-    expect(client.createIssueComment).toHaveBeenCalledTimes(1);
-    const body = (client.createIssueComment as ReturnType<typeof vi.fn>).mock
-      .calls[0]![3] as string;
-    expect(body).toContain("<!-- superfield-audit -->");
-    expect(body).toContain("## Features");
-    expect(body).toContain("## Deliverables");
-    expect(body).toContain("Rename Deliverables to Features");
+    expect(client.updateIssueBody).toHaveBeenCalledWith({
+      owner: "org",
+      repo: "repo",
+      issue_number: 10,
+      body: nonConformantBatchResponse.reports[0]!.proposed_body,
+    });
     expect(client.addIssueLabel).toHaveBeenCalledWith({
       owner: "org",
       repo: "repo",
       issue_number: 10,
       label: "non-conformant",
     });
+    expect(result.reports[10]?.quality_issues).toEqual([
+      "Test plan item 1 is vague",
+    ]);
   });
 
   it("deletes stale audit findings and removes stale label when conformant", async () => {
@@ -114,7 +133,7 @@ describe("runIssueAudit", () => {
         ]),
     });
     await runIssueAudit(client, "org", "repo", {
-      spawn: fakeSpawn(conformantResponse),
+      spawn: fakeSpawn(conformantBatchResponse),
     });
     expect(client.removeIssueLabel).toHaveBeenCalledWith({
       owner: "org",
@@ -123,6 +142,7 @@ describe("runIssueAudit", () => {
       label: "non-conformant",
     });
     expect(client.deleteIssueComment).toHaveBeenCalledWith("org", "repo", 500);
+    expect(client.updateIssueBody).not.toHaveBeenCalled();
     expect(client.updateIssueComment).not.toHaveBeenCalled();
     expect(client.createIssueComment).not.toHaveBeenCalled();
   });
@@ -139,7 +159,30 @@ describe("runIssueAudit", () => {
         ]),
     });
     const result = await runIssueAudit(client, "org", "repo", {
-      spawn: fakeSpawn(conformantResponse),
+      spawn: async (_opts: AgentOpts): Promise<AgentResult> => ({
+        sessionId: "sess-1",
+        output: JSON.stringify({
+          reports: [
+            {
+              issue_number: 10,
+              conformant: true,
+              missing_sections: [],
+              forbidden_sections: [],
+              empty_sections: [],
+              quality_issues: [],
+            },
+            {
+              issue_number: 22,
+              conformant: true,
+              missing_sections: [],
+              forbidden_sections: [],
+              empty_sections: [],
+              quality_issues: [],
+            },
+          ],
+        }),
+        isError: false,
+      }),
     });
     expect(result.audited).toBe(2);
   });
@@ -155,34 +198,62 @@ describe("runIssueAudit", () => {
     expect(auditable.map((issue) => issue.number)).toEqual([10, 22]);
   });
 
-  it("normalizes malformed audit arrays before posting findings", async () => {
+  it("normalizes malformed audit arrays before applying remediation", async () => {
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({ number: 10, body: "bad body" }),
+      ]),
     });
     const result = await runIssueAudit(client, "org", "repo", {
       spawn: fakeSpawn({
-        issue_number: 10,
-        conformant: false,
-        missing_sections: ["## Features", 123, null],
-        forbidden_sections: "bad",
-        empty_sections: undefined,
-        fix_suggestions: ["Rename Deliverables", false],
+        reports: [
+          {
+            issue_number: 10,
+            conformant: false,
+            missing_sections: ["## Features", 123, null],
+            forbidden_sections: "bad",
+            empty_sections: undefined,
+            quality_issues: ["Rewrite tests", false],
+            proposed_body: "## Phase\nFoundation",
+          },
+        ],
       }),
     });
 
     expect(result.reports[10]?.missing_sections).toEqual(["## Features"]);
     expect(result.reports[10]?.forbidden_sections).toEqual([]);
-    expect(result.reports[10]?.fix_suggestions).toEqual([
-      "Rename Deliverables",
-    ]);
-    const body = (client.createIssueComment as ReturnType<typeof vi.fn>).mock
-      .calls[0]![3] as string;
-    expect(body).toContain("## Features");
-    expect(body).toContain("Rename Deliverables");
-    expect(body).not.toContain("123");
+    expect(result.reports[10]?.quality_issues).toEqual(["Rewrite tests"]);
+    expect(client.updateIssueBody).toHaveBeenCalledWith({
+      owner: "org",
+      repo: "repo",
+      issue_number: 10,
+      body: "## Phase\nFoundation",
+    });
   });
 
-  it("throws when LLM response is missing required fields", async () => {
+  it("throws when a non-conformant issue is missing proposed_body", async () => {
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
+    });
+    await expect(
+      runIssueAudit(client, "org", "repo", {
+        spawn: fakeSpawn({
+          reports: [
+            {
+              issue_number: 10,
+              conformant: false,
+              missing_sections: ["## Phase"],
+              forbidden_sections: [],
+              empty_sections: [],
+              quality_issues: [],
+            },
+          ],
+        }),
+      }),
+    ).rejects.toThrow(/without proposed_body/);
+  });
+
+  it("throws when the batch response is missing required reports", async () => {
     const client = makeClient({
       listIssues: vi.fn().mockResolvedValue([makeIssue({ number: 10 })]),
     });
@@ -190,6 +261,31 @@ describe("runIssueAudit", () => {
       runIssueAudit(client, "org", "repo", {
         spawn: fakeSpawn({ some: "bad" }),
       }),
-    ).rejects.toThrow(/missing issue_number/);
+    ).rejects.toThrow(/missing reports/);
+  });
+
+  it("throws when the batch response omits an input issue", async () => {
+    const client = makeClient({
+      listIssues: vi.fn().mockResolvedValue([
+        makeIssue({ number: 10 }),
+        makeIssue({ number: 11 }),
+      ]),
+    });
+    await expect(
+      runIssueAudit(client, "org", "repo", {
+        spawn: fakeSpawn({
+          reports: [
+            {
+              issue_number: 10,
+              conformant: true,
+              missing_sections: [],
+              forbidden_sections: [],
+              empty_sections: [],
+              quality_issues: [],
+            },
+          ],
+        }),
+      }),
+    ).rejects.toThrow(/reports length mismatch|missing report/);
   });
 });

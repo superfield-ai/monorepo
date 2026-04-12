@@ -73,7 +73,14 @@ export interface TickRepositoryResult {
     | { ok: true; nonConformant: number[] }
     | { ok: false; error: string };
   planCoverage:
-    | { ok: true; appended: number[]; planCreated: boolean }
+    | {
+        ok: true;
+        appended: number[];
+        skipped: number[];
+        llmPlaced: number[];
+        createdPhases: string[];
+        planCreated: boolean;
+      }
     | { ok: false; error: string };
   blueprintConformance:
     | { ok: true; issuesWithViolations: number[] }
@@ -267,6 +274,9 @@ async function tickRepository(
     planCoverageOutcome = {
       ok: true,
       appended: coverage.appended,
+      skipped: coverage.skipped,
+      llmPlaced: coverage.llmPlaced,
+      createdPhases: coverage.createdPhases,
       planCreated: coverage.planCreated,
     };
     if (coverage.planCreated) {
@@ -275,6 +285,21 @@ async function tickRepository(
     if (coverage.appended.length > 0) {
       console.log(
         `[plan] Appended ${coverage.appended.length} issues to Plan: ${coverage.appended.join(", ")}`,
+      );
+    }
+    if (coverage.llmPlaced.length > 0) {
+      console.log(
+        `[plan] LLM placed ${coverage.llmPlaced.length} issue(s): ${coverage.llmPlaced.join(", ")}`,
+      );
+    }
+    if (coverage.createdPhases.length > 0) {
+      console.log(
+        `[plan] Created ${coverage.createdPhases.length} phase(s): ${coverage.createdPhases.join(", ")}`,
+      );
+    }
+    if (coverage.skipped.length > 0) {
+      console.log(
+        `[plan] Deferred ${coverage.skipped.length} issue(s) pending scout-gated placement: ${coverage.skipped.join(", ")}`,
       );
     }
   } catch (err) {
@@ -364,7 +389,7 @@ async function tickConfiguredRepositories(
           ? `${result.issueAudit.nonConformant.length} non-conformant`
           : "error";
         const coverageSummary = result.planCoverage.ok
-          ? `${result.planCoverage.appended.length} appended`
+          ? `${result.planCoverage.appended.length} appended, ${(result.planCoverage.skipped ?? []).length} skipped`
           : "error";
         const conformanceSummary = result.blueprintConformance.ok
           ? `${result.blueprintConformance.issuesWithViolations.length} with violations`

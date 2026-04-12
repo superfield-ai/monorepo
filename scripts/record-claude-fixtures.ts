@@ -64,7 +64,7 @@ const RECORDERS: Record<string, TaskRecorder> = {
     async build(args) {
       const issue = await fetchIssue(args);
       return {
-        prompt: buildIssueAuditPrompt({ issue }),
+        prompt: buildIssueAuditPrompt({ issues: [issue] }),
         metadata: {
           repo: args.repo,
           issue_number: issue.number,
@@ -79,7 +79,7 @@ const RECORDERS: Record<string, TaskRecorder> = {
     async build(args) {
       const issue = await fetchIssue(args);
       return {
-        prompt: buildIssueAuditPrompt({ issue }),
+        prompt: buildIssueAuditPrompt({ issues: [issue] }),
         metadata: {
           repo: args.repo,
           issue_number: issue.number,

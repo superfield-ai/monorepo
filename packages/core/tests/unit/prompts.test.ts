@@ -252,7 +252,7 @@ describe("prompt builders — structural invariants", () => {
 
   describe("buildIssueAuditPrompt", () => {
     it("lists required and forbidden sections", () => {
-      const out = buildIssueAuditPrompt({ issue });
+      const out = buildIssueAuditPrompt({ issues: [issue] });
       expect(out).toContain("## Phase");
       expect(out).toContain("## Features");
       expect(out).toContain("## Test Plan");
@@ -445,7 +445,7 @@ describe("prompt builders — snapshots", () => {
   });
 
   it("buildIssueAuditPrompt matches snapshot", () => {
-    expect(buildIssueAuditPrompt({ issue })).toMatchSnapshot();
+    expect(buildIssueAuditPrompt({ issues: [issue] })).toMatchSnapshot();
   });
 
   it("buildBlueprintConformancePrompt matches snapshot", () => {
@@ -511,8 +511,8 @@ describe("prompt builders — pure functions", () => {
   });
 
   it("buildIssueAuditPrompt is deterministic", () => {
-    expect(buildIssueAuditPrompt({ issue })).toBe(
-      buildIssueAuditPrompt({ issue }),
+    expect(buildIssueAuditPrompt({ issues: [issue] })).toBe(
+      buildIssueAuditPrompt({ issues: [issue] }),
     );
   });
 });

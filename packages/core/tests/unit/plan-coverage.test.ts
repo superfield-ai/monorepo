@@ -319,9 +319,26 @@ Scout gate: #5
         .mockResolvedValue([makeIssue({ number: 10, title: "feat: one", body: null })]),
     });
 
-    await expect(runPlanCoverage(client, "org", "repo")).rejects.toThrow(
-      "plan coverage cannot place issue #10: missing ## Phase section",
-    );
+    const result = await runPlanCoverage(client, "org", "repo", {
+      spawn: async () => ({
+        sessionId: "sess",
+        output: JSON.stringify({
+          placements: [
+            {
+              issue_number: 10,
+              phase: "Foundation",
+              create_phase: true,
+              phase_goal: "Create the initial delivery phase",
+            },
+          ],
+        }),
+        isError: false,
+      }),
+    });
+
+    expect(result.llmPlaced).toEqual([10]);
+    expect(result.createdPhases).toEqual(["Foundation"]);
+    expect(result.skipped).toEqual([10]);
   });
 
   it("fails clearly when an uncovered feature would violate scout dependency semantics", async () => {

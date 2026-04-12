@@ -112,6 +112,9 @@ function fakeCoverage(result: Partial<PlanCoverageResult> = {}) {
       planCreated: false,
       appended: [],
       alreadyCovered: [],
+      skipped: [],
+      llmPlaced: [],
+      createdPhases: [],
       ...result,
     }),
   );

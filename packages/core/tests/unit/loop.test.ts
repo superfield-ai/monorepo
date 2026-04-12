@@ -83,6 +83,9 @@ const noOpCoverage = vi.fn(
     planCreated: false,
     appended: [],
     alreadyCovered: [],
+    skipped: [],
+    llmPlaced: [],
+    createdPhases: [],
   }),
 );
 
