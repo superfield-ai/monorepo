@@ -134,8 +134,9 @@ function resolveDevLogLevel(): DevLogLevel {
   return "info";
 }
 
-function devLog(level: DevLogLevel, message: string): void {
-  const line = `[${level}] [dev] ${message}`;
+function devLog(level: DevLogLevel, message: string, slot?: number): void {
+  const scope = slot !== undefined ? `[dev ${slot}]` : "[dev]";
+  const line = `[${level}] ${scope} ${message}`;
   if (level === "error") return console.error(line);
   if (level === "warn") return console.warn(line);
   const current = resolveDevLogLevel();
@@ -458,10 +459,7 @@ async function prepareWorktreeAndSession(
   slot: number,
 ): Promise<SlotContext | null> {
   const { client, owner, repo } = opts;
-  devLog(
-    "info",
-    `slot ${slotTag(role, slot)} preparing issue #${entry.number} (${entry.kind})`,
-  );
+  devLog("info", `preparing issue #${entry.number} (${entry.kind})`, slot);
 
   const issue = await client.getIssue(owner, repo, entry.number);
   if (issue.state === "closed") {
@@ -492,15 +490,9 @@ async function prepareWorktreeAndSession(
   if (sessionId && existing?.session.startedAt) {
     const ageMs = Date.now() - new Date(existing.session.startedAt).getTime();
     const ageMin = Math.round(ageMs / 60_000);
-    devLog(
-      "info",
-      `slot ${slotTag(role, slot)} issue #${entry.number} resuming session ${sessionId} started ${ageMin}m ago`,
-    );
+    devLog("info", `issue #${entry.number} resuming session ${sessionId} started ${ageMin}m ago`, slot);
   }
-  devLog(
-    "debug",
-    `slot ${slotTag(role, slot)} issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`,
-  );
+  devLog("debug", `issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`, slot);
 
   // Escalation latch (#78): once an earlier turn returned
   // needsBlueprintEscalation, the session record carries blueprintEscalated,
@@ -574,10 +566,7 @@ async function executeAgentWithAudit(
     selfAuditRemediationCount: remediationCount || undefined,
     selfAuditPendingViolations: remediationViolations,
   });
-  devLog(
-    "debug",
-    `slot ${slotTag(role, slot)} issue #${entry.number} session claimed role=${role} slot=${slot}`,
-  );
+  devLog("debug", `issue #${entry.number} session claimed role=${role}`, slot);
 
   const spawnFn = opts.spawn ?? spawnAgent;
   const circuit = opts.circuit;
@@ -597,10 +586,7 @@ async function executeAgentWithAudit(
     },
     { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
   );
-  devLog(
-    "info",
-    `slot ${slotTag(role, slot)} issue #${entry.number} agent run finished is_error=${agentResult.isError}`,
-  );
+  devLog("info", `issue #${entry.number} agent run finished is_error=${agentResult.isError}`, slot);
 
   // Latch escalation on the first true and persist.
   const nextEscalated =
@@ -723,20 +709,14 @@ async function runSlot(
   role: "primary" | "speculative",
   slot: number,
 ): Promise<{ closed: boolean; mergeGateBlocked: number[] }> {
-  devLog(
-    "info",
-    `slot ${slotTag(role, slot)} start issue #${entry.number}`,
-  );
+  devLog("info", `start issue #${entry.number}`, slot);
   // Stage 1: worktree + session setup
   const ctx = await prepareWorktreeAndSession(opts, entry, role, slot);
   if (!ctx) {
     // Issue already closed or remediation cap exceeded
     const { client, owner, repo } = opts;
     const issue = await client.getIssue(owner, repo, entry.number);
-    devLog(
-      "debug",
-      `slot ${slotTag(role, slot)} issue #${entry.number} skipped before spawn (closed=${issue.state === "closed"})`,
-    );
+    devLog("debug", `issue #${entry.number} skipped before spawn (closed=${issue.state === "closed"})`, slot);
     return { closed: issue.state === "closed", mergeGateBlocked: [] };
   }
 
@@ -751,10 +731,7 @@ async function runSlot(
   );
 
   if (!proceedToMerge) {
-    devLog(
-      "warn",
-      `slot ${slotTag(role, slot)} issue #${entry.number} halted after self-audit; waiting for remediation`,
-    );
+    devLog("warn", `issue #${entry.number} halted after self-audit; waiting for remediation`, slot);
     return { closed: false, mergeGateBlocked: [] };
   }
 
@@ -762,32 +739,19 @@ async function runSlot(
   if (role === "primary") {
     const mergeResult = await attemptMergeGate(opts, plan, entry);
     if (mergeResult.closed) {
-      devLog("info", `slot ${slotTag(role, slot)} issue #${entry.number} merge-gate result closed=true`);
+      devLog("info", `issue #${entry.number} merge-gate result closed=true`, slot);
     } else if (mergeResult.mergeGateBlocked.length > 0) {
-      devLog(
-        "info",
-        `slot ${slotTag(role, slot)} issue #${entry.number} merge-gate result closed=false blocked=${mergeResult.mergeGateBlocked.map((n) => `#${n}`).join(",")}`,
-      );
+      devLog("info", `issue #${entry.number} merge-gate result closed=false blocked=${mergeResult.mergeGateBlocked.map((n) => `#${n}`).join(",")}`, slot);
     } else {
-      devLog(
-        "info",
-        `slot ${slotTag(role, slot)} issue #${entry.number} merge-gate result closed=false blocked=0 — issue still open, likely waiting on CI or PR merge`,
-      );
+      devLog("info", `issue #${entry.number} merge-gate result closed=false blocked=0 — issue still open, likely waiting on CI or PR merge`, slot);
     }
     return mergeResult;
   }
 
-  devLog(
-    "debug",
-    `slot ${slotTag(role, slot)} issue #${entry.number} completed (speculative path)`,
-  );
+  devLog("debug", `issue #${entry.number} completed (speculative path)`, slot);
   return { closed: false, mergeGateBlocked: [] };
 }
 
-function slotTag(role: "primary" | "speculative", slot?: number): string {
-  const label = role === "primary" ? "primary" : "spec";
-  return slot !== undefined ? `slot${slot}(${label})` : label;
-}
 
 /**
  * Selects up to `count` speculative candidates from the same phase as the
