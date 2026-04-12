@@ -87,6 +87,16 @@ class AgentRateLimitError extends Error {
   }
 }
 
+export class StaleSessionError extends Error {
+  constructor(
+    readonly sessionId: string,
+    readonly backend: AgentBackend,
+  ) {
+    super(`Session ${sessionId} not found on ${backend} — session is stale`);
+    this.name = "StaleSessionError";
+  }
+}
+
 /**
  * Spawns the configured agent CLI in headless mode and returns the session ID and output.
  *
@@ -305,9 +315,17 @@ function parseClaudeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
         `claude was rate limited: ${truncateForError(run.stderr || run.stdout)}`,
       );
     }
+    const staleMatch = /No conversation found with session ID:\s*([0-9a-f-]{36})/i.exec(
+      run.stderr || run.stdout,
+    );
+    if (staleMatch) {
+      logger.emit("warn", `stale session detected: ${staleMatch[0]}`);
+      throw new StaleSessionError(staleMatch[1]!, "claude");
+    }
+    const detail = toSingleLine((run.stderr || run.stdout).slice(0, 200));
     logger.emit(
       "error",
-      "invocation did not return structured JSON (backend=claude, no session started)",
+      `invocation did not return structured JSON (backend=claude, no session started): ${detail}`,
     );
     throw new Error(
       `claude exited with code ${run.code} and produced non-JSON output.\n` +

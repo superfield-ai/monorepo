@@ -15,7 +15,7 @@ import {
   buildDevScoutPrompt,
   buildCIFailurePrompt,
 } from "../prompts/index.ts";
-import { spawnAgent, type AgentOpts, type AgentResult } from "../agent.ts";
+import { spawnAgent, StaleSessionError, type AgentOpts, type AgentResult } from "../agent.ts";
 import {
   classifyStartupSessions,
   getSession,
@@ -571,21 +571,41 @@ async function executeAgentWithAudit(
   const spawnFn = opts.spawn ?? spawnAgent;
   const circuit = opts.circuit;
 
-  const agentResult = await withRetry(
-    () => {
-      const call = () =>
-        spawnFn({
+  let effectiveSessionId = sessionId;
+  const agentResult = await (async () => {
+    try {
+      return await withRetry(
+        () => {
+          const call = () =>
+            spawnFn({
+              prompt,
+              worktreePath: wt.path,
+              sessionId: effectiveSessionId,
+              model: "sonnet",
+              loop: "dev",
+              task: entry.kind,
+            });
+          return circuit ? circuit.call(call) : call();
+        },
+        { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
+      );
+    } catch (err) {
+      if (err instanceof StaleSessionError) {
+        devLog("warn", `issue #${entry.number} stale session cleared — retrying as new session`, slot);
+        await deleteSession(client, owner, repo, entry.number);
+        effectiveSessionId = undefined;
+        return await spawnFn({
           prompt,
           worktreePath: wt.path,
-          sessionId,
+          sessionId: undefined,
           model: "sonnet",
           loop: "dev",
           task: entry.kind,
         });
-      return circuit ? circuit.call(call) : call();
-    },
-    { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
-  );
+      }
+      throw err;
+    }
+  })();
   devLog("info", `issue #${entry.number} agent run finished is_error=${agentResult.isError}`, slot);
 
   // Latch escalation on the first true and persist.
