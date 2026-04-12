@@ -77,49 +77,6 @@ describe("spawnAgent", () => {
     });
   });
 
-  it("falls back to codex when claude is rate limited", async () => {
-    const calls: Array<{ command: string; args: string[] }> = [];
-    spawnMock.mockImplementation((command: string, args: string[]) => {
-      calls.push({ command, args });
-      const proc = makeProc();
-      queueMicrotask(() => {
-        if (calls.length === 1) {
-          finish(
-            proc,
-            JSON.stringify({
-              type: "result",
-              subtype: "error",
-              is_error: true,
-              session_id: "claude-sess",
-              error: "429 rate limit exceeded",
-            }),
-          );
-          return;
-        }
-
-        finish(
-          proc,
-          [
-            '{"type":"thread.started","thread_id":"codex-thread"}',
-            '{"type":"turn.started"}',
-            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\\"answer\\":42}"}}',
-            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}',
-          ].join("\n"),
-        );
-      });
-      return proc;
-    });
-
-    const result = await spawnAgent({
-      worktreePath: "/tmp/work",
-      prompt: "hello",
-    });
-
-    expect(calls.map((call) => call.command)).toEqual(["claude", "codex"]);
-    expect(result.sessionId).toBe("codex-thread");
-    expect(result.output).toBe('{"answer":42}');
-  });
-
   it("falls back to opencode when both claude and codex are rate limited", async () => {
     const calls: Array<{ command: string; args: string[] }> = [];
     spawnMock.mockImplementation((command: string, args: string[]) => {
@@ -210,156 +167,6 @@ describe("spawnAgent", () => {
       output: '{"answer":42}',
       isError: false,
     });
-  });
-
-  it("falls back to codex when claude says you've hit your limit", async () => {
-    const calls: Array<{ command: string; args: string[] }> = [];
-    spawnMock.mockImplementation((command: string, args: string[]) => {
-      calls.push({ command, args });
-      const proc = makeProc();
-      queueMicrotask(() => {
-        if (calls.length === 1) {
-          finish(
-            proc,
-            JSON.stringify({
-              type: "result",
-              subtype: "error",
-              is_error: true,
-              session_id: "claude-sess",
-              error: "You've hit your limit · resets 8pm (UTC)",
-            }),
-          );
-          return;
-        }
-
-        finish(
-          proc,
-          [
-            '{"type":"thread.started","thread_id":"codex-thread"}',
-            '{"type":"turn.started"}',
-            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"{\\"answer\\":42}"}}',
-            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}',
-          ].join("\n"),
-        );
-      });
-      return proc;
-    });
-
-    const result = await spawnAgent({
-      worktreePath: "/tmp/work",
-      prompt: "hello",
-    });
-
-    expect(calls.map((call) => call.command)).toEqual(["claude", "codex"]);
-    expect(result.sessionId).toBe("codex-thread");
-    expect(result.output).toBe('{"answer":42}');
-  });
-
-  it("maps claude model alias when falling back to codex", async () => {
-    const calls: Array<{ command: string; args: string[] }> = [];
-    spawnMock.mockImplementation((command: string, args: string[]) => {
-      calls.push({ command, args });
-      const proc = makeProc();
-      queueMicrotask(() => {
-        if (calls.length === 1) {
-          finish(
-            proc,
-            JSON.stringify({
-              type: "result",
-              subtype: "error",
-              is_error: true,
-              session_id: "claude-sess",
-              error: "You've hit your limit · resets 8pm (UTC)",
-            }),
-          );
-          return;
-        }
-
-        finish(
-          proc,
-          [
-            '{"type":"thread.started","thread_id":"codex-thread"}',
-            '{"type":"turn.started"}',
-            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ok"}}',
-            '{"type":"turn.completed"}',
-          ].join("\n"),
-        );
-      });
-      return proc;
-    });
-
-    const result = await spawnAgent({
-      worktreePath: "/tmp/work",
-      prompt: "hello",
-      model: "sonnet",
-    });
-
-    expect(calls.map((call) => call.command)).toEqual(["claude", "codex"]);
-    const codexCall = calls.find((c) => c.command === "codex");
-    expect(codexCall?.args).toContain("--model");
-    expect(result.sessionId).toBe("codex-thread");
-  });
-
-  it("retries codex fallback without model if mapped model is rejected", async () => {
-    const calls: Array<{ command: string; args: string[] }> = [];
-    spawnMock.mockImplementation((command: string, args: string[]) => {
-      calls.push({ command, args });
-      const proc = makeProc();
-      queueMicrotask(() => {
-        if (calls.length === 1) {
-          finish(
-            proc,
-            JSON.stringify({
-              type: "result",
-              subtype: "error",
-              is_error: true,
-              session_id: "claude-sess",
-              error: "rate limit",
-            }),
-          );
-          return;
-        }
-
-        const hasModel = args.includes("--model");
-        if (hasModel) {
-          finish(
-            proc,
-            JSON.stringify({
-              type: "error",
-              error: {
-                type: "invalid_request_error",
-                message: "model not supported",
-              },
-            }),
-          );
-          return;
-        }
-
-        finish(
-          proc,
-          [
-            '{"type":"thread.started","thread_id":"codex-thread"}',
-            '{"type":"turn.started"}',
-            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"ok"}}',
-            '{"type":"turn.completed"}',
-          ].join("\n"),
-        );
-      });
-      return proc;
-    });
-
-    const result = await spawnAgent({
-      worktreePath: "/tmp/work",
-      prompt: "hello",
-      model: "sonnet",
-    });
-
-    expect(calls.map((call) => call.command)).toEqual([
-      "claude",
-      "codex",
-      "codex",
-    ]);
-    expect(result.sessionId).toBe("codex-thread");
   });
 
   it("falls back to opencode when codex model is unsupported", async () => {
@@ -607,5 +414,118 @@ describe("spawnAgent", () => {
     expect(calls[1]!.args).toContain("gpt-5.4-mini");
     expect(calls[2]!.args).not.toContain("--model");
     expect(result.sessionId).toBe("codex-thread");
+  });
+
+  it("respects SUPERFIELD_AGENT_PROVIDER env var", async () => {
+    process.env.SUPERFIELD_AGENT_PROVIDER = "codex";
+    const calls: Array<{ command: string; args: string[] }> = [];
+    spawnMock.mockImplementation((command: string, args: string[]) => {
+      calls.push({ command, args });
+      const proc = makeProc();
+      queueMicrotask(() =>
+        finish(
+          proc,
+          [
+            '{"type":"thread.started","thread_id":"codex-env"}',
+            '{"type":"turn.started"}',
+            '{"type":"item.completed","item":{"id":"item_0","type":"agent_message","text":"done"}}',
+            '{"type":"turn.completed","usage":{"input_tokens":1,"output_tokens":1}}',
+          ].join("\n"),
+        ),
+      );
+      return proc;
+    });
+
+    const result = await spawnAgent({ worktreePath: "/tmp/work", prompt: "hello" });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]!.command).toBe("codex");
+    expect(result.sessionId).toBe("codex-env");
+  });
+
+  describe("jobType model routing", () => {
+    it("selects opus for plan job type", async () => {
+      const calls: Array<{ command: string; args: string[] }> = [];
+      spawnMock.mockImplementation((command: string, args: string[]) => {
+        calls.push({ command, args });
+        const proc = makeProc();
+        queueMicrotask(() =>
+          finish(
+            proc,
+            JSON.stringify({
+              type: "result",
+              subtype: "success",
+              is_error: false,
+              session_id: "claude-plan",
+              result: "done",
+            }),
+          ),
+        );
+        return proc;
+      });
+
+      await spawnAgent({ worktreePath: "/tmp/work", prompt: "plan", jobType: "plan" });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.command).toBe("claude");
+      expect(calls[0]!.args).toContain("--model");
+      expect(calls[0]!.args).toContain("opus");
+    });
+
+    it("selects haiku for issue-audit job type", async () => {
+      const calls: Array<{ command: string; args: string[] }> = [];
+      spawnMock.mockImplementation((command: string, args: string[]) => {
+        calls.push({ command, args });
+        const proc = makeProc();
+        queueMicrotask(() =>
+          finish(
+            proc,
+            JSON.stringify({
+              type: "result",
+              subtype: "success",
+              is_error: false,
+              session_id: "claude-audit",
+              result: "done",
+            }),
+          ),
+        );
+        return proc;
+      });
+
+      await spawnAgent({ worktreePath: "/tmp/work", prompt: "audit", jobType: "issue-audit" });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.command).toBe("claude");
+      expect(calls[0]!.args).toContain("--model");
+      expect(calls[0]!.args).toContain("haiku");
+    });
+
+    it("selects sonnet for dev job type (default when jobType omitted)", async () => {
+      const calls: Array<{ command: string; args: string[] }> = [];
+      spawnMock.mockImplementation((command: string, args: string[]) => {
+        calls.push({ command, args });
+        const proc = makeProc();
+        queueMicrotask(() =>
+          finish(
+            proc,
+            JSON.stringify({
+              type: "result",
+              subtype: "success",
+              is_error: false,
+              session_id: "claude-dev",
+              result: "done",
+            }),
+          ),
+        );
+        return proc;
+      });
+
+      await spawnAgent({ worktreePath: "/tmp/work", prompt: "dev" });
+
+      expect(calls).toHaveLength(1);
+      expect(calls[0]!.command).toBe("claude");
+      expect(calls[0]!.args).toContain("--model");
+      expect(calls[0]!.args).toContain("sonnet");
+    });
   });
 });
