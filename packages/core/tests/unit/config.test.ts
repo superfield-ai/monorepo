@@ -52,3 +52,76 @@ describe("saveConfig", () => {
     expect(loaded).toEqual({ users: [], repositories: [] });
   });
 });
+
+describe("tiers and jobs config fields", () => {
+  it("loads tiers overrides from YAML", async () => {
+    const p = await tmpPath();
+    await fs.writeFile(
+      p,
+      [
+        "users: []",
+        "repositories: []",
+        "tiers:",
+        "  thinking-medium:",
+        "    - backend: codex",
+        "      model: gpt-5.4",
+      ].join("\n"),
+    );
+    const config = await loadConfig(p);
+    expect(config.tiers).toEqual({
+      "thinking-medium": [{ backend: "codex", model: "gpt-5.4" }],
+    });
+  });
+
+  it("loads jobs overrides from YAML", async () => {
+    const p = await tmpPath();
+    await fs.writeFile(
+      p,
+      [
+        "users: []",
+        "repositories: []",
+        "jobs:",
+        "  plan:",
+        "    preferred:",
+        "      backend: codex",
+        "      tier: high",
+        "    failovers:",
+        "      - thinking-high",
+      ].join("\n"),
+    );
+    const config = await loadConfig(p);
+    expect(config.jobs?.["plan"]).toEqual({
+      preferred: { backend: "codex", tier: "high" },
+      failovers: ["thinking-high"],
+    });
+  });
+
+  it("omits tiers and jobs when not present in YAML", async () => {
+    const p = await tmpPath();
+    await fs.writeFile(p, "users: []\nrepositories: []\n");
+    const config = await loadConfig(p);
+    expect(config.tiers).toBeUndefined();
+    expect(config.jobs).toBeUndefined();
+  });
+
+  it("preserves unrelated fields when only tiers is overridden", async () => {
+    const p = await tmpPath();
+    await fs.writeFile(
+      p,
+      [
+        "users:",
+        "  - handle: octocat",
+        "    token: ghp_test",
+        "repositories: []",
+        "tiers:",
+        "  thinking-low:",
+        "    - backend: opencode",
+        "      model: opencode/cheap",
+      ].join("\n"),
+    );
+    const config = await loadConfig(p);
+    expect(config.users[0]?.handle).toBe("octocat");
+    expect(config.tiers?.["thinking-low"]).toBeDefined();
+    expect(config.jobs).toBeUndefined();
+  });
+});

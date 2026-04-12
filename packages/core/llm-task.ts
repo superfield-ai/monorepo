@@ -5,6 +5,7 @@ import {
   type AgentMode,
   type AgentLoop,
 } from "./agent.ts";
+import type { JobType } from "./job-registry.ts";
 
 /**
  * Wraps `spawnAgent` for one-shot LLM tasks that emit structured JSON.
@@ -31,6 +32,8 @@ export interface LLMTaskOpts {
   loop?: AgentLoop;
   /** Task type for logging (e.g. "self-audit", "planning"). */
   task?: string;
+  /** Inference job type — drives backend + model selection via the job registry. */
+  jobType?: JobType;
   /** Injectable spawn function for testing. */
   spawn?: (opts: AgentOpts) => Promise<AgentResult>;
 }
@@ -55,6 +58,7 @@ export async function runLLMTask<T>(
     model: opts.model,
     loop: opts.loop,
     task: opts.task,
+    jobType: opts.jobType,
   });
 
   if (res.isError) {

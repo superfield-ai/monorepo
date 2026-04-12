@@ -586,6 +586,7 @@ async function executeAgentWithAudit(
               model: "sonnet",
               loop: "dev",
               task: entry.kind,
+              jobType: entry.kind === "dev-scout" ? "dev-scout" : entry.kind === "ci-failure" ? "ci-failure" : "dev",
             });
           return circuit ? circuit.call(call) : call();
         },
@@ -603,6 +604,7 @@ async function executeAgentWithAudit(
           model: "sonnet",
           loop: "dev",
           task: entry.kind,
+          jobType: entry.kind === "dev-scout" ? "dev-scout" : entry.kind === "ci-failure" ? "ci-failure" : "dev",
         });
       }
       throw err;

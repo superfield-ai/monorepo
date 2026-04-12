@@ -248,7 +248,7 @@ async function runCoverageScan(
     changedFiles: sourceFiles,
   });
   const { result } = await runLLMTask<{ missing_docs: DocCoverageMissing[] }>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc" },
+    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc", jobType: "doc-coverage" },
     (json) => {
       const parsed = JSON.parse(json) as {
         missing_docs?: DocCoverageMissing[];
@@ -275,7 +275,7 @@ async function runCanonicalSync(
     readmeContent: readmeContent ?? "",
   });
   const { result } = await runLLMTask<DocSyncProposal>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc" },
+    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc", jobType: "doc-canonical-sync" },
     (json) => {
       const parsed = JSON.parse(json) as Partial<DocSyncProposal>;
       return {
@@ -309,7 +309,7 @@ async function runConsistencyCheck(
   });
   const { result } = await runLLMTask<{
     inconsistencies: DocConsistencyFinding[];
-  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc" }, (json) => {
+  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc", jobType: "doc-consistency" }, (json) => {
     const parsed = JSON.parse(json) as {
       inconsistencies?: DocConsistencyFinding[];
     };

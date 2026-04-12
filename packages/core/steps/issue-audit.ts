@@ -108,6 +108,7 @@ async function auditBatch(
       model: "haiku",
       loop: "plan",
       task: "issue-audit",
+      jobType: "issue-audit",
     },
     (json) => parseIssueAuditBatchResponse(json, issues),
   );

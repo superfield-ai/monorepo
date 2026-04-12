@@ -234,6 +234,7 @@ async function buildLlmPlacementEntries(
       model: "haiku",
       loop: "plan",
       task: "plan-placement",
+      jobType: "issue-audit",
     },
     (json) => parsePlanPlacementResult(json, plan, issues),
   );

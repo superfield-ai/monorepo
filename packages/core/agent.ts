@@ -1,9 +1,31 @@
 import { spawn } from "node:child_process";
 import { writeToLog } from "./file-logger.ts";
-
-export type AgentBackend = "claude" | "codex";
-export type AgentMode = AgentBackend | "auto";
-export type AgentLoop = "plan" | "dev" | "doc";
+import {
+  resolveJobCandidates,
+  type JobType,
+  type CandidateEntry,
+} from "./job-registry.ts";
+import { availabilityStore } from "./backend-availability.ts";
+export {
+  type AgentBackend,
+  type AgentMode,
+  type AgentLoop,
+  ModelTier,
+  type ModelMapping,
+  type BackendModelMapping,
+  MODEL_TIER_MAPPING,
+  getModelForBackend,
+  translateModelForBackend,
+  isValidModelTier,
+  modelTierFromString,
+} from "./models.ts";
+import {
+  type AgentBackend,
+  type AgentMode,
+  type AgentLoop,
+  getModelForBackend,
+  translateModelForBackend,
+} from "./models.ts";
 
 type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
 const LOG_LEVEL_RANK: Record<LogLevel, number> = {
@@ -55,6 +77,11 @@ export interface AgentOpts {
   loop?: AgentLoop;
   /** Task type for logging (e.g. "feature", "dev-scout", "ci-failure"). */
   task?: string;
+  /**
+   * Inference job type — drives backend + model selection via the job registry.
+   * Defaults to `"dev"` when omitted (claude/sonnet preferred, codex/opencode fallback).
+   */
+  jobType?: JobType;
 }
 
 export interface AgentResult {
@@ -101,52 +128,183 @@ export class StaleSessionError extends Error {
 /**
  * Spawns the configured agent CLI in headless mode and returns the session ID and output.
  *
+ * Backend and model are selected via the job registry (see `docs/runtime-agent-selection.md`).
+ * Pass `jobType` to use the appropriate preferred + fallover list for the inference role;
+ * omit it to fall back to the default `"dev"` profile (claude → codex → opencode).
+ *
  * The caller is responsible for persisting `result.sessionId` so that the next
  * invocation for the same slot can resume where this one left off.
  */
 export async function spawnAgent(opts: AgentOpts): Promise<AgentResult> {
-  const backend = resolveBackend(opts.provider);
   const logger = makeAgentLogger(opts.loop);
-  try {
-    return await spawnAgentBackend(backend, opts, logger);
-  } catch (err) {
-    if (backend === "claude" && isRetryableRateLimitError(err)) {
+
+  // Honour explicit provider override (opts or env var), else use job registry.
+  const envProvider = process.env.SUPERFIELD_AGENT_PROVIDER?.trim().toLowerCase();
+  const explicitProvider =
+    opts.provider && opts.provider !== "auto"
+      ? opts.provider
+      : envProvider && envProvider !== "auto"
+        ? (envProvider as AgentBackend)
+        : undefined;
+
+  let candidates: CandidateEntry[];
+  if (explicitProvider) {
+    candidates = [
+      {
+        backend: explicitProvider,
+        model: opts.model ?? getModelForBackend(explicitProvider),
+      },
+    ];
+  } else {
+    candidates = resolveJobCandidates(opts.jobType ?? "dev");
+  }
+
+  const available = candidates.filter((c) =>
+    availabilityStore.isAvailable(c.backend),
+  );
+
+  if (available.length === 0) {
+    logger.emit(
+      "warn",
+      "all backends rate limited or unavailable, waiting for availability...",
+    );
+    return await waitForAvailableBackend(opts, candidates, logger);
+  }
+
+  return await callWithCandidatePriority(opts, available, logger);
+}
+
+async function callWithCandidatePriority(
+  opts: AgentOpts,
+  candidates: CandidateEntry[],
+  logger: AgentLogger,
+): Promise<AgentResult> {
+  for (const candidate of candidates) {
+    const result = await tryCandidate(candidate, opts, logger);
+    if (result !== null) {
+      return result;
+    }
+  }
+  return await waitForAvailableBackend(opts, candidates, logger);
+}
+
+/**
+ * Attempt one candidate. Returns null when the backend should be skipped
+ * (rate-limit, model rejection) so the caller moves to the next candidate.
+ * Throws on non-retriable errors.
+ *
+ * Model-rejection retry: when the caller supplied `opts.model` and the backend
+ * rejected the translated model name, we retry the same backend with no model
+ * override (let the CLI use its default). This covers the pattern where the
+ * user pins e.g. "haiku" and the fallback backend doesn't support that alias.
+ */
+async function tryCandidate(
+  candidate: CandidateEntry,
+  opts: AgentOpts,
+  logger: AgentLogger,
+): Promise<AgentResult | null> {
+  const { backend } = candidate;
+
+  if (opts.sessionId) {
+    const sessionBackend = inferBackendFromSessionId(opts.sessionId);
+    if (sessionBackend && sessionBackend !== backend) {
       logger.emit(
-        "warn",
-        "rate limited; falling back to codex for this run",
+        "info",
+        `session ${opts.sessionId} belongs to ${sessionBackend}, skipping ${backend}`,
       );
-      const mappedModel = mapClaudeModelAliasToCodex(opts.model, logger);
-      try {
-        return await spawnAgentBackend(
-          "codex",
-          { ...opts, sessionId: undefined, model: mappedModel },
-          logger,
-        );
-      } catch (fallbackErr) {
-        if (mappedModel && isUnsupportedModelError(fallbackErr)) {
-          logger.emit(
-            "warn",
-            `codex rejected model ${mappedModel}; retrying with codex default model`,
-          );
-          return spawnAgentBackend(
-            "codex",
-            { ...opts, sessionId: undefined, model: undefined },
+      return null;
+    }
+  }
+
+  // Caller model override takes precedence; translate it for this backend.
+  // Fall back to the registry model when no override is set.
+  const model = opts.model
+    ? translateModelForBackend(opts.model, backend, "claude")
+    : candidate.model;
+
+  logger.emit("info", `trying backend=${backend}`);
+
+  try {
+    const result = await spawnAgentBackend(backend, { ...opts, model }, logger);
+    availabilityStore.clearAvailable(backend);
+    return result;
+  } catch (err) {
+    if (isRetryableRateLimitError(err)) {
+      const backendName =
+        err instanceof AgentRateLimitError ? err.backend : backend;
+      logger.emit("warn", `${backendName} was rate limited`);
+      availabilityStore.markUnavailable(backend);
+      return null;
+    }
+
+    if (isUnsupportedModelError(err)) {
+      logger.emit("warn", `${backend} rejected model, falling back`);
+
+      // If a caller model was translated and rejected, retry without model override.
+      if (opts.model !== undefined) {
+        logger.emit("info", `retrying ${backend} without model override`);
+        try {
+          const retryResult = await spawnAgentBackend(
+            backend,
+            { ...opts, model: undefined },
             logger,
           );
+          availabilityStore.clearAvailable(backend);
+          return retryResult;
+        } catch (retryErr) {
+          if (isRetryableRateLimitError(retryErr)) {
+            availabilityStore.markUnavailable(backend);
+          }
+          // Fall through to null — move to next candidate.
         }
-        throw fallbackErr;
       }
+      return null;
     }
+
     throw err;
   }
 }
 
-function resolveBackend(provider?: AgentMode): AgentBackend {
-  const env = process.env.SUPERFIELD_AGENT_PROVIDER?.trim().toLowerCase();
-  if (env === "claude" || env === "codex" || env === "auto") {
-    return env === "codex" ? "codex" : "claude";
+function inferBackendFromSessionId(sessionId: string): AgentBackend | null {
+  if (sessionId.startsWith("claude-")) {
+    return "claude";
   }
-  return provider === "codex" ? "codex" : "claude";
+  if (sessionId.startsWith("codex-")) {
+    return "codex";
+  }
+  if (sessionId.startsWith("ses_")) {
+    return "opencode";
+  }
+  return null;
+}
+
+async function waitForAvailableBackend(
+  opts: AgentOpts,
+  candidates: CandidateEntry[],
+  logger: AgentLogger,
+): Promise<AgentResult> {
+  const pollIntervalMs = 60_000;
+  logger.emit(
+    "warn",
+    `all backends rate limited; polling every ${pollIntervalMs / 1000}s for availability`,
+  );
+
+  while (true) {
+    await new Promise((resolve) => setTimeout(resolve, pollIntervalMs));
+
+    logger.emit("info", "polling backends availability...");
+    const available = candidates.filter((c) =>
+      availabilityStore.isAvailable(c.backend),
+    );
+
+    if (available.length > 0) {
+      logger.emit(
+        "info",
+        `backends now available: ${available.map((c) => c.backend).join(", ")}`,
+      );
+      return await callWithCandidatePriority(opts, available, logger);
+    }
+  }
 }
 
 async function spawnAgentBackend(
@@ -168,9 +326,18 @@ async function spawnAgentBackend(
   }, 60_000);
   let run: CliRunResult;
   try {
+    const args = buildArgs(backend, opts, logger);
+    logger.emit(
+      "trace",
+      `running command: ${backend} ${args.join(" ")} in ${opts.worktreePath}`,
+    );
     run = await runCli(
-      backend === "claude" ? "claude" : "codex",
-      buildArgs(backend, opts, logger),
+      backend === "claude"
+        ? "claude"
+        : backend === "codex"
+          ? "codex"
+          : "opencode",
+      args,
       opts.worktreePath,
       logger,
     );
@@ -181,6 +348,10 @@ async function spawnAgentBackend(
 
   if (backend === "claude") {
     return parseClaudeRun(run, logger);
+  }
+
+  if (backend === "opencode") {
+    return parseOpencodeRun(run, logger);
   }
 
   return parseCodexRun(run, logger);
@@ -209,6 +380,26 @@ function buildArgs(
 
     if (opts.sessionId) {
       args.push("--resume", opts.sessionId);
+    }
+
+    args.push(opts.prompt);
+    return args;
+  }
+
+  if (backend === "opencode") {
+    const args: string[] = [
+      "run",
+      "--format",
+      "json",
+      "--dir",
+      opts.worktreePath,
+    ];
+
+    const model = opts.model ?? getModelForBackend(backend);
+    args.push("--model", model);
+
+    if (opts.sessionId) {
+      args.push("--continue", "--session", opts.sessionId);
     }
 
     args.push(opts.prompt);
@@ -250,23 +441,7 @@ function normalizeCodexModel(
   return model;
 }
 
-function mapClaudeModelAliasToCodex(
-  model: string | undefined,
-  logger: AgentLogger,
-): string | undefined {
-  if (!model) return undefined;
-  const normalized = model.trim().toLowerCase();
-  let mapped: string | undefined;
-  if (normalized === "haiku") mapped = "gpt-5.4-mini";
-  else if (normalized === "sonnet") mapped = "gpt-5.4";
-  else if (normalized === "opus") mapped = "gpt-5.4";
-  if (!mapped) return model;
-  logger.emit(
-    "info",
-    `codex fallback model mapping: ${model} -> ${mapped}`,
-  );
-  return mapped;
-}
+
 
 async function runCli(
   command: string,
@@ -316,9 +491,10 @@ function parseClaudeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
         `claude was rate limited: ${truncateForError(run.stderr || run.stdout)}`,
       );
     }
-    const staleMatch = /No conversation found with session ID:\s*([0-9a-f-]{36})/i.exec(
-      run.stderr || run.stdout,
-    );
+    const staleMatch =
+      /No conversation found with session ID:\s*([0-9a-f-]{36})/i.exec(
+        run.stderr || run.stdout,
+      );
     if (staleMatch) {
       logger.emit("warn", `stale session detected: ${staleMatch[0]}`);
       throw new StaleSessionError(staleMatch[1]!, "claude");
@@ -469,6 +645,90 @@ function parseCodexRun(run: CliRunResult, logger: AgentLogger): AgentResult {
   return { sessionId, output, isError, costUsd };
 }
 
+function parseOpencodeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
+  const lines = run.stdout
+    .split(/\r?\n/)
+    .filter((line) => line.trim().length > 0);
+
+  let sessionId = "";
+  let output = "";
+  let isError = false;
+  let costUsd: number | undefined;
+
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed.startsWith("{")) continue;
+
+    let event: unknown;
+    try {
+      event = JSON.parse(trimmed);
+    } catch {
+      continue;
+    }
+
+    if (!event || typeof event !== "object") continue;
+    const record = event as Record<string, unknown>;
+
+    if (record.type === "step_finish" && typeof record.part === "object") {
+      const part = record.part as Record<string, unknown>;
+      if (part.tokens && typeof part.tokens === "object") {
+        const tokens = part.tokens as Record<string, number>;
+        const cost = tokens.cost;
+        if (typeof cost === "number") {
+          costUsd = cost;
+        }
+      }
+    }
+
+    if (
+      record.sessionID &&
+      typeof record.sessionID === "string" &&
+      !sessionId
+    ) {
+      sessionId = record.sessionID;
+    }
+
+    if (record.type === "text" && typeof record.part === "object") {
+      const part = record.part as Record<string, unknown>;
+      if (typeof part.text === "string") {
+        output = part.text;
+      }
+    }
+
+    if (record.type === "error") {
+      isError = true;
+      if (record.message) {
+        output = String(record.message);
+      }
+    }
+  }
+
+  if (!sessionId) {
+    if (isRetryableRateLimit(run.stdout) || isRetryableRateLimit(run.stderr)) {
+      throw new AgentRateLimitError(
+        "opencode",
+        `opencode was rate limited: ${truncateForError(run.stderr || run.stdout)}`,
+      );
+    }
+    logger.emit(
+      "error",
+      "response missing sessionID (backend=opencode, no session started)",
+    );
+    throw new Error(
+      `opencode response missing sessionID: ${run.stdout.slice(0, 500)}`,
+    );
+  }
+
+  logger.emit(
+    "debug",
+    `parsed response (backend=opencode): session=${sessionId} is_error=${isError} output_preview=${toSingleLine(
+      output.slice(0, 300),
+    )}`,
+  );
+
+  return { sessionId, output, isError, costUsd };
+}
+
 function makeAgentLogger(loop?: AgentLoop): AgentLogger {
   const currentLevel = resolveLogLevel();
   const scope = loop ? `[${loop}] [agent]` : "[agent]";
@@ -534,10 +794,7 @@ function logInvocationStart(
     "debug",
     `model=${opts.model ?? "default"} max_turns=${opts.maxTurns ?? 50} cwd=${opts.worktreePath}`,
   );
-  logger.emit(
-    "trace",
-    `prompt:\n${prettyPromptPreview(opts.prompt)}`,
-  );
+  logger.emit("trace", `prompt:\n${prettyPromptPreview(opts.prompt)}`);
 }
 
 function logRawCliResult(
