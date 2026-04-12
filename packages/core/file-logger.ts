@@ -16,7 +16,7 @@ let currentLogPath: string | null = null;
  * Safe to call multiple times — subsequent calls re-open the file.
  */
 export function initFileLogger(): void {
-  const dir = process.env.SUPERFIELD_LOG_DIR?.trim() || DEFAULT_LOG_DIR;
+  const dir = resolveLogDir();
   fs.mkdirSync(dir, { recursive: true });
   pruneOldLogs(dir);
   const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
@@ -38,6 +38,24 @@ export function writeToLog(line: string): void {
 /** Returns the current log file path, or null if not initialised. */
 export function currentLogFile(): string | null {
   return currentLogPath;
+}
+
+/**
+ * Resolves the log directory for this session.
+ *
+ * Priority:
+ *   1. SUPERFIELD_LOG_DIR env var — explicit override, always respected.
+ *   2. SUPERFIELD_DEV=1 — dev/debug run via `bun run start`; use a fresh
+ *      randomized temp dir so debug sessions never touch ~/.superfield.
+ *   3. Default: ~/.superfield/logs
+ */
+function resolveLogDir(): string {
+  const explicit = process.env.SUPERFIELD_LOG_DIR?.trim();
+  if (explicit) return explicit;
+  if (process.env.SUPERFIELD_DEV === "1") {
+    return fs.mkdtempSync(path.join(os.tmpdir(), "superfield-"));
+  }
+  return DEFAULT_LOG_DIR;
 }
 
 function pruneOldLogs(dir: string): void {

@@ -6,7 +6,7 @@
     "packages/*"
   ],
   "scripts": {
-    "start": "bun packages/cli/bin/superfield.ts start",
+    "start": "SUPERFIELD_DEV=1 bun packages/cli/bin/superfield.ts start",
     "build": "bun run --filter '*' build",
     "local-install": "bun run --filter @superfield/cli local-install",
     "release": "bun run --filter @superfield/cli release",
