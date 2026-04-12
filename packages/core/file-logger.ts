@@ -11,6 +11,7 @@ const MAX_CHUNK_BYTES = 10 * 1024 * 1024;
 const MAX_CHUNK_LINES = 100_000;
 
 let logDir: string | null = null;
+let sessionPrefix: string | null = null;
 let stream: fs.WriteStream | null = null;
 let currentLogPath: string | null = null;
 let chunkIndex = 0;
@@ -18,17 +19,22 @@ let linesWritten = 0;
 let bytesWritten = 0;
 
 /**
- * Initialises the file logger. Called once at startup by the CLI.
- * Creates the log directory if needed, deletes files older than
- * RETENTION_DAYS, and opens the first chunk of today's log file.
+ * Initialises the file logger for a new session. Called once at startup.
+ * Each call generates a unique session-scoped log file so restarts never
+ * share or overwrite a previous session's logs.
  *
- * Safe to call multiple times — subsequent calls re-open the file.
+ * Filename format: superfield-YYYY-MM-DDTHH-MM-SS-mmmZ.log
+ * Chunks:          superfield-YYYY-MM-DDTHH-MM-SS-mmmZ.1.log, .2.log, …
  */
 export function initFileLogger(): void {
   logDir = resolveLogDir();
   fs.mkdirSync(logDir, { recursive: true });
   pruneOldLogs(logDir);
-  chunkIndex = nextChunkIndex(logDir);
+  // Session prefix derived from wall-clock start time — unique per ms.
+  sessionPrefix = `superfield-${new Date().toISOString().replace(/:/g, "-").replace(/\./g, "-")}`;
+  chunkIndex = 0;
+  linesWritten = 0;
+  bytesWritten = 0;
   openChunk();
 }
 
@@ -53,41 +59,15 @@ export function currentLogFile(): string | null {
 }
 
 function openChunk(): void {
-  if (!logDir) return;
+  if (!logDir || !sessionPrefix) return;
   if (stream) {
     stream.end();
     stream = null;
   }
-  const today = new Date().toISOString().slice(0, 10); // YYYY-MM-DD
   const suffix = chunkIndex === 0 ? "" : `.${chunkIndex}`;
-  const logFile = path.join(logDir, `superfield-${today}${suffix}.log`);
+  const logFile = path.join(logDir, `${sessionPrefix}${suffix}.log`);
   stream = fs.createWriteStream(logFile, { flags: "a" });
   currentLogPath = logFile;
-}
-
-/**
- * Find the highest existing chunk index for today so we continue
- * from where a previous run left off rather than overwriting.
- */
-function nextChunkIndex(dir: string): number {
-  const today = new Date().toISOString().slice(0, 10);
-  let max = 0;
-  try {
-    for (const file of fs.readdirSync(dir)) {
-      const base = `superfield-${today}`;
-      if (!file.startsWith(base) || !file.endsWith(".log")) continue;
-      const inner = file.slice(base.length, -4); // "" or ".N"
-      if (inner === "") {
-        max = Math.max(max, 0);
-      } else {
-        const n = parseInt(inner.slice(1), 10);
-        if (!isNaN(n)) max = Math.max(max, n);
-      }
-    }
-  } catch {
-    // best effort
-  }
-  return max;
 }
 
 /**
