@@ -1,8 +1,6 @@
 import type { GitHubClientPort as GitHubClient } from "@superfield/github";
 import type { BlueprintViolation } from "./steps/blueprint-conformance.ts";
 
-const logger = { warn: (...args: unknown[]) => console.warn(...args) };
-
 export type AgentRole = "primary" | "speculative";
 
 export interface AgentSession {
@@ -199,7 +197,7 @@ export async function upsertSession(
       // Conflict detected — another writer incremented the version.
       if (attempt < RETRY_DELAYS_MS.length) {
         const delay = RETRY_DELAYS_MS[attempt]!;
-        logger.warn(
+        console.warn(
           `[sessions] version conflict on issue #${issueNumber} ` +
             `(expected ${expectedVersion}, found ${storedVersion}), ` +
             `retry ${attempt + 1}/${RETRY_DELAYS_MS.length} after ${delay}ms`,
@@ -208,7 +206,7 @@ export async function upsertSession(
         continue; // retry full cycle
       }
       // Exhausted retries — fall through and write anyway.
-      logger.warn(
+      console.warn(
         `[sessions] exhausted ${RETRY_DELAYS_MS.length} retries on issue ` +
           `#${issueNumber}, writing anyway (last-writer-wins)`,
       );

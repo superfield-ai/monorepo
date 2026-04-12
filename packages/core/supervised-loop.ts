@@ -1,3 +1,5 @@
+import { defaultSleep } from "./retry.ts";
+
 export interface SupervisedLoopOpts<T> {
   runOnce: () => Promise<T>;
   delayMs: (result: T) => number;
@@ -36,8 +38,4 @@ export async function runSupervisedLoop<T>(
     }
     await sleep(nextDelayMs);
   }
-}
-
-function defaultSleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

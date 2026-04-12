@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { writeToLog } from "./file-logger.ts";
+import { makeLogger, type Logger, type LogLevel } from "./logger.ts";
 import {
   resolveJobCandidates,
   type JobType,
@@ -27,15 +27,6 @@ import {
   translateModelForBackend,
 } from "./models.ts";
 
-type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
-const LOG_LEVEL_RANK: Record<LogLevel, number> = {
-  error: 0,
-  warn: 1,
-  info: 2,
-  debug: 3,
-  trace: 4,
-};
-
 // Shape of the JSON object Claude Code emits with --output-format json
 interface ClaudeJsonResult {
   type: string;
@@ -55,10 +46,7 @@ interface CliRunResult {
   stderr: string;
 }
 
-interface AgentLogger {
-  emit: (level: LogLevel, message: string) => void;
-  currentLevel: LogLevel;
-}
+type AgentLogger = Logger;
 
 export interface AgentOpts {
   /** Absolute path to the git worktree the agent should work in. */
@@ -332,11 +320,7 @@ async function spawnAgentBackend(
       `running command: ${backend} ${args.join(" ")} in ${opts.worktreePath}`,
     );
     run = await runCli(
-      backend === "claude"
-        ? "claude"
-        : backend === "codex"
-          ? "codex"
-          : "opencode",
+      backend,
       args,
       opts.worktreePath,
       logger,
@@ -419,9 +403,8 @@ function buildArgs(
     args.splice(2, 0, "--ephemeral");
   }
 
-  const codexModel = normalizeCodexModel(opts.model, logger);
-  if (codexModel) {
-    args.push("--model", codexModel);
+  if (opts.model) {
+    args.push("--model", opts.model);
   }
 
   if (opts.sessionId) {
@@ -432,16 +415,6 @@ function buildArgs(
 
   return args;
 }
-
-function normalizeCodexModel(
-  model: string | undefined,
-  logger: AgentLogger,
-): string | undefined {
-  if (!model) return undefined;
-  return model;
-}
-
-
 
 async function runCli(
   command: string,
@@ -730,51 +703,8 @@ function parseOpencodeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
 }
 
 function makeAgentLogger(loop?: AgentLoop): AgentLogger {
-  const currentLevel = resolveLogLevel();
   const scope = loop ? `[${loop}] [agent]` : "[agent]";
-  return {
-    currentLevel,
-    emit: (level, message) => {
-      const line = `[${level}] ${scope} ${message}`;
-      writeToLog(line);
-      if (level === "error") {
-        console.error(line);
-        return;
-      }
-      if (level === "warn") {
-        console.warn(line);
-        return;
-      }
-      if (LOG_LEVEL_RANK[level] <= LOG_LEVEL_RANK[currentLevel]) {
-        console.log(line);
-      }
-    },
-  };
-}
-
-function resolveLogLevel(): LogLevel {
-  const raw = (
-    process.env.SUPERFIELD_LOG_LEVEL ??
-    process.env.LOG_LEVEL ??
-    "info"
-  )
-    .trim()
-    .toLowerCase();
-  if (
-    raw === "error" ||
-    raw === "warn" ||
-    raw === "info" ||
-    raw === "debug" ||
-    raw === "trace"
-  ) {
-    return raw;
-  }
-  console.warn(
-    `[warn] [agent] Ignoring invalid SUPERFIELD_LOG_LEVEL=${JSON.stringify(
-      process.env.SUPERFIELD_LOG_LEVEL ?? process.env.LOG_LEVEL,
-    )}; using "info"`,
-  );
-  return "info";
+  return makeLogger(scope);
 }
 
 function logInvocationStart(

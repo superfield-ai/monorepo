@@ -23,6 +23,7 @@ import {
 } from "./steps/blueprint-conformance.ts";
 import { runSupervisedLoop } from "./supervised-loop.ts";
 import { insertCIFailureAtTop, parsePlan, serializePlan } from "./plan.ts";
+import { formatError, isRateLimitError } from "./format-error.ts";
 
 const POLL_INTERVAL_MS = 5_000;
 const ISSUE_AUDIT_MIN_INTERVAL_MS = 10 * 60 * 1000;
@@ -480,24 +481,6 @@ async function runWatchdogStep(
   }
 
   return watchdogIssuesCreated;
-}
-
-function formatError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  const singleLine = raw.replace(/\s+/g, " ").trim();
-  if (isRateLimitError(singleLine)) {
-    const requestId = /request id ([A-Z0-9:]+)/i.exec(singleLine)?.[1];
-    return requestId
-      ? `GitHub API rate limit exceeded (request id: ${requestId})`
-      : "GitHub API rate limit exceeded";
-  }
-  return singleLine;
-}
-
-function isRateLimitError(message: string): boolean {
-  return /rate limit exceeded|api rate limit exceeded|too many requests|secondary rate limit/i.test(
-    message,
-  );
 }
 
 function findPlanIssue(issues: Issue[]): Issue | null {

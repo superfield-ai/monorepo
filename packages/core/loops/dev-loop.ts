@@ -17,6 +17,7 @@ import {
 } from "../prompts/index.ts";
 import { spawnAgent, StaleSessionError, type AgentOpts, type AgentResult } from "../agent.ts";
 import { writeToLog } from "../file-logger.ts";
+import { type LogLevel, LOG_LEVEL_RANK, resolveLogLevel } from "../logger.ts";
 import {
   classifyStartupSessions,
   getSession,
@@ -29,6 +30,7 @@ import {
   type PrePRSelfAuditResult,
 } from "../steps/pre-pr-self-audit.ts";
 import type { BlueprintViolation } from "../steps/blueprint-conformance.ts";
+import { formatError } from "../format-error.ts";
 
 /** Cap on remediation passes per issue (#81). */
 export const SELF_AUDIT_REMEDIATION_CAP = 3;
@@ -106,43 +108,14 @@ class FatalDevLoopError extends Error {
 const DEFAULT_IDLE_MS = 30_000;
 const DEFAULT_PRUNE_INTERVAL_MS = 15 * 60 * 1000;
 
-type DevLogLevel = "error" | "warn" | "info" | "debug" | "trace";
-const DEV_LOG_LEVEL_RANK: Record<DevLogLevel, number> = {
-  error: 0,
-  warn: 1,
-  info: 2,
-  debug: 3,
-  trace: 4,
-};
-
-function resolveDevLogLevel(): DevLogLevel {
-  const raw = (
-    process.env.SUPERFIELD_LOG_LEVEL ??
-    process.env.LOG_LEVEL ??
-    "info"
-  )
-    .trim()
-    .toLowerCase();
-  if (
-    raw === "error" ||
-    raw === "warn" ||
-    raw === "info" ||
-    raw === "debug" ||
-    raw === "trace"
-  ) {
-    return raw;
-  }
-  return "info";
-}
-
-function devLog(level: DevLogLevel, message: string, slot?: number): void {
+function devLog(level: LogLevel, message: string, slot?: number): void {
   const scope = slot !== undefined ? `[dev ${slot}]` : "[dev]";
   const line = `[${level}] ${scope} ${message}`;
   writeToLog(line);
   if (level === "error") return console.error(line);
   if (level === "warn") return console.warn(line);
-  const current = resolveDevLogLevel();
-  if (DEV_LOG_LEVEL_RANK[level] <= DEV_LOG_LEVEL_RANK[current]) {
+  const current = resolveLogLevel();
+  if (LOG_LEVEL_RANK[level] <= LOG_LEVEL_RANK[current]) {
     console.log(line);
   }
 }
@@ -1126,22 +1099,6 @@ function extractCheckUrl(body: string | null): string {
   if (!body) return "";
   const match = /(https:\/\/github\.com\/[^\s)]+\/runs\/\d+)/.exec(body);
   return match?.[1] ?? "";
-}
-
-function formatError(err: unknown): string {
-  const raw = err instanceof Error ? err.message : String(err);
-  const singleLine = raw.replace(/\s+/g, " ").trim();
-  if (
-    /rate limit exceeded|api rate limit exceeded|too many requests|secondary rate limit/i.test(
-      singleLine,
-    )
-  ) {
-    const requestId = /request id ([A-Z0-9:]+)/i.exec(singleLine)?.[1];
-    return requestId
-      ? `GitHub API rate limit exceeded (request id: ${requestId})`
-      : "GitHub API rate limit exceeded";
-  }
-  return singleLine;
 }
 
 /**
