@@ -49,8 +49,12 @@ describe("BackendAvailabilityStore", () => {
   describe("markUnavailable", () => {
     it("uses DEFAULT_BACKOFF_MS when no backoff is supplied", () => {
       store.markUnavailable("claude");
-      expect(store.retryAfterMs("claude")).toBeGreaterThan(DEFAULT_BACKOFF_MS - 100);
-      expect(store.retryAfterMs("claude")).toBeLessThanOrEqual(DEFAULT_BACKOFF_MS);
+      expect(store.retryAfterMs("claude")).toBeGreaterThan(
+        DEFAULT_BACKOFF_MS - 100,
+      );
+      expect(store.retryAfterMs("claude")).toBeLessThanOrEqual(
+        DEFAULT_BACKOFF_MS,
+      );
     });
 
     it("does not shorten an existing window when called again with a smaller backoff", () => {

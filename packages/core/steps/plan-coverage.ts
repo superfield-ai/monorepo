@@ -1,4 +1,4 @@
-import type { GitHubClientPort as GitHubClient, Issue } from "@superfield/github";
+import type { GitHubClientPort as GitHubClient } from "@superfield/github";
 import {
   parsePlan,
   serializePlan,
@@ -82,7 +82,9 @@ export async function runPlanCoverage(
   }
 
   const declaredEntries: PendingCoverageEntry[] = [];
-  const missingPhaseIssues: Array<PlanCoverageSourceIssue & { originalIndex: number }> = [];
+  const missingPhaseIssues: Array<
+    PlanCoverageSourceIssue & { originalIndex: number }
+  > = [];
   const alreadyCovered: number[] = [];
 
   for (let index = 0; index < trackable.length; index++) {
@@ -166,7 +168,9 @@ export async function runPlanCoverage(
       });
     } else {
       if (!planIssue) {
-        throw new Error("plan coverage invariant: expected existing Plan issue");
+        throw new Error(
+          "plan coverage invariant: expected existing Plan issue",
+        );
       }
       await client.updateIssueBody({
         owner,
@@ -347,7 +351,9 @@ function normalizePlanPlacementEntry(value: unknown): PlanPlacementEntry {
     phase: parsed.phase.trim(),
     create_phase: parsed.create_phase,
     phase_goal:
-      typeof parsed.phase_goal === "string" ? parsed.phase_goal.trim() : undefined,
+      typeof parsed.phase_goal === "string"
+        ? parsed.phase_goal.trim()
+        : undefined,
   };
 }
 
@@ -374,7 +380,10 @@ function initializeCoveragePhases(
   return { ...plan, phases };
 }
 
-function ensurePhasesForEntries(plan: Plan, entries: PendingCoverageEntry[]): string[] {
+function ensurePhasesForEntries(
+  plan: Plan,
+  entries: PendingCoverageEntry[],
+): string[] {
   const existing = new Set(plan.phases.map((phase) => phase.name));
   const created: string[] = [];
   for (const entry of entries) {
@@ -451,10 +460,15 @@ function insertScoutIntoPhase(plan: Plan, entry: PlanIssueMetadata): Plan {
   };
 }
 
-function orderEntries(plan: Plan, entries: PendingCoverageEntry[]): PendingCoverageEntry[] {
+function orderEntries(
+  plan: Plan,
+  entries: PendingCoverageEntry[],
+): PendingCoverageEntry[] {
   if (entries.length === 0) return [];
 
-  const phaseIndex = new Map(plan.phases.map((phase, index) => [phase.name, index]));
+  const phaseIndex = new Map(
+    plan.phases.map((phase, index) => [phase.name, index]),
+  );
   const newPhaseOrder = new Map<string, number>();
 
   for (const entry of entries) {
@@ -465,9 +479,11 @@ function orderEntries(plan: Plan, entries: PendingCoverageEntry[]): PendingCover
 
   return entries.slice().sort((left, right) => {
     const leftPhaseRank =
-      phaseIndex.get(left.phase) ?? plan.phases.length + newPhaseOrder.get(left.phase)!;
+      phaseIndex.get(left.phase) ??
+      plan.phases.length + newPhaseOrder.get(left.phase)!;
     const rightPhaseRank =
-      phaseIndex.get(right.phase) ?? plan.phases.length + newPhaseOrder.get(right.phase)!;
+      phaseIndex.get(right.phase) ??
+      plan.phases.length + newPhaseOrder.get(right.phase)!;
     if (leftPhaseRank !== rightPhaseRank) {
       return leftPhaseRank - rightPhaseRank;
     }

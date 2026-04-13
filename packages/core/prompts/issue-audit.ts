@@ -19,7 +19,9 @@ export interface IssueAuditContext {
  */
 export function buildIssueAuditPrompt(ctx: IssueAuditContext): string {
   const issueList = ctx.issues
-    .map((i) => `### Issue #${i.number} — ${i.title}\n\n${i.body ?? "(no body)"}`)
+    .map(
+      (i) => `### Issue #${i.number} — ${i.title}\n\n${i.body ?? "(no body)"}`,
+    )
     .join("\n\n---\n\n");
 
   return joinSections(

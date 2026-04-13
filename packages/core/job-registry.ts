@@ -103,7 +103,7 @@ const MEDIUM_DEV_SPEC: JobSpec = {
 };
 
 const BUILT_IN_JOB_SPECS: Record<JobType, JobSpec> = {
-  "dev": MEDIUM_DEV_SPEC,
+  dev: MEDIUM_DEV_SPEC,
   "dev-scout": MEDIUM_DEV_SPEC,
   "ci-failure": MEDIUM_DEV_SPEC,
   "feature-evaluate": MEDIUM_DEV_SPEC,
@@ -112,7 +112,7 @@ const BUILT_IN_JOB_SPECS: Record<JobType, JobSpec> = {
   "doc-canonical-sync": MEDIUM_DEV_SPEC,
   "doc-consistency": MEDIUM_DEV_SPEC,
   "pre-pr-self-audit": MEDIUM_DEV_SPEC,
-  "plan": {
+  plan: {
     preferred: { backend: "claude", tier: ModelTier.HIGH },
     failovers: [{ backend: "codex", tier: ModelTier.HIGH }, "thinking-high"],
   },
@@ -131,7 +131,10 @@ function isAbstractTierName(ref: FailoverRef): ref is AbstractTierName {
 }
 
 function resolveBackendTierRef(ref: BackendTierRef): CandidateEntry {
-  return { backend: ref.backend, model: MODEL_TIER_MAPPING[ref.backend][ref.tier] };
+  return {
+    backend: ref.backend,
+    model: MODEL_TIER_MAPPING[ref.backend][ref.tier],
+  };
 }
 
 /**

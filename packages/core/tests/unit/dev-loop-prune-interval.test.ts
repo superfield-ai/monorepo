@@ -8,45 +8,36 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { DevLoopTickResult } from "../../loops/dev-loop.ts";
 import type { SupervisedLoopOpts } from "../../supervised-loop.ts";
 
-vi.mock("../../supervised-loop.ts", () => ({
-  runSupervisedLoop: vi.fn(),
-}));
-
-vi.mock("../../sessions.ts", () => ({
-  classifyStartupSessions: vi.fn().mockResolvedValue({
-    prioritizedIssueNumbers: [],
-    reapedIssueNumbers: [],
-    reapedSessions: [],
-  }),
-  getSession: vi.fn(),
-  upsertSession: vi.fn(),
-  deleteSession: vi.fn(),
-}));
-
 import { runDevLoop } from "../../loops/dev-loop.ts";
-import { runSupervisedLoop } from "../../supervised-loop.ts";
 
 let capturedRunOnce: (() => Promise<DevLoopTickResult>) | undefined;
 const mockPruneFn = vi
   .fn()
   .mockResolvedValue({ prunedWorktrees: [], reapedSessions: [] });
 const mockTickFn = vi.fn<() => Promise<DevLoopTickResult>>();
+const mockRunSupervisedLoop = vi.fn(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  async (opts: SupervisedLoopOpts<any>) => {
+    capturedRunOnce = opts.runOnce;
+  },
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
   capturedRunOnce = undefined;
-
-  vi.mocked(runSupervisedLoop).mockImplementation(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (opts: SupervisedLoopOpts<any>) => {
-      capturedRunOnce = opts.runOnce;
-    },
-  );
 });
 
 function makeClient() {
+  const planIssue = {
+    number: 61,
+    state: "open",
+    title: "Plan",
+    body: "",
+    html_url: "",
+    labels: ["plan"],
+  };
   return {
-    listIssues: vi.fn().mockResolvedValue([]),
+    listIssues: vi.fn().mockResolvedValue([planIssue]),
     getIssue: vi.fn().mockResolvedValue({
       number: 1,
       state: "open",
@@ -100,6 +91,7 @@ async function initLoop(
     pruneIntervalMs,
     _pruneFn: mockPruneFn,
     _tickFn: mockTickFn,
+    _runSupervisedLoop: mockRunSupervisedLoop,
   });
   // Clear the startup prune call
   mockPruneFn.mockClear();

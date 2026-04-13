@@ -22,8 +22,8 @@ Commands:
                 Begin loop(s). Defaults to all three when no --<loop> flags are provided.
   plan          Replan: group issues into phases, create scouts, write Plan
   feature "..." Evaluate a feature request and create an issue + Plan entry
-  deploy provision|deploy [target]
-                Scout deploy seams for the demo target
+  deploy [--provision] [target]
+                Provision the demo target, then deploy it. Use --provision to run setup only.
 `.trim();
 }
 
@@ -73,7 +73,7 @@ export async function runCLI(args: string[]): Promise<void> {
   }
 
   if (cmd === "deploy") {
-    await deployCommand(sub, third);
+    await deployCommand(args.slice(1));
     return;
   }
 
