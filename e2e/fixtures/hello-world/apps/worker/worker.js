@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-require-imports */
 const http = require("http");
 const net = require("net");
 
@@ -22,8 +23,10 @@ async function waitForService(host, port, name, maxRetries = 30) {
       });
       console.log(`✓ ${name} is reachable`);
       return;
-    } catch (err) {
-      console.log(`  Attempt ${i + 1}/${maxRetries}: ${name} not ready, retrying...`);
+    } catch {
+      console.log(
+        `  Attempt ${i + 1}/${maxRetries}: ${name} not ready, retrying...`,
+      );
       await new Promise((r) => setTimeout(r, 1000));
     }
   }
@@ -80,7 +83,9 @@ async function main() {
     for (let i = 1; i <= WORK_ITEMS; i++) {
       try {
         const newCount = await incrementCounter();
-        console.log(`Task ${i}/${WORK_ITEMS} completed. Counter is now: ${newCount}`);
+        console.log(
+          `Task ${i}/${WORK_ITEMS} completed. Counter is now: ${newCount}`,
+        );
       } catch (err) {
         console.error(`Task ${i}/${WORK_ITEMS} failed:`, err.message);
         throw err;

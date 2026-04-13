@@ -24,7 +24,7 @@ export async function ensureCluster(): Promise<void> {
       "--port=58080:80@loadbalancer",
       "--wait",
     ],
-    { stdio: "pipe" }
+    { stdio: "pipe" },
   );
 
   // Verify cluster is accessible

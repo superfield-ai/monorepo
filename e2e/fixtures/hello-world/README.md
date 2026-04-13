@@ -21,32 +21,39 @@ Real multi-service architecture with inter-container communication:
 The `superfield deploy` command runs:
 
 ### 1. Provision Phase
+
 - Creates k3d cluster: `superfield-e2e`
 - Creates local Docker registry: `localhost:5000`
 - Integrates registry with the cluster
 
 ### 2. Deploy Phase
+
 **Build images:**
+
 ```bash
 scripts/build-images.sh
 ```
+
 - `api-server:dev` — Node.js HTTP server with `/counter` and `/counter/increment` endpoints
 - `worker:dev` — Node.js worker that calls api-server to increment counter
 - `static-web:dev` — Node.js frontend server
 - `postgres:dev` — Official postgres:15-alpine image
 
 **Apply manifests:**
+
 ```bash
 kubectl apply -f deploy/base/ -f deploy/env/local/
 ```
 
 **Wait for pods:**
+
 - postgres (exec liveness probe: `pg_isready`)
 - api-server (HTTP liveness probe: `/health`)
 - worker (runs to completion or stays running)
 - static-web (HTTP liveness probe: `/`)
 
 **Probe ingress:**
+
 - HTTP GET `http://localhost:58080/` → returns 200 with counter page
 
 ## Key Testing Aspects
@@ -92,18 +99,21 @@ hello-world/
 ## Running Locally
 
 ### Prerequisites
+
 - Docker
 - k3d
 - kubectl
 - bun (optional, for running provisioning script)
 
 ### One-line deployment
+
 ```bash
 cd e2e/fixtures/hello-world
 superfield deploy
 ```
 
 ### Manual steps
+
 ```bash
 cd e2e/fixtures/hello-world
 
@@ -134,6 +144,7 @@ curl http://localhost:58080/
 4. **Success**: If counter shows 3 and all 4 services are ready, deployment succeeded
 
 This tests the complete data flow:
+
 ```
 static-web ──HTTP──> api-server
                           ↑

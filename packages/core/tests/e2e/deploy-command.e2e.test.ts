@@ -13,7 +13,7 @@ import { runDeployCommand } from "../../commands/deploy.ts";
 
 const FIXTURE_ROOT = path.resolve(
   import.meta.dirname,
-  "../../../e2e/fixtures/hello-world"
+  "../../../e2e/fixtures/hello-world",
 );
 
 describe("deploy command — full e2e", { timeout: 600_000 }, () => {
