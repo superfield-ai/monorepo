@@ -67,7 +67,7 @@ describe("runDeployCommand — demo wiring", () => {
       "deploy:kubectl wait --for=condition=ready pod -l app=postgres --timeout=120s",
       "deploy:kubectl wait --for=condition=ready pod -l app=api-server --timeout=120s",
       "deploy:kubectl wait --for=condition=ready pod -l app=static-web --timeout=120s",
-      "deploy:kubectl wait --for=condition=ready pod -l app=greenmail --timeout=120s",
+      "deploy:kubectl wait --for=condition=ready pod -l app=worker --timeout=120s",
     ]);
     expect(steps[5]?.env).toMatchObject({
       PUSH: "true",

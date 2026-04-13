@@ -1,0 +1,132 @@
+---
+# Postgres deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: postgres
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: postgres
+  template:
+    metadata:
+      labels:
+        app: postgres
+    spec:
+      containers:
+      - name: postgres
+        image: localhost:5000/postgres:dev
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 5432
+        env:
+        - name: POSTGRES_USER
+          value: "superfield"
+        - name: POSTGRES_PASSWORD
+          value: "password"
+        - name: POSTGRES_DB
+          value: "superfield_db"
+        livenessProbe:
+          exec:
+            command:
+            - pg_isready
+            - -U
+            - superfield
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+# API Server deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: api-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: api-server
+  template:
+    metadata:
+      labels:
+        app: api-server
+    spec:
+      containers:
+      - name: api-server
+        image: localhost:5000/api-server:dev
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 5
+          periodSeconds: 5
+---
+# Worker deployment (async job processor)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: worker
+  template:
+    metadata:
+      labels:
+        app: worker
+    spec:
+      # Wait for postgres and api-server to be ready before starting
+      initContainers:
+      - name: wait-for-postgres
+        image: busybox:1
+        command: ["sh", "-c", "until nc -z postgres 5432; do echo waiting for postgres; sleep 1; done"]
+      - name: wait-for-api
+        image: busybox:1
+        command: ["sh", "-c", "until nc -z api-server 8080; do echo waiting for api-server; sleep 1; done"]
+      containers:
+      - name: worker
+        image: localhost:5000/worker:dev
+        imagePullPolicy: Always
+        env:
+        - name: API_SERVER_HOST
+          value: "api-server"
+        - name: API_SERVER_PORT
+          value: "8080"
+        - name: POSTGRES_HOST
+          value: "postgres"
+        - name: POSTGRES_PORT
+          value: "5432"
+        - name: WORK_ITEMS
+          value: "3"
+---
+# Static web deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: static-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: static-web
+  template:
+    metadata:
+      labels:
+        app: static-web
+    spec:
+      containers:
+      - name: static-web
+        image: localhost:5000/static-web:dev
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 80
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 80
+          initialDelaySeconds: 5
+          periodSeconds: 5

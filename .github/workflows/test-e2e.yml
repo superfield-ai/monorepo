@@ -1,0 +1,33 @@
+name: E2E Deploy Tests
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/core/commands/deploy.ts"
+      - "packages/cli/commands/deploy.ts"
+      - "e2e/**"
+      - ".github/workflows/test-e2e.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/core/commands/deploy.ts"
+      - "packages/cli/commands/deploy.ts"
+      - "e2e/**"
+      - ".github/workflows/test-e2e.yml"
+
+jobs:
+  test-e2e:
+    name: E2E deploy (k3d)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - name: Install k3d
+        run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
+      - name: Install kubectl
+        uses: azure/setup-kubectl@v4
+      - run: bun install --frozen-lockfile
+      - name: Run E2E tests
+        run: bun --bun vitest run packages/*/tests/e2e

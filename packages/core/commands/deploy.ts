@@ -301,7 +301,7 @@ async function ensureLocalSecrets(context: DemoContext): Promise<void> {
 async function waitForPods(context: DemoContext): Promise<void> {
   await runPostgresWait(context);
 
-  for (const app of ["api-server", "static-web", "greenmail"]) {
+  for (const app of ["api-server", "static-web", "worker"]) {
     await executeStep(context, {
       phase: "deploy",
       label: `${app} readiness`,

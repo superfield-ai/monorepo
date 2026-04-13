@@ -1,0 +1,52 @@
+---
+# Postgres service
+apiVersion: v1
+kind: Service
+metadata:
+  name: postgres
+spec:
+  type: ClusterIP
+  selector:
+    app: postgres
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+# API Server service
+apiVersion: v1
+kind: Service
+metadata:
+  name: api-server
+spec:
+  type: ClusterIP
+  selector:
+    app: api-server
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+# Worker service
+apiVersion: v1
+kind: Service
+metadata:
+  name: worker
+spec:
+  type: ClusterIP
+  selector:
+    app: worker
+  ports:
+  - port: 8080
+    targetPort: 8080
+---
+# Static web service
+apiVersion: v1
+kind: Service
+metadata:
+  name: static-web
+spec:
+  type: ClusterIP
+  selector:
+    app: static-web
+  ports:
+  - port: 80
+    targetPort: 80

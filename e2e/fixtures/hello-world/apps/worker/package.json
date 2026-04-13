@@ -1,0 +1,5 @@
+{
+  "name": "superfield-worker",
+  "version": "1.0.0",
+  "main": "worker.js"
+}
