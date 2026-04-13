@@ -35,5 +35,12 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
       - run: bun install --frozen-lockfile
+      - name: Diagnose PATH and docker location
+        run: |
+          echo "Shell PATH=$PATH"
+          which docker
+          docker --version
+          bun --print "process.env.PATH" || true
+          bun --eval "const {spawnSync} = await import('node:child_process'); const r = spawnSync('docker', ['--version'], {env: process.env, encoding: 'utf8'}); console.log('bun spawn docker:', r.stdout, r.stderr, r.error);" || true
       - name: Run E2E tests
         run: bun --bun vitest run packages/*/tests/e2e
