@@ -69,6 +69,22 @@ export type {
   FeatureCommandResult,
 } from "./commands/feature.ts";
 
+export {
+  DEPLOY_PHASES,
+  DEMO_DEPLOY_TARGET,
+  DeployPhaseNotImplementedError,
+  DeployTargetNotImplementedError,
+  getDeployTargetModel,
+  parseDeployPhase,
+  runDeployCommand,
+} from "./commands/deploy.ts";
+export type {
+  DeployPhase,
+  DeployPhaseModel,
+  DeployTargetModel,
+  DeployCommandOpts,
+} from "./commands/deploy.ts";
+
 export { runBlueprintConformance } from "./steps/blueprint-conformance.ts";
 export type {
   BlueprintViolation,

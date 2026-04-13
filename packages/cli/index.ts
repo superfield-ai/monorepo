@@ -2,6 +2,7 @@ import { githubCommand } from "./commands/github.ts";
 import { startCommand, type StartLoop } from "./commands/start.ts";
 import { planCommand } from "./commands/plan.ts";
 import { featureCommand } from "./commands/feature.ts";
+import { deployCommand } from "./commands/deploy.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -21,6 +22,8 @@ Commands:
                 Begin loop(s). Defaults to all three when no --<loop> flags are provided.
   plan          Replan: group issues into phases, create scouts, write Plan
   feature "..." Evaluate a feature request and create an issue + Plan entry
+  deploy provision|deploy [target]
+                Scout deploy seams for the demo target
 `.trim();
 }
 
@@ -66,6 +69,11 @@ export async function runCLI(args: string[]): Promise<void> {
 
   if (cmd === "feature") {
     await featureCommand(sub, third);
+    return;
+  }
+
+  if (cmd === "deploy") {
+    await deployCommand(sub, third);
     return;
   }
 
