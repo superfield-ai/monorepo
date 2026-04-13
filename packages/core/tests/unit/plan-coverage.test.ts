@@ -316,7 +316,9 @@ Scout gate: #5
     const client = makeClient({
       listIssues: vi
         .fn()
-        .mockResolvedValue([makeIssue({ number: 10, title: "feat: one", body: null })]),
+        .mockResolvedValue([
+          makeIssue({ number: 10, title: "feat: one", body: null }),
+        ]),
     });
 
     const result = await runPlanCoverage(client, "org", "repo", {

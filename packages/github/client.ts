@@ -210,14 +210,14 @@ export class GitHubClient implements GitHubClientPort {
     return data
       .filter((issue) => !("pull_request" in issue))
       .map((issue) => ({
-      number: issue.number,
-      title: issue.title,
-      body: issue.body ?? null,
-      html_url: issue.html_url,
-      state: issue.state,
-      labels: issue.labels
-        .map((l) => (typeof l === "string" ? l : (l.name ?? "")))
-        .filter(Boolean),
+        number: issue.number,
+        title: issue.title,
+        body: issue.body ?? null,
+        html_url: issue.html_url,
+        state: issue.state,
+        labels: issue.labels
+          .map((l) => (typeof l === "string" ? l : (l.name ?? "")))
+          .filter(Boolean),
       }));
   }
 

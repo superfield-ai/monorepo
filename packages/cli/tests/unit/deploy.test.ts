@@ -68,14 +68,18 @@ describe("deployCommand", () => {
   });
 
   it("prints usage and exits when deploy args are invalid", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
-    const exit = vi.spyOn(process, "exit").mockImplementation(
-      (() => undefined) as never,
-    );
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
+    const exit = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as never);
 
     await deployCommand(["demo", "staging"]);
 
-    expect(error).toHaveBeenCalledWith("Usage: superfield deploy [--provision] [target]");
+    expect(error).toHaveBeenCalledWith(
+      "Usage: superfield deploy [--provision] [target]",
+    );
     expect(exit).toHaveBeenCalledWith(1);
     expect(mocks.runDeployCommand).not.toHaveBeenCalled();
   });

@@ -40,7 +40,9 @@ export function buildPlanPlacementPrompt(ctx: PlanPlacementContext): string {
           .map(
             (p) =>
               `- **${p.name}**${p.goal ? `: ${p.goal}` : ""}` +
-              (p.scoutGate !== null ? ` (scout gate: #${p.scoutGate})` : " (no scout gate yet)"),
+              (p.scoutGate !== null
+                ? ` (scout gate: #${p.scoutGate})`
+                : " (no scout gate yet)"),
           )
           .join("\n")
       : "(no phases defined yet — you may create the first one)";

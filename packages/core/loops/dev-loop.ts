@@ -15,7 +15,12 @@ import {
   buildDevScoutPrompt,
   buildCIFailurePrompt,
 } from "../prompts/index.ts";
-import { spawnAgent, StaleSessionError, type AgentOpts, type AgentResult } from "../agent.ts";
+import {
+  spawnAgent,
+  StaleSessionError,
+  type AgentOpts,
+  type AgentResult,
+} from "../agent.ts";
 import { writeToLog } from "../file-logger.ts";
 import { type LogLevel, LOG_LEVEL_RANK, resolveLogLevel } from "../logger.ts";
 import {
@@ -129,7 +134,11 @@ function devLog(level: LogLevel, message: string, slot?: number): void {
  */
 export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   console.log("[dev] loop started");
-  const startupPlan = await findOpenPlanIssue(opts.client, opts.owner, opts.repo);
+  const startupPlan = await findOpenPlanIssue(
+    opts.client,
+    opts.owner,
+    opts.repo,
+  );
   if (!startupPlan) {
     throw new FatalDevLoopError(
       `No open Plan issue found for ${opts.owner}/${opts.repo}. Run 'superfield plan <repo-path>' before 'superfield start'.`,
@@ -194,15 +203,11 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           );
         }
         if (result.reason?.startsWith("plan has no entries")) {
-          console.error(
-            `[error] [dev] tick idle: ${result.reason}`,
-          );
+          console.error(`[error] [dev] tick idle: ${result.reason}`);
         } else if (
           result.reason?.startsWith("open issues are not referenced in Plan")
         ) {
-          console.error(
-            `[error] [dev] tick idle: ${result.reason}`,
-          );
+          console.error(`[error] [dev] tick idle: ${result.reason}`);
         } else if (result.reason === "merge gate blocked") {
           const blockedText =
             result.mergeGateBlocked.length > 0
@@ -236,9 +241,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
           await pruneFn(opts);
           lastPruneAt = Date.now();
         } catch (err) {
-          console.error(
-            `[error] [dev] prune pass failed: ${formatError(err)}`,
-          );
+          console.error(`[error] [dev] prune pass failed: ${formatError(err)}`);
         }
       } else if (Date.now() - lastPruneAt >= pruneIntervalMs) {
         // Wall-clock interval prune — ensures pruning even during long busy streaks
@@ -255,9 +258,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     },
     delayMs: (result) => (result.idle ? idleMs : 0),
     onError: (err) => {
-      console.error(
-        `[error] [dev] loop failed: ${formatError(err)}`,
-      );
+      console.error(`[error] [dev] loop failed: ${formatError(err)}`);
     },
     stopOnError: (err) => err instanceof FatalDevLoopError,
   });
@@ -272,8 +273,7 @@ export async function tickDevLoop(
 
   // 1. Read the Plan
   const planIssue =
-    opts.startupPlanIssue ??
-    (await findOpenPlanIssue(client, owner, repo));
+    opts.startupPlanIssue ?? (await findOpenPlanIssue(client, owner, repo));
   if (!planIssue) {
     return {
       primaryIssue: null,
@@ -468,9 +468,17 @@ async function prepareWorktreeAndSession(
   if (sessionId && existing?.session.startedAt) {
     const ageMs = Date.now() - new Date(existing.session.startedAt).getTime();
     const ageMin = Math.round(ageMs / 60_000);
-    devLog("info", `issue #${entry.number} resuming session ${sessionId} started ${ageMin}m ago`, slot);
+    devLog(
+      "info",
+      `issue #${entry.number} resuming session ${sessionId} started ${ageMin}m ago`,
+      slot,
+    );
   }
-  devLog("trace", `issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`, slot);
+  devLog(
+    "trace",
+    `issue #${entry.number} worktree=${wt.path} branch=${branch} resume_session=${sessionId ?? "none"}`,
+    slot,
+  );
 
   // Escalation latch (#78): once an earlier turn returned
   // needsBlueprintEscalation, the session record carries blueprintEscalated,
@@ -562,7 +570,12 @@ async function executeAgentWithAudit(
               model: "sonnet",
               loop: "dev",
               task: entry.kind,
-              jobType: entry.kind === "dev-scout" ? "dev-scout" : entry.kind === "ci-failure" ? "ci-failure" : "dev",
+              jobType:
+                entry.kind === "dev-scout"
+                  ? "dev-scout"
+                  : entry.kind === "ci-failure"
+                    ? "ci-failure"
+                    : "dev",
             });
           return circuit ? circuit.call(call) : call();
         },
@@ -570,7 +583,11 @@ async function executeAgentWithAudit(
       );
     } catch (err) {
       if (err instanceof StaleSessionError) {
-        devLog("warn", `issue #${entry.number} stale session cleared — retrying as new session`, slot);
+        devLog(
+          "warn",
+          `issue #${entry.number} stale session cleared — retrying as new session`,
+          slot,
+        );
         await deleteSession(client, owner, repo, entry.number);
         effectiveSessionId = undefined;
         return await spawnFn({
@@ -580,13 +597,22 @@ async function executeAgentWithAudit(
           model: "sonnet",
           loop: "dev",
           task: entry.kind,
-          jobType: entry.kind === "dev-scout" ? "dev-scout" : entry.kind === "ci-failure" ? "ci-failure" : "dev",
+          jobType:
+            entry.kind === "dev-scout"
+              ? "dev-scout"
+              : entry.kind === "ci-failure"
+                ? "ci-failure"
+                : "dev",
         });
       }
       throw err;
     }
   })();
-  devLog("info", `issue #${entry.number} agent run finished is_error=${agentResult.isError}`, slot);
+  devLog(
+    "info",
+    `issue #${entry.number} agent run finished is_error=${agentResult.isError}`,
+    slot,
+  );
 
   // Latch escalation on the first true and persist.
   const nextEscalated =
@@ -716,7 +742,11 @@ async function runSlot(
     // Issue already closed or remediation cap exceeded
     const { client, owner, repo } = opts;
     const issue = await client.getIssue(owner, repo, entry.number);
-    devLog("debug", `issue #${entry.number} skipped before spawn (closed=${issue.state === "closed"})`, slot);
+    devLog(
+      "debug",
+      `issue #${entry.number} skipped before spawn (closed=${issue.state === "closed"})`,
+      slot,
+    );
     return { closed: issue.state === "closed", mergeGateBlocked: [] };
   }
 
@@ -731,7 +761,11 @@ async function runSlot(
   );
 
   if (!proceedToMerge) {
-    devLog("warn", `issue #${entry.number} halted after self-audit; waiting for remediation`, slot);
+    devLog(
+      "warn",
+      `issue #${entry.number} halted after self-audit; waiting for remediation`,
+      slot,
+    );
     return { closed: false, mergeGateBlocked: [] };
   }
 
@@ -739,11 +773,23 @@ async function runSlot(
   if (role === "primary") {
     const mergeResult = await attemptMergeGate(opts, plan, entry);
     if (mergeResult.closed) {
-      devLog("info", `issue #${entry.number} merge-gate result closed=true`, slot);
+      devLog(
+        "info",
+        `issue #${entry.number} merge-gate result closed=true`,
+        slot,
+      );
     } else if (mergeResult.mergeGateBlocked.length > 0) {
-      devLog("info", `issue #${entry.number} merge-gate result closed=false blocked=${mergeResult.mergeGateBlocked.map((n) => `#${n}`).join(",")}`, slot);
+      devLog(
+        "info",
+        `issue #${entry.number} merge-gate result closed=false blocked=${mergeResult.mergeGateBlocked.map((n) => `#${n}`).join(",")}`,
+        slot,
+      );
     } else {
-      devLog("info", `issue #${entry.number} merge-gate result closed=false blocked=0 — issue still open, likely waiting on CI or PR merge`, slot);
+      devLog(
+        "info",
+        `issue #${entry.number} merge-gate result closed=false blocked=0 — issue still open, likely waiting on CI or PR merge`,
+        slot,
+      );
     }
     return mergeResult;
   }
@@ -751,7 +797,6 @@ async function runSlot(
   devLog("trace", `issue #${entry.number} completed (speculative path)`, slot);
   return { closed: false, mergeGateBlocked: [] };
 }
-
 
 /**
  * Selects up to `count` speculative candidates from the same phase as the
@@ -845,7 +890,9 @@ async function diagnoseNoPrimaryReason(
   }
 
   const openIssues = await client.listIssues(owner, repo);
-  const openWorkIssues = openIssues.filter((issue) => !issue.labels.includes("plan"));
+  const openWorkIssues = openIssues.filter(
+    (issue) => !issue.labels.includes("plan"),
+  );
   if (openWorkIssues.length === 0) {
     return "no open issues in repository";
   }
@@ -1116,7 +1163,11 @@ function withIssueCache(
   return new Proxy(base, {
     get(target, prop, receiver) {
       if (prop === "getIssue") {
-        return async (owner: string, repo: string, n: number): Promise<Issue> => {
+        return async (
+          owner: string,
+          repo: string,
+          n: number,
+        ): Promise<Issue> => {
           const hit = cache.get(n);
           if (hit) return hit;
           const issue = await target.getIssue(owner, repo, n);
@@ -1146,7 +1197,8 @@ async function findOpenPlanIssue(
   // Backward-compatible fallback for adapters/mocks that only respect
   // label-filtered issue listing.
   if (allOpenIssues.length === 0) {
-    const labeledPlanIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
+    const labeledPlanIssues =
+      (await client.listIssues(owner, repo, ["plan"])) ?? [];
     return labeledPlanIssues[0] ?? null;
   }
   return null;
@@ -1230,7 +1282,8 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
   );
 
   // --- Step 2: Reap stale session comments on open issues ---
-  const reapedSessionDetails: Array<{ issueNumber: number; ageMin: number }> = [];
+  const reapedSessionDetails: Array<{ issueNumber: number; ageMin: number }> =
+    [];
   const openIssues = await client.listIssues(owner, repo);
   await Promise.all(
     openIssues.map(async (issue) => {
@@ -1265,7 +1318,10 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
         if (age > staleMs) {
           await client.deleteIssueComment(owner, repo, sessionComment.id);
           reapedSessions.push(issue.number);
-          reapedSessionDetails.push({ issueNumber: issue.number, ageMin: Math.round(age / 60_000) });
+          reapedSessionDetails.push({
+            issueNumber: issue.number,
+            ageMin: Math.round(age / 60_000),
+          });
         }
       } catch {
         // Skip if comments cannot be fetched
@@ -1276,7 +1332,9 @@ export async function runPrunePass(opts: DevLoopOpts): Promise<PruneResult> {
   if (prunedWorktrees.length > 0 || reapedSessions.length > 0) {
     const reapedPart =
       reapedSessionDetails.length > 0
-        ? reapedSessionDetails.map((s) => `#${s.issueNumber}(${s.ageMin}m)`).join(", ")
+        ? reapedSessionDetails
+            .map((s) => `#${s.issueNumber}(${s.ageMin}m)`)
+            .join(", ")
         : "none";
     devLog(
       "info",

@@ -80,26 +80,37 @@ export async function runPrePRSelfAudit(
   const { result } = await runLLMTask<{
     conformant: boolean;
     violations: PrePRSelfAuditViolation[];
-  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "dev", task: "self-audit", jobType: "pre-pr-self-audit" }, (json) => {
-    const parsed = JSON.parse(json) as RawVerdict;
-    if (typeof parsed.conformant !== "boolean") {
-      throw new Error("missing boolean `conformant` field");
-    }
-    const rawViolations = Array.isArray(parsed.violations)
-      ? (parsed.violations as RawViolation[])
-      : [];
-    const violations: PrePRSelfAuditViolation[] = rawViolations.map((v) => ({
-      rule_id: typeof v.rule_id === "string" ? v.rule_id : "",
-      rule_name: typeof v.rule_name === "string" ? v.rule_name : "",
-      rule_type: typeof v.rule_type === "string" ? v.rule_type : "",
-      domain: typeof v.domain === "string" ? v.domain : "",
-      concern: typeof v.concern === "string" ? v.concern : "",
-    }));
-    if (parsed.conformant === false && violations.length === 0) {
-      throw new Error("conformant=false but no violations were emitted");
-    }
-    return { conformant: parsed.conformant, violations };
-  });
+  }>(
+    {
+      prompt,
+      spawn: opts.spawn,
+      cwd: opts.repoPath,
+      model: "sonnet",
+      loop: "dev",
+      task: "self-audit",
+      jobType: "pre-pr-self-audit",
+    },
+    (json) => {
+      const parsed = JSON.parse(json) as RawVerdict;
+      if (typeof parsed.conformant !== "boolean") {
+        throw new Error("missing boolean `conformant` field");
+      }
+      const rawViolations = Array.isArray(parsed.violations)
+        ? (parsed.violations as RawViolation[])
+        : [];
+      const violations: PrePRSelfAuditViolation[] = rawViolations.map((v) => ({
+        rule_id: typeof v.rule_id === "string" ? v.rule_id : "",
+        rule_name: typeof v.rule_name === "string" ? v.rule_name : "",
+        rule_type: typeof v.rule_type === "string" ? v.rule_type : "",
+        domain: typeof v.domain === "string" ? v.domain : "",
+        concern: typeof v.concern === "string" ? v.concern : "",
+      }));
+      if (parsed.conformant === false && violations.length === 0) {
+        throw new Error("conformant=false but no violations were emitted");
+      }
+      return { conformant: parsed.conformant, violations };
+    },
+  );
 
   return {
     conformant: result.conformant,

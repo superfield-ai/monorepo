@@ -200,9 +200,9 @@ describe("runIssueAudit", () => {
 
   it("normalizes malformed audit arrays before applying remediation", async () => {
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([
-        makeIssue({ number: 10, body: "bad body" }),
-      ]),
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([makeIssue({ number: 10, body: "bad body" })]),
     });
     const result = await runIssueAudit(client, "org", "repo", {
       spawn: fakeSpawn({
@@ -266,10 +266,12 @@ describe("runIssueAudit", () => {
 
   it("throws when the batch response omits an input issue", async () => {
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([
-        makeIssue({ number: 10 }),
-        makeIssue({ number: 11 }),
-      ]),
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([
+          makeIssue({ number: 10 }),
+          makeIssue({ number: 11 }),
+        ]),
     });
     await expect(
       runIssueAudit(client, "org", "repo", {

@@ -27,7 +27,8 @@ import { formatError, isRateLimitError } from "./format-error.ts";
 
 const POLL_INTERVAL_MS = 5_000;
 const ISSUE_AUDIT_MIN_INTERVAL_MS = 10 * 60 * 1000;
-const PLAN_ISSUE_AUDIT_STATE_MARKER = "<!-- superfield-plan-issue-audit-state -->";
+const PLAN_ISSUE_AUDIT_STATE_MARKER =
+  "<!-- superfield-plan-issue-audit-state -->";
 
 interface IssueAuditStateEntry {
   fingerprint: string;
@@ -165,76 +166,68 @@ async function tickRepository(
       if (auditable.length === 0) {
         issueAuditOutcome = { ok: true, nonConformant: [] };
       } else {
-      const planIssue = findPlanIssue(allOpenIssues);
-      const loadedState = planIssue
-        ? await loadPlanIssueAuditState(
-            client,
-            owner,
-            repo,
-            planIssue.number,
-          )
-        : { entries: new Map<number, IssueAuditStateEntry>() };
-      const {
-        issuesToAudit,
-        cachedNonConformant,
-        skippedRecentlyAudited,
-      } = selectIssuesToAuditFromState(
-        auditable,
-        loadedState.entries,
-        Date.now(),
-      );
-      if (planIssue) {
-        console.log(
-          `[plan] issue-audit state: plan=#${planIssue.number} cached=${loadedState.entries.size} to_audit=${issuesToAudit.length} skipped=${skippedRecentlyAudited}`,
-        );
-      }
-
-      if (issuesToAudit.length === 0) {
-        issueAuditOutcome = {
-          ok: true,
-          nonConformant: cachedNonConformant,
-        };
-      } else {
-        const audit = await auditFn(client, owner, repo, {
-          cwd: process.cwd(),
-          issues: issuesToAudit,
-        });
-        mergeIssueAuditState(
-          loadedState.entries,
-          auditable,
-          issuesToAudit,
-          audit,
-          Date.now(),
-        );
-        if (planIssue) {
-          await persistPlanIssueAuditState(
-            client,
-            owner,
-            repo,
-            planIssue.number,
+        const planIssue = findPlanIssue(allOpenIssues);
+        const loadedState = planIssue
+          ? await loadPlanIssueAuditState(client, owner, repo, planIssue.number)
+          : { entries: new Map<number, IssueAuditStateEntry>() };
+        const { issuesToAudit, cachedNonConformant, skippedRecentlyAudited } =
+          selectIssuesToAuditFromState(
+            auditable,
             loadedState.entries,
-            loadedState.commentId,
-            loadedState.commentBody,
+            Date.now(),
+          );
+        if (planIssue) {
+          console.log(
+            `[plan] issue-audit state: plan=#${planIssue.number} cached=${loadedState.entries.size} to_audit=${issuesToAudit.length} skipped=${skippedRecentlyAudited}`,
           );
         }
-        issueAuditOutcome = {
-          ok: true,
-          nonConformant: Array.from(
-            new Set([...cachedNonConformant, ...audit.nonConformant]),
-          ),
-        };
-      }
 
-      if (skippedRecentlyAudited > 0) {
-        console.log(
-          `[plan] issue-audit: skipped ${skippedRecentlyAudited} recently-audited unchanged issue(s)`,
-        );
-      }
-      if (issueAuditOutcome.nonConformant.length > 0) {
-        console.log(
-          `[plan] issue audit: ${issueAuditOutcome.nonConformant.length} non-conformant issue(s): ${issueAuditOutcome.nonConformant.join(", ")}`,
-        );
-      }
+        if (issuesToAudit.length === 0) {
+          issueAuditOutcome = {
+            ok: true,
+            nonConformant: cachedNonConformant,
+          };
+        } else {
+          const audit = await auditFn(client, owner, repo, {
+            cwd: process.cwd(),
+            issues: issuesToAudit,
+          });
+          mergeIssueAuditState(
+            loadedState.entries,
+            auditable,
+            issuesToAudit,
+            audit,
+            Date.now(),
+          );
+          if (planIssue) {
+            await persistPlanIssueAuditState(
+              client,
+              owner,
+              repo,
+              planIssue.number,
+              loadedState.entries,
+              loadedState.commentId,
+              loadedState.commentBody,
+            );
+          }
+          issueAuditOutcome = {
+            ok: true,
+            nonConformant: Array.from(
+              new Set([...cachedNonConformant, ...audit.nonConformant]),
+            ),
+          };
+        }
+
+        if (skippedRecentlyAudited > 0) {
+          console.log(
+            `[plan] issue-audit: skipped ${skippedRecentlyAudited} recently-audited unchanged issue(s)`,
+          );
+        }
+        if (issueAuditOutcome.nonConformant.length > 0) {
+          console.log(
+            `[plan] issue audit: ${issueAuditOutcome.nonConformant.length} non-conformant issue(s): ${issueAuditOutcome.nonConformant.join(", ")}`,
+          );
+        }
       }
     } else {
       const audit = await auditFn(client, owner, repo, {
@@ -340,9 +333,7 @@ async function tickRepository(
   } catch (err) {
     const msg = formatError(err);
     blueprintConformanceOutcome = { ok: false, error: msg };
-    console.error(
-      `[error] [plan] blueprint-conformance failed: ${msg}`,
-    );
+    console.error(`[error] [plan] blueprint-conformance failed: ${msg}`);
   }
 
   return {
@@ -400,9 +391,7 @@ async function tickConfiguredRepositories(
         );
       } catch (err) {
         const msg = formatError(err);
-        console.error(
-          `[error] [plan] tick failed: ${msg}`,
-        );
+        console.error(`[error] [plan] tick failed: ${msg}`);
       }
     }),
   );
@@ -428,8 +417,7 @@ async function runWatchdogStep(
       .map((issue) => issue.title),
   );
   const planIssue = openIssues.find(
-    (issue) =>
-      issue.labels.includes("plan") || /^plan\b/i.test(issue.title),
+    (issue) => issue.labels.includes("plan") || /^plan\b/i.test(issue.title),
   );
   let plan = parsePlan(planIssue?.body ?? "");
   let planChanged = false;
@@ -452,11 +440,12 @@ async function runWatchdogStep(
     });
     existingFailureTitles.add(title);
     watchdogIssuesCreated.push(issue.number);
-    plan = insertCIFailureAtTop(plan, buildCIFailurePlanEntry(issue.number, title));
-    planChanged = true;
-    console.log(
-      `[plan] Created issue #${issue.number}: ${issue.title}`,
+    plan = insertCIFailureAtTop(
+      plan,
+      buildCIFailurePlanEntry(issue.number, title),
     );
+    planChanged = true;
+    console.log(`[plan] Created issue #${issue.number}: ${issue.title}`);
   }
 
   if (planChanged) {
@@ -486,8 +475,7 @@ async function runWatchdogStep(
 function findPlanIssue(issues: Issue[]): Issue | null {
   return (
     issues.find(
-      (issue) =>
-        issue.labels.includes("plan") || /^plan\b/i.test(issue.title),
+      (issue) => issue.labels.includes("plan") || /^plan\b/i.test(issue.title),
     ) ?? null
   );
 }
@@ -527,8 +515,7 @@ function selectIssuesToAuditFromState(
       continue;
     }
     const unchanged = cached.fingerprint === fingerprint;
-    const fresh =
-      nowMs - cached.auditedAtMs < ISSUE_AUDIT_MIN_INTERVAL_MS;
+    const fresh = nowMs - cached.auditedAtMs < ISSUE_AUDIT_MIN_INTERVAL_MS;
     if (unchanged && fresh) {
       skippedRecentlyAudited += 1;
       if (cached.nonConformant) cachedNonConformant.push(issue.number);
@@ -577,7 +564,8 @@ async function loadPlanIssueAuditState(
   const stateComment = comments.find((comment) =>
     comment.body.startsWith(PLAN_ISSUE_AUDIT_STATE_MARKER),
   );
-  if (!stateComment) return { entries: new Map<number, IssueAuditStateEntry>() };
+  if (!stateComment)
+    return { entries: new Map<number, IssueAuditStateEntry>() };
 
   const jsonText = stateComment.body
     .slice(PLAN_ISSUE_AUDIT_STATE_MARKER.length)

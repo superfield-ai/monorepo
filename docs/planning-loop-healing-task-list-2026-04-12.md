@@ -26,7 +26,7 @@ Finish the planning-loop redesign so the loop can:
 - [x] Extend the audit result types to capture `quality_issues` and `proposed_body`.
 - [x] Change the step from “post findings comment” to “update the issue body when non-conformant”.
 - [x] Preserve label behavior:
-  `non-conformant` should still be added when remediation is needed and removed once the issue is conformant.
+      `non-conformant` should still be added when remediation is needed and removed once the issue is conformant.
 - [x] Decide and implement whether the audit comment should be removed entirely or kept only for infrastructure failures.
 - [x] Keep bounded concurrency, but make each spawn process a batch of issues instead of one issue.
 
@@ -40,11 +40,11 @@ Acceptance criteria:
 
 - [x] Add a new planning step implementation that calls `buildPlanPlacementPrompt` for uncovered issues missing usable phase placement.
 - [x] Decide whether this becomes:
-  a helper inside `plan-coverage.ts`, or a separate `steps/plan-placement.ts` invoked by `loop.ts`.
+      a helper inside `plan-coverage.ts`, or a separate `steps/plan-placement.ts` invoked by `loop.ts`.
 - [x] Preserve deterministic placement for issues that already have a valid `## Phase`.
 - [x] Support creating new phases when the model marks `create_phase: true`.
 - [x] Validate LLM output:
-  every issue appears exactly once, new phases have goals, existing phases match exactly.
+      every issue appears exactly once, new phases have goals, existing phases match exactly.
 - [x] Reject illegal placements cleanly and log actionable errors.
 
 Acceptance criteria:
@@ -56,12 +56,12 @@ Acceptance criteria:
 ### Phase 3: Rework plan-coverage flow
 
 - [x] Refactor `packages/core/steps/plan-coverage.ts` to separate:
-  deterministic coverage, LLM-assisted placement input collection, phase creation, and final append ordering.
+      deterministic coverage, LLM-assisted placement input collection, phase creation, and final append ordering.
 - [x] Return richer result metadata such as:
-  `appended`, `alreadyCovered`, `skipped`, `llmPlaced`, `createdPhases`, `planCreated`.
+      `appended`, `alreadyCovered`, `skipped`, `llmPlaced`, `createdPhases`, `planCreated`.
 - [x] Keep scout-first ordering and scout-gate dependency behavior intact.
 - [x] Make failure modes explicit:
-  invalid placement, conflicting scout gate, missing phase goal, duplicate issue mapping.
+      invalid placement, conflicting scout gate, missing phase goal, duplicate issue mapping.
 
 Acceptance criteria:
 
@@ -85,7 +85,7 @@ Acceptance criteria:
 - [x] Add unit tests for malformed `reports[]` payloads, missing `proposed_body`, and mixed conformant/non-conformant batches.
 - [ ] Add unit tests for LLM-assisted phase placement validation.
 - [x] Add unit tests for `plan-coverage.ts` covering:
-  missing `## Phase`, new phase creation, grouped placements, and scout-gate conflicts.
+      missing `## Phase`, new phase creation, grouped placements, and scout-gate conflicts.
 - [ ] Update any prompt snapshot tests affected by the new prompt files or contracts.
 - [ ] Run targeted unit tests, then full unit suite.
 

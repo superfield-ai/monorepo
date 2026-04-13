@@ -142,10 +142,7 @@ describe("startCommand", () => {
     const exit = vi.fn() as unknown as StartDeps["exit"];
     const deps = makeDeps({
       createClient: vi.fn().mockReturnValue({
-        listIssues: vi
-          .fn()
-          .mockResolvedValueOnce([])
-          .mockResolvedValueOnce([]),
+        listIssues: vi.fn().mockResolvedValueOnce([]).mockResolvedValueOnce([]),
       } as unknown as DevLoopOpts["client"]),
       exit,
     });

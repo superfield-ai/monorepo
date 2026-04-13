@@ -14,11 +14,11 @@ A vendor CLI that Superfield can spawn: `claude`, `codex`, or `opencode`.
 
 An abstract capability level independent of any backend:
 
-| Tier     | Claude   | Codex          | OpenCode                      |
-| -------- | -------- | -------------- | ----------------------------- |
-| `high`   | opus     | o3             | opencode/minimax-m2.5-free    |
-| `medium` | sonnet   | gpt-5.4        | opencode/minimax-m2.5-free    |
-| `low`    | haiku    | gpt-5.4-mini   | opencode/minimax-m2.5-free    |
+| Tier     | Claude | Codex        | OpenCode                   |
+| -------- | ------ | ------------ | -------------------------- |
+| `high`   | opus   | o3           | opencode/minimax-m2.5-free |
+| `medium` | sonnet | gpt-5.4      | opencode/minimax-m2.5-free |
+| `low`    | haiku  | gpt-5.4-mini | opencode/minimax-m2.5-free |
 
 ### Job type
 
@@ -54,6 +54,7 @@ Remove any candidate whose backend is within an active rate-limit window (the ba
 Attempt each remaining candidate in sequence. On a successful call, record the elapsed time and return the result.
 
 On a rate-limit or unsupported-model error:
+
 - Mark the backend unavailable with a computed retry time (see [Availability tracking](#availability-tracking)).
 - Advance to the next candidate.
 
@@ -124,12 +125,12 @@ Each job type entry specifies:
 ```yaml
 preferred:
   backend: claude
-  tier: medium          # → sonnet
+  tier: medium # → sonnet
 
 failovers:
   - backend: codex
-    tier: medium        # → gpt-5.4
-  - thinking-medium     # resolved from app-wide tier table
+    tier: medium # → gpt-5.4
+  - thinking-medium # resolved from app-wide tier table
 ```
 
 ### `dev-scout` — stub-only integration pass
@@ -169,11 +170,11 @@ Planning requires strong reasoning but is short-lived. Prefer high tier so the P
 ```yaml
 preferred:
   backend: claude
-  tier: high            # → opus
+  tier: high # → opus
 
 failovers:
   - backend: codex
-    tier: high          # → o3
+    tier: high # → o3
   - thinking-high
 ```
 
@@ -199,11 +200,11 @@ Lightweight classification task. Low tier acceptable.
 ```yaml
 preferred:
   backend: claude
-  tier: low             # → haiku
+  tier: low # → haiku
 
 failovers:
   - backend: codex
-    tier: low           # → gpt-5.4-mini
+    tier: low # → gpt-5.4-mini
   - thinking-low
 ```
 
@@ -258,12 +259,12 @@ failovers:
 
 The system maintains an in-memory map of `backend → retryAfter` timestamps. This map is process-local and does not persist across restarts.
 
-| Event                               | Effect                                                  |
-| ----------------------------------- | ------------------------------------------------------- |
-| Rate-limit error (HTTP 429 / prose) | `retryAfter = now + backoffMs`                          |
+| Event                               | Effect                                                                 |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| Rate-limit error (HTTP 429 / prose) | `retryAfter = now + backoffMs`                                         |
 | Unsupported-model error             | Mark backend unavailable for this selection only; no persistent window |
-| Login / auth failure                | `retryAfter = now + 300_000` (5 min); log a warning    |
-| Successful response                 | Clear any existing `retryAfter` for that backend        |
+| Login / auth failure                | `retryAfter = now + 300_000` (5 min); log a warning                    |
+| Successful response                 | Clear any existing `retryAfter` for that backend                       |
 
 Initial backoff: **60 seconds** (matching the current `waitForAvailableBackend` poll interval). A future improvement may implement exponential backoff with jitter.
 
@@ -288,18 +289,18 @@ repositories: [...]
 tiers:
   thinking-high:
     - { backend: claude, model: opus }
-    - { backend: codex,  model: o3 }
+    - { backend: codex, model: o3 }
     - { backend: opencode, model: opencode/minimax-m2.5-free }
   thinking-medium:
     - { backend: claude, model: sonnet }
-    - { backend: codex,  model: gpt-5.4 }
+    - { backend: codex, model: gpt-5.4 }
     - { backend: opencode, model: opencode/minimax-m2.5-free }
   thinking-low:
     - { backend: claude, model: haiku }
-    - { backend: codex,  model: gpt-5.4-mini }
+    - { backend: codex, model: gpt-5.4-mini }
     - { backend: opencode, model: opencode/minimax-m2.5-free }
   coding-medium:
-    - { backend: codex,  model: gpt-5.4 }
+    - { backend: codex, model: gpt-5.4 }
     - { backend: claude, model: sonnet }
     - { backend: opencode, model: opencode/minimax-m2.5-free }
 
@@ -319,15 +320,15 @@ If `tiers` or `jobs` is absent, built-in defaults apply. Partial overrides are n
 
 ## Relationship to existing code
 
-| Concept in this spec             | Current location in code                          |
-| -------------------------------- | ------------------------------------------------- |
-| `AgentBackend`, `ModelTier`      | `packages/core/agent.ts`                          |
-| `MODEL_TIER_MAPPING`             | `packages/core/agent.ts:26`                       |
-| `filterAvailableBackends`        | `packages/core/agent.ts:214` — login check only; no retry window yet |
-| `waitForAvailableBackend`        | `packages/core/agent.ts:424` — polls every 60s    |
-| `callWithBackendPriority`        | `packages/core/agent.ts:342` — iterates backends  |
-| Job type → backend mapping       | **not yet implemented** — all jobs use the same `["claude","codex","opencode"]` default |
-| Availability window tracking     | **not yet implemented** — rate-limit handling exits immediately; no per-backend cooldown |
-| App-wide tier config             | **not yet implemented** — tier resolution is hardcoded in `MODEL_TIER_MAPPING` |
+| Concept in this spec         | Current location in code                                                                 |
+| ---------------------------- | ---------------------------------------------------------------------------------------- |
+| `AgentBackend`, `ModelTier`  | `packages/core/agent.ts`                                                                 |
+| `MODEL_TIER_MAPPING`         | `packages/core/agent.ts:26`                                                              |
+| `filterAvailableBackends`    | `packages/core/agent.ts:214` — login check only; no retry window yet                     |
+| `waitForAvailableBackend`    | `packages/core/agent.ts:424` — polls every 60s                                           |
+| `callWithBackendPriority`    | `packages/core/agent.ts:342` — iterates backends                                         |
+| Job type → backend mapping   | **not yet implemented** — all jobs use the same `["claude","codex","opencode"]` default  |
+| Availability window tracking | **not yet implemented** — rate-limit handling exits immediately; no per-backend cooldown |
+| App-wide tier config         | **not yet implemented** — tier resolution is hardcoded in `MODEL_TIER_MAPPING`           |
 
 This spec defines the target behaviour. Implementation will extend `AgentOpts` with a `jobType` field, introduce a per-process `BackendAvailabilityStore`, and add a `JobRegistry` that maps job types to their preferred + failover candidate lists.

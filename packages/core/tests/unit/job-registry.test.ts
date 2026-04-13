@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { resolveJobCandidates, type JobSpec, type TierTable } from "../../job-registry.ts";
+import {
+  resolveJobCandidates,
+  type JobSpec,
+  type TierTable,
+} from "../../job-registry.ts";
 import { MODEL_TIER_MAPPING, ModelTier } from "../../models.ts";
 
 describe("resolveJobCandidates", () => {
@@ -116,7 +120,9 @@ describe("resolveJobCandidates", () => {
   describe("tier table overrides", () => {
     it("expands an overridden abstract tier name", () => {
       const tierOverrides: TierTable = {
-        "thinking-medium": [{ backend: "opencode", model: "opencode/custom-model" }],
+        "thinking-medium": [
+          { backend: "opencode", model: "opencode/custom-model" },
+        ],
       };
       const candidates = resolveJobCandidates("dev", {}, tierOverrides);
       // thinking-medium should expand to just the custom entry

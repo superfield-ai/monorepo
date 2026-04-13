@@ -115,7 +115,8 @@ export async function startCommand(
   const selectedLoops = normalizeLoops(loops);
   const worktrees = new WorktreeManager();
   const envSlotCount = slotCount ?? resolveEnvSlotCount(env, emit);
-  if (envSlotCount !== undefined) emit("debug", `Using slot count: ${envSlotCount}`);
+  if (envSlotCount !== undefined)
+    emit("debug", `Using slot count: ${envSlotCount}`);
   else emit("trace", "Using default slot count");
   if (selectedLoops.includes("dev")) {
     let planIssue: { number: number; title: string } | null = null;
@@ -196,8 +197,18 @@ function resolveLogLevel(
   env: NodeJS.ProcessEnv,
   warn: (msg: string) => void,
 ): LogLevel {
-  const raw = (env.SUPERFIELD_LOG_LEVEL ?? env.LOG_LEVEL ?? "info").toLowerCase();
-  if (raw === "error" || raw === "warn" || raw === "info" || raw === "debug" || raw === "trace") {
+  const raw = (
+    env.SUPERFIELD_LOG_LEVEL ??
+    env.LOG_LEVEL ??
+    "info"
+  ).toLowerCase();
+  if (
+    raw === "error" ||
+    raw === "warn" ||
+    raw === "info" ||
+    raw === "debug" ||
+    raw === "trace"
+  ) {
     return raw;
   }
   warn(
@@ -229,7 +240,8 @@ async function findOpenPlanIssue(
   // Backward-compatible fallback for adapters/mocks that only respect
   // label-filtered issue listing.
   if (allOpenIssues.length === 0) {
-    const labeledPlanIssues = (await client.listIssues(owner, repo, ["plan"])) ?? [];
+    const labeledPlanIssues =
+      (await client.listIssues(owner, repo, ["plan"])) ?? [];
     const first = labeledPlanIssues[0];
     if (first) return { number: first.number, title: first.title };
   }

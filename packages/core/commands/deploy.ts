@@ -36,9 +36,7 @@ export interface DeployProcessStep {
   env?: NodeJS.ProcessEnv;
 }
 
-export type DeployProcessRunner = (
-  step: DeployProcessStep,
-) => Promise<void>;
+export type DeployProcessRunner = (step: DeployProcessStep) => Promise<void>;
 
 export interface DeployCommandDeps {
   runProcess?: DeployProcessRunner;
@@ -50,9 +48,7 @@ export interface DeployCommandDeps {
 }
 
 export class DeployTargetNotImplementedError extends Error {
-  constructor(
-    readonly target: string,
-  ) {
+  constructor(readonly target: string) {
     super(`Deploy target "${target}" is not implemented yet.`);
     this.name = "DeployTargetNotImplementedError";
   }
@@ -63,7 +59,9 @@ export class DeployPhaseNotImplementedError extends Error {
     readonly target: string,
     readonly phase: DeployPhase,
   ) {
-    super(`Deploy phase "${phase}" for target "${target}" is not implemented yet.`);
+    super(
+      `Deploy phase "${phase}" for target "${target}" is not implemented yet.`,
+    );
     this.name = "DeployPhaseNotImplementedError";
   }
 }
@@ -85,18 +83,21 @@ export class DeployPhaseExecutionError extends Error {
 
 export const DEMO_DEPLOY_TARGET: DeployTargetModel = {
   name: "demo",
-  description: "Local Calypso demo environment rooted at ~/calypso-distribution.",
+  description:
+    "Local Calypso demo environment rooted at ~/calypso-distribution.",
   phases: [
     {
       name: "provision",
       title: "Provision demo environment",
-      description: "Validate prerequisites and ensure the local k3d demo cluster exists.",
+      description:
+        "Validate prerequisites and ensure the local k3d demo cluster exists.",
       implemented: true,
     },
     {
       name: "deploy",
       title: "Deploy to demo environment",
-      description: "Build the demo images, apply manifests, and wait for the demo URL.",
+      description:
+        "Build the demo images, apply manifests, and wait for the demo URL.",
       implemented: true,
     },
   ],
@@ -124,9 +125,7 @@ export function parseDeployPhase(
   return null;
 }
 
-export function selectDeployPhases(
-  provisionOnly = false,
-): DeployPhase[] {
+export function selectDeployPhases(provisionOnly = false): DeployPhase[] {
   return provisionOnly ? ["provision"] : [...DEPLOY_PHASES];
 }
 
@@ -181,7 +180,9 @@ function buildDemoContext(
   };
 }
 
-function buildDemoEnv(overrides: NodeJS.ProcessEnv | undefined): NodeJS.ProcessEnv {
+function buildDemoEnv(
+  overrides: NodeJS.ProcessEnv | undefined,
+): NodeJS.ProcessEnv {
   return {
     ...process.env,
     ...overrides,
@@ -372,7 +373,12 @@ async function runPhaseAction(
   try {
     await action();
   } catch (error) {
-    throw new DeployPhaseExecutionError(context.target.name, phase, label, error);
+    throw new DeployPhaseExecutionError(
+      context.target.name,
+      phase,
+      label,
+      error,
+    );
   }
 }
 

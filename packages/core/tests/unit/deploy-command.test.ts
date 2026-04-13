@@ -22,9 +22,9 @@ describe("deploy command", () => {
       "provision",
       "deploy",
     ]);
-    expect(DEMO_DEPLOY_TARGET.phases.every((phase) => phase.implemented === true)).toBe(
-      true,
-    );
+    expect(
+      DEMO_DEPLOY_TARGET.phases.every((phase) => phase.implemented === true),
+    ).toBe(true);
   });
 
   it("rejects non-demo targets until #115 implements them", () => {
