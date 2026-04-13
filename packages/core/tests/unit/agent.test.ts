@@ -436,7 +436,10 @@ describe("spawnAgent", () => {
       return proc;
     });
 
-    const result = await spawnAgent({ worktreePath: "/tmp/work", prompt: "hello" });
+    const result = await spawnAgent({
+      worktreePath: "/tmp/work",
+      prompt: "hello",
+    });
 
     expect(calls).toHaveLength(1);
     expect(calls[0]!.command).toBe("codex");
@@ -464,7 +467,11 @@ describe("spawnAgent", () => {
         return proc;
       });
 
-      await spawnAgent({ worktreePath: "/tmp/work", prompt: "plan", jobType: "plan" });
+      await spawnAgent({
+        worktreePath: "/tmp/work",
+        prompt: "plan",
+        jobType: "plan",
+      });
 
       expect(calls).toHaveLength(1);
       expect(calls[0]!.command).toBe("claude");
@@ -492,7 +499,11 @@ describe("spawnAgent", () => {
         return proc;
       });
 
-      await spawnAgent({ worktreePath: "/tmp/work", prompt: "audit", jobType: "issue-audit" });
+      await spawnAgent({
+        worktreePath: "/tmp/work",
+        prompt: "audit",
+        jobType: "issue-audit",
+      });
 
       expect(calls).toHaveLength(1);
       expect(calls[0]!.command).toBe("claude");

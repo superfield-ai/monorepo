@@ -133,10 +133,12 @@ describe("tickDevLoop", () => {
 
   it("returns granular idle reason when Plan has no entries", async () => {
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([
-        makeIssue({ number: 10, state: "open" }),
-        makeIssue({ number: 11, state: "open" }),
-      ]),
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([
+          makeIssue({ number: 10, state: "open" }),
+          makeIssue({ number: 11, state: "open" }),
+        ]),
     });
 
     const result = await tickDevLoop({
@@ -172,10 +174,12 @@ Scout gate: #5
   <!-- superfield: {"number":5,"title":"scout identity","phase":"Identity","kind":"dev-scout","risk":5,"dependencies":[],"parallel_safe":true} -->
 `;
     const client = makeClient({
-      listIssues: vi.fn().mockResolvedValue([
-        makeIssue({ number: 10, state: "open" }),
-        makeIssue({ number: 11, state: "open" }),
-      ]),
+      listIssues: vi
+        .fn()
+        .mockResolvedValue([
+          makeIssue({ number: 10, state: "open" }),
+          makeIssue({ number: 11, state: "open" }),
+        ]),
       getIssue: vi.fn().mockImplementation(async (_o, _r, n: number) => {
         if (n === 5) return makeIssue({ number: 5, state: "closed" });
         throw new Error(`unexpected getIssue ${n}`);

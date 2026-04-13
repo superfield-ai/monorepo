@@ -206,11 +206,14 @@ function normalizeAuditReport(value: unknown): IssueAuditReport {
     throw new Error("missing issue_number");
   }
   if (typeof parsed.conformant !== "boolean") {
-    throw new Error(`missing conformant for issue_number ${parsed.issue_number}`);
+    throw new Error(
+      `missing conformant for issue_number ${parsed.issue_number}`,
+    );
   }
 
   const proposedBody =
-    typeof parsed.proposed_body === "string" && parsed.proposed_body.trim().length > 0
+    typeof parsed.proposed_body === "string" &&
+    parsed.proposed_body.trim().length > 0
       ? parsed.proposed_body
       : undefined;
 

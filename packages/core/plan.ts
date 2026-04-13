@@ -45,8 +45,7 @@ export interface Plan {
 
 const SUPERFIELD_METADATA_RE = /<!--\s*superfield:\s*(\{.*?\})\s*-->/;
 const CALYPSO_METADATA_RE = /<!--\s*calypso:\s*(\{.*?\})\s*-->/;
-const ENTRY_RE =
-  /^\s*-\s+#(\d+)\s+[—-]\s+(.+?)(?:\s+\[risk:\s*(\d+)\])?\s*$/;
+const ENTRY_RE = /^\s*-\s+#(\d+)\s+[—-]\s+(.+?)(?:\s+\[risk:\s*(\d+)\])?\s*$/;
 const PHASE_HEADER_RE = /^##\s+Phase:\s+(.+?)\s*$/;
 const GOAL_RE = /^Goal:\s*(.*)$/;
 const DEPENDS_ON_RE = /^Depends on phases:\s*(.*)$/;
@@ -123,8 +122,7 @@ export function parsePlan(body: string): Plan {
           typeof metadata.title === "string" && metadata.title.trim().length > 0
             ? metadata.title
             : lineTitle,
-        phase:
-          typeof metadata.phase === "string" ? metadata.phase : "",
+        phase: typeof metadata.phase === "string" ? metadata.phase : "",
         kind:
           metadata.kind === "dev-scout" ||
           metadata.kind === "feature" ||

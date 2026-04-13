@@ -93,9 +93,7 @@ export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
       const headSha = await opts.client.getHeadSha(opts.owner, opts.repo);
       const result = await tickDocLoop({ ...opts, lastSeenSha, headSha });
       if (!result.triggered) {
-        console.log(
-          "[doc] tick idle: no new merged PRs on main",
-        );
+        console.log("[doc] tick idle: no new merged PRs on main");
       } else if (result.docPrNumber) {
         console.log(
           `[doc] tick: processed PR #${result.pr}, opened doc PR #${result.docPrNumber}`,
@@ -112,9 +110,7 @@ export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
     },
     delayMs: () => pollMs,
     onError: (err) => {
-      console.error(
-        `[error] [doc] loop failed: ${formatError(err)}`,
-      );
+      console.error(`[error] [doc] loop failed: ${formatError(err)}`);
     },
   });
 }
@@ -249,7 +245,14 @@ async function runCoverageScan(
     changedFiles: sourceFiles,
   });
   const { result } = await runLLMTask<{ missing_docs: DocCoverageMissing[] }>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc", jobType: "doc-coverage" },
+    {
+      prompt,
+      spawn: opts.spawn,
+      cwd: opts.repoPath,
+      model: "sonnet",
+      loop: "doc",
+      jobType: "doc-coverage",
+    },
     (json) => {
       const parsed = JSON.parse(json) as {
         missing_docs?: DocCoverageMissing[];
@@ -276,7 +279,14 @@ async function runCanonicalSync(
     readmeContent: readmeContent ?? "",
   });
   const { result } = await runLLMTask<DocSyncProposal>(
-    { prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc", jobType: "doc-canonical-sync" },
+    {
+      prompt,
+      spawn: opts.spawn,
+      cwd: opts.repoPath,
+      model: "sonnet",
+      loop: "doc",
+      jobType: "doc-canonical-sync",
+    },
     (json) => {
       const parsed = JSON.parse(json) as Partial<DocSyncProposal>;
       return {
@@ -310,12 +320,22 @@ async function runConsistencyCheck(
   });
   const { result } = await runLLMTask<{
     inconsistencies: DocConsistencyFinding[];
-  }>({ prompt, spawn: opts.spawn, cwd: opts.repoPath, model: "sonnet", loop: "doc", jobType: "doc-consistency" }, (json) => {
-    const parsed = JSON.parse(json) as {
-      inconsistencies?: DocConsistencyFinding[];
-    };
-    return { inconsistencies: parsed.inconsistencies ?? [] };
-  });
+  }>(
+    {
+      prompt,
+      spawn: opts.spawn,
+      cwd: opts.repoPath,
+      model: "sonnet",
+      loop: "doc",
+      jobType: "doc-consistency",
+    },
+    (json) => {
+      const parsed = JSON.parse(json) as {
+        inconsistencies?: DocConsistencyFinding[];
+      };
+      return { inconsistencies: parsed.inconsistencies ?? [] };
+    },
+  );
   return result.inconsistencies;
 }
 

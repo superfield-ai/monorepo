@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { makeLogger, type Logger, type LogLevel } from "./logger.ts";
+import { makeLogger, type Logger } from "./logger.ts";
 import {
   resolveJobCandidates,
   type JobType,
@@ -127,7 +127,8 @@ export async function spawnAgent(opts: AgentOpts): Promise<AgentResult> {
   const logger = makeAgentLogger(opts.loop);
 
   // Honour explicit provider override (opts or env var), else use job registry.
-  const envProvider = process.env.SUPERFIELD_AGENT_PROVIDER?.trim().toLowerCase();
+  const envProvider =
+    process.env.SUPERFIELD_AGENT_PROVIDER?.trim().toLowerCase();
   const explicitProvider =
     opts.provider && opts.provider !== "auto"
       ? opts.provider
@@ -319,12 +320,7 @@ async function spawnAgentBackend(
       "trace",
       `running command: ${backend} ${args.join(" ")} in ${opts.worktreePath}`,
     );
-    run = await runCli(
-      backend,
-      args,
-      opts.worktreePath,
-      logger,
-    );
+    run = await runCli(backend, args, opts.worktreePath, logger);
   } finally {
     clearInterval(heartbeat);
   }
@@ -344,7 +340,7 @@ async function spawnAgentBackend(
 function buildArgs(
   backend: AgentBackend,
   opts: AgentOpts,
-  logger: AgentLogger,
+  _logger: AgentLogger,
 ): string[] {
   if (backend === "claude") {
     const args: string[] = [

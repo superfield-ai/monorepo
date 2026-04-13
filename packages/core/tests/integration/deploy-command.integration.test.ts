@@ -4,7 +4,10 @@ import * as path from "node:path";
 
 import { afterEach, describe, expect, it } from "vitest";
 
-import { runDeployCommand, type DeployProcessStep } from "../../commands/deploy.ts";
+import {
+  runDeployCommand,
+  type DeployProcessStep,
+} from "../../commands/deploy.ts";
 
 describe("runDeployCommand — demo wiring", () => {
   let tmpDir: string | null = null;
@@ -49,7 +52,9 @@ describe("runDeployCommand — demo wiring", () => {
     ).toContain("kind: Secret");
 
     expect(
-      steps.map((step) => `${step.phase}:${step.command} ${step.args.join(" ")}`),
+      steps.map(
+        (step) => `${step.phase}:${step.command} ${step.args.join(" ")}`,
+      ),
     ).toEqual([
       "provision:docker --version",
       "provision:k3d version",
