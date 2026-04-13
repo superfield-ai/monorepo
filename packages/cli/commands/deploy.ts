@@ -1,20 +1,51 @@
-import { parseDeployPhase, runDeployCommand } from "@superfield/core";
+import { runDeployCommand } from "@superfield/core";
 
-const USAGE = "Usage: superfield deploy provision|deploy [target]";
+const USAGE = "Usage: superfield deploy [--provision] [target]";
 
-export async function deployCommand(
-  phase?: string,
-  target?: string,
-): Promise<void> {
-  const parsedPhase = parseDeployPhase(phase);
-  if (parsedPhase === null) {
+export interface ParsedDeployArgs {
+  provisionOnly: boolean;
+  target?: string;
+  unknown: string[];
+}
+
+export function parseDeployArgs(args: string[]): ParsedDeployArgs {
+  let provisionOnly = false;
+  let target: string | undefined;
+  const unknown: string[] = [];
+
+  for (const arg of args) {
+    if (arg === "--provision") {
+      provisionOnly = true;
+      continue;
+    }
+    if (arg.startsWith("--")) {
+      unknown.push(arg);
+      continue;
+    }
+    if (target === undefined) {
+      target = arg;
+      continue;
+    }
+    unknown.push(arg);
+  }
+
+  return {
+    provisionOnly,
+    target,
+    unknown,
+  };
+}
+
+export async function deployCommand(args: string[]): Promise<void> {
+  const parsed = parseDeployArgs(args);
+  if (parsed.unknown.length > 0) {
     console.error(USAGE);
     process.exit(1);
     return;
   }
 
   await runDeployCommand({
-    phase: parsedPhase,
-    ...(target ? { target } : {}),
+    provisionOnly: parsed.provisionOnly,
+    ...(parsed.target ? { target: parsed.target } : {}),
   });
 }

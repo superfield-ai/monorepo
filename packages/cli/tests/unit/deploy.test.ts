@@ -1,48 +1,81 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { deployCommand } from "../../commands/deploy.ts";
+import { deployCommand, parseDeployArgs } from "../../commands/deploy.ts";
 
 const mocks = vi.hoisted(() => ({
-  parseDeployPhase: vi.fn(),
   runDeployCommand: vi.fn(),
 }));
 
 vi.mock("@superfield/core", () => ({
-  parseDeployPhase: mocks.parseDeployPhase,
   runDeployCommand: mocks.runDeployCommand,
 }));
 
 afterEach(() => {
   vi.restoreAllMocks();
-  mocks.parseDeployPhase.mockReset();
   mocks.runDeployCommand.mockReset();
 });
 
+describe("parseDeployArgs", () => {
+  it("defaults to a full demo deploy when no args are provided", () => {
+    expect(parseDeployArgs([])).toEqual({
+      provisionOnly: false,
+      target: undefined,
+      unknown: [],
+    });
+  });
+
+  it("parses --provision with an optional target in any order", () => {
+    expect(parseDeployArgs(["--provision", "demo"])).toEqual({
+      provisionOnly: true,
+      target: "demo",
+      unknown: [],
+    });
+    expect(parseDeployArgs(["demo", "--provision"])).toEqual({
+      provisionOnly: true,
+      target: "demo",
+      unknown: [],
+    });
+  });
+
+  it("captures unknown flags and extra positionals", () => {
+    expect(parseDeployArgs(["demo", "staging", "--wat"])).toEqual({
+      provisionOnly: false,
+      target: "demo",
+      unknown: ["staging", "--wat"],
+    });
+  });
+});
+
 describe("deployCommand", () => {
-  it("forwards the parsed deploy phase and target to the core command", async () => {
-    mocks.parseDeployPhase.mockReturnValue("provision");
+  it("forwards the default full deploy to the core command", async () => {
     mocks.runDeployCommand.mockResolvedValue(undefined);
 
-    await deployCommand("provision", "demo");
+    await deployCommand([]);
 
-    expect(mocks.parseDeployPhase).toHaveBeenCalledWith("provision");
     expect(mocks.runDeployCommand).toHaveBeenCalledWith({
-      phase: "provision",
+      provisionOnly: false,
+    });
+  });
+
+  it("forwards provision-only mode and target to the core command", async () => {
+    mocks.runDeployCommand.mockResolvedValue(undefined);
+
+    await deployCommand(["--provision", "demo"]);
+
+    expect(mocks.runDeployCommand).toHaveBeenCalledWith({
+      provisionOnly: true,
       target: "demo",
     });
   });
 
-  it("prints usage and exits when the deploy phase is missing", async () => {
-    mocks.parseDeployPhase.mockReturnValue(null);
+  it("prints usage and exits when deploy args are invalid", async () => {
     const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
     const exit = vi.spyOn(process, "exit").mockImplementation(
       (() => undefined) as never,
     );
 
-    await deployCommand(undefined, "demo");
+    await deployCommand(["demo", "staging"]);
 
-    expect(error).toHaveBeenCalledWith(
-      "Usage: superfield deploy provision|deploy [target]",
-    );
+    expect(error).toHaveBeenCalledWith("Usage: superfield deploy [--provision] [target]");
     expect(exit).toHaveBeenCalledWith(1);
     expect(mocks.runDeployCommand).not.toHaveBeenCalled();
   });

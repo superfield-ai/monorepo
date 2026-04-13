@@ -72,10 +72,12 @@ export type {
 export {
   DEPLOY_PHASES,
   DEMO_DEPLOY_TARGET,
+  DeployPhaseExecutionError,
   DeployPhaseNotImplementedError,
   DeployTargetNotImplementedError,
   getDeployTargetModel,
   parseDeployPhase,
+  selectDeployPhases,
   runDeployCommand,
 } from "./commands/deploy.ts";
 export type {
@@ -83,6 +85,8 @@ export type {
   DeployPhaseModel,
   DeployTargetModel,
   DeployCommandOpts,
+  DeployProcessStep,
+  DeployProcessRunner,
 } from "./commands/deploy.ts";
 
 export { runBlueprintConformance } from "./steps/blueprint-conformance.ts";

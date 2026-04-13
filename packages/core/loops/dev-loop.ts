@@ -73,6 +73,8 @@ export interface DevLoopOpts {
   _pruneFn?: (opts: DevLoopOpts) => Promise<PruneResult>;
   /** @internal Test seam — override the tick function used by runDevLoop. */
   _tickFn?: (opts: DevLoopOpts) => Promise<DevLoopTickResult>;
+  /** @internal Test seam — override the supervised loop driver. */
+  _runSupervisedLoop?: typeof runSupervisedLoop;
 }
 
 export interface PruneResult {
@@ -139,6 +141,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   const idleMs = opts.idlePollMs ?? DEFAULT_IDLE_MS;
   const pruneFn = opts._pruneFn ?? runPrunePass;
   const tickFn = opts._tickFn ?? tickDevLoop;
+  const supervisedLoop = opts._runSupervisedLoop ?? runSupervisedLoop;
   // Shared circuit breaker across all slots in this loop instance
   const circuit =
     opts.circuit ?? new CircuitBreaker({ tripAt: 5, resetMs: 5 * 60 * 1000 });
@@ -169,7 +172,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   let firstTick = true;
   const pruneIntervalMs = opts.pruneIntervalMs ?? DEFAULT_PRUNE_INTERVAL_MS;
   let lastPruneAt = Date.now();
-  await runSupervisedLoop({
+  await supervisedLoop({
     runOnce: async () => {
       console.log("[dev] tick start");
       const tickStartMs = Date.now();
