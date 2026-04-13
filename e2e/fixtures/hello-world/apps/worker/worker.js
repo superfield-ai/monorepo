@@ -60,6 +60,10 @@ async function incrementCounter() {
     });
 
     req.on("error", reject);
+    req.setTimeout(5000, () => {
+      req.destroy();
+      reject(new Error("Request timeout"));
+    });
     req.end();
   });
 }
