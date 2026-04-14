@@ -24,12 +24,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
-      - name: Ensure Docker daemon is running
-        run: |
-          echo "Checking Docker installation..."
-          which docker || echo "docker not in PATH"
-          docker ps || echo "Docker daemon check failed"
-          docker version
+      - name: Verify Docker
+        run: docker version
       - name: Install k3d
         run: curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash
       - name: Install kubectl
@@ -41,5 +37,6 @@ jobs:
         if: failure()
         run: |
           kubectl get pods -A || true
-          kubectl describe pod -l app=postgres || true
-          kubectl logs -l app=postgres --tail=50 || true
+          kubectl describe pods || true
+          kubectl logs -l app=postgres --tail=20 || true
+          kubectl logs -l app=api-server --tail=20 || true
