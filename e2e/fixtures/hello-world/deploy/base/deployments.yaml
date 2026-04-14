@@ -18,8 +18,8 @@ spec:
         fsGroup: 999
       containers:
         - name: postgres
-          image: localhost:5000/postgres:dev
-          imagePullPolicy: Always
+          image: postgres:15-alpine
+          imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 5432
           env:

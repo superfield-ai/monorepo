@@ -31,12 +31,4 @@ if [ "$PUSH" = "true" ]; then
   docker push "$REGISTRY/static-web:$TAG"
 fi
 
-# For postgres, use the official postgres image and retag it
-echo "Pulling and retagging postgres..."
-docker pull postgres:15-alpine
-docker tag postgres:15-alpine "$REGISTRY/postgres:$TAG"
-if [ "$PUSH" = "true" ]; then
-  docker push "$REGISTRY/postgres:$TAG"
-fi
-
 echo "Build complete"
