@@ -73,25 +73,39 @@ function makeApiMock(options: {
   grantedPermissions?: string[];
   enabledServices?: string[];
 }) {
-  const { project = ACTIVE_PROJECT, grantedPermissions = [], enabledServices = REQUIRED_SERVICES } = options;
+  const {
+    project = ACTIVE_PROJECT,
+    grantedPermissions = [],
+    enabledServices = REQUIRED_SERVICES,
+  } = options;
 
   return async (input: string | URL | Request): Promise<Response> => {
-    const url = typeof input === "string" ? input : input instanceof URL ? input.href : input.url;
+    const url =
+      typeof input === "string"
+        ? input
+        : input instanceof URL
+          ? input.href
+          : input.url;
 
     // Project GET
-    if (/cloudresourcemanager.*\/projects\/[^:?]+$/.test(url) && !url.includes(":testIamPermissions")) {
+    if (
+      /cloudresourcemanager.*\/projects\/[^:?]+$/.test(url) &&
+      !url.includes(":testIamPermissions")
+    ) {
       if (!project) {
-        return new Response("Not Found", { status: 404, statusText: "Not Found" });
+        return new Response("Not Found", {
+          status: 404,
+          statusText: "Not Found",
+        });
       }
       return new Response(JSON.stringify(project), { status: 200 });
     }
 
     // IAM permissions check
     if (url.includes(":testIamPermissions")) {
-      return new Response(
-        JSON.stringify({ permissions: grantedPermissions }),
-        { status: 200 },
-      );
+      return new Response(JSON.stringify({ permissions: grantedPermissions }), {
+        status: 200,
+      });
     }
 
     // Service state
@@ -111,7 +125,10 @@ describe("runDoctor", () => {
     const deps = makeDeps({
       fetch: makeApiMock({ grantedPermissions: ALL_PROVISION_PERMISSIONS }),
     });
-    const result = await runDoctor({ mode: "provision", projectId: "my-project" }, deps);
+    const result = await runDoctor(
+      { mode: "provision", projectId: "my-project" },
+      deps,
+    );
     expect(result.ok).toBe(true);
     expect(result.missingPermissions).toHaveLength(0);
     expect(result.disabledServices).toHaveLength(0);
@@ -122,12 +139,19 @@ describe("runDoctor", () => {
   it("returns ok=false when permissions are missing", async () => {
     const deps = makeDeps({
       // Only grant a subset of permissions
-      fetch: makeApiMock({ grantedPermissions: ["resourcemanager.projects.get"] }),
+      fetch: makeApiMock({
+        grantedPermissions: ["resourcemanager.projects.get"],
+      }),
     });
-    const result = await runDoctor({ mode: "provision", projectId: "my-project" }, deps);
+    const result = await runDoctor(
+      { mode: "provision", projectId: "my-project" },
+      deps,
+    );
     expect(result.ok).toBe(false);
     expect(result.missingPermissions.length).toBeGreaterThan(0);
-    expect(result.missingPermissions).not.toContain("resourcemanager.projects.get");
+    expect(result.missingPermissions).not.toContain(
+      "resourcemanager.projects.get",
+    );
   });
 
   it("returns ok=false in provision mode when services disabled and cannot enable them", async () => {
@@ -139,7 +163,10 @@ describe("runDoctor", () => {
         enabledServices: [],
       }),
     });
-    const result = await runDoctor({ mode: "provision", projectId: "my-project" }, deps);
+    const result = await runDoctor(
+      { mode: "provision", projectId: "my-project" },
+      deps,
+    );
     expect(result.ok).toBe(false);
     expect(result.disabledServices.length).toBeGreaterThan(0);
     expect(result.warnings.length).toBeGreaterThan(0);
@@ -152,7 +179,10 @@ describe("runDoctor", () => {
         enabledServices: [],
       }),
     });
-    const result = await runDoctor({ mode: "provision", projectId: "my-project" }, deps);
+    const result = await runDoctor(
+      { mode: "provision", projectId: "my-project" },
+      deps,
+    );
     expect(result.ok).toBe(true);
     expect(result.disabledServices.length).toBeGreaterThan(0);
     expect(result.warnings).toHaveLength(0);
@@ -184,7 +214,10 @@ describe("runDoctor", () => {
       // Only grant deploy permissions (not provision ones like compute.instances.create)
       fetch: makeApiMock({ grantedPermissions: ALL_DEPLOY_PERMISSIONS }),
     });
-    const result = await runDoctor({ mode: "deploy", projectId: "my-project" }, deps);
+    const result = await runDoctor(
+      { mode: "deploy", projectId: "my-project" },
+      deps,
+    );
     expect(result.ok).toBe(true);
     expect(result.missingPermissions).toHaveLength(0);
   });
@@ -196,7 +229,10 @@ describe("runDoctor", () => {
         enabledServices: [], // all disabled
       }),
     });
-    const result = await runDoctor({ mode: "deploy", projectId: "my-project" }, deps);
+    const result = await runDoctor(
+      { mode: "deploy", projectId: "my-project" },
+      deps,
+    );
     // Deploy mode doesn't care about service state for ok
     expect(result.ok).toBe(true);
   });

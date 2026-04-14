@@ -99,9 +99,7 @@ export async function runDoctor(
   );
 
   if (!project?.projectId || !project.projectNumber) {
-    throw new Error(
-      `Unable to read project metadata for ${config.projectId}`,
-    );
+    throw new Error(`Unable to read project metadata for ${config.projectId}`);
   }
 
   if (project.lifecycleState && project.lifecycleState !== "ACTIVE") {

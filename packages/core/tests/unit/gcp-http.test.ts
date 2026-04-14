@@ -4,7 +4,8 @@ import type { HttpDeps } from "../../gcp/http.ts";
 
 function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
   return {
-    fetch: async () => new Response(JSON.stringify({ ok: true }), { status: 200 }),
+    fetch: async () =>
+      new Response(JSON.stringify({ ok: true }), { status: 200 }),
     getAccessToken: async () => "test-token",
     ...overrides,
   };
@@ -13,9 +14,14 @@ function makeDeps(overrides: Partial<HttpDeps> = {}): HttpDeps {
 describe("googleJsonRequest", () => {
   it("happy path returns parsed JSON", async () => {
     const deps = makeDeps({
-      fetch: async () => new Response(JSON.stringify({ value: 42 }), { status: 200 }),
+      fetch: async () =>
+        new Response(JSON.stringify({ value: 42 }), { status: 200 }),
     });
-    const result = await googleJsonRequest<{ value: number }>("https://example.com/api", {}, deps);
+    const result = await googleJsonRequest<{ value: number }>(
+      "https://example.com/api",
+      {},
+      deps,
+    );
     expect(result).toEqual({ value: 42 });
   });
 
@@ -35,7 +41,8 @@ describe("googleJsonRequest", () => {
 
   it("throws on non-2xx response", async () => {
     const deps = makeDeps({
-      fetch: async () => new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
+      fetch: async () =>
+        new Response("Forbidden", { status: 403, statusText: "Forbidden" }),
     });
     await expect(
       googleJsonRequest("https://example.com/api", {}, deps),
@@ -53,8 +60,9 @@ describe("googleJsonRequest", () => {
   describe("record/replay", () => {
     it("records on first call and replays on second (no real fetch on replay)", async () => {
       const store: Record<string, string> = {};
-      const fetchMock = vi.fn(async () =>
-        new Response(JSON.stringify({ recorded: true }), { status: 200 }),
+      const fetchMock = vi.fn(
+        async () =>
+          new Response(JSON.stringify({ recorded: true }), { status: 200 }),
       );
 
       const deps: HttpDeps = {
