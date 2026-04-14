@@ -169,7 +169,8 @@ function buildDemoContext(
   deps: DeployCommandDeps,
 ): DemoContext {
   const env = buildDemoEnv(opts.env);
-  const demoRoot = opts.demoRoot ?? path.join(homedir(), "calypso-distribution");
+  const demoRoot =
+    opts.demoRoot ?? path.join(homedir(), "calypso-distribution");
   return {
     target,
     demoRoot,
@@ -186,7 +187,8 @@ function buildDemoContext(
     fileExists: deps.fileExists ?? existsSync,
     copyFile: deps.copyFile ?? copyFileSync,
     checkPvcExists:
-      deps.checkPvcExists ?? ((name) => defaultCheckPvcExists(name, env, demoRoot)),
+      deps.checkPvcExists ??
+      ((name) => defaultCheckPvcExists(name, env, demoRoot)),
     promptVolumeReuse: deps.promptVolumeReuse ?? defaultPromptVolumeReuse,
   };
 }

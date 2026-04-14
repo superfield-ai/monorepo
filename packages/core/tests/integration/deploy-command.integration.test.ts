@@ -119,7 +119,9 @@ describe("runDeployCommand — demo wiring", () => {
     await runDeployCommand(
       { demoRoot: tmpDir },
       {
-        runProcess: async (step) => { steps.push(step); },
+        runProcess: async (step) => {
+          steps.push(step);
+        },
         probeIngress: async () => undefined,
         checkPvcExists: async () => true,
         promptVolumeReuse: async () => true,
@@ -143,7 +145,9 @@ describe("runDeployCommand — demo wiring", () => {
     await runDeployCommand(
       { demoRoot: tmpDir },
       {
-        runProcess: async (step) => { steps.push(step); },
+        runProcess: async (step) => {
+          steps.push(step);
+        },
         probeIngress: async () => undefined,
         checkPvcExists: async () => true,
         promptVolumeReuse: async () => false,

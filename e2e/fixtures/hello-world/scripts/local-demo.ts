@@ -1,7 +1,7 @@
 import { spawnSync } from "node:child_process";
 
 const CLUSTER_NAME = "superfield-e2e";
-const REGISTRY_NAME = "k3d-superfield-reg";
+const REGISTRY_NAME = "superfield-reg";
 
 /**
  * Ensures the k3d cluster and local registry exist and are ready.
