@@ -37,7 +37,9 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-export function startApiServer(opts: ApiServerOpts): void {
+export function startApiServer(
+  opts: ApiServerOpts,
+): ReturnType<typeof createServer> {
   const { host = "127.0.0.1", port = 7837, state, logger } = opts;
 
   const server = createServer(async (req, res) => {
@@ -156,4 +158,6 @@ export function startApiServer(opts: ApiServerOpts): void {
   server.on("error", (err: Error) => {
     logger.emit("warn", `API server error: ${err.message}`);
   });
+
+  return server;
 }

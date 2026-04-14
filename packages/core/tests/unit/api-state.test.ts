@@ -149,4 +149,57 @@ describe("ApiState", () => {
     expect(s.loops.plan.lastTickAt).toBeGreaterThanOrEqual(before);
     expect(s.loops.plan.lastTickAt).toBeLessThanOrEqual(after);
   });
+
+  it("recordLoopTick works for dev and doc loops independently", () => {
+    const s = new ApiState();
+    s.recordLoopTick("dev", 10, "no slots");
+    s.recordLoopTick("doc", 20, "no docs");
+    expect(s.loops.dev.lastTickDurationMs).toBe(10);
+    expect(s.loops.dev.idleReason).toBe("no slots");
+    expect(s.loops.doc.lastTickDurationMs).toBe(20);
+    expect(s.loops.doc.idleReason).toBe("no docs");
+    expect(s.loops.plan.lastTickDurationMs).toBeUndefined();
+  });
+
+  it("consumeSteer is idempotent — second call returns undefined", () => {
+    const s = new ApiState();
+    s.pendingSteers.set("s1", {
+      requestId: "r1",
+      context: "go",
+      queuedAt: Date.now(),
+    });
+    expect(s.consumeSteer("s1")?.context).toBe("go");
+    expect(s.consumeSteer("s1")).toBeUndefined();
+  });
+
+  it("consumeEscalation is idempotent — second call returns undefined", () => {
+    const s = new ApiState();
+    s.pendingEscalations.set(10, { requestId: "e1", queuedAt: Date.now() });
+    expect(s.consumeEscalation(10)?.requestId).toBe("e1");
+    expect(s.consumeEscalation(10)).toBeUndefined();
+  });
+
+  it("recordAgentStart overwrites an existing slot with the same number", () => {
+    const s = new ApiState();
+    s.recordAgentStart({
+      slot: 1,
+      issueNumber: 1,
+      role: "primary",
+      sessionId: "first",
+      backend: "claude",
+      model: "m",
+      startedAt: "",
+    });
+    s.recordAgentStart({
+      slot: 1,
+      issueNumber: 2,
+      role: "speculative",
+      sessionId: "second",
+      backend: "codex",
+      model: "m2",
+      startedAt: "",
+    });
+    expect(s.slots.size).toBe(1);
+    expect(s.slots.get(1)?.sessionId).toBe("second");
+  });
 });
