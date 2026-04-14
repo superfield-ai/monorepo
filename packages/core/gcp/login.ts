@@ -61,7 +61,9 @@ export async function runDeviceCodeFlow(
   );
 
   deps.log("");
-  deps.log("Visit the following URL to authorize Superfield Google Cloud access:");
+  deps.log(
+    "Visit the following URL to authorize Superfield Google Cloud access:",
+  );
   deps.log(`  ${deviceCodeResponse.verification_url}`);
   deps.log("");
   deps.log(`Enter this code when prompted: ${deviceCodeResponse.user_code}`);
@@ -79,8 +81,7 @@ export async function runDeviceCodeFlow(
     deps,
   );
 
-  const tokenFilePath =
-    params.tokenFilePath ?? resolveOAuthTokenFilePath(deps);
+  const tokenFilePath = params.tokenFilePath ?? resolveOAuthTokenFilePath(deps);
 
   await writeLocalOAuthCredentialFile(
     {
@@ -200,7 +201,9 @@ async function requestDeviceCode(
     typeof parsed.expires_in !== "number" ||
     typeof parsed.interval !== "number"
   ) {
-    throw new Error(`Device code response is missing required fields: ${bodyText}`);
+    throw new Error(
+      `Device code response is missing required fields: ${bodyText}`,
+    );
   }
 
   return parsed as DeviceCodeResponse;

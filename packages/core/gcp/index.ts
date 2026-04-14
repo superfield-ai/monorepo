@@ -6,7 +6,11 @@ export {
   getGoogleCredentialInfo,
 } from "./auth.ts";
 
-export type { LoginDeps, LoginLogoutFlags, HandleLoginLogoutDeps } from "./login.ts";
+export type {
+  LoginDeps,
+  LoginLogoutFlags,
+  HandleLoginLogoutDeps,
+} from "./login.ts";
 export {
   makeDefaultLoginDeps,
   runDeviceCodeFlow,

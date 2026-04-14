@@ -1,7 +1,13 @@
 import { createSign } from "node:crypto";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { mkdirSync, chmodSync, existsSync, readFileSync, writeFileSync } from "node:fs";
+import {
+  mkdirSync,
+  chmodSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs";
 
 import type {
   AuthDeps,
@@ -107,7 +113,10 @@ function resolveCredentialDescriptor(deps: AuthDeps): GcpCredentialDescriptor {
   const keyFile = env("GCP_SERVICE_ACCOUNT_KEY_FILE");
   if (keyFile) {
     return {
-      key: parseServiceAccountKey(readFile(keyFile), "GCP_SERVICE_ACCOUNT_KEY_FILE"),
+      key: parseServiceAccountKey(
+        readFile(keyFile),
+        "GCP_SERVICE_ACCOUNT_KEY_FILE",
+      ),
       source: "GCP_SERVICE_ACCOUNT_KEY_FILE",
       type: "service-account-json",
     };
@@ -136,7 +145,11 @@ export async function getGoogleAccessToken(deps: AuthDeps): Promise<string> {
     const oauth = descriptor.oauth!;
 
     // Still valid (with 60s buffer)
-    if (oauth.access_token && oauth.expires_at_ms && oauth.expires_at_ms - now > 60_000) {
+    if (
+      oauth.access_token &&
+      oauth.expires_at_ms &&
+      oauth.expires_at_ms - now > 60_000
+    ) {
       return oauth.access_token;
     }
 
@@ -186,7 +199,10 @@ export async function getGoogleAccessToken(deps: AuthDeps): Promise<string> {
 
     // Persist the refreshed token back to the file
     const oauthFilePath = resolveOAuthTokenFilePath(deps);
-    deps.writeFile(oauthFilePath, `${JSON.stringify(updatedCredential, null, 2)}\n`);
+    deps.writeFile(
+      oauthFilePath,
+      `${JSON.stringify(updatedCredential, null, 2)}\n`,
+    );
 
     return refreshed.access_token;
   }
@@ -241,7 +257,10 @@ export function getGoogleCredentialInfo(deps: AuthDeps): GoogleCredentialInfo {
 // Helpers
 // ---------------------------------------------------------------------------
 
-function parseServiceAccountKey(rawJson: string, source: string): ServiceAccountKey {
+function parseServiceAccountKey(
+  rawJson: string,
+  source: string,
+): ServiceAccountKey {
   let parsed: ServiceAccountKey;
   try {
     parsed = JSON.parse(rawJson) as ServiceAccountKey;
@@ -267,7 +286,10 @@ function parseServiceAccountKey(rawJson: string, source: string): ServiceAccount
   return parsed;
 }
 
-function parseLocalOAuthCredential(rawJson: string, source: string): LocalOAuthCredential {
+function parseLocalOAuthCredential(
+  rawJson: string,
+  source: string,
+): LocalOAuthCredential {
   let parsed: LocalOAuthCredential;
   try {
     parsed = JSON.parse(rawJson) as LocalOAuthCredential;
@@ -285,7 +307,10 @@ function parseLocalOAuthCredential(rawJson: string, source: string): LocalOAuthC
       `Credential from ${source} is missing client_id or refresh_token`,
     );
   }
-  if (parsed.expires_at_ms !== undefined && !Number.isFinite(parsed.expires_at_ms)) {
+  if (
+    parsed.expires_at_ms !== undefined &&
+    !Number.isFinite(parsed.expires_at_ms)
+  ) {
     throw new Error(`Credential from ${source} has invalid expires_at_ms`);
   }
   return parsed;

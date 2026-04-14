@@ -1,5 +1,8 @@
 import { describe, it, expect, vi } from "vitest";
-import { getGoogleAccessToken, getGoogleCredentialInfo } from "../../gcp/auth.ts";
+import {
+  getGoogleAccessToken,
+  getGoogleCredentialInfo,
+} from "../../gcp/auth.ts";
 import type { AuthDeps } from "../../gcp/auth.ts";
 
 const FAKE_SA_KEY = {
@@ -38,7 +41,9 @@ function makeDeps(overrides: Partial<AuthDeps> = {}): AuthDeps {
 
 describe("getGoogleAccessToken", () => {
   it("returns token from GCP_ACCESS_TOKEN env var", async () => {
-    const deps = makeDeps({ env: (name) => (name === "GCP_ACCESS_TOKEN" ? "my-raw-token" : undefined) });
+    const deps = makeDeps({
+      env: (name) => (name === "GCP_ACCESS_TOKEN" ? "my-raw-token" : undefined),
+    });
     const token = await getGoogleAccessToken(deps);
     expect(token).toBe("my-raw-token");
   });
@@ -96,16 +101,19 @@ describe("getGoogleAccessToken", () => {
   });
 
   it("falls back to service account JSON env when no OAuth file", async () => {
-    const fetchMock = vi.fn().mockResolvedValue(
-      new Response(
-        JSON.stringify({ access_token: "sa-token", expires_in: 3600 }),
-        { status: 200 },
-      ),
-    );
+    const fetchMock = vi
+      .fn()
+      .mockResolvedValue(
+        new Response(
+          JSON.stringify({ access_token: "sa-token", expires_in: 3600 }),
+          { status: 200 },
+        ),
+      );
 
     const deps = makeDeps({
       env: (name) => {
-        if (name === "GCP_SERVICE_ACCOUNT_JSON") return JSON.stringify(FAKE_SA_KEY);
+        if (name === "GCP_SERVICE_ACCOUNT_JSON")
+          return JSON.stringify(FAKE_SA_KEY);
         return undefined;
       },
       fetch: fetchMock,
@@ -143,7 +151,8 @@ describe("getGoogleCredentialInfo", () => {
   it("returns principal=client_email for service account", () => {
     const deps = makeDeps({
       env: (name) => {
-        if (name === "GCP_SERVICE_ACCOUNT_JSON") return JSON.stringify(FAKE_SA_KEY);
+        if (name === "GCP_SERVICE_ACCOUNT_JSON")
+          return JSON.stringify(FAKE_SA_KEY);
         return undefined;
       },
     });

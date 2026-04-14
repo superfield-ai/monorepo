@@ -51,13 +51,20 @@ describe("runDeviceCodeFlow", () => {
     // First call returns device code, second returns success token
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(makeDeviceCodeResponse(), { status: 200 }))
-      .mockResolvedValueOnce(new Response(makeSuccessTokenResponse(), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(makeDeviceCodeResponse(), { status: 200 }),
+      )
+      .mockResolvedValueOnce(
+        new Response(makeSuccessTokenResponse(), { status: 200 }),
+      );
 
     const deps = makeDeps({
       fetch: fetchMock,
-      writeFile: (p, c) => { writtenFiles[p] = c; },
-      env: (name) => (name === "GCP_OAUTH_TOKEN_FILE" ? "/tmp/sf-oauth.json" : undefined),
+      writeFile: (p, c) => {
+        writtenFiles[p] = c;
+      },
+      env: (name) =>
+        name === "GCP_OAUTH_TOKEN_FILE" ? "/tmp/sf-oauth.json" : undefined,
     });
 
     await runDeviceCodeFlow(
@@ -80,14 +87,22 @@ describe("runDeviceCodeFlow", () => {
   it("handles authorization_pending correctly (keeps polling)", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(makeDeviceCodeResponse(), { status: 200 }))
       .mockResolvedValueOnce(
-        new Response(makeErrorTokenResponse("authorization_pending"), { status: 400 }),
+        new Response(makeDeviceCodeResponse(), { status: 200 }),
       )
       .mockResolvedValueOnce(
-        new Response(makeErrorTokenResponse("authorization_pending"), { status: 400 }),
+        new Response(makeErrorTokenResponse("authorization_pending"), {
+          status: 400,
+        }),
       )
-      .mockResolvedValueOnce(new Response(makeSuccessTokenResponse(), { status: 200 }));
+      .mockResolvedValueOnce(
+        new Response(makeErrorTokenResponse("authorization_pending"), {
+          status: 400,
+        }),
+      )
+      .mockResolvedValueOnce(
+        new Response(makeSuccessTokenResponse(), { status: 200 }),
+      );
 
     const deps = makeDeps({
       fetch: fetchMock,
@@ -112,21 +127,27 @@ describe("runDeviceCodeFlow", () => {
     const sleepCalls: number[] = [];
     let callCount = 0;
 
-    const fetchMock = vi.fn().mockImplementation(async (url: string) => {
+    const fetchMock = vi.fn().mockImplementation(async (_url: string) => {
       callCount += 1;
       if (callCount === 1) {
         // device code request
-        return new Response(makeDeviceCodeResponse({ interval: 5 }), { status: 200 });
+        return new Response(makeDeviceCodeResponse({ interval: 5 }), {
+          status: 200,
+        });
       }
       if (callCount === 2) {
-        return new Response(makeErrorTokenResponse("slow_down"), { status: 400 });
+        return new Response(makeErrorTokenResponse("slow_down"), {
+          status: 400,
+        });
       }
       return new Response(makeSuccessTokenResponse(), { status: 200 });
     });
 
     const deps = makeDeps({
       fetch: fetchMock,
-      sleep: async (ms) => { sleepCalls.push(ms); },
+      sleep: async (ms) => {
+        sleepCalls.push(ms);
+      },
       writeFile: () => {},
     });
 
@@ -148,7 +169,9 @@ describe("runDeviceCodeFlow", () => {
   it("throws on access_denied", async () => {
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(makeDeviceCodeResponse(), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(makeDeviceCodeResponse(), { status: 200 }),
+      )
       .mockResolvedValueOnce(
         new Response(makeErrorTokenResponse("access_denied"), { status: 400 }),
       );
@@ -172,10 +195,14 @@ describe("runDeviceCodeFlow", () => {
     let nowValue = 1_000_000;
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(new Response(makeDeviceCodeResponse(), { status: 200 }))
+      .mockResolvedValueOnce(
+        new Response(makeDeviceCodeResponse(), { status: 200 }),
+      )
       // Each poll returns pending; now() advances past timeout
       .mockResolvedValue(
-        new Response(makeErrorTokenResponse("authorization_pending"), { status: 400 }),
+        new Response(makeErrorTokenResponse("authorization_pending"), {
+          status: 400,
+        }),
       );
 
     const deps = makeDeps({

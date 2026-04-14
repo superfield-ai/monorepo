@@ -42,6 +42,9 @@ export interface AuthDeps {
   readFile: (filePath: string) => string;
   writeFile: (filePath: string, contents: string) => void;
   fileExists: (filePath: string) => boolean;
-  fetch: (input: string | URL | Request, init?: RequestInit) => Promise<Response>;
+  fetch: (
+    input: string | URL | Request,
+    init?: RequestInit,
+  ) => Promise<Response>;
   now: () => number;
 }
