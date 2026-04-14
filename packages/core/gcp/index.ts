@@ -24,3 +24,14 @@ export type {
   GcpCredentialType,
   GcpCredentialDescriptor,
 } from "./types.ts";
+
+export type { HttpDeps } from "./http.ts";
+export { googleJsonRequest, makeDefaultHttpDeps } from "./http.ts";
+
+export type {
+  DoctorMode,
+  DoctorConfig,
+  DoctorResult,
+  DoctorDeps,
+} from "./doctor.ts";
+export { runDoctor } from "./doctor.ts";
