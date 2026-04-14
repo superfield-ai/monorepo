@@ -62,7 +62,7 @@ spec:
     spec:
       containers:
         - name: api-server
-          image: localhost:5000/api-server:dev
+          image: k3d-superfield-reg:5000/api-server:dev
           imagePullPolicy: Always
           ports:
             - containerPort: 8080
@@ -108,7 +108,7 @@ spec:
             ]
       containers:
         - name: worker
-          image: localhost:5000/worker:dev
+          image: k3d-superfield-reg:5000/worker:dev
           imagePullPolicy: Always
           env:
             - name: API_SERVER_HOST
@@ -139,7 +139,7 @@ spec:
     spec:
       containers:
         - name: static-web
-          image: localhost:5000/static-web:dev
+          image: k3d-superfield-reg:5000/static-web:dev
           imagePullPolicy: Always
           ports:
             - containerPort: 80

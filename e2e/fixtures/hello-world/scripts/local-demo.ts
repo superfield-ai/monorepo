@@ -2,6 +2,7 @@ import { spawnSync } from "node:child_process";
 
 const CLUSTER_NAME = "superfield-e2e";
 const REGISTRY_NAME = "superfield-reg";
+const REGISTRY_K3D_NAME = `k3d-${REGISTRY_NAME}`;
 
 /**
  * Ensures the k3d cluster and local registry exist and are ready.
@@ -20,7 +21,7 @@ export async function ensureCluster(): Promise<void> {
       "cluster",
       "create",
       CLUSTER_NAME,
-      `--registry-use=${REGISTRY_NAME}:5000`,
+      `--registry-use=${REGISTRY_K3D_NAME}:5000`,
       "--port=58080:80@loadbalancer",
       "--wait",
     ],
