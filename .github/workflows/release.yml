@@ -14,6 +14,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: oven-sh/setup-bun@v2
 
@@ -24,6 +26,7 @@ jobs:
           SUPERFIELD_BUILD_VERSION="${GITHUB_REF_NAME#v}" \
           SUPERFIELD_BUILD_COMMIT="${GITHUB_SHA}" \
           SUPERFIELD_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+          SUPERFIELD_BUILD_BLUEPRINT_COMMIT="$(git -C blueprint rev-parse --short HEAD)" \
           bun run --filter @superfield/cli release
 
       - name: Stage release asset
@@ -38,6 +41,7 @@ jobs:
           printf '%s\n' "$help_output"
           printf '%s\n' "$help_output" | grep -F "Version: ${GITHUB_REF_NAME#v}"
           printf '%s\n' "$help_output" | grep -F "Commit: ${GITHUB_SHA}"
+          printf '%s\n' "$help_output" | grep -F "Blueprint: $(git -C blueprint rev-parse --short HEAD)"
           printf '%s\n' "$help_output" | grep -F "Build date:"
 
       - name: Publish release

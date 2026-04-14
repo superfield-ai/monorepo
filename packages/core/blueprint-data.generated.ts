@@ -4661,7 +4661,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "rules": [
         {
           "deprecated": false,
-          "description": "A single task_queue table in the application's PostgreSQL instance serves as the queue for all agent types. Per-type views and row-level security isolate agent types from each other. The API gateway is the sole writer. Workers poll views and claim via API. No external message broker. Appropriate for task volumes up to low hundreds per minute. If throughput exceeds PostgreSQL's capacity, the queue table schema and worker lifecycle remain unchanged — only the transport layer (read path) would swap to a dedicated broker.\n",
+          "description": "A single task_queue table in the application's PostgreSQL instance serves as the queue for all agent types. Per-type views are queried by the API server only. The API gateway is the sole reader and writer at the database layer. Workers discover tasks via SSE and claim via API; they hold no database connection. No external message broker. Appropriate for task volumes up to low hundreds per minute. If throughput exceeds PostgreSQL's capacity, the queue table schema and worker lifecycle remain unchanged — only the API server's transport layer would swap to a dedicated broker.\n",
           "hash": "9a4beaec3954",
           "name": "single-table-postgres-queue",
           "number": "TQ-A-001",
@@ -4709,7 +4709,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "LISTEN/NOTIFY channels are per agent type (task_queue_coding, task_queue_analysis). A notification on one channel does not wake workers of a different type. Trigger function verified to use NEW.agent_type in the channel name.\n",
+          "description": "LISTEN/NOTIFY channels are per agent type (task_queue_coding, task_queue_analysis). The API server holds one LISTEN connection per channel; each SSE client is subscribed to exactly one channel matching its service token's agent type. A pg_notify on one channel does not propagate to SSE clients of a different type. Verified: trigger function uses NEW.agent_type in the channel name; API server fan-out is verified to reach only SSE streams registered for that channel.\n",
           "hash": "add350cf11b9",
           "name": "notification-channel-per-type",
           "number": "TQ-C-006",
@@ -4725,9 +4725,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Worker startup with a write-capable database role panics before entering the main loop. Tested by provisioning a role with INSERT on task_queue and verifying the worker exits with a non-zero status and a logged permission error.\n",
+          "description": "Worker startup aborts if any database credential environment variable is detected (DATABASE_URL, PGPASSWORD, PGHOST, etc.). The worker binary checks for these variables at startup and exits with a non-zero status and a logged error before entering the main loop. Tested by injecting a dummy DATABASE_URL and verifying the worker refuses to start.\n",
           "hash": "9110f8b7a172",
-          "name": "startup-role-verification-tested",
+          "name": "startup-credential-absence-verified",
           "number": "TQ-C-008",
           "type": "checklist"
         },
@@ -4757,7 +4757,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Each agent type reads from a dedicated PostgreSQL view (task_queue_view_<type>) that filters by agent_type and exposes only the columns the worker needs (id, job_type, status, payload, correlation_id, priority, created_at, attempt, max_attempts). Sensitive columns (delegated_token, created_by, result, error_message) are excluded from views. Workers receive delegated tokens only through the claim API response.\n",
+          "description": "The API server queries a dedicated PostgreSQL view (task_queue_view_<type>) per agent type when serving SSE heartbeats, the claim endpoint, and task-status reads. Views filter by agent_type and project only non-sensitive columns: id, job_type, status, payload, correlation_id, priority, created_at, attempt, max_attempts. Sensitive columns (delegated_token, created_by, result, error_message) are excluded. Workers never query these views directly — they receive only what the API returns in claim and fetch responses.\n",
           "hash": "e9256535c69a",
           "name": "per-type-filtered-views",
           "number": "TQ-D-004",
@@ -4765,9 +4765,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "A PostgreSQL AFTER INSERT trigger calls pg_notify('task_queue_<agent_type>', task_id) on each new task insertion. Workers LISTEN on their type-specific channel and wake immediately on notification rather than waiting for the next poll interval. The poll loop remains the authoritative discovery mechanism; notifications only reduce latency.\n",
+          "description": "A PostgreSQL AFTER INSERT trigger calls pg_notify('task_queue_<agent_type>', task_id) on each new task insertion. The API server — not workers — holds a persistent LISTEN connection per agent type and forwards each notification to all workers of that type over SSE. Workers have no database connection; they receive task-available signals exclusively through the SSE stream.\n",
           "hash": "869d373d9461",
-          "name": "listen-notify-wake",
+          "name": "api-server-listen-notify-sse-fanout",
           "number": "TQ-D-005",
           "type": "design_pattern"
         },
@@ -4829,7 +4829,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "PostgreSQL LISTEN/NOTIFY reduces poll latency by waking workers when new tasks are inserted. Notifications are best-effort delivery hints. The polling loop with a bounded interval is the authoritative discovery mechanism. A worker that misses every notification must still discover and claim tasks within one poll interval. The queue table is the source of truth; the notification channel is an optimization.\n",
+          "description": "PostgreSQL LISTEN/NOTIFY reduces task delivery latency and is implemented entirely within the API server — workers never hold a database connection. The API server maintains one LISTEN connection per agent type and fans pg_notify events out to workers over Server-Sent Events (SSE). The API server's own poll loop with a bounded interval is the authoritative discovery mechanism: if no pg_notify arrives before the interval elapses, the API server emits a heartbeat SSE event to connected workers. The queue table is the source of truth; notifications and the SSE fan-out are transport optimizations that do not change the claim-execute-submit contract.\n",
           "hash": "d3356916c05d",
           "name": "notification-assists-polling-not-replaces",
           "number": "TQ-P-005",
@@ -4885,7 +4885,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "A worker that polls in a tight loop with no interval or backoff when the queue is empty wastes database connections, CPU, and I/O. The poll loop must sleep for a configurable interval (default: seconds, not milliseconds) when no tasks are found, and notifications should reduce effective latency without tight polling.\n",
+          "description": "The API server's internal poll loop running with no interval or backoff when the queue is empty wastes database connections, CPU, and I/O. The API server's poll loop must sleep for a configurable interval (default: seconds, not milliseconds) when no tasks are found. Workers never poll the database directly; they receive SSE heartbeats driven by the API server's poll loop and are never in a position to create a tight database poll loop.\n",
           "hash": "4573785143b4",
           "name": "polling-without-backoff",
           "number": "TQ-X-001",
@@ -4909,7 +4909,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Relying on LISTEN/NOTIFY as the sole mechanism for task discovery. Notifications are best-effort — they are lost during connection interruptions, channel buffer overflows, and worker restarts. A worker that only wakes on notification will miss tasks inserted while it was disconnected. The polling loop is mandatory; notifications are supplementary.\n",
+          "description": "The API server relying on LISTEN/NOTIFY as the sole mechanism for task discovery, with no internal poll-loop fallback. Notifications are best-effort — lost during connection interruptions, channel buffer overflows, and API server restarts. The API server's bounded poll loop is mandatory; SSE heartbeats driven by that loop ensure workers receive a wakeup even when no pg_notify fires. Workers that depend only on SSE task_available events (and receive no heartbeat) will stall silently if the API server's LISTEN connection drops.\n",
           "hash": "0718a9a15e3f",
           "name": "notification-as-sole-trigger",
           "number": "TQ-X-004",
@@ -4921,6 +4921,14 @@ export const BLUEPRINT_DATA: BlueprintSource = {
           "hash": "6a18e8f4ff97",
           "name": "api-server-executes-cpu-bound-work",
           "number": "TQ-X-005",
+          "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "A worker container connecting to the database for any purpose — including reading the task queue view — violates zero-database-connectivity (WORKER-P-001). The task queue is not a public read surface; it is an internal API-server resource. Even a read-only connection grants the worker database credentials, a port-5432 network path, and the ability to probe schema structure and exhaust the connection pool. Task discovery must flow through the API's SSE stream (WORKER-D-001); task claiming must flow through the API's claim endpoint. The database is not a worker API.\n",
+          "hash": "d9c4e1b72a30",
+          "name": "worker-direct-database-connection",
+          "number": "TQ-X-006",
           "type": "antipattern"
         }
       ],
@@ -5507,6 +5515,14 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
+          "description": "The compliance framework for a generative-UI product is produced\n once per product by a five-gate DAG. Each gate emits its own\n separately-addressable JSON artifact; the framework is the union\n of the five artifacts. Gates execute in dependency order: a gate\n may run as soon as all its prerequisite gates have reached pass or\n pass_with_revisions. Gate outputs feed into per-view contract\n specs and, through them, into implementation. Each gate returns\n one of three statuses: pass, pass_with_revisions, or fail.\n High-severity findings block framework approval until the\n synthesizer revises the affected artifacts and reruns the affected\n gates.\n",
+          "hash": "1f4c2d9a7b8e",
+          "name": "compliance-framework-gate-dag",
+          "number": "UX-A-004",
+          "type": "architecture"
+        },
+        {
+          "deprecated": false,
           "description": "Service flow maps are written and reviewed for all primary user goals\n before any interface implementation begins.\n",
           "hash": "f3f42fba19c6",
           "name": "service-flow-maps-before-implementation",
@@ -5571,7 +5587,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Visual quality verified via headless Playwright screenshot capture;\n screenshots reviewed by a vision-capable model or human stakeholder. No\n live browser session required or permitted.\n",
+          "description": "Visual quality verified in CI via headless screenshot capture;\n screenshots reviewed by a vision-capable model. CI verification does\n not require a display server or a live browser session. Manual\n stakeholder and usability review stages are out of scope for this\n check.\n",
           "hash": "5efd041cefe4",
           "name": "visual-quality-verified-headless",
           "number": "UX-C-009",
@@ -5579,7 +5595,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Designers have signed off that no specification references a specific\n front-end framework, component, or CSS property.\n",
+          "description": "No specification references a specific front-end framework, component,\n library, or CSS property. Specifications describe user needs, states,\n and feedback only; implementation choices belong downstream.\n",
           "hash": "e7252852006f",
           "name": "specs-no-framework-references",
           "number": "UX-C-010",
@@ -5683,6 +5699,278 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
+          "description": "Required UX governance artifacts exist for each phase and are stored as\n canonical JSON with the required metadata fields: artifact_id,\n artifact_type, phase, version, status, owner, updated_at,\n source_artifacts, and derived_artifacts.\n",
+          "hash": "5a3c8e1b6d0f",
+          "name": "ux-governance-artifacts-versioned",
+          "number": "UX-C-023",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "UX governance artifacts declare the ordered gate sequence, the three\n gate statuses (pass, pass_with_revisions, fail), and the explicit fail\n conditions for each gate before high-fidelity design is approved.\n",
+          "hash": "2b7d1e9f4a6c",
+          "name": "governance-gates-declared",
+          "number": "UX-C-024",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "All review findings use the structured critique format and the synthesis\n loop continues until all high-severity issues are cleared. A\n pass_with_revisions result is acceptable only when the remaining\n revisions are non-blocking and explicitly tracked.\n",
+          "hash": "7c2e1a9d5b4f",
+          "name": "structured-critiques-and-revision-loop",
+          "number": "UX-C-025",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Accessibility structure invariants are enforced in CI. Critical views\n must match the approved ARIA snapshot and fail on critical axe\n violations.\n",
+          "hash": "e25d3654327e",
+          "name": "accessibility-structure-invariants-enforced",
+          "number": "UX-C-026",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "DOM and CSS conformance is enforced in CI. Critical views must use\n approved tokens and components, avoid hardcoded spacing or color where\n tokens exist, and pass layout invariants for overflow, overlap, and\n primary-action placement.\n",
+          "hash": "46ed8e8e96d6",
+          "name": "dom-css-design-token-layout-conformance",
+          "number": "UX-C-027",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Flow graph invariants are enforced in CI. Implemented navigation and\n task transitions must cover the approved state graph without dead ends,\n missing states, or unreachable critical actions.\n",
+          "hash": "ab7ab23512ad",
+          "name": "flow-graph-invariants-enforced",
+          "number": "UX-C-028",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Targeted visual regression is enforced in CI using headless screenshots\n for critical views and states. Missing baselines or excessive drift in\n whitelisted regions blocks merge.\n",
+          "hash": "8b04a200f070",
+          "name": "targeted-visual-regression-enforced",
+          "number": "UX-C-029",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Performance and rendering sanity are enforced in CI. Critical pages must\n render without hydration failures, blank first paint, or unacceptable\n layout instability.\n",
+          "hash": "24f52c5dd608",
+          "name": "performance-and-rendering-sanity-enforced",
+          "number": "UX-C-030",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Every deterministic-gate CI run emits ux-conformance-report.json\n with run identity, per-view check results, evidence pointers,\n blocking issues, and a final merge decision.\n",
+          "hash": "f9b2be6bec16",
+          "name": "ux-conformance-report-emitted",
+          "number": "UX-C-031",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Saliency scoring runs in CI and emits warning-only scores, heatmaps, and\n evidence for critical views and states.\n",
+          "hash": "d14e2f6a9b01",
+          "name": "saliency-scoring-warning-only",
+          "number": "UX-C-032",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Screenshot layout parsing runs in CI and emits warning-only structural\n scores for hierarchy, balance, and focal-point drift.\n",
+          "hash": "d14e2f6a9b02",
+          "name": "screenshot-layout-parsing-warning-only",
+          "number": "UX-C-033",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Model-assisted UX linting runs in CI and emits warning-only findings for\n ambiguous labels, clutter, and unsupported interaction patterns.\n",
+          "hash": "d14e2f6a9b03",
+          "name": "model-assisted-ux-lint-warning-only",
+          "number": "UX-C-034",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Synthetic walkthrough quality scoring runs in CI and emits warning-only\n findings for friction, detours, and incomplete state handling.\n",
+          "hash": "d14e2f6a9b04",
+          "name": "synthetic-walkthrough-quality-warning-only",
+          "number": "UX-C-035",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Promotion criteria are defined before any threshold-scored signal\n can become merge-blocking. Calibration thresholds, labeled\n baselines, and error rates must be documented.\n",
+          "hash": "d14e2f6a9b05",
+          "name": "soft-signal-promotion-criteria-defined",
+          "number": "UX-C-036",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "The UX conformance report includes a soft_signals section with\n warning status, scores, evidence pointers, and calibration metadata\n for threshold-scored jobs.\n",
+          "hash": "d14e2f6a9b06",
+          "name": "soft-signals-recorded-in-conformance-report",
+          "number": "UX-C-037",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Approved state-matrix.json exists for each scoped UX surface and covers\n the required routes, breakpoints, and states for that surface. Every\n declared route includes explicit loading, empty, error, success, and\n permission_denied coverage where the state can occur.\n",
+          "hash": "68678e6ff182",
+          "name": "state-matrix-coverage-complete",
+          "number": "UX-C-038",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Flow path invariants are verified: no approved route is a dead end, the\n critical action for each primary task is reachable within the configured\n max-step threshold, and any denied or empty state provides an explicit\n next step or recovery path.\n",
+          "hash": "1cdc130608fa",
+          "name": "flow-path-invariants-verified",
+          "number": "UX-C-039",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Every view in the screen spec declares a primary user goal drawn from\n the jobs-to-be-done (JTBD) controlled vocabulary. Secondary goals,\n where present, draw from the same vocabulary.\n",
+          "hash": "5c2a9e8f3b7d",
+          "name": "user-goal-declared-from-jtbd-vocabulary",
+          "number": "UX-C-040",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Each view declares a reading pattern and assigns the primary action to\n a named region. CI computes the primary action's bounding box per\n declared breakpoint and fails when it falls outside the declared\n region.\n",
+          "hash": "6d3b1a7e4f8c",
+          "name": "primary-action-placement-invariant-verified",
+          "number": "UX-C-041",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Each view declares density caps (max interactive elements, max text\n blocks, max nesting depth, max above-fold elements) and CI fails when\n any measured count exceeds the declared cap.\n",
+          "hash": "7e4c2b8a5d1f",
+          "name": "density-budget-declared-and-verified",
+          "number": "UX-C-042",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Every measurable spacing value in CI-rendered critical views resolves\n to an integer multiple of the declared baseline-grid unit; off-grid\n spacing fails.\n",
+          "hash": "8f5d3c9b6e2a",
+          "name": "baseline-grid-conformance-verified",
+          "number": "UX-C-043",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Every interactive element declared in the screen spec is present in\n the rendered DOM with the declared affordance kind; no rendered\n element is interactive or computes as a false affordance (clickable\n appearance without interactivity) without being declared.\n",
+          "hash": "9a6e4d1c7b3f",
+          "name": "interaction-inventory-matches-dom",
+          "number": "UX-C-044",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Controlled vocabularies for user goal, reading pattern, gaze region,\n affordance kind, state kind, and transition trigger exist in the\n blueprint, and every spec field that uses them references an existing\n vocabulary term. Free-text values in bound fields fail the spec\n gate.\n",
+          "hash": "1b7f5e2d8c4a",
+          "name": "controlled-vocabularies-present-and-referenced",
+          "number": "UX-C-045",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Each UX scope has a complete derivation chain: intake → capability\n map → information architecture → screen spec. Each artifact records\n its inputs, the derivation rule applied, and the output fields\n produced.\n",
+          "hash": "2c8a6f3e9d5b",
+          "name": "derivation-artifact-chain-complete",
+          "number": "UX-C-046",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "The spec-conformance gate emits spec-conformance-report.json and\n passes for the committed specification before any implementation CI\n runs against it. Implementation gates reference the passing\n spec-conformance report by identifier.\n",
+          "hash": "3d9b7a4f1e6c",
+          "name": "spec-conformance-gate-passes-before-implementation",
+          "number": "UX-C-047",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Every field in every governance artifact records the blueprint rule\n (by hash or number) that constrained its value. Fields without\n provenance fail the spec-conformance gate.\n",
+          "hash": "4e1c8b5a2f7d",
+          "name": "spec-field-provenance-recorded",
+          "number": "UX-C-048",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Each view directory contains the required artifacts: one\n *.view.json, one *.state-matrix.json where the view participates in\n a flow, the last-passing *.spec-conformance.json and\n *.ux-conformance.json reports, a generated README.md, and an\n __evidence__/ directory with baseline screenshots and accessibility\n snapshots for each declared state-breakpoint pair.\n",
+          "hash": "1a9f7e5c4b2d",
+          "name": "view-directory-contains-required-artifacts",
+          "number": "UX-C-049",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Every view source module imports its adjacent *.view.json (and\n *.state-matrix.json where applicable). The build fails if the\n import is missing, the target file does not exist, or the imported\n JSON fails schema validation against the blueprint-derived schema.\n",
+          "hash": "2b8e6f4d5c3a",
+          "name": "source-file-imports-view-spec",
+          "number": "UX-C-050",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "Every selector declared in the spec's interaction inventory resolves\n to exactly one DOM element at each declared state-breakpoint pair.\n Selectors that resolve to zero or to more than one element fail CI.\n Elements present in the DOM whose computed style signals\n interactivity (cursor, contrast, hover) but are not declared in the\n inventory also fail (false-affordance check).\n",
+          "hash": "3c7d5a8e6f1b",
+          "name": "interaction-inventory-selectors-resolve-in-dom",
+          "number": "UX-C-051",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "user-contracts.json exists for the product, enumerates every\n supported user action with principal, outcome verb (from the\n controlled vocabulary), target state, and precondition, and has\n status pass or pass_with_revisions for Gate 1.\n",
+          "hash": "5a8c3e7d1f9b",
+          "name": "user-contracts-artifact-present",
+          "number": "UX-C-052",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "information-architecture.json exists, declares the product's\n navigation graph, and asserts that every user contract is reachable\n within the declared max-step threshold with no islands or dead\n ends. Gate 2 status is pass or pass_with_revisions.\n",
+          "hash": "6b9d4f8e2c1a",
+          "name": "information-architecture-artifact-present",
+          "number": "UX-C-053",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "design-system-binding.json exists, declares the adopted design\n system (name, version, reference) together with token catalog,\n baseline-grid unit, component library, and applicable scopes. Gate\n 3 status is pass or pass_with_revisions.\n",
+          "hash": "7c1e5a9f3d8b",
+          "name": "design-system-binding-artifact-present",
+          "number": "UX-C-054",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "data-availability.json exists, maps every user contract to its\n data requirements, sources, availability guarantees, and fallback\n behavior. Every contract is either backed by available data or has\n a declared fallback. Gate 4 status is pass or pass_with_revisions.\n",
+          "hash": "8d2f6b1a4e9c",
+          "name": "data-availability-artifact-present",
+          "number": "UX-C-055",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
+          "description": "edge-case-coverage.json exists, enumerates the non-happy-path\n branches of every user contract with a declared UX outcome for\n each. No enumerated branch is left without declared handling. Gate\n 5 status is pass or pass_with_revisions.\n",
+          "hash": "9e3a7c2b5f1d",
+          "name": "edge-case-coverage-artifact-present",
+          "number": "UX-C-056",
+          "type": "checklist"
+        },
+        {
+          "deprecated": false,
           "description": "Before any visual design begins, map the service flow as a state machine.\n Define entry state, terminal state, every intermediate state, and every\n transition. Annotate each transition with its trigger and feedback. The\n resulting map is the authoritative UX specification from which interfaces\n in any medium are derived. Trade-off: adds time before design begins;\n wrong when the service is exploratory — prototype first, formalize once\n the happy path is stable.\n",
           "hash": "173636ad122f",
           "name": "service-flow-mapping",
@@ -5719,6 +6007,158 @@ export const BLUEPRINT_DATA: BlueprintSource = {
           "hash": "9b929c73ac69",
           "name": "progressive-disclosure",
           "number": "UX-D-005",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "UX governance is expressed as a chain of canonical JSON artifacts by\n phase: intake, domain capability map, information architecture, screen\n spec, review findings, and handoff contract. Human-readable Markdown,\n Mermaid, HTML, and SVG outputs are derived from those JSON artifacts and\n never become the authoritative source. Trade-off: introduces more\n structure and file discipline; wrong only when the work is an\n exploratory sketch that will not be reused.\n",
+          "hash": "1f7f7b6a4c21",
+          "name": "artifact-contracts-as-source-of-truth",
+          "number": "UX-D-006",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "The implementation is verified against its contract spec by\n orthogonal tooling that emits a machine-readable report,\n ux-conformance-report.json. The report records run identity,\n commit identity, the view under test, deterministic-check\n results, evidence pointers, and the blocking decision. Markdown\n summaries are derived artifacts only. The report detects harmony\n between implementation and spec; it is not itself the source of\n correctness.\n",
+          "hash": "130d0ff25610",
+          "name": "implementation-conformance-report",
+          "number": "UX-D-007",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Some UX checks do not admit a binary pass/fail against an invariant\n — saliency ranking, screenshot layout parsing, model-assisted UX\n lint, synthetic walkthrough quality. These are threshold-scored\n gates: each emits a numeric score and evidence into\n ux-conformance-report.json under a soft_signals section. A\n threshold-scored gate is advisory (warning-only) until a labeled\n calibration set, an explicit threshold, and a blueprint update\n reclassify it as a deterministic gate, at which point it blocks\n merge like any other gate. A threshold-scored check without a\n published threshold never blocks merge.\n",
+          "hash": "4bf26c1a8d31",
+          "name": "threshold-scored-signal-analysis",
+          "number": "UX-D-008",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Every approved UX flow is backed by a machine-readable state-matrix.json\n artifact that enumerates required routes, breakpoints, and states.\n The matrix is the contract between the service-flow map and CI: a route\n is not considered complete unless its loading, empty, error, success,\n and permission_denied states are explicitly accounted for, along with\n route-step limits and critical-action reachability.\n",
+          "hash": "8a969646ab51",
+          "name": "state-matrix-contract",
+          "number": "UX-D-009",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Every view declares its primary user goal drawn from the\n jobs-to-be-done (JTBD) controlled vocabulary — the outcome the user is\n trying to achieve. Secondary goals are enumerated separately. The\n declared primary goal is the anchor for every downstream check:\n primary-action placement, density budget, and interaction inventory\n are all evaluated relative to it.\n",
+          "hash": "6a3d1f8b2e9c",
+          "name": "user-goal-declaration-per-view",
+          "number": "UX-D-010",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Each view declares a reading pattern from a controlled set (F-pattern,\n Z-pattern, layer-cake, centered-hero, modal-focus) grounded in\n Nielsen Norman Group eye-tracking research. The declared pattern\n assigns a named region to the primary action. CI computes the primary\n action's bounding box at each declared breakpoint and fails when it\n falls outside the declared region. The check is deterministic: the\n research fixes the regions; the spec selects one.\n",
+          "hash": "7b4e2f9c1a8d",
+          "name": "reading-pattern-and-primary-action-placement",
+          "number": "UX-D-011",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Each view declares numeric caps on interactive elements, text blocks,\n nesting depth, and above-fold element count. The budget is grounded\n in Hick's Law (decision time grows with option count) and Tufte's\n data-ink ratio (non-informational chrome is waste). CI counts DOM\n elements and fails on exceedance. The check is fully deterministic.\n",
+          "hash": "8c5f3a1e7b2d",
+          "name": "information-density-budget",
+          "number": "UX-D-012",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Spacing is constrained to multiples of a declared baseline-grid unit\n (8pt is the industry default; 4pt for dense interfaces). Every\n inter-element gap, padding value, and margin in CI-rendered output\n must resolve to an integer multiple of the unit. Off-grid spacing\n fails CI. Extends design-token conformance from \"tokens used\" to\n \"rhythm preserved.\"\n",
+          "hash": "9d6a4b2f8c1e",
+          "name": "baseline-grid-conformance",
+          "number": "UX-D-013",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "The screen spec enumerates every interactive element on the view: its\n affordance kind (button, link, input, toggle, menu, …) from a\n controlled vocabulary; its label; its selector; the user goal it\n serves. CI extracts the rendered DOM's interactive surface and\n asserts bidirectional match: every declared affordance is\n implemented, and nothing implemented is undeclared. False affordances\n — elements that compute as clickable without being interactive — also\n fail.\n",
+          "hash": "1e7c5d3a9b4f",
+          "name": "interaction-inventory",
+          "number": "UX-D-014",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Every spec field whose value would otherwise be free-text is bound to\n a controlled vocabulary declared in the blueprint. Vocabularies cover\n user goal (JTBD taxonomy), reading pattern, gaze region, affordance\n kind, state kind, and transition trigger. Free-text values are\n rejected at spec-conformance time. Extending a vocabulary requires a\n blueprint change, not a per-view exception.\n",
+          "hash": "2f8d6e4b1c5a",
+          "name": "controlled-vocabularies-for-spec-fields",
+          "number": "UX-D-015",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Each governance phase in the artifact chain (intake → capability map\n → information architecture → screen spec → review findings →\n handoff contract) has explicit derivation rules: required inputs,\n required outputs, controlled vocabularies that apply, and the\n blueprint rules that constrain the transformation. An agent runs the\n derivation; two agents given the same inputs produce artifacts that\n pass the same gates. Divergence indicates an underdetermined\n blueprint and triggers a blueprint patch, not a per-run exception.\n",
+          "hash": "3a9e7f5c2b6d",
+          "name": "artifact-derivation-rules",
+          "number": "UX-D-016",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "The contract spec is verified against the compliance framework by\n orthogonal tooling that emits a machine-readable report,\n spec-conformance-report.json. The report validates that every\n required spec field is present, every controlled-vocabulary value\n is valid, every provenance reference resolves to a blueprint rule\n or framework artifact, and every derivation step has completed.\n Implementation-conformance verification runs only after the\n spec-conformance report has reached pass for the committed spec.\n",
+          "hash": "4b1f8d6a3c7e",
+          "name": "spec-conformance-report",
+          "number": "UX-D-017",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Every view's UI source directory contains the canonical view\n artifacts (*.view.json, *.state-matrix.json), the last-passing\n conformance reports (*.spec-conformance.json, *.ux-conformance.json),\n a generated human-readable README.md, and an __evidence__/ directory\n holding visual-regression baselines and accessibility snapshots.\n Scope-level artifacts (_scope.view.json, _scope.state-matrix.json)\n live at the scope directory boundary. Agents working on a view open\n one file and reach every artifact by adjacency; no convention lookup\n is required.\n",
+          "hash": "8e5c3a9f2b1d",
+          "name": "ui-source-co-locates-view-artifacts",
+          "number": "UX-D-018",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "The view's source file (e.g., the React component module) imports\n its canonical spec JSON directly — not as documentation, but as a\n build-time binding. Interactive-element selectors, breakpoint\n definitions, and state identifiers are read from the spec. A view\n module without a spec import fails the build. A brief inline marker\n at the top of the source file names the adjacent artifacts and\n their status for agents who open the source first; the marker\n points to the canonical files and does not duplicate their content.\n",
+          "hash": "9f6d4b1a3c8e",
+          "name": "source-imports-view-spec",
+          "number": "UX-D-019",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Framework Gate 1. Every user action supported by the product is\n paired with a declared promised outcome: \"if the user does X, the\n system delivers Y.\" The gate emits user-contracts.json recording,\n for each action, the principal (end-user, admin, agent), the\n outcome verb from a controlled vocabulary (confirm, persist,\n notify, redirect, reveal, reject, defer, ...), the target state,\n and the precondition. This is the anchor artifact of the entire\n framework — IA (Gate 2), Data Feasibility (Gate 4), and Edge-Case\n Coverage (Gate 5) all derive from it. No dependencies on other\n gates.\n",
+          "hash": "9e4c7a3b1d8f",
+          "name": "user-contract-clarity-gate",
+          "number": "UX-D-020",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Framework Gate 2. The IA — the graph of navigation nodes and\n transitions that reaches every declared user contract — is\n enumerated and checked for integrity. Every contract from Gate 1\n has a declared path from at least one entry point, path length is\n within the declared max-step threshold, there are no islands, and\n every branch terminates at a known state. The gate emits\n information-architecture.json and is the source of scope-level\n state matrices. Depends on Gate 1.\n",
+          "hash": "1c5b9d7e4a2f",
+          "name": "information-architecture-integrity-gate",
+          "number": "UX-D-021",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Framework Gate 3. The product's design system is declared: name,\n version, reference URL, token catalog (color, typography, spacing,\n radii, elevation), baseline-grid unit, component library, and the\n scopes to which it applies (should be \"all\"). The gate emits\n design-system-binding.json. This is the input that every\n implementation surface — end-user, admin, agent-adjacent — draws\n from. No dependencies on other gates; can run at any time.\n",
+          "hash": "2d8a6f4c3b9e",
+          "name": "design-system-compliance-gate",
+          "number": "UX-D-022",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Framework Gate 4. For each user contract from Gate 1, the data\n required to deliver the promised outcome is declared: source\n (service, capability, or store), availability guarantees (latency,\n freshness, reachability), and fallback behavior when the data is\n absent. The gate emits data-availability.json. Contracts whose data\n is not available fail Gate 4. Depends on Gate 1.\n",
+          "hash": "3e1f5b8d7a6c",
+          "name": "data-feasibility-gate",
+          "number": "UX-D-023",
+          "type": "design_pattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Framework Gate 5. For every user contract, the non-happy-path\n branches are enumerated with declared handling: data unavailable\n (from Gate 4), permission denied, validation failure, conflict,\n timeout, empty result, unreachable (from Gate 2). Each branch has a\n declared UX outcome — redirect, explain, retry option, fallback\n action. The gate emits edge-case-coverage.json. Branches without\n declared handling fail Gate 5. Depends on Gates 1, 2, 4.\n",
+          "hash": "4f7e2c9a5b3d",
+          "name": "edge-case-coverage-gate",
+          "number": "UX-D-024",
           "type": "design_pattern"
         },
         {
@@ -5765,8 +6205,40 @@ export const BLUEPRINT_DATA: BlueprintSource = {
           "deprecated": false,
           "description": "A UX specification describes what a user needs to accomplish, the states\n they move through, and the feedback they receive — not the components,\n frameworks, or libraries used to render those states. A specification\n that references specific front-end technologies has conflated design with\n implementation.\n",
           "hash": "e49ebcb9644c",
-          "name": "designers-specify-needs-not-implementations",
+          "name": "specifications-describe-needs-not-implementations",
           "number": "UX-P-006",
+          "type": "principle"
+        },
+        {
+          "deprecated": false,
+          "description": "A UX specification is not improvised; it is generated by an agent\n according to blueprint rules. The blueprint is a grammar of controlled\n vocabularies, derivation rules, and field schemas from which every\n specification is produced. Specification fields draw only from\n vocabularies declared in the blueprint. A specification that invents\n fields, labels, or categories outside the grammar is a conformance\n failure regardless of its visible quality.\n",
+          "hash": "2f4a8b1c6d9e",
+          "name": "blueprint-grammar-constrains-specification",
+          "number": "UX-P-007",
+          "type": "principle"
+        },
+        {
+          "deprecated": false,
+          "description": "A generative-UI product is a chain of three derived artifacts: the\n compliance framework (per product, produced by the five framework\n gates), the contract specs (per view, derived from the framework),\n and the implementation (code, derived from the contract specs).\n Each artifact builds on the prior by derivation. Harmony across\n the framework, specs, and implementation is the correctness\n criterion — an artifact that contradicts the one above it is a\n defect in the derivation, not a permitted variation. Production of\n the artifacts is the agent workflow; verification of harmony is\n orthogonal tooling. Conflating the two (treating verification\n reports as the source of correctness, or treating derivation as a\n tooling concern) is a category error.\n",
+          "hash": "3e7b9d1f4c8a",
+          "name": "generative-ui-artifact-harmony",
+          "number": "UX-P-008",
+          "type": "principle"
+        },
+        {
+          "deprecated": false,
+          "description": "Every field in a governance artifact records the blueprint rule (by\n hash or number) that constrained its value. An unconstrained field is\n either a blueprint gap or an agent invention; both are audit failures.\n Provenance makes the governance loop debuggable: when two agents\n produce divergent specifications for the same capability, provenance\n identifies the rule that underdetermined the decision. Modeled on W3C\n PROV-style lineage, adapted for design artifacts.\n",
+          "hash": "5c8e2a7b3f1d",
+          "name": "spec-field-provenance",
+          "number": "UX-P-009",
+          "type": "principle"
+        },
+        {
+          "deprecated": false,
+          "description": "The blueprint uses a fixed vocabulary for the structural units of UX\n governance.\n\n **Compliance framework**, **contract spec**, **implementation** —\n the three derived artifacts of a generative-UI product. The\n compliance framework is produced once per product by the framework\n gate sequence. Contract specs are per-view and derived from the\n framework. The implementation is the code and is derived from the\n contract specs. Each is derived from the prior; harmony across all\n three is the correctness criterion.\n\n **Framework gate** — one of the five steps that produce the\n compliance framework: User Contract Clarity, IA Integrity, Design\n System Compliance, Data Feasibility, Edge-Case Coverage. Each gate\n emits its own addressable artifact; the framework is the union of\n the five artifacts.\n\n **Deterministic gate** — a check whose outcome is binary pass/fail\n against an invariant (e.g., a selector resolving in the DOM, an\n enum value drawn from a controlled vocabulary, an ARIA snapshot\n matching). All framework gates are deterministic. **Threshold-\n scored gate** — a check that emits a numeric score and passes or\n fails against a calibrated threshold declared in the blueprint;\n threshold-scored checks are advisory (warning-only) until their\n threshold is published, at which point they block merge like any\n deterministic gate.\n\n **View** — a single renderable surface (one route, modal, or\n equivalent atomic screen) with its own contract spec and state\n matrix. **Scope** — a group of related views that share a user\n contract or flow; scope-level artifacts govern transitions between\n views.\n\n **Artifact** — a canonical JSON document in any stage of the\n governance chain. **Report** — a machine-readable CI output\n emitted by verification tooling; reports may be per-view\n (*.ux-conformance.json, *.spec-conformance.json) or aggregate\n (ux-conformance-report.json, spec-conformance-report.json).\n\n Synonyms (\"page,\" \"screen,\" \"UX scope,\" \"doc,\" \"tier,\" \"layer\")\n are not used in governance artifacts. Where legacy terms appear,\n they are mapped onto this vocabulary.\n",
+          "hash": "6b8d3e1c9a4f",
+          "name": "canonical-ux-vocabulary",
+          "number": "UX-P-010",
           "type": "principle"
         },
         {
@@ -5904,17 +6376,73 @@ export const BLUEPRINT_DATA: BlueprintSource = {
           "name": "complexity-surfaced-by-default",
           "number": "UX-X-008",
           "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Markdown notes, Mermaid diagrams, HTML previews, or SVG mockups become\n the source of truth instead of being regenerated from canonical JSON.\n Manual edits to derived artifacts create drift, make review ambiguous,\n and break the audit trail between phases.\n",
+          "hash": "8c1b6d4f2a90",
+          "name": "derived-artifacts-treated-as-authority",
+          "number": "UX-X-009",
+          "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Approving UX after a single non-gated critique pass, or accepting vague\n reviewer comments without explicit issue, evidence, severity, and\n proposed fix, allows polished-but-invalid designs to escape review.\n UX approval must be earned through the defined gate sequence and\n revision loop.\n",
+          "hash": "ad4e1c7f9b20",
+          "name": "single-pass-review-approval",
+          "number": "UX-X-010",
+          "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "An agent or human producing a specification without reference to the\n blueprint's controlled vocabularies, derivation rules, or field\n schemas. The resulting spec may be internally coherent and visually\n plausible, but it cannot be gated, compared, or reproduced. Authoring\n outside the grammar is equivalent to improvising without a blueprint.\n",
+          "hash": "5f2d9c6b3a8e",
+          "name": "spec-authored-outside-blueprint-grammar",
+          "number": "UX-X-011",
+          "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Running implementation conformance checks against a specification that\n has not itself passed the spec-conformance gate. The audit chain is\n broken: the implementation may conform to an invalid contract, and\n the blueprint's constraints are enforced only at the final step.\n",
+          "hash": "6a3e1d7c4b9f",
+          "name": "implementation-gated-without-spec-gate",
+          "number": "UX-X-012",
+          "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Specification fields accept free-text values where a controlled\n vocabulary should apply. Two agents producing specs for the same\n capability will select different labels for the same concept, making\n spec-to-spec comparison impossible and defeating the provenance\n chain.\n",
+          "hash": "7b4f2e8d5c1a",
+          "name": "free-text-spec-fields",
+          "number": "UX-X-013",
+          "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Encoding view specifications, state matrices, or conformance claims\n as inline comments (JSDoc tags, annotation blocks, banner comments)\n in source files instead of adjacent canonical JSON. Comments are\n free-text, not schema-validatable, and drift silently from the\n rendered contract. The source file's inline marker is a pointer to\n adjacent canonical artifacts, not a substitute for them.\n",
+          "hash": "7c9a4b2e1f6d",
+          "name": "inline-contract-in-source-comments",
+          "number": "UX-X-014",
+          "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Storing a view's canonical spec, state matrix, or conformance\n evidence in a location other than the view's own source directory\n — e.g., a central /docs tree, a separate governance repository, or\n CI artifact storage only. An agent editing the source cannot see\n the contract or last-passing evidence, and drift is invisible until\n CI runs. The agent's only reliable locator for governance artifacts\n is adjacency to the source.\n",
+          "hash": "8d1e5f3b2c7a",
+          "name": "view-artifacts-outside-view-directory",
+          "number": "UX-X-015",
+          "type": "antipattern"
         }
       ],
       "title": "UX Blueprint",
-      "vision": "Beauty is a gate condition, not a preference. A Calypso application that is not visually\npolished and immediately comprehensible will not survive management review — regardless of its\ntechnical correctness. The interface is the product to every non-technical stakeholder. UX\nquality must be established from the first screen, the first prototype, and the first demo. An\nugly early version sets an anchor that is nearly impossible to reverse. Applications that are\nnot beautiful from the start do not ship.\n\nService delivery is designed before interfaces. The question \"how do we deliver this capability\nto a user?\" precedes \"what does the screen look like?\" The channel — visual browser interface,\nAPI, command-line, voice, structured text — is a consequence of the service design, not its\npremise. A service designed around a visual browser interface produces a service that only works\nin a visual browser. A service designed around the delivery of a capability to a user produces\nsomething that can be expressed in any appropriate medium.\n\nEvery user type receives an interface appropriate to their medium. A human end-user navigates a\nvisual interface. An administrator manages operations through a purpose-built interface — never\nthrough raw database tooling or developer consoles. An AI agent interacts through structured,\nmachine-readable interfaces — not through screen scraping, browser automation, or interfaces\ndesigned for human perception. Designing only for the human end-user produces a system where\nadministration is painful and agent integration is fragile.\n\nThe AI agent is a first-class user with a defined presence on the end-user account. It is not a\nbackground process operating invisibly. Its participation in the account is declared, visible to\nthe human account holder, and governed by a clearly specified scope. The end-user knows the\nagent is there. The service is designed to make that shared-account relationship explicit and\nauditable, not to obscure it.\n"
+      "vision": "This blueprint is part of the Superfield Generative UI product. It governs the UX of\ninterfaces that are generated, not hand-authored — specifications are produced by AI agents\nfrom blueprint rules, and implementations are produced by agents from those specifications.\nGovernance of UX is a prerequisite for generative UI, not an optional discipline layered on\ntop of it. When the author is an agent, the blueprint is the only backstop against invented\nvocabularies, unverifiable quality claims, and specifications that drift from any reproducible\ngrammar. Without a blueprint, generative UI produces output that is individually plausible and\ncollectively incoherent; with a blueprint, it produces interfaces that are auditable,\ncomparable, and demonstrably correct at scale. The remainder of this document defines that\nblueprint: the controlled vocabularies, derivation rules, and conformance gates required for\ngenerative UI to be trustworthy.\n\nBeauty is a gate condition, not a preference. A Calypso application that is not visually\npolished and immediately comprehensible will not survive management review — regardless of its\ntechnical correctness. The interface is the product to every non-technical stakeholder. UX\nquality must be established from the first screen, the first prototype, and the first demo. An\nugly early version sets an anchor that is nearly impossible to reverse. Applications that are\nnot beautiful from the start do not ship.\n\nService delivery is designed before interfaces. The question \"how do we deliver this capability\nto a user?\" precedes \"what does the screen look like?\" The channel — visual browser interface,\nAPI, command-line, voice, structured text — is a consequence of the service design, not its\npremise. A service designed around a visual browser interface produces a service that only works\nin a visual browser. A service designed around the delivery of a capability to a user produces\nsomething that can be expressed in any appropriate medium.\n\nEvery user type receives an interface appropriate to their medium. A human end-user navigates a\nvisual interface. An administrator manages operations through a purpose-built interface — never\nthrough raw database tooling or developer consoles. An AI agent interacts through structured,\nmachine-readable interfaces — not through screen scraping, browser automation, or interfaces\ndesigned for human perception. Designing only for the human end-user produces a system where\nadministration is painful and agent integration is fragile.\n\nThe AI agent is a first-class user with a defined presence on the end-user account. It is not a\nbackground process operating invisibly. Its participation in the account is declared, visible to\nthe human account holder, and governed by a clearly specified scope. The end-user knows the\nagent is there. The service is designed to make that shared-account relationship explicit and\nauditable, not to obscure it.\n\nA generative-UI product is a chain of three derived artifacts. The compliance framework\n(per product) is produced by the five-gate sequence defined in the governance architecture\n— User Contract Clarity, IA Integrity, Design System Compliance, Data Feasibility, and\nEdge-Case Coverage. The contract specs (per view) are derived from the framework. The\nimplementation (the actual web view code) is derived from the contract specs. Each\nartifact builds on the prior; an artifact that contradicts the one above it is a defect in\nthe derivation, not a permitted variation. Harmony across the framework, specs, and\nimplementation is the correctness criterion for the product. Production is the agent\nworkflow; verification is orthogonal tooling that detects harmony but does not produce it.\nEvery artifact field records the blueprint rule that constrained it, so the governance\nloop is auditable end-to-end. Two agents given the same capability and the same blueprint\nproduce artifacts that pass the same gates; divergence is treated as an underdetermined\nblueprint to be patched, not a tolerated variation.\n"
     },
     {
       "name": "worker",
       "rules": [
         {
           "deprecated": false,
-          "description": "Single agent type, single replica. Worker container communicates with the API for task claim and result submission. Agent has SELECT-only access to its task queue view; all writes go through the API. Network policy blocks direct DB writes. Appropriate for early-stage projects with low task volume where the task queue provides natural buffering. No redundancy; tasks queue up if the worker dies.\n",
+          "description": "Single agent type, single replica. Worker container communicates with the API only — for SSE task discovery, task claiming, and result submission. The worker has no database connection, no database credentials, and no network path to port 5432. All application state access is mediated by the API server. Appropriate for early-stage projects with low task volume. No redundancy; tasks queue up if the worker dies.\n",
           "hash": "293e98fe383a",
           "name": "single-agent-single-replica",
           "number": "WORKER-A-001",
@@ -5922,7 +6450,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Multiple agent types running concurrently with per-type replicas scaling independently. Each type has its own Kubernetes deployment, database role, and vendor API credentials. A single API layer serves as the write surface. Requires per-type deployments, roles, and credentials. Isolation guarantees make this necessary at any scale where multiple agent types operate on shared infrastructure.\n",
+          "description": "Multiple agent types running concurrently with per-type replicas scaling independently. Each type has its own Kubernetes deployment, per-type API service token, and vendor API credentials. No agent type holds database credentials. A single API layer serves as the sole read/write surface for all agent types. Isolation is enforced by API-layer token validation and network policy; there are no per-type database roles for workers.\n",
           "hash": "fee38de47d57",
           "name": "multi-agent-concurrent-replicas",
           "number": "WORKER-A-002",
@@ -5938,9 +6466,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Agent DB role created with SELECT-only grants on the task queue view. INSERT, UPDATE, and DELETE produce permission errors. Must be tested.\n",
+          "description": "Worker container environment contains no database credentials. No DATABASE_URL, PGPASSWORD, PGHOST, PGUSER, or any database connection string. Verified by inspecting the container's environment variables and mounted Kubernetes Secrets — none reference the database. Network policy (WORKER-C-006) provides structural enforcement; this check confirms no credentials are accidentally injected via ConfigMap, Secret, or environment override.\n",
           "hash": "ba3b855fc0a5",
-          "name": "select-only-db-role",
+          "name": "no-database-credentials",
           "number": "WORKER-C-002",
           "type": "checklist"
         },
@@ -5970,7 +6498,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Agent network policy verified: worker container cannot reach the database port directly. Tested via kubectl exec attempt.\n",
+          "description": "Worker container cannot reach the database port under any circumstances. Primary enforcement: Kubernetes network policy denies all egress from the worker namespace to the database port. Secondary enforcement: no database credentials are present in the worker environment (WORKER-C-002). Both layers must be verified independently. Network policy test: kubectl exec into a worker pod and attempt a TCP connection to the database host:port — connection must be refused or timeout. This is the most critical checklist item for zero-database-connectivity.\n",
           "hash": "bf7fc36b1d50",
           "name": "network-policy-blocks-direct-db",
           "number": "WORKER-C-006",
@@ -6034,9 +6562,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Per-agent-type database roles verified to be isolated: agent_coding cannot SELECT from task_queue_view_analysis. Must be tested.\n",
+          "description": "Per-agent-type API service token isolation verified: a coding-agent service token cannot subscribe to the analysis SSE task stream, cannot claim analysis tasks, and receives 403 on any cross-type request. Must be tested with each token against each other type's endpoints. No database-role isolation test is needed — workers have no database access.\n",
           "hash": "f020f72a449a",
-          "name": "per-type-db-role-isolation",
+          "name": "per-type-api-token-isolation",
           "number": "WORKER-C-014",
           "type": "checklist"
         },
@@ -6082,7 +6610,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Agent type isolation penetration tested: agent_coding credential used to attempt direct DB write confirms permission denied at DB layer.\n",
+          "description": "Agent type isolation penetration tested across three axes: (1) worker network cannot reach database port — network policy enforced, confirmed via kubectl exec TCP probe (WORKER-C-006); (2) coding-agent service token cannot subscribe to analysis stream or claim analysis tasks — API-layer type scope enforced, confirmed with 403 responses (WORKER-C-014); (3) worker container environment contains no database credentials — confirmed by inspecting env and mounted secrets (WORKER-C-002). All three must fail as expected.\n",
           "hash": "21a4ba78c3c5",
           "name": "agent-type-penetration-tested",
           "number": "WORKER-C-020",
@@ -6122,9 +6650,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "The database exposes a per-agent-type view over the task queue table filtered by task type and status. An agent claims a task by calling the API which executes an atomic UPDATE WHERE status='pending' RETURNING. The agent's DB role can read the view but cannot execute the claim write. This eliminates race conditions and enforces type isolation.\n",
+          "description": "Workers discover tasks exclusively through a streaming API endpoint, not by querying the database. The API server maintains one PostgreSQL LISTEN connection per agent type and fans new-task notifications to all connected workers of that type over Server-Sent Events (SSE). The worker connects to GET /api/v1/tasks/stream authenticated with its per-type service token; the API validates the token and opens an SSE stream restricted to that agent type. Each SSE event signals task availability. The worker then calls POST /api/v1/tasks/claim to atomically claim the next available task. The API server's internal poll interval provides a heartbeat SSE event as a fallback when no pg_notify fires within the window.\n",
           "hash": "fec546a4edeb",
-          "name": "task-queue-read-only-view",
+          "name": "api-streaming-task-discovery",
           "number": "WORKER-D-001",
           "type": "design_pattern"
         },
@@ -6170,9 +6698,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Each agent type is assigned a dedicated PostgreSQL role at database initialization with SELECT on type-specific views only. Row-level security on the task queue table ensures a role only sees rows matching its task type. The agent's database credential corresponds to its type-specific role injected via a Kubernetes Secret. Adding a new agent type requires a database init script update and explicit review.\n",
+          "description": "Each agent type is issued a dedicated API service token at deployment time. The token encodes the agent type and is scoped to: subscribing to that type's SSE task stream, calling the claim endpoint for tasks of that type, and submitting results using a delegated user token. The service token is injected via a Kubernetes Secret scoped to that agent type's deployment. Adding a new agent type requires issuing a new service token and explicit review.\n",
           "hash": "cebee7387f5b",
-          "name": "per-agent-type-database-role",
+          "name": "per-agent-type-service-token",
           "number": "WORKER-D-007",
           "type": "design_pattern"
         },
@@ -6186,9 +6714,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Agents are read-authorized, write-prohibited at the database layer. The agent's PostgreSQL role grants read access to curated views only and no write permissions to any table. An agent that attempts a direct write receives a permission error from the database before any application logic runs.\n",
+          "description": "Worker containers have no database connection, no database credentials, and no network path to the database port. This is a stronger guarantee than read-only access: even a read-only database connection is an attack surface — credentials can be stolen from the environment, the connection pool can be exhausted, schema structure can be probed, and read-only access creates the conditions for future scope creep. All worker interaction with application state — task discovery, task claiming, data reads, result submission — passes through the API server. The database is physically unreachable from the worker container at the network level, and no credential that could reach it exists in the worker's environment.\n",
           "hash": "828eead860c0",
-          "name": "read-only-database-access",
+          "name": "zero-database-connectivity",
           "number": "WORKER-P-001",
           "type": "principle"
         },
@@ -6242,7 +6770,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Agent types are isolated from each other. Different agent types are deployed with different database roles, different task queue views, and different vendor API credentials. An agent of type A cannot read type B's tasks, use type B's API keys, or submit results using type B's identity. Isolation is enforced at network policy, database role, and API validation layers.\n",
+          "description": "Agent types are isolated from each other. Different agent types are deployed with different per-type API service tokens and different vendor API credentials. An agent of type A cannot subscribe to type B's task stream, claim type B's tasks, use type B's API keys, or submit results using type B's identity. Isolation is enforced at network policy and API validation layers. There are no per-type database roles for worker containers — workers have no database access of any kind.\n",
           "hash": "f84a99a27579",
           "name": "agent-type-isolation",
           "number": "WORKER-P-008",
@@ -6266,15 +6794,15 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "A compromised agent credential grants write access to the database. The agent DB role must be read-only; write access is structurally impossible regardless of credential scope.\n",
+          "description": "A compromised agent service token is used to access API endpoints beyond its intended scope. Workers hold no database credentials; the only credential a worker possesses is a per-type API service token scoped to task discovery and result submission. Compromise of that token cannot grant database access because the worker has no database network path. API-layer scope validation limits the blast radius to the agent type the token was issued for.\n",
           "hash": "dc243cc9fac7",
-          "name": "compromised-credential-grants-db-write",
+          "name": "compromised-credential-grants-api-overreach",
           "number": "WORKER-T-002",
           "type": "threat"
         },
         {
           "deprecated": false,
-          "description": "Agent reads data outside its authorized scope such as another user's records. The agent DB role must be restricted to task-queue views and anonymized or aggregated data, enforced by row-level security.\n",
+          "description": "Agent reads data outside its authorized scope such as another user's records. Because workers have no database connection, all data reads are mediated by the API. The API enforces authorization on every read endpoint; the delegated token's scope limits which resources the worker may fetch. There is no database-layer read path for a worker to bypass.\n",
           "hash": "6dbf9c26bf09",
           "name": "agent-reads-unauthorized-data",
           "number": "WORKER-T-003",
@@ -6314,7 +6842,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "Agent type A accesses task types or data views belonging to agent type B. Each agent type's DB role must grant access only to its own task queue view; type claims are validated by the API.\n",
+          "description": "Agent type A subscribes to the task stream or claims tasks belonging to agent type B. Because workers have no database connection, cross-type access must come through the API. The API validates the per-type service token on every request; a coding-agent token cannot subscribe to the analysis SSE stream or claim analysis tasks. Type isolation is enforced at the API layer and by network policy.\n",
           "hash": "7bd1b8579f60",
           "name": "cross-agent-type-access",
           "number": "WORKER-T-008",
@@ -6338,9 +6866,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "An agent with write access to the database bypasses schema validation, business logic, access control, and audit logging simultaneously. Even if writes are correct today they are unreviewed, unvalidated, and unauditable. The write-through-API pattern exists to prevent this. There are no exceptions.\n",
+          "description": "A worker container with any database connection — read or write — violates the zero-database-connectivity principle. Read-only access is not safe: it requires database credentials in the worker environment, opens a port-5432 network path, exposes schema structure to probing, risks connection pool exhaustion, and creates conditions for future scope creep. A worker with write access additionally bypasses schema validation, business logic, access control, and audit logging simultaneously. All application state access — reads and writes — goes through the API server. There are no exceptions.\n",
           "hash": "a76fb9bc6f9a",
-          "name": "direct-database-writes",
+          "name": "direct-database-access",
           "number": "WORKER-X-001",
           "type": "antipattern"
         },
@@ -6370,7 +6898,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
         },
         {
           "deprecated": false,
-          "description": "An agent that reads configuration at runtime to decide which task types, database views, or vendor APIs it can access has moved the capability boundary from infrastructure to application layer. Infrastructure-layer enforcement (database roles, network policy, K8s manifest) is the only enforcement that cannot be overridden by buggy or adversarial code.\n",
+          "description": "An agent that reads configuration at runtime to decide which task types or vendor APIs it can access has moved the capability boundary from infrastructure to application layer. Infrastructure-layer enforcement (API service tokens, network policy, Kubernetes manifest) is the only enforcement that cannot be overridden by buggy or adversarial code.\n",
           "hash": "cf2b1cacf907",
           "name": "runtime-capability-selection",
           "number": "WORKER-X-005",
@@ -6399,6 +6927,14 @@ export const BLUEPRINT_DATA: BlueprintSource = {
           "name": "prompt-content-in-audit-log",
           "number": "WORKER-X-008",
           "type": "antipattern"
+        },
+        {
+          "deprecated": false,
+          "description": "Injecting a database connection string, DATABASE_URL, or any database credential into a worker container environment — even with the intent of enforcing read-only access at the PostgreSQL role level. The credential is the vulnerability: it can be extracted from the process environment, leaked via structured logs, or used directly with any PostgreSQL client. The correct enforcement is no credential at all, backed by a network policy that makes port 5432 structurally unreachable from the worker namespace. Role-level enforcement at the database is defense-in-depth for the API server; it is not a substitute for credential absence in worker containers.\n",
+          "hash": "b1e3f7a2c849",
+          "name": "worker-with-database-credentials",
+          "number": "WORKER-X-009",
+          "type": "antipattern"
         }
       ],
       "title": "Worker Blueprint",
@@ -6413,8 +6949,9 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     "deploy-ts.yaml": "meta:\n  domain: IMPL-DEPLOY\n  title: Deployment - TypeScript Implementation\n  implements: DEPLOY\n  version: 1\n\nrules:\n  # ---------------------------------------------------------------------------\n  # Container Packaging\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-001\n    hash: \"41ea0553bbe1\"\n    name: multistage-distroless-container\n    type: implementation\n    description: >\n      Use multi-stage Dockerfile with oven/bun:1 builder and oven/bun:1-distroless\n      production image. Copy only the compiled output into the final stage to\n      eliminate shell, package manager, and minimize attack surface.\n    links:\n      - {target: \"cebbff0e956c\", rel: implements}  # DEPLOY-D-001 immutable-distroless-container-builds\n      - {target: \"f4deae0ff5d3\", rel: implements}  # DEPLOY-P-001 containers-are-the-great-unifier\n      - {target: \"3a7b8dab73da\", rel: implements}  # DEPLOY-C-001 dockerfile-created\n    deprecated: false\n\n  - number: IMPL-DEPLOY-002\n    hash: \"7faa287bdafc\"\n    name: frozen-lockfile-install\n    type: implementation\n    description: >\n      Run bun install --frozen-lockfile in the builder stage to ensure\n      deterministic dependency resolution matching the committed lockfile.\n    links:\n      - {target: \"cebbff0e956c\", rel: implements}  # DEPLOY-D-001 immutable-distroless-container-builds\n    deprecated: false\n\n  - number: IMPL-DEPLOY-003\n    hash: \"9ebb0e4c384e\"\n    name: explicit-bun-build\n    type: implementation\n    description: >\n      Run bun build apps/server/index.ts --target bun --outfile dist/server.js\n      for exact reproducibility. The compiled single-file output is copied into\n      the distroless production image.\n    links:\n      - {target: \"cebbff0e956c\", rel: implements}  # DEPLOY-D-001 immutable-distroless-container-builds\n    deprecated: false\n\n  - number: IMPL-DEPLOY-004\n    hash: \"603013cc2110\"\n    name: no-process-managers\n    type: implementation\n    description: >\n      No systemd services, PM2, or custom restart scripts on the host. The\n      container orchestrator handles process lifecycle exclusively.\n    links:\n      - {target: \"f4deae0ff5d3\", rel: implements}  # DEPLOY-P-001 containers-are-the-great-unifier\n      - {target: \"b9d1a6dddde4\", rel: implements}  # DEPLOY-C-002 orchestrator-auto-restart\n    deprecated: false\n\n  # ---------------------------------------------------------------------------\n  # Environment Variables\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-005\n    hash: \"ee328dcf5c71\"\n    name: production-env-gitignored\n    type: implementation\n    description: >\n      All secrets stored as scoped Kubernetes Secrets, encrypted at rest by\n      KMS. No .env files. Each workload (db, api, worker) mounts only its own\n      Secret object.\n    links:\n      - {target: \"584e64645b8f\", rel: implements}  # DEPLOY-P-009 secrets-are-runtime-configuration\n      - {target: \"3f7f5f443afe\", rel: implements}  # DEPLOY-C-003 secrets-injected-securely\n    deprecated: false\n\n  - number: IMPL-DEPLOY-006\n    hash: \"af04d380f7c1\"\n    name: test-env-committed\n    type: implementation\n    description: >\n      Test credentials in CI passed as inline environment variables in workflow\n      definitions. No .env.test file.\n    links:\n      - {target: \"584e64645b8f\", rel: implements}  # DEPLOY-P-009 secrets-are-runtime-configuration\n      - {target: \"5286b4639f51\", rel: implements}  # DEPLOY-C-004 test-env-committed\n    deprecated: false\n\n  # ---------------------------------------------------------------------------\n  # Logging\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-007\n    hash: \"fe265ca449d3\"\n    name: stdout-log-to-orchestrator\n    type: implementation\n    description: >\n      Chronological log output goes to stdout, captured by the container\n      orchestrator (Kubernetes) and aggregated at the cluster level.\n    links:\n      - {target: \"41353c4858b0\", rel: implements}  # DEPLOY-P-003 logs-are-for-machines-first\n      - {target: \"681125756d40\", rel: implements}  # DEPLOY-C-005 stdout-stderr-captured\n      - {target: \"969f83c41da9\", rel: implements}  # DEPLOY-C-006 structured-log-entries\n    deprecated: false\n\n  - number: IMPL-DEPLOY-008\n    hash: \"a5d088c867e5\"\n    name: unique-error-log\n    type: implementation\n    description: >\n      Deduplicated error categories written to /var/log/calypso/uniques.log\n      with count and last-seen timestamp. Persisted via volume mounts or a\n      dedicated service.\n    links:\n      - {target: \"4b71998780a6\", rel: implements}  # DEPLOY-D-002 dual-log-architecture\n      - {target: \"a9c435b04f11\", rel: implements}  # DEPLOY-C-010 uniques-log-implemented\n    deprecated: false\n\n  - number: IMPL-DEPLOY-009\n    hash: \"671666890d8e\"\n    name: log-rotation-via-cluster\n    type: implementation\n    description: >\n      Log rotation managed by cluster log aggregation facility (Fluentd,\n      Promtail) rather than application-level rotation.\n    links:\n      - {target: \"41353c4858b0\", rel: implements}  # DEPLOY-P-003 logs-are-for-machines-first\n      - {target: \"1b33ad831887\", rel: implements}  # DEPLOY-C-011 log-rotation-configured\n    deprecated: false\n\n  # ---------------------------------------------------------------------------\n  # Browser Error Forwarding\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-010\n    hash: \"e047e9b4514f\"\n    name: window-onerror-capture\n    type: implementation\n    description: >\n      Synchronous browser errors captured via window.onerror handler.\n    links:\n      - {target: \"aef55d669b45\", rel: implements}  # DEPLOY-D-003 browser-to-server-error-forwarding\n      - {target: \"2a36bd9bbcb2\", rel: implements}  # DEPLOY-C-008 browser-error-forwarding-implemented\n    deprecated: false\n\n  - number: IMPL-DEPLOY-011\n    hash: \"eec2b995d14e\"\n    name: unhandled-rejection-capture\n    type: implementation\n    description: >\n      Promise rejections captured via window.onunhandledrejection handler.\n    links:\n      - {target: \"aef55d669b45\", rel: implements}  # DEPLOY-D-003 browser-to-server-error-forwarding\n      - {target: \"2a36bd9bbcb2\", rel: implements}  # DEPLOY-C-008 browser-error-forwarding-implemented\n    deprecated: false\n\n  - number: IMPL-DEPLOY-012\n    hash: \"dea01237c6e6\"\n    name: react-error-boundary\n    type: implementation\n    description: >\n      React error boundaries catch component tree crashes and forward them\n      to the server logging endpoint.\n    links:\n      - {target: \"aef55d669b45\", rel: implements}  # DEPLOY-D-003 browser-to-server-error-forwarding\n      - {target: \"2a36bd9bbcb2\", rel: implements}  # DEPLOY-C-008 browser-error-forwarding-implemented\n    deprecated: false\n\n  - number: IMPL-DEPLOY-013\n    hash: \"b6cb61a1bed6\"\n    name: error-post-to-api-logs\n    type: implementation\n    description: >\n      All captured browser errors POST to /api/logs with payload containing\n      traceId, error, stack, url, and timestamp.\n    links:\n      - {target: \"aef55d669b45\", rel: implements}  # DEPLOY-D-003 browser-to-server-error-forwarding\n      - {target: \"2a36bd9bbcb2\", rel: implements}  # DEPLOY-C-008 browser-error-forwarding-implemented\n    deprecated: false\n\n  # ---------------------------------------------------------------------------\n  # Trace ID\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-014\n    hash: \"b7a7b24512b4\"\n    name: trace-id-uuid-v4-in-browser\n    type: implementation\n    description: >\n      Trace ID generated as UUID v4 in the browser at the start of each\n      user action.\n    links:\n      - {target: \"fffb29a3e0a6\", rel: implements}  # DEPLOY-D-004 trace-id-propagation\n      - {target: \"2d45f6788919\", rel: implements}  # DEPLOY-C-007 trace-id-propagated\n    deprecated: false\n\n  - number: IMPL-DEPLOY-015\n    hash: \"9987c161a167\"\n    name: trace-id-request-header\n    type: implementation\n    description: >\n      Trace ID sent as X-Trace-Id request header from browser to server.\n    links:\n      - {target: \"fffb29a3e0a6\", rel: implements}  # DEPLOY-D-004 trace-id-propagation\n      - {target: \"2d45f6788919\", rel: implements}  # DEPLOY-C-007 trace-id-propagated\n    deprecated: false\n\n  - number: IMPL-DEPLOY-016\n    hash: \"42c11a347b54\"\n    name: trace-id-server-middleware\n    type: implementation\n    description: >\n      Server middleware extracts X-Trace-Id from incoming requests and\n      attaches it to all log entries for that request lifecycle.\n    links:\n      - {target: \"fffb29a3e0a6\", rel: implements}  # DEPLOY-D-004 trace-id-propagation\n      - {target: \"55b6ac786a19\", rel: implements}  # DEPLOY-P-004 traces-span-the-full-stack\n      - {target: \"5ead7b43c21d\", rel: implements}  # DEPLOY-C-021 trace-id-search-works\n    deprecated: false\n\n  - number: IMPL-DEPLOY-017\n    hash: \"e968fc9889f6\"\n    name: trace-id-response-header\n    type: implementation\n    description: >\n      Server returns trace ID as X-Trace-Id response header back to the\n      browser.\n    links:\n      - {target: \"fffb29a3e0a6\", rel: implements}  # DEPLOY-D-004 trace-id-propagation\n      - {target: \"2d45f6788919\", rel: implements}  # DEPLOY-C-007 trace-id-propagated\n    deprecated: false\n\n  # ---------------------------------------------------------------------------\n  # Build and Deploy\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-018\n    hash: \"630c178303c0\"\n    name: browser-build-command\n    type: implementation\n    description: >\n      Browser assets built via bun build apps/web/index.tsx --outdir dist/web.\n    links:\n      - {target: \"123eab1a292b\", rel: implements}  # DEPLOY-P-005 deployment-is-a-build-not-a-ceremony\n      - {target: \"26419e6cc6ce\", rel: implements}  # DEPLOY-C-012 deploy-script-idempotent\n    deprecated: false\n\n  - number: IMPL-DEPLOY-019\n    hash: \"cfc9c0e9ea35\"\n    name: server-docker-build\n    type: implementation\n    description: >\n      Server image built via docker build -f apps/server/Dockerfile\n      -t calypso-server:latest producing the immutable container artifact.\n    links:\n      - {target: \"cebbff0e956c\", rel: implements}  # DEPLOY-D-001 immutable-distroless-container-builds\n      - {target: \"123eab1a292b\", rel: implements}  # DEPLOY-P-005 deployment-is-a-build-not-a-ceremony\n      - {target: \"26419e6cc6ce\", rel: implements}  # DEPLOY-C-012 deploy-script-idempotent\n    deprecated: false\n\n  - number: IMPL-DEPLOY-020\n    hash: \"10ab81ff2832\"\n    name: kubectl-apply-deploy\n    type: implementation\n    description: >\n      Deployment executed via kubectl apply -f k8s/deployments/server.yaml\n      (or helm upgrade). Declarative, idempotent, non-interactive.\n    links:\n      - {target: \"e889c6c25ede\", rel: implements}  # DEPLOY-A-002 kubernetes-enterprise-deployment\n      - {target: \"123eab1a292b\", rel: implements}  # DEPLOY-P-005 deployment-is-a-build-not-a-ceremony\n      - {target: \"26419e6cc6ce\", rel: implements}  # DEPLOY-C-012 deploy-script-idempotent\n      - {target: \"bd28ad6f0308\", rel: implements}  # DEPLOY-C-019 zero-manual-ssh-steps\n    deprecated: false\n\n  # ---------------------------------------------------------------------------\n  # Dependency Justification\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-021\n    hash: \"3ebf2cc8637b\"\n    name: rootless-orchestrator-selection\n    type: implementation\n    description: >\n      Select an orchestration substrate that can run all long-running platform\n      services unprivileged in the target topology. If evaluating k3s, use it\n      only where its rootless mode constraints fit the deployment shape;\n      otherwise choose a different rootless-capable distribution or a managed\n      control plane.\n    links:\n      - {target: \"e889c6c25ede\", rel: implements}  # DEPLOY-A-002 kubernetes-enterprise-deployment\n      - {target: \"f28913ace8fa\", rel: implements}  # DEPLOY-P-019 bootstrap-is-one-time-and-hardened\n      - {target: \"4287f5044d5c\", rel: implements}  # DEPLOY-C-038 non-root-service-account-owns-orchestrator\n    deprecated: false\n\n  - number: IMPL-DEPLOY-022\n    hash: \"051086e71629\"\n    name: uuid-generation-diy\n    type: implementation\n    description: >\n      UUID generation implemented internally as a single function. No\n      external library required.\n    links:\n      - {target: \"fffb29a3e0a6\", rel: implements}  # DEPLOY-D-004 trace-id-propagation\n    deprecated: false\n\n  - number: IMPL-DEPLOY-023\n    hash: \"4da9bd79a3c5\"\n    name: error-forwarding-diy\n    type: implementation\n    description: >\n      Error forwarding client implemented as a thin wrapper around fetch.\n      No external library required.\n    links:\n      - {target: \"aef55d669b45\", rel: implements}  # DEPLOY-D-003 browser-to-server-error-forwarding\n    deprecated: false\n\n  # ---------------------------------------------------------------------------\n  # Antipatterns\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-024\n    hash: \"35b8a52a9b3f\"\n    name: no-hot-reload-dev-servers\n    type: implementation\n    description: >\n      Do not use vite dev or similar hot-reloading development servers.\n      Deploy the containerized build for environment parity. Agents do not\n      benefit from hot-reloading convenience tooling.\n    links:\n      - {target: \"9d33a458e91a\", rel: implements}  # DEPLOY-P-002 no-incremental-hot-reloading-dev-servers\n      - {target: \"2a5c123b62fc\", rel: implements}  # DEPLOY-X-001 hybrid-environments\n    deprecated: false\n\n  # ---------------------------------------------------------------------------\n  # Bootstrap and Rollout Hardening\n  # ---------------------------------------------------------------------------\n  - number: IMPL-DEPLOY-025\n    hash: \"a93736f26369\"\n    name: bootstrap-service-account-ownership\n    type: implementation\n    description: >\n      init-host.sh creates dedicated service accounts for every bootstrap-\n      installed long-running service, locks password auth, installs only\n      approved admin keys, and transfers orchestration state directories to\n      those accounts during bootstrap. If any required service cannot run\n      unprivileged on the chosen platform, bootstrap fails rather than falling\n      back to root-owned daemons.\n    links:\n      - {target: \"f28913ace8fa\", rel: implements}  # DEPLOY-P-019 bootstrap-is-one-time-and-hardened\n      - {target: \"4287f5044d5c\", rel: implements}  # DEPLOY-C-038 non-root-service-account-owns-orchestrator\n    deprecated: false\n\n  - number: IMPL-DEPLOY-026\n    hash: \"11b2b280d55d\"\n    name: bootstrap-script-disables-routine-root-access\n    type: implementation\n    description: >\n      init-host.sh uses the one permitted bootstrap SSH session to initialize\n      the host, then disables routine root login, locks password-based access,\n      and documents an explicit emergency recovery path rather than leaving root\n      as the default day-two operating user.\n    links:\n      - {target: \"f28913ace8fa\", rel: implements}  # DEPLOY-P-019 bootstrap-is-one-time-and-hardened\n      - {target: \"82fc909784a1\", rel: implements}  # DEPLOY-T-011 bootstrap-access-persists-after-init\n      - {target: \"bd28ad6f0308\", rel: implements}  # DEPLOY-C-019 zero-manual-ssh-steps-post-init\n    deprecated: false\n\n  - number: IMPL-DEPLOY-027\n    hash: \"791d16c0d740\"\n    name: private-runner-control-plane-access\n    type: implementation\n    description: >\n      Non-production rollout workflows run from a self-hosted or ephemeral\n      runner attached to the trusted deployment network. The runner reaches the\n      control plane over the private path or mTLS-protected boundary instead of\n      exposing the cluster admin interface to arbitrary public runners.\n    links:\n      - {target: \"d04312f3a350\", rel: implements}  # DEPLOY-D-007 trusted-control-plane-access-boundary\n      - {target: \"ca63c71ed4a6\", rel: implements}  # DEPLOY-C-040 control-plane-not-broadly-public\n      - {target: \"bd28ad6f0308\", rel: implements}  # DEPLOY-C-019 zero-manual-ssh-steps-post-init\n    deprecated: false\n\n  - number: IMPL-DEPLOY-028\n    hash: \"5309be7aa7ff\"\n    name: tokenrequest-scoped-rollout-credentials\n    type: implementation\n    description: >\n      Rollout jobs mint short-lived namespace-scoped Kubernetes credentials at\n      job start via the TokenRequest API or an equivalent control-plane token\n      broker. The workflow validates the returned expiration timestamp or token\n      claims and fails if the effective lifetime exceeds the deployment policy\n      maximum. Credentials expire automatically and are never stored as\n      reusable admin kubeconfigs in CI secrets.\n    links:\n      - {target: \"d26fa22ea001\", rel: implements}  # DEPLOY-P-020 control-plane-credentials-are-ephemeral-and-scoped\n      - {target: \"76b51b494ba9\", rel: implements}  # DEPLOY-C-039 rollout-credentials-short-lived\n    deprecated: false\n\n  - number: IMPL-DEPLOY-029\n    hash: \"acaddbb18aae\"\n    name: separate-release-and-rollout-entrypoints\n    type: implementation\n    description: >\n      The repository defines separate entrypoints for release publication and\n      environment rollout. Release automation builds, signs, and publishes the\n      image. Demo and stage rollouts run through environment-specific workflows\n      with concurrency guards. Production rollout uses a distinct human-invoked\n      control-plane command or service entrypoint.\n    links:\n      - {target: \"75a275739d63\", rel: implements}  # DEPLOY-P-021 release-publication-is-separate-from-rollout-authorization\n      - {target: \"d10a89ac4d50\", rel: implements}  # DEPLOY-C-041 rollout-concurrency-serialized-per-environment\n      - {target: \"a79b45957f80\", rel: implements}  # DEPLOY-C-042 release-path-separated-from-rollout-paths\n      - {target: \"d5e6f7a2b3c4\", rel: implements}  # DEPLOY-C-027 prod-deployment-requires-human-action\n    deprecated: false\n\n  - number: IMPL-DEPLOY-030\n    hash: \"adf47b7e310a\"\n    name: deployment-audit-fanout-recording\n    type: implementation\n    description: >\n      Each rollout writes the canonical deployment audit record, annotates the\n      affected workload with release metadata, and publishes a repository\n      deployment event carrying the same actor, environment, outcome, and\n      release identifier.\n    links:\n      - {target: \"e667f78d38de\", rel: implements}  # DEPLOY-D-008 deployment-audit-fanout\n      - {target: \"5e6f1a2b3c4d\", rel: implements}  # DEPLOY-D-006 deployment-audit-record\n      - {target: \"e7f8a9b0c1d2\", rel: implements}  # DEPLOY-C-035 deployment-audit-record-written\n    deprecated: false\n\n  - number: IMPL-DEPLOY-031\n    hash: \"4ff75ee9bd78\"\n    name: bootstrap-admin-key-validation-and-rotation\n    type: implementation\n    description: >\n      init-host.sh validates admin SSH keys before installation, rejects weak\n      RSA keys, supports explicit rotation and revocation operations, and\n      prevents the last recovery key from being removed without a replacement.\n    links:\n      - {target: \"508835566e5e\", rel: implements}  # DEPLOY-C-043 admin-key-lifecycle-managed\n      - {target: \"f28913ace8fa\", rel: implements}  # DEPLOY-P-019 bootstrap-is-one-time-and-hardened\n    deprecated: false\n\n  - number: IMPL-DEPLOY-032\n    hash: \"2449dd6e90a4\"\n    name: bootstrap-cis-hardening-profile\n    type: implementation\n    description: >\n      init-host.sh applies the bootstrap hardening profile: restricted sshd\n      settings, unattended security updates, removal or disablement of unused\n      host services, and security-focused sysctl defaults aligned with the\n      target distribution.\n    links:\n      - {target: \"2da56c9625cb\", rel: implements}  # DEPLOY-C-044 bootstrap-cis-baseline-applied\n      - {target: \"f28913ace8fa\", rel: implements}  # DEPLOY-P-019 bootstrap-is-one-time-and-hardened\n    deprecated: false\n\n  - number: IMPL-DEPLOY-033\n    hash: \"8f5ab3747854\"\n    name: rollback-via-prior-image-digest\n    type: implementation\n    description: >\n      The rollback entrypoint re-applies a prior approved image digest or\n      release artifact through the orchestration control plane, waits for\n      health, and records the rollback as a deployment event. It does not\n      revert Git history, log into hosts, or attempt destructive schema\n      downgrades.\n    links:\n      - {target: \"11c0e2d55a91\", rel: implements}  # DEPLOY-C-045 rollback-via-prior-release-artifact-tested\n      - {target: \"4913a0616eea\", rel: implements}  # DEPLOY-P-008 rollouts-are-ordered-and-health-gated\n      - {target: \"b2c3d4e5f6a1\", rel: implements}  # DEPLOY-P-010 migrations-are-forward-only\n      - {target: \"75a275739d63\", rel: implements}  # DEPLOY-P-021 release-publication-is-separate-from-rollout-authorization\n    deprecated: false\n",
     "env-ts.yaml": "meta:\n  domain: IMPL-ENV\n  title: Environment - TypeScript Implementation\n  implements: ENV\n  version: 1\n\nrules:\n  - number: IMPL-ENV-001\n    hash: 19ab8bfb8730\n    name: host-dep-git\n    type: implementation\n    description: >\n      git is a required host dependency for version control.\n    links:\n      - {target: 9bf3512d80fc, rel: implements}  # ENV-C-001\n    deprecated: false\n\n  - number: IMPL-ENV-002\n    hash: 1410fbb52e79\n    name: host-dep-gh-https\n    type: implementation\n    description: >\n      gh (GitHub CLI) is a required host dependency, authenticated via HTTPS\n      using gh auth login -p https -w.\n    links:\n      - {target: 9bf3512d80fc, rel: implements}  # ENV-C-001\n    deprecated: false\n\n  - number: IMPL-ENV-003\n    hash: 0d10d95fe4b7\n    name: host-dep-tmux\n    type: implementation\n    description: >\n      tmux is a required host dependency for persistent terminal sessions\n      that survive SSH disconnects.\n    links:\n      - {target: 1d0d5a6c0fde, rel: implements}  # ENV-C-008\n    deprecated: false\n\n  - number: IMPL-ENV-004\n    hash: e75f10e67aee\n    name: host-dep-bun\n    type: implementation\n    description: >\n      Bun is the JavaScript/TypeScript runtime and package manager. It replaces\n      Node, npm, webpack, and jest in a single binary.\n    links:\n      - {target: 9bf3512d80fc, rel: implements}  # ENV-C-001\n    deprecated: false\n\n  - number: IMPL-ENV-005\n    hash: 6eecad0d40e5\n    name: host-dep-agent-cli\n    type: implementation\n    description: >\n      An agent CLI (Claude Code, Cursor server, Gemini CLI, or equivalent) is\n      a required host dependency. The agent runs on the cloud host, not locally.\n    links:\n      - {target: 54bdaf625e7e, rel: implements}  # ENV-C-004\n    deprecated: false\n\n  - number: IMPL-ENV-006\n    hash: a9398935df4c\n    name: host-dep-playwright\n    type: implementation\n    description: >\n      Playwright OS dependencies are required on the host for headless Chromium.\n      Install via bunx playwright install-deps.\n    links:\n      - {target: 7add10d6242f, rel: implements}  # ENV-C-016\n    deprecated: false\n\n  - number: IMPL-ENV-007\n    hash: 90c694d2af9d\n    name: session-start-read-context\n    type: implementation\n    description: >\n      At session start, the agent reads all files in agent-context/ before\n      any development or documentation work.\n    links:\n      - {target: 223b1f507440, rel: implements}  # ENV-C-009\n    deprecated: false\n\n  - number: IMPL-ENV-008\n    hash: d4f76137c782\n    name: preview-server-port-31415\n    type: implementation\n    description: >\n      The Calypso dev server binds to port 31415. This is the project-wide\n      convention and must be exposed on the host firewall.\n    links:\n      - {target: edd5ed9ab836, rel: implements}  # ENV-C-005\n    deprecated: false\n\n  - number: IMPL-ENV-009\n    hash: a48d8014980f\n    name: justified-tmux\n    type: implementation\n    description: >\n      tmux is justified as a buy decision. Session persistence with decades\n      of stability; a DIY terminal multiplexer is absurd.\n    links:\n      - {target: 1d0d5a6c0fde, rel: implements}  # ENV-C-008\n    deprecated: false\n\n  - number: IMPL-ENV-010\n    hash: 853e1a23ff81\n    name: justified-bun\n    type: implementation\n    description: >\n      Bun is justified as a buy decision. Runtime, bundler, test runner, and\n      package manager in one binary; replaces Node + npm + webpack + jest.\n    links:\n      - {target: 9bf3512d80fc, rel: implements}  # ENV-C-001\n    deprecated: false\n\n  - number: IMPL-ENV-011\n    hash: b176e3163d31\n    name: justified-gh\n    type: implementation\n    description: >\n      gh is justified as a buy decision. GitHub API integration with auth\n      management; a DIY approach is fragile and under-tested.\n    links:\n      - {target: 9bf3512d80fc, rel: implements}  # ENV-C-001\n    deprecated: false\n\n  - number: IMPL-ENV-012\n    hash: 0d36858cdab3\n    name: justified-playwright\n    type: implementation\n    description: >\n      Playwright is justified as a buy decision. Headless browser automation\n      with cross-browser support; no viable DIY alternative.\n    links:\n      - {target: 7add10d6242f, rel: implements}  # ENV-C-016\n    deprecated: false\n",
     "process-ts.yaml": "meta:\n  domain: IMPL-PROCESS\n  title: Process - TypeScript Implementation\n  implements: PROCESS\n  version: 1\n\nrules:\n  - number: IMPL-PROCESS-001\n    hash: 7aa2287045fd\n    name: github-issues-based-planning\n    type: implementation\n    description: >\n      Planning state lives in GitHub Issues, not repository files. The\n      Implementation Plan issue is a global tracking issue containing phases and\n      feature issue links. Feature issues have structured sections: Motivation,\n      Features (checkboxes), Test Plan (checkboxes), and Stage. The Implementation\n      Plan issue is created during requirements gathering and never closes; feature\n      issues are created per feature and closed when implemented and tested.\n    links:\n      - {target: ce4b1e4f537f, rel: implements}  # PROCESS-D-001 issue-based-planning-loop\n    deprecated: false\n\n  - number: IMPL-PROCESS-002\n    hash: 715bb67fd6bf\n    name: workflow-state-machine-definition\n    type: implementation\n    description: >\n      Calypso workflow state machine declared in YAML at\n      agent-context/workflows/calypso-default-feature-workflow.yaml. States\n      include new, prd-review, architecture-plan, scaffold-tdd, implementation,\n      qa-validation, ready-for-review, done, plus recovery states\n      waiting-for-human, blocked, aborted.\n    links:\n      - {target: d1479e8e74df, rel: implements}  # PROCESS-D-003 calypso-yaml-workflow-definition\n    deprecated: false\n\n  - number: IMPL-PROCESS-003\n    hash: 46a31de04c90\n    name: feature-unit-invariant\n    type: implementation\n    description: >\n      One feature equals one branch equals one worktree equals one pull request.\n      This is the default unit model enforced by the CLI.\n    links:\n      - {target: d1479e8e74df, rel: implements}  # PROCESS-D-003 calypso-yaml-workflow-definition\n    deprecated: false\n\n  - number: IMPL-PROCESS-004\n    hash: 3d57d080f618\n    name: single-orchestrator-per-repo\n    type: implementation\n    description: >\n      One Calypso orchestrator per repository context. The CLI is the\n      orchestrator, not the coding agent. CLI owns workflow state, task dispatch,\n      gate evaluation, and operator interaction.\n    links:\n      - {target: 309eabc8623a, rel: implements}  # PROCESS-A-002 calypso-orchestrated-multi-agent\n    deprecated: false\n\n  - number: IMPL-PROCESS-005\n    hash: a24b24b667c5\n    name: early-pull-request-creation\n    type: implementation\n    description: >\n      Pull requests are created early in the feature lifecycle, not deferred\n      until work is complete.\n    links:\n      - {target: d1479e8e74df, rel: implements}  # PROCESS-D-003 calypso-yaml-workflow-definition\n    deprecated: false\n\n  - number: IMPL-PROCESS-006\n    hash: 11c1bf6a82ab\n    name: structured-agent-outcomes\n    type: implementation\n    description: >\n      Agent tasks produce structured outcomes: OK, NOK, or ABORTED. These are\n      the only valid agent result values.\n    links:\n      - {target: 0cb0c7f4709f, rel: implements}  # PROCESS-D-004 producer-validator-handoff\n    deprecated: false\n\n  - number: IMPL-PROCESS-007\n    hash: c45d5f0c83bb\n    name: gh-as-github-surface\n    type: implementation\n    description: >\n      The gh CLI is the required GitHub control surface for all GitHub\n      operations.\n    links:\n      - {target: d1479e8e74df, rel: implements}  # PROCESS-D-003 calypso-yaml-workflow-definition\n    deprecated: false\n\n  - number: IMPL-PROCESS-008\n    hash: cefd621e999f\n    name: cli-tui-operator-surfaces\n    type: implementation\n    description: >\n      CLI and TUI are the primary operator surfaces for interacting with\n      Calypso.\n    links:\n      - {target: 309eabc8623a, rel: implements}  # PROCESS-A-002 calypso-orchestrated-multi-agent\n    deprecated: false\n\n  - number: IMPL-PROCESS-009\n    hash: ad1cb0c85188\n    name: gate-groups\n    type: implementation\n    description: >\n      Default workflow gates are grouped into four concerns: specification,\n      implementation, validation, and merge-readiness. Each gate records task,\n      owner role, status source, blocking behavior, and checklist label.\n    links:\n      - {target: 309a8b908fc1, rel: implements}  # PROCESS-D-006 gate-groups-and-evidence\n    deprecated: false\n\n  - number: IMPL-PROCESS-010\n    hash: e3201fdd4cea\n    name: task-catalog\n    type: implementation\n    description: >\n      Workflow declares a task catalog with three kinds: builtin (doctor-clean,\n      feature-unit-bound, workflow-files-present, rust-quality, test-matrix,\n      main-compatibility), agent (pr-editor, documentation-merge,\n      blueprint-review), and human (human-clarification, human-review-approval).\n      Each task has a kind and backing implementation or role.\n    links:\n      - {target: 0586a33b4412, rel: implements}  # PROCESS-D-007 task-catalog-backing-workflow\n    deprecated: false\n\n  - number: IMPL-PROCESS-011\n    hash: 455a1db3fb8c\n    name: agent-prompt-catalog\n    type: implementation\n    description: >\n      Agent-backed tasks define stable prompt contracts. pr-editor keeps PR\n      description aligned with feature state. documentation-merge reconciles\n      docs semantically. blueprint-review checks for drift from blueprint rules.\n      Prompts are short, role-specific intents wrapped with context by the CLI\n      before dispatch.\n    links:\n      - {target: 0cb0c7f4709f, rel: implements}  # PROCESS-D-004 producer-validator-handoff\n      - {target: 0586a33b4412, rel: implements}  # PROCESS-D-007 task-catalog-backing-workflow\n    deprecated: false\n\n  - number: IMPL-PROCESS-012\n    hash: 6b75ae3293de\n    name: requirements-interview-output\n    type: implementation\n    description: >\n      Agent generates a structured interview using the process standards\n      template. Output becomes the Implementation Plan GitHub Issue and initial\n      Feature Issues. Interview template is in product-owner-interview.md in the\n      process prompts. The issue structure captures requirements in a form that\n      guides implementation.\n    links:\n      - {target: 036dcf4739fc, rel: implements}  # PROCESS-D-008 structured-requirements-interview\n    deprecated: false\n\n  - number: IMPL-PROCESS-012-A\n    hash: a3f7b8e2c1d4\n    name: prd-userflow-state-machines\n    type: implementation\n    description: >\n      The PRD includes a state machine specification for every user goal\n      extracted from the product owner interview. Each state machine defines\n      entry conditions, exit conditions, all intermediate states, transitions,\n      feedback, and edge case recovery paths. State machines are formalized\n      before implementation begins per UX Pattern 1: Service Flow Mapping.\n    links:\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-005 service-flow-precedes-interface\n    deprecated: false\n\n  - number: IMPL-PROCESS-013\n    hash: e7ef01a35298\n    name: implementation-plan-format\n    type: implementation\n    description: >\n      Implementation Plan GitHub Issue uses phase headings with feature issue\n      links in checkbox format: \"- [ ] #<issue-number> Feature Name\". Updated at\n      every commit with both discovery (new feature issues created and linked) and\n      completion (checkboxes checked as features are closed). The issue body\n      encodes the current plan state and guides agent priorities.\n    links:\n      - {target: 22de09615f92, rel: implements}  # PROCESS-P-002 plans-are-living-documents\n      - {target: ce4b1e4f537f, rel: implements}  # PROCESS-D-001 issue-based-planning-loop\n    deprecated: false\n\n  - number: IMPL-PROCESS-014\n    hash: 1f7307afa072\n    name: feature-issue-next-action-encoding\n    type: implementation\n    description: >\n      Feature issue descriptions encode the next action for the agent. The\n      description includes the Stage field and explicit next steps. As the agent\n      updates the issue (checking features, updating stage, adding test results),\n      it narrates the completion and implicitly encodes what to do next. Reading\n      the current stage and description replaces reading a next-prompt file.\n    links:\n      - {target: c93476ff124b, rel: implements}  # PROCESS-P-004 next-action-always-explicit\n      - {target: 7adecf113ceb, rel: implements}  # PROCESS-D-002 self-advancing-state-machine\n    deprecated: false\n\n  - number: IMPL-PROCESS-015\n    hash: 1cc3c029ef72\n    name: pre-commit-hook-plan-enforcement\n    type: implementation\n    description: >\n      DEPRECATED. Git pre-commit hook no longer enforces planning file\n      requirements since planning state moved to GitHub Issues. Pre-commit hook\n      focuses on code quality gates (lint, format, tests).\n    links:\n      - {target: 888ece3bbd9f, rel: implements}  # PROCESS-C-005 pre-commit-hook-enforces-updates\n    deprecated: true\n\n  - number: IMPL-PROCESS-016\n    hash: c312733de253\n    name: documentation-merge-gitattributes\n    type: implementation\n    description: >\n      .gitattributes marks documentation files (*.md, *.rst, *.txt) with\n      merge=binary to prevent automatic line-level merges.\n    links:\n      - {target: 22de09615f92, rel: implements}  # PROCESS-P-002 plans-are-living-documents\n    deprecated: false\n\n  - number: IMPL-PROCESS-017\n    hash: 40d29666d64f\n    name: documentation-merge-conflict-check\n    type: implementation\n    description: >\n      .githooks/pre-commit scans staged documentation files and blocks commits\n      containing merge conflict markers.\n    links:\n      - {target: 888ece3bbd9f, rel: implements}  # PROCESS-C-005 pre-commit-hook-enforces-updates\n    deprecated: false\n\n  - number: IMPL-PROCESS-018\n    hash: b9aad00f9e9c\n    name: documentation-merge-protocol\n    type: implementation\n    description: >\n      Merge protocol for documentation: read older and newer docs, produce one\n      coherent result, prefer the newer document when uncertain. Agent resolution\n      is mandatory for agent-maintained documentation.\n    links:\n      - {target: 22de09615f92, rel: implements}  # PROCESS-P-002 plans-are-living-documents\n    deprecated: false\n\n  - number: IMPL-PROCESS-019\n    hash: f1becde5801c\n    name: scaffold-checklist\n    type: implementation\n    description: >\n      Stage 0 scaffold checklist: git init + gh repo create, create\n      .github/workflows/ with CI jobs, stub all test suites (server unit,\n      integration, browser unit, component, e2e), verify all tests run and fail,\n      write initial implementation plan and next-prompt.\n    links:\n      - {target: 3d643a9a5413, rel: implements}  # PROCESS-D-009 infrastructure-before-features\n      - {target: d38caa99ef55, rel: implements}  # PROCESS-C-006 scaffold-complete-before-features\n    deprecated: false\n\n  - number: IMPL-PROCESS-020\n    hash: 397b29e6c90a\n    name: no-runtime-dependencies\n    type: implementation\n    description: >\n      The process implementation introduces no runtime dependencies.\n    links:\n      - {target: ce4b1e4f537f, rel: implements}  # PROCESS-D-001 three-document-planning-loop\n    deprecated: false\n\n  - number: IMPL-PROCESS-021\n    hash: d9e96eda98d5\n    name: workflow-yaml-tracked-artifact\n    type: implementation\n    description: >\n      The workflow YAML file is a tracked repository artifact, not an ephemeral\n      CLI cache.\n    links:\n      - {target: 607b8479a54b, rel: implements}  # PROCESS-C-004 calypso-workflow-yaml-exists\n    deprecated: false\n",
+    "task-queue-ts.yaml": "meta:\n  domain: IMPL-TASK-QUEUE\n  title: Task Queue - TypeScript Implementation\n  implements: TASK-QUEUE\n  version: 1\n\nrules:\n  # ── API Server: LISTEN/NOTIFY and SSE Fan-out ──────────────────────────────\n\n  - number: IMPL-TQ-TS-001\n    hash: a3f7d2e1b490\n    name: api-server-pg-listen-manager\n    type: implementation\n    description: >\n      The API server maintains one persistent PostgreSQL LISTEN connection per agent type using\n      a dedicated Bun postgres client (separate from the main connection pool). On startup, the\n      server calls LISTEN task_queue_<type> for each registered agent type. pg_notify payloads\n      (task_id) are forwarded to the in-process SSE fan-out registry. The LISTEN client\n      reconnects automatically on connection loss and re-issues LISTEN commands on reconnect.\n      Workers never hold a LISTEN connection.\n    links:\n      - {target: 869d373d9461, rel: implements}  # TQ-D-005 api-server-listen-notify-sse-fanout\n      - {target: d3356916c05d, rel: implements}  # TQ-P-005 notification-assists-polling-not-replaces\n    deprecated: false\n\n  - number: IMPL-TQ-TS-002\n    hash: c8b1e4a09f23\n    name: sse-fan-out-registry\n    type: implementation\n    description: >\n      An in-process registry maps agent_type → Set<ReadableStreamController>. When the LISTEN\n      manager receives a pg_notify event, it looks up the set for that agent type and writes\n      `data: task_available\\n\\n` to each open SSE controller. Controllers that have been\n      closed (worker disconnected) are removed from the set. The registry is a plain Map; no\n      external pub/sub broker is required. Implemented in apps/server/src/task-queue/sse.ts.\n    links:\n      - {target: 869d373d9461, rel: implements}  # TQ-D-005 api-server-listen-notify-sse-fanout\n      - {target: fec546a4edeb, rel: implements}  # WORKER-D-001 api-streaming-task-discovery\n    deprecated: false\n\n  - number: IMPL-TQ-TS-003\n    hash: e2d5f8c0a174\n    name: sse-heartbeat-poll-loop\n    type: implementation\n    description: >\n      A setInterval loop runs on the API server at TASK_QUEUE_POLL_INTERVAL_MS (default 5000).\n      On each tick it unconditionally writes `data: heartbeat\\n\\n` to every connected SSE client,\n      regardless of whether any pending tasks exist. The heartbeat is time-driven, not\n      task-driven: its purpose is to guarantee that a worker wakes within one poll interval even\n      if every pg_notify for that period was missed. Workers treat heartbeat events identically to\n      task_available events and attempt a claim, receiving 0 rows if the queue is empty. This\n      unconditional behaviour is what makes the poll interval a firm discovery bound.\n    links:\n      - {target: d3356916c05d, rel: implements}  # TQ-P-005 notification-assists-polling-not-replaces\n      - {target: 0718a9a15e3f, rel: mitigates}   # TQ-X-004 notification-as-sole-trigger\n      - {target: 4573785143b4, rel: mitigates}   # TQ-X-001 polling-without-backoff\n    deprecated: false\n\n  # ── API Server: SSE Endpoint ───────────────────────────────────────────────\n\n  - number: IMPL-TQ-TS-004\n    hash: f91a3c7d2e05\n    name: task-stream-sse-endpoint\n    type: implementation\n    description: >\n      GET /api/v1/tasks/stream is a Server-Sent Events endpoint. Because the browser EventSource\n      API does not support custom request headers, the service token is passed as a query\n      parameter: GET /api/v1/tasks/stream?token=<service_token>. The API server validates the\n      token from the query parameter, extracts the agent_type claim, creates a ReadableStream\n      with a cancel handler that removes the controller from the fan-out registry, and returns a\n      Response with Content-Type: text/event-stream and Cache-Control: no-cache. The token query\n      parameter is redacted from all access log entries (see IMPL-TQ-TS-011). The endpoint is\n      implemented using Bun's native Response streaming. Workers reconnect automatically using\n      the EventSource API's built-in retry logic.\n    links:\n      - {target: fec546a4edeb, rel: implements}  # WORKER-D-001 api-streaming-task-discovery\n      - {target: cebee7387f5b, rel: implements}  # WORKER-D-007 per-agent-type-service-token\n    deprecated: false\n\n  - number: IMPL-TQ-TS-005\n    hash: b70e9d1c3f48\n    name: service-token-validation\n    type: implementation\n    description: >\n      The SSE endpoint and claim endpoint validate the service token on every request. The service\n      token is a signed JWT with claims: { sub: \"<agent_type>_service\", agent_type: \"<type>\",\n      scope: [\"tasks:stream\", \"tasks:claim\"] }. The API server verifies the signature using the\n      SERVICE_TOKEN_SECRET environment variable. Requests with an expired, malformed, or\n      wrong-type token receive 401 or 403. Service tokens are distinct from user session tokens\n      and delegated task tokens.\n    links:\n      - {target: cebee7387f5b, rel: implements}  # WORKER-D-007 per-agent-type-service-token\n      - {target: f020f72a449a, rel: implements}  # WORKER-C-014 per-type-api-token-isolation\n    deprecated: false\n\n  # ── API Server: Claim and Result Endpoints ─────────────────────────────────\n\n  - number: IMPL-TQ-TS-006\n    hash: d4a8f2c1e937\n    name: atomic-claim-endpoint\n    type: implementation\n    description: >\n      POST /api/v1/tasks/claim accepts { agent_type, max_tasks?: number } and executes an atomic\n      UPDATE task_queue SET status = 'claimed', claimed_by = $worker_instance_id, claimed_at = now(),\n      claim_expires_at = now() + $CLAIM_TTL_SECONDS WHERE id IN (SELECT id FROM task_queue WHERE\n      status = 'pending' AND agent_type = $agent_type ORDER BY priority ASC, created_at ASC LIMIT\n      $max_tasks FOR UPDATE SKIP LOCKED) RETURNING *. Returns the claimed task rows including the\n      delegated_token. The service token's agent_type must match the requested agent_type.\n      $worker_instance_id is a stable UUID generated at worker process startup (not per-claim),\n      stored in the task record for audit attribution and stale-claim diagnosis.\n    links:\n      - {target: c838af843858, rel: implements}  # TQ-P-001 atomic-claim-exactly-one-winner\n      - {target: fec546a4edeb, rel: implements}  # WORKER-D-001 api-streaming-task-discovery\n      - {target: e9256535c69a, rel: implements}  # TQ-D-004 per-type-filtered-views\n    deprecated: false\n\n  # ── Worker: SSE Client ─────────────────────────────────────────────────────\n\n  - number: IMPL-TQ-TS-007\n    hash: c1b5e8f0d362\n    name: worker-sse-client\n    type: implementation\n    description: >\n      The worker daemon connects to the API's SSE endpoint using the native EventSource API\n      (available in Bun). The service token is passed as a query parameter since EventSource\n      does not support custom headers: GET /api/v1/tasks/stream?token=<service_token>. On each\n      task_available or heartbeat event, the worker calls POST /api/v1/tasks/claim with its\n      service token. EventSource reconnects automatically with exponential backoff on connection\n      loss. No database connection is opened; no DATABASE_URL is present in the environment.\n    links:\n      - {target: fec546a4edeb, rel: implements}  # WORKER-D-001 api-streaming-task-discovery\n      - {target: 828eead860c0, rel: implements}  # WORKER-P-001 zero-database-connectivity\n    deprecated: false\n\n  - number: IMPL-TQ-TS-008\n    hash: a9f3d0e7b215\n    name: worker-startup-credential-guard\n    type: implementation\n    description: >\n      The worker binary checks for database credential environment variables at startup\n      (DATABASE_URL, PGPASSWORD, PGHOST, PGUSER, PGDATABASE). If any are present, the worker\n      logs an error and exits with status 1 before opening any connections. This is a safety net\n      that prevents accidental injection of database credentials into the worker container from\n      misconfigured Kubernetes Secrets or ConfigMaps. Implemented in\n      apps/worker/src/startup-guard.ts, called before any other initialization.\n    links:\n      - {target: 828eead860c0, rel: implements}  # WORKER-P-001 zero-database-connectivity\n      - {target: ba3b855fc0a5, rel: implements}  # WORKER-C-002 no-database-credentials\n      - {target: 9110f8b7a172, rel: implements}  # TQ-C-008 startup-credential-absence-verified\n    deprecated: false\n\n  # ── Infrastructure ─────────────────────────────────────────────────────────\n\n  - number: IMPL-TQ-TS-009\n    hash: f6c2b8a1d047\n    name: pg-notify-trigger\n    type: implementation\n    description: >\n      A PostgreSQL AFTER INSERT OR UPDATE trigger on task_queue calls pg_notify when a row\n      transitions to status = 'pending'. The trigger function: CREATE OR REPLACE FUNCTION\n      notify_task_queue() RETURNS trigger AS $$ BEGIN IF NEW.status = 'pending' THEN PERFORM\n      pg_notify('task_queue_' || NEW.agent_type, NEW.id::text); END IF; RETURN NEW; END; $$\n      LANGUAGE plpgsql. The trigger fires on INSERT and on UPDATE (to cover stale-claim recovery\n      returning tasks to pending). Channel name uses the agent_type value, matching the LISTEN\n      channel the API server subscribes to.\n    links:\n      - {target: 869d373d9461, rel: implements}  # TQ-D-005 api-server-listen-notify-sse-fanout\n      - {target: add350cf11b9, rel: implements}  # TQ-C-006 notification-channel-per-type\n    deprecated: false\n\n  - number: IMPL-TQ-TS-010\n    hash: e3a9c0f7b182\n    name: worker-kubernetes-manifest\n    type: implementation\n    description: >\n      Each agent type has a dedicated Kubernetes Deployment. The pod spec includes: (1) a single\n      Secret mount for the per-type SERVICE_TOKEN (not a DATABASE_URL); (2) a NetworkPolicy that\n      allows egress to the API server and declared vendor API hostnames only — port 5432 is not\n      listed; (3) TASK_QUEUE_STREAM_URL pointing to the API server's SSE endpoint. No database\n      connection strings appear in the manifest, ConfigMap, or Secret for worker deployments.\n    links:\n      - {target: cebee7387f5b, rel: implements}  # WORKER-D-007 per-agent-type-service-token\n      - {target: ba3b855fc0a5, rel: implements}  # WORKER-C-002 no-database-credentials\n      - {target: bf7fc36b1d50, rel: implements}  # WORKER-C-006 network-policy-blocks-direct-db\n    deprecated: false\n\n  - number: IMPL-TQ-TS-011\n    hash: a7e2d0f9c341\n    name: sse-token-query-param-redaction\n    type: implementation\n    description: >\n      Because the service token is passed as a query parameter, it appears in raw access logs.\n      The API server's request logger must redact the token value before writing the log entry.\n      Implementation: a logging middleware runs before route handlers and rewrites the request\n      URL, replacing the token query parameter value with [REDACTED]:\n      `url.searchParams.set('token', '[REDACTED]')`. The rewritten URL is logged; the original\n      is used for request processing. This applies to all logging sinks (stdout, file, external\n      aggregator). Verified in CI by asserting that access log output for SSE requests contains\n      `token=[REDACTED]` and not a valid JWT string.\n    links:\n      - {target: cebee7387f5b, rel: implements}  # WORKER-D-007 per-agent-type-service-token\n      - {target: c5f0a3d8e917, rel: mitigates}   # IMPL-TQ-TS-X-002 sse-token-in-url-logged\n    deprecated: false\n\n  # ── Antipatterns ───────────────────────────────────────────────────────────\n\n  - number: IMPL-TQ-TS-X-001\n    hash: b8d1f4e2a039\n    name: worker-pg-import\n    type: antipattern\n    description: >\n      Importing postgres, pg, or any PostgreSQL client library into the worker package. Even if\n      no connection is opened, the import signals intent and makes the violation easier to\n      introduce later. The worker package must not list any database client as a dependency.\n      CI must verify via package.json inspection that no database client is present in\n      apps/worker/package.json or any package it depends on.\n    links:\n      - {target: 828eead860c0, rel: contradicts}  # WORKER-P-001 zero-database-connectivity\n      - {target: d9c4e1b72a30, rel: contradicts}  # TQ-X-006 worker-direct-database-connection\n    deprecated: false\n\n  - number: IMPL-TQ-TS-X-002\n    hash: c5f0a3d8e917\n    name: sse-token-in-url-logged\n    type: antipattern\n    description: >\n      Since the service token is passed as a query parameter (EventSource limitation), access\n      logs will contain the token in the URL. The API server must strip or redact the token\n      query parameter from all access log entries. Failure to do so leaks valid service tokens\n      into log aggregators. The alternative — rotating the token frequently — does not eliminate\n      the leak; redaction is the correct fix.\n    links:\n      - {target: cebee7387f5b, rel: contradicts}  # WORKER-D-007 per-agent-type-service-token\n    deprecated: false\n",
     "test-ts.yaml": "meta:\n  domain: IMPL-TEST\n  title: Testing - TypeScript Implementation\n  implements: TEST\n  version: 1\n\nrules:\n  # ── Test Driver ────────────────────────────────────────────────────────\n\n  - number: IMPL-TEST-001\n    hash: 6548c9fd87e3\n    name: vitest-single-driver\n    type: implementation\n    description: >\n      Vitest is the single test driver for all TypeScript test categories\n      (unit, API integration, component, E2E). No other test runner (Jest,\n      Mocha, standalone Playwright runner) is permitted.\n    links:\n      - {target: e71a98fb1de2, rel: implements}   # TEST-C-001 vitest-unit-tests\n      - {target: a12043dd7788, rel: implements}   # TEST-X-004 monolithic-ci-workflow\n    deprecated: false\n\n  - number: IMPL-TEST-002\n    hash: 0d46961a3ef9\n    name: playwright-browser-provider\n    type: implementation\n    description: >\n      Playwright is used exclusively as a browser provider under Vitest, not\n      as a top-level test runner. Vitest owns lifecycle and reporting;\n      Playwright provides the headless Chromium engine.\n    links:\n      - {target: f34f055c75c5, rel: implements}   # TEST-D-004 headless-browser-testing\n      - {target: 4276faad79f4, rel: implements}   # TEST-T-004 browser-fidelity\n    deprecated: false\n\n  - number: IMPL-TEST-003\n    hash: 7b5baf097198\n    name: bun-runtime-infra-owner\n    type: implementation\n    description: >\n      Infrastructure setup and teardown (containers, servers, fixtures, env\n      wiring) is always performed from the Bun runtime side of Vitest hooks\n      or setup files. The Bun runtime owns subprocesses and environment values.\n    links:\n      - {target: 217845b40c8f, rel: implements}   # TEST-P-005 suite-independence\n      - {target: e9f7459b95e2, rel: implements}   # TEST-T-001 environment-parity\n    deprecated: false\n\n  # ── Test Category Locations ────────────────────────────────────────────\n\n  - number: IMPL-TEST-004\n    hash: e62998fded69\n    name: unit-test-location\n    type: implementation\n    description: >\n      Unit tests reside in /tests/unit, run via Vitest with no browser engine,\n      and execute in Bun runtime.\n    links:\n      - {target: e71a98fb1de2, rel: implements}   # TEST-C-001 vitest-unit-tests\n    deprecated: false\n\n  - number: IMPL-TEST-005\n    hash: e39a2442bd54\n    name: api-integration-location\n    type: implementation\n    description: >\n      API integration tests reside in /tests/integration, run via Vitest with\n      no browser engine, and execute in Bun runtime.\n    links:\n      - {target: 1b3bbdf1be70, rel: implements}   # TEST-P-001 prefer-real-systems\n    deprecated: false\n\n  - number: IMPL-TEST-006\n    hash: bf4555596741\n    name: component-test-location\n    type: implementation\n    description: >\n      React component tests reside in /tests/component, run via Vitest with\n      Playwright providing the headless Chromium engine.\n    links:\n      - {target: 58672304c9d2, rel: implements}   # TEST-C-005 component-tests-in-browser\n    deprecated: false\n\n  - number: IMPL-TEST-007\n    hash: c3506c5e6ac5\n    name: e2e-test-location\n    type: implementation\n    description: >\n      Full-page user story tests reside in /tests/e2e, run via Vitest with\n      Playwright providing the headless Chromium engine.\n    links:\n      - {target: 0dcc3d6b670e, rel: implements}   # TEST-C-006 e2e-test-passing\n    deprecated: false\n\n  # ── CI Workflow Structure ──────────────────────────────────────────────\n\n  - number: IMPL-TEST-008\n    hash: d31b7fc8e801\n    name: per-suite-ci-workflows\n    type: implementation\n    description: >\n      Separate CI workflow files exist for each test suite: test-unit.yml,\n      test-api.yml, test-component.yml, test-e2e.yml, and test-pg-container.yml.\n      Each installs runtime dependencies, runs its canonical command, and\n      reports pass/fail independently.\n    links:\n      - {target: fab7da1aaf57, rel: implements}   # TEST-D-002 suite-per-workflow-ci\n      - {target: fb899ca2312e, rel: implements}   # TEST-C-007 four-ci-workflows\n    deprecated: false\n\n  - number: IMPL-TEST-009\n    hash: dfe04c2a1b92\n    name: quality-gate-workflow\n    type: implementation\n    description: >\n      quality-gate.yml installs Bun and dependencies, runs lint, format check,\n      and build verification. It is separate from test-suite workflows.\n    links:\n      - {target: e89af6c2f0d3, rel: implements}   # TEST-D-005 separate-quality-gate\n      - {target: 34c0790ac993, rel: implements}   # TEST-C-010 quality-gate-workflow\n    deprecated: false\n\n  - number: IMPL-TEST-010\n    hash: c818e5cd4dd6\n    name: test-workflows-tests-only\n    type: implementation\n    description: >\n      Test-suite CI workflows run the suite's canonical test command only.\n      Quality checks (lint, format, build) are not duplicated in test workflows.\n    links:\n      - {target: 9673d6a79b8a, rel: implements}   # TEST-C-011 suite-workflows-tests-only\n      - {target: ff3651f8db7d, rel: implements}   # TEST-X-006 duplicated-quality-checks\n    deprecated: false\n\n  - number: IMPL-TEST-011\n    hash: 99b4eb127d53\n    name: merge-gate-all-pass\n    type: implementation\n    description: >\n      Merge is blocked unless the quality gate and all required test workflows\n      pass.\n    links:\n      - {target: e01fc87ad565, rel: implements}   # TEST-C-012 merge-gate-configured\n      - {target: 3450e2a1cbdb, rel: implements}   # TEST-T-006 merge-gating\n    deprecated: false\n\n  - number: IMPL-TEST-012\n    hash: d842c3e42341\n    name: local-ci-command-parity\n    type: implementation\n    description: >\n      Local invocation uses the exact same per-suite commands as CI. CI cannot\n      use alternate runners or alternate suite entrypoints.\n    links:\n      - {target: 2a5242355dd5, rel: implements}   # TEST-D-003 local-ci-command-parity\n      - {target: 9f579d269f3e, rel: implements}   # TEST-P-006 local-ci-parity\n      - {target: 6d71b8f70b27, rel: implements}   # TEST-C-009 canonical-commands-documented\n    deprecated: false\n\n  - number: IMPL-TEST-029\n    hash: 4c1456a6189a\n    name: release-workflow-gates\n    type: implementation\n    description: >\n      Release builds must pass the release workflow gates (release.yml) before\n      tagged publication.\n    links:\n      - {target: 3450e2a1cbdb, rel: implements}   # TEST-T-006 merge-gating\n    deprecated: false\n\n  # ── Fixture Format ─────────────────────────────────────────────────────\n\n  - number: IMPL-TEST-013\n    hash: 21b9f880e12a\n    name: golden-fixture-recorder\n    type: implementation\n    description: >\n      The fixture recorder is a Bun script that reads runtime configuration,\n      makes real HTTP requests to external services, writes response bodies\n      and headers to JSON files in /tests/fixtures/, and logs schema changes\n      compared to existing fixtures.\n    links:\n      - {target: 135eccfbae17, rel: implements}   # TEST-D-001 golden-fixture-recording\n      - {target: a8a20e29fa32, rel: implements}   # TEST-C-003 golden-fixture-recorded\n    deprecated: false\n\n  - number: IMPL-TEST-014\n    hash: 341b8e46ce49\n    name: fixtures-are-files\n    type: implementation\n    description: >\n      Fixtures are file artifacts under /tests/fixtures/ or suite-specific\n      fixture folders. Environment variables are configuration only and must\n      not be used as fixture storage.\n    links:\n      - {target: 65d4d742b6e6, rel: implements}   # TEST-P-002 fixtures-are-files\n      - {target: 73c69823c03a, rel: implements}   # TEST-X-003 fixtures-in-env-vars\n    deprecated: false\n\n  # ── Environment Setup Contract ─────────────────────────────────────────\n\n  - number: IMPL-TEST-015\n    hash: 20c8d61245ee\n    name: vitest-lifecycle-setup\n    type: implementation\n    description: >\n      Vitest lifecycle hooks (beforeAll, afterAll, setup files, test projects)\n      create and destroy infrastructure. Setup logic is never delegated to\n      ad hoc shell sessions or external manual orchestration.\n    links:\n      - {target: 217845b40c8f, rel: implements}   # TEST-P-005 suite-independence\n    deprecated: false\n\n  - number: IMPL-TEST-016\n    hash: 064d094db901\n    name: dynamic-infra-values\n    type: implementation\n    description: >\n      Dynamic infrastructure values (e.g. DB URL with random port) are\n      generated in Bun runtime and passed into app processes started by\n      Vitest-controlled setup.\n    links:\n      - {target: 217845b40c8f, rel: implements}   # TEST-P-005 suite-independence\n      - {target: 1b3bbdf1be70, rel: implements}   # TEST-P-001 prefer-real-systems\n    deprecated: false\n\n  - number: IMPL-TEST-017\n    hash: 4e58adb00633\n    name: no-fixed-database-url\n    type: implementation\n    description: >\n      Never rely on a fixed DATABASE_URL for browser/integration suites when\n      the container helper provides a random host port.\n    links:\n      - {target: 1b3bbdf1be70, rel: implements}   # TEST-P-001 prefer-real-systems\n    deprecated: false\n\n  # ── Browser Test Configuration ─────────────────────────────────────────\n\n  - number: IMPL-TEST-018\n    hash: 807ec56c57c5\n    name: headless-no-display\n    type: implementation\n    description: >\n      Browser tests run in real Playwright browsers in headless mode. Execution\n      has no GUI, no display server, and no DISPLAY dependency. Browser tests\n      are launched through Vitest configuration, not a standalone Playwright\n      runner.\n    links:\n      - {target: f34f055c75c5, rel: implements}   # TEST-D-004 headless-browser-testing\n      - {target: 58672304c9d2, rel: implements}   # TEST-C-005 component-tests-in-browser\n    deprecated: false\n\n  # ── Dependency Justification ───────────────────────────────────────────\n\n  - number: IMPL-TEST-019\n    hash: 126d03ac1ce4\n    name: vitest-dependency\n    type: implementation\n    description: >\n      Vitest is a Buy dependency: mandatory TypeScript test driver owning\n      lifecycle, orchestration, and reporting.\n    links:\n      - {target: e71a98fb1de2, rel: implements}   # TEST-C-001 vitest-unit-tests\n    deprecated: false\n\n  - number: IMPL-TEST-020\n    hash: 58a6c32dc03b\n    name: playwright-dependency\n    type: implementation\n    description: >\n      Playwright is a Buy dependency: browser provider used by Vitest for real\n      headless browser execution.\n    links:\n      - {target: cd9ec303e282, rel: implements}   # TEST-C-002 playwright-installed\n    deprecated: false\n\n  - number: IMPL-TEST-021\n    hash: 8e2c00e7ef7f\n    name: eslint-dependency\n    type: implementation\n    description: >\n      ESLint is a Buy dependency: linting with ecosystem plugins, infeasible\n      to replicate.\n    links:\n      - {target: 34c0790ac993, rel: implements}   # TEST-C-010 quality-gate-workflow\n    deprecated: false\n\n  - number: IMPL-TEST-022\n    hash: 4c73eecd149b\n    name: prettier-dependency\n    type: implementation\n    description: >\n      Prettier is a Buy dependency: deterministic formatting, agent-generated\n      formatter would diverge.\n    links:\n      - {target: 34c0790ac993, rel: implements}   # TEST-C-010 quality-gate-workflow\n    deprecated: false\n\n  # ── Antipatterns (TypeScript/Web-Specific) ──────────────────────────────\n\n  - number: IMPL-TEST-023\n    hash: 53e686c26eab\n    name: no-split-runners\n    type: implementation\n    description: >\n      Do not run some TypeScript suites in Vitest and others in standalone\n      Playwright, Jest, or Mocha. This fragments setup and lifecycle logic.\n      All TS suites must be driven by Vitest.\n    links:\n      - {target: a12043dd7788, rel: implements}   # TEST-X-004 monolithic-ci-workflow\n    deprecated: false\n\n  - number: IMPL-TEST-024\n    hash: 6814bcd073bd\n    name: no-infra-outside-bun\n    type: implementation\n    description: >\n      Do not start databases or servers manually and hope tests discover them.\n      Infrastructure must be created and cleaned by Bun-side Vitest setup so\n      each suite is self-contained.\n    links:\n      - {target: 2485ba0453b8, rel: implements}   # TEST-X-009 test-environment-shortcuts\n      - {target: 217845b40c8f, rel: implements}   # TEST-P-005 suite-independence\n    deprecated: false\n\n  - number: IMPL-TEST-025\n    hash: 54bcfd23d5c9\n    name: no-fixtures-in-env-vars\n    type: implementation\n    description: >\n      Do not put replay payloads or expected responses in .env values. Fixtures\n      must be committed file artifacts.\n    links:\n      - {target: 73c69823c03a, rel: implements}   # TEST-X-003 fixtures-in-env-vars\n    deprecated: false\n\n  - number: IMPL-TEST-026\n    hash: b938820a47b2\n    name: no-local-ci-drift\n    type: implementation\n    description: >\n      Do not run a suite with one command locally and a different command in CI.\n    links:\n      - {target: 75558009a61e, rel: implements}   # TEST-X-005 local-ci-divergence\n    deprecated: false\n\n  - number: IMPL-TEST-027\n    hash: db50ca7cf782\n    name: no-jsdom-as-browser\n    type: implementation\n    description: >\n      Do not run component tests in JSDOM or Happy DOM. These are DOM\n      simulations, not browsers; they lack layout, rendering, real event\n      dispatch, and network behavior. A component that passes in JSDOM and\n      fails in Chromium fails in production.\n    links:\n      - {target: 4276faad79f4, rel: implements}   # TEST-T-004 browser-fidelity\n      - {target: 58672304c9d2, rel: implements}   # TEST-C-005 component-tests-in-browser\n    deprecated: false\n\n  - number: IMPL-TEST-028\n    hash: 4285d870e3ab\n    name: schema-upgrade-not-yet-implemented\n    type: implementation\n    description: >\n      Schema-upgrade compatibility is a required release doctrine but this\n      repository does not yet ship a canonical test-schema-upgrade-compatibility\n      CI workflow. Do not claim that workflow exists until the suite and its\n      entrypoint actually exist in the repo.\n    links:\n      - {target: 3450e2a1cbdb, rel: implements}   # TEST-T-006 merge-gating\n    deprecated: false\n",
-    "ux-ts.yaml": "meta:\n  domain: IMPL-UX\n  title: UX - TypeScript Implementation\n  implements: UX\n  version: 1\n\nrules:\n  # ── Package Structure ──────────────────────────────────────────────────────────\n\n  - number: IMPL-UX-001\n    hash: c9183c1222df\n    name: monorepo-surface-layout\n    type: implementation\n    description: >\n      Monorepo organized into packages/ui (design-system, end-user, admin),\n      packages/services (capability-api), and apps (web, admin, agent-sdk,\n      server with api and agent-router). Each actor type maps to a distinct\n      app consuming shared packages.\n    links:\n      - {target: 67863239eb85, rel: implements}  # UX-A-001 unified-service-layer-multiple-surfaces\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-004 unified-design-system-across-user-types\n    deprecated: false\n\n  # ── Core Interfaces ────────────────────────────────────────────────────────────\n\n  - number: IMPL-UX-002\n    hash: e403416186fd\n    name: capability-interface\n    type: implementation\n    description: >\n      TypeScript Capability interface with id, allowedActors (ActorType[]),\n      and requiredScopes (string[]). Serves as the atomic unit of UX design\n      and access control across all surfaces.\n    links:\n      - {target: 8de237165c47, rel: implements}  # UX-D-003 agent-native-interface\n      - {target: 300c0e349c72, rel: implements}  # UX-A-002 api-first-client-agnostic\n    deprecated: false\n\n  - number: IMPL-UX-003\n    hash: 45c3e9f3959c\n    name: actor-type-enum\n    type: implementation\n    description: >\n      ActorType union type ('end-user' | 'admin' | 'agent') determines which\n      interface surface is appropriate for each actor. Used by Capability to\n      gate access per surface.\n    links:\n      - {target: e43e9ff85857, rel: implements}  # UX-P-003 medium-appropriate-interface-per-user-type\n    deprecated: false\n\n  - number: IMPL-UX-004\n    hash: 89d1ed6147ee\n    name: agent-presence-interface\n    type: implementation\n    description: >\n      AgentPresence interface declares agent identity, account binding,\n      authorized scopes, grant and last-active timestamps. The\n      visibleToAccountHolder field is an invariant (always true), ensuring\n      the account holder can always see the agent.\n    links:\n      - {target: b6f0649c24cf, rel: implements}  # UX-P-005 agent-presence-explicit-and-bounded\n    deprecated: false\n\n  - number: IMPL-UX-005\n    hash: a3434ed492e8\n    name: agent-action-record-interface\n    type: implementation\n    description: >\n      AgentActionRecord interface logs every agent operation with agentId,\n      accountId, capabilityId, human-readable inputSummary, outcome\n      (success | rejected | failed), and timestamp.\n    links:\n      - {target: b6f0649c24cf, rel: implements}  # UX-P-005 agent-presence-explicit-and-bounded\n    deprecated: false\n\n  - number: IMPL-UX-006\n    hash: 4d981fb18e23\n    name: service-flow-state-interface\n    type: implementation\n    description: >\n      ServiceFlowState interface models a state in the service flow state\n      machine with id, label, and availableTransitions. This is the\n      authoritative UX specification unit from which interfaces are derived.\n    links:\n      - {target: 173636ad122f, rel: implements}  # UX-D-001 service-flow-mapping\n      - {target: d7f85752c1b1, rel: implements}  # UX-P-001 service-delivery-precedes-surface-design\n    deprecated: false\n\n  - number: IMPL-UX-007\n    hash: c5bf9dc442c8\n    name: service-flow-transition-interface\n    type: implementation\n    description: >\n      ServiceFlowTransition interface models a transition between states with\n      id, trigger (user-action | system-event | agent-action), targetStateId,\n      and requiredCapability mapping to Capability.id.\n    links:\n      - {target: 173636ad122f, rel: implements}  # UX-D-001 service-flow-mapping\n    deprecated: false\n\n  # ── Dependency Decisions ───────────────────────────────────────────────────────\n\n  - number: IMPL-UX-008\n    hash: e47230dc6081\n    name: react-buy-decision\n    type: implementation\n    description: >\n      React is a buy decision for the UI component model. No viable DIY\n      alternative exists for the browser rendering layer. Used by apps/web\n      and apps/admin.\n    links:\n      - {target: 95f2b6bff569, rel: implements}  # UX-P-004 beauty-is-functional-requirement\n    deprecated: false\n\n  - number: IMPL-UX-009\n    hash: 98d7226de402\n    name: tailwind-buy-decision\n    type: implementation\n    description: >\n      Tailwind CSS is a buy decision for design tokens and utility classes.\n      DIY CSS at scale is unmaintainable without a preprocessor or framework.\n      Provides the token system for the shared design system.\n    links:\n      - {target: 95f2b6bff569, rel: implements}  # UX-P-004 beauty-is-functional-requirement\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-004 unified-design-system-across-user-types\n    deprecated: false\n\n  - number: IMPL-UX-010\n    hash: cfc8c6e2114d\n    name: design-token-generator-diy\n    type: implementation\n    description: >\n      Design token generator is DIY. Token definitions are a JSON file; no\n      external package is needed to produce or consume them.\n    links:\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-004 unified-design-system-across-user-types\n    deprecated: false\n\n  - number: IMPL-UX-011\n    hash: 3631e7b6a114\n    name: agent-sdk-http-client-diy\n    type: implementation\n    description: >\n      Agent SDK HTTP client is DIY. fetch is native to Bun; a thin typed\n      wrapper over fetch is under 50 lines. No HTTP client library needed.\n    links:\n      - {target: 8de237165c47, rel: implements}  # UX-D-003 agent-native-interface\n    deprecated: false\n\n  - number: IMPL-UX-012\n    hash: d86c976bee04\n    name: component-docs-static-build\n    type: implementation\n    description: >\n      Component documentation is a DIY static markdown or auto-generated HTML\n      artifact produced by the build pipeline. No runtime dev server tool\n      (e.g. Storybook) is warranted or permitted.\n    links:\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-004 unified-design-system-across-user-types\n    deprecated: false\n\n  - number: IMPL-UX-013\n    hash: dadf0ad4deb6\n    name: form-state-react-native\n    type: implementation\n    description: >\n      Form state management is DIY using React useState and controlled\n      inputs. No external form library is needed at Calypso scale.\n    links:\n      - {target: e49ebcb9644c, rel: implements}  # UX-P-006 designers-specify-needs-not-implementations\n    deprecated: false\n\n  # ── Antipatterns (TypeScript/Calypso-Specific) ─────────────────────────────────\n\n  - number: IMPL-UX-014\n    hash: a8d946b7440e\n    name: no-technology-specific-specs\n    type: implementation\n    description: >\n      Design documents must not specify implementation details such as\n      \"use a React modal\" or \"apply a Tailwind flex container.\"\n      Specifications describe user states and transitions; implementations\n      satisfy them independently.\n    links:\n      - {target: e49ebcb9644c, rel: implements}  # UX-P-006 designers-specify-needs-not-implementations\n      - {target: 099bffc7e55a, rel: implements}  # UX-T-007 design-coupled-to-framework\n    deprecated: false\n\n  - number: IMPL-UX-015\n    hash: 8c5904835856\n    name: no-gui-dependent-tooling\n    type: implementation\n    description: >\n      Calypso runs on hosted Linux with no display server. Any tool requiring\n      a live browser window, native GUI, or local dev server (e.g. Storybook,\n      Figma desktop agents, visual diff tools) is prohibited. Visual output\n      is evaluated via headless Playwright screenshots. If a tool cannot run\n      headlessly and produce output to stdout or a file, it does not belong\n      in the toolchain.\n    links:\n      - {target: 95f2b6bff569, rel: implements}  # UX-P-004 beauty-is-functional-requirement\n    deprecated: false\n"
+    "ux-ts.yaml": "meta:\n  domain: IMPL-UX\n  title: UX - TypeScript Implementation\n  implements: UX\n  version: 1\n\nrules:\n  # ── Package Structure ──────────────────────────────────────────────────────────\n\n  - number: IMPL-UX-001\n    hash: c9183c1222df\n    name: monorepo-surface-layout\n    type: implementation\n    description: >\n      Monorepo organized into packages/ui (design-system, end-user, admin),\n      packages/services (capability-api), and apps (web, admin, agent-sdk,\n      server with api and agent-router). Each actor type maps to a distinct\n      app consuming shared packages.\n    links:\n      - {target: 67863239eb85, rel: implements}  # UX-A-001 unified-service-layer-multiple-surfaces\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-004 unified-design-system-across-user-types\n    deprecated: false\n\n  # ── Core Interfaces ────────────────────────────────────────────────────────────\n\n  - number: IMPL-UX-002\n    hash: e403416186fd\n    name: capability-interface\n    type: implementation\n    description: >\n      TypeScript Capability interface with id, allowedActors (ActorType[]),\n      and requiredScopes (string[]). Serves as the atomic unit of UX design\n      and access control across all surfaces.\n    links:\n      - {target: 8de237165c47, rel: implements}  # UX-D-003 agent-native-interface\n      - {target: 300c0e349c72, rel: implements}  # UX-A-002 api-first-client-agnostic\n    deprecated: false\n\n  - number: IMPL-UX-003\n    hash: 45c3e9f3959c\n    name: actor-type-enum\n    type: implementation\n    description: >\n      ActorType union type ('end-user' | 'admin' | 'agent') determines which\n      interface surface is appropriate for each actor. Used by Capability to\n      gate access per surface.\n    links:\n      - {target: e43e9ff85857, rel: implements}  # UX-P-003 medium-appropriate-interface-per-user-type\n    deprecated: false\n\n  - number: IMPL-UX-004\n    hash: 89d1ed6147ee\n    name: agent-presence-interface\n    type: implementation\n    description: >\n      AgentPresence interface declares agent identity, account binding,\n      authorized scopes, grant and last-active timestamps. The\n      visibleToAccountHolder field is an invariant (always true), ensuring\n      the account holder can always see the agent.\n    links:\n      - {target: b6f0649c24cf, rel: implements}  # UX-P-005 agent-presence-explicit-and-bounded\n    deprecated: false\n\n  - number: IMPL-UX-005\n    hash: a3434ed492e8\n    name: agent-action-record-interface\n    type: implementation\n    description: >\n      AgentActionRecord interface logs every agent operation with agentId,\n      accountId, capabilityId, human-readable inputSummary, outcome\n      (success | rejected | failed), and timestamp.\n    links:\n      - {target: b6f0649c24cf, rel: implements}  # UX-P-005 agent-presence-explicit-and-bounded\n    deprecated: false\n\n  - number: IMPL-UX-006\n    hash: 4d981fb18e23\n    name: service-flow-state-interface\n    type: implementation\n    description: >\n      ServiceFlowState interface models a state in the service flow state\n      machine with id, label, and availableTransitions. This is the\n      authoritative UX specification unit from which interfaces are derived.\n    links:\n      - {target: 173636ad122f, rel: implements}  # UX-D-001 service-flow-mapping\n      - {target: d7f85752c1b1, rel: implements}  # UX-P-001 service-delivery-precedes-surface-design\n    deprecated: false\n\n  - number: IMPL-UX-007\n    hash: c5bf9dc442c8\n    name: service-flow-transition-interface\n    type: implementation\n    description: >\n      ServiceFlowTransition interface models a transition between states with\n      id, trigger (user-action | system-event | agent-action), targetStateId,\n      and requiredCapability mapping to Capability.id.\n    links:\n      - {target: 173636ad122f, rel: implements}  # UX-D-001 service-flow-mapping\n    deprecated: false\n\n  # ── Dependency Decisions ───────────────────────────────────────────────────────\n\n  - number: IMPL-UX-008\n    hash: e47230dc6081\n    name: react-buy-decision\n    type: implementation\n    description: >\n      React is a buy decision for the UI component model. No viable DIY\n      alternative exists for the browser rendering layer. Used by apps/web\n      and apps/admin.\n    links:\n      - {target: 95f2b6bff569, rel: implements}  # UX-P-004 beauty-is-functional-requirement\n    deprecated: false\n\n  - number: IMPL-UX-009\n    hash: 98d7226de402\n    name: tailwind-buy-decision\n    type: implementation\n    description: >\n      Tailwind CSS is a buy decision for design tokens and utility classes.\n      DIY CSS at scale is unmaintainable without a preprocessor or framework.\n      Provides the token system for the shared design system.\n    links:\n      - {target: 95f2b6bff569, rel: implements}  # UX-P-004 beauty-is-functional-requirement\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-004 unified-design-system-across-user-types\n    deprecated: false\n\n  - number: IMPL-UX-010\n    hash: cfc8c6e2114d\n    name: design-token-generator-diy\n    type: implementation\n    description: >\n      Design token generator is DIY. Token definitions are a JSON file; no\n      external package is needed to produce or consume them.\n    links:\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-004 unified-design-system-across-user-types\n    deprecated: false\n\n  - number: IMPL-UX-011\n    hash: 3631e7b6a114\n    name: agent-sdk-http-client-diy\n    type: implementation\n    description: >\n      Agent SDK HTTP client is DIY. fetch is native to Bun; a thin typed\n      wrapper over fetch is under 50 lines. No HTTP client library needed.\n    links:\n      - {target: 8de237165c47, rel: implements}  # UX-D-003 agent-native-interface\n    deprecated: false\n\n  - number: IMPL-UX-012\n    hash: d86c976bee04\n    name: component-docs-static-build\n    type: implementation\n    description: >\n      Component documentation is a DIY static markdown or auto-generated HTML\n      artifact produced by the build pipeline. No runtime dev server tool\n      (e.g. Storybook) is warranted or permitted.\n    links:\n      - {target: 60c41e0c35c7, rel: implements}  # UX-D-004 unified-design-system-across-user-types\n    deprecated: false\n\n  - number: IMPL-UX-013\n    hash: dadf0ad4deb6\n    name: form-state-react-native\n    type: implementation\n    description: >\n      Form state management is DIY using React useState and controlled\n      inputs. No external form library is needed at Calypso scale.\n    links:\n      - {target: e49ebcb9644c, rel: implements}  # UX-P-006 specifications-describe-needs-not-implementations\n    deprecated: false\n\n  # ── Antipatterns (TypeScript/Calypso-Specific) ─────────────────────────────────\n\n  - number: IMPL-UX-014\n    hash: a8d946b7440e\n    name: no-technology-specific-specs\n    type: implementation\n    description: >\n      Design documents must not specify implementation details such as\n      \"use a React modal\" or \"apply a Tailwind flex container.\"\n      Specifications describe user states and transitions; implementations\n      satisfy them independently.\n    links:\n      - {target: e49ebcb9644c, rel: implements}  # UX-P-006 specifications-describe-needs-not-implementations\n      - {target: 099bffc7e55a, rel: implements}  # UX-T-007 design-coupled-to-framework\n    deprecated: false\n\n  - number: IMPL-UX-015\n    hash: 8c5904835856\n    name: no-gui-dependent-tooling\n    type: implementation\n    description: >\n      Calypso runs on hosted Linux with no display server. Any tool requiring\n      a live browser window, native GUI, or local dev server (e.g. Storybook,\n      Figma desktop agents, visual diff tools) is prohibited. Visual output\n      is evaluated via headless Playwright screenshots. If a tool cannot run\n      headlessly and produce output to stdout or a file, it does not belong\n      in the toolchain.\n    links:\n      - {target: 95f2b6bff569, rel: implements}  # UX-P-004 beauty-is-functional-requirement\n    deprecated: false\n\n  - number: IMPL-UX-016\n    hash: 9a6f2c1d7b80\n    name: ux-governance-canonical-json-contracts\n    type: implementation\n    description: >\n      UX governance canonical artifacts are stored as JSON under\n      docs/technical/ux-governance/ and treated as the authoritative source.\n      Required phase artifacts are intake, domain capability map,\n      information architecture, screen specs, review findings, handoff\n      contract, state matrix, and conformance report. Each canonical JSON\n      artifact includes artifact_id, artifact_type, phase, version, status,\n      owner, updated_at, source_artifacts, and derived_artifacts. Markdown,\n      Mermaid, HTML, and SVG outputs are derived from those JSON files and\n      may be regenerated, but never edited as the source of truth.\n    links:\n      - {target: 1f7f7b6a4c21, rel: implements}\n      - {target: d7f85752c1b1, rel: implements}\n      - {target: e49ebcb9644c, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-017\n    hash: f1d2c3b4a5e6\n    name: ux-governance-gate-status\n    type: implementation\n    description: >\n      UX governance gate status is a closed union: pass,\n      pass_with_revisions, or fail. The status is attached to each gate\n      result and used to drive the revision loop and approval decision.\n    links:\n      - {target: 1f4c2d9a7b8e, rel: implements}\n      - {target: 2b7d1e9f4a6c, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-018\n    hash: cc11dd22ee33\n    name: ux-governance-gate-definition\n    type: implementation\n    description: >\n      UXGovernanceGate definition captures gate id, sequence number,\n      reviewer role, explicit fail conditions, status, and evidence\n      references. Each gate is deterministic enough to be evaluated without\n      subjective approval language.\n    links:\n      - {target: 1f4c2d9a7b8e, rel: implements}\n      - {target: 2b7d1e9f4a6c, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-019\n    hash: b1c2d3e4f5a6\n    name: ux-governance-critique-record\n    type: implementation\n    description: >\n      UXGovernanceCritiqueRecord captures issue, why_it_matters, evidence,\n      severity, proposed_fix, gate_id, and blocking. The record format is the\n      canonical output of all review agents.\n    links:\n      - {target: 1f4c2d9a7b8e, rel: implements}\n      - {target: 7c2e1a9d5b4f, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-020\n    hash: dd22ee33ff44\n    name: ux-governance-revision-loop\n    type: implementation\n    description: >\n      UX governance revision loop re-runs the affected gates after\n      synthesis. High-severity findings remain blocking until they are\n      cleared. The loop terminates only when all gates are pass or\n      pass_with_revisions with no remaining high-severity findings.\n    links:\n      - {target: 1f4c2d9a7b8e, rel: implements}\n      - {target: 7c2e1a9d5b4f, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-021\n    hash: 8b0fe15f404f\n    name: ts-ci-conformance-report-json\n    type: implementation\n    description: >\n      CI emits ux-conformance-report.json for every deterministic-gate UX validation run.\n      The report records run identity, commit identity, per-page hard checks,\n      evidence locations, blocking issues, and the final merge decision.\n    links:\n      - {target: 130d0ff25610, rel: implements}\n      - {target: f9b2be6bec16, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-022\n    hash: 263e6e5a93e7\n    name: ts-accessibility-structure-gate\n    type: implementation\n    description: >\n      Headless Playwright accessibility gate validates critical views against\n      ARIA snapshots and axe-core checks. Critical violations or structure\n      drift in the approved state are merge blockers.\n    links:\n      - {target: e25d3654327e, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-023\n    hash: 0ee6280f581a\n    name: ts-dom-css-layout-token-gate\n    type: implementation\n    description: >\n      DOM and CSS gate validates approved design token usage, component\n      vocabulary, spacing, typography, overflow, overlap, clipped content,\n      and primary-action placement in critical views.\n    links:\n      - {target: 46ed8e8e96d6, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-024\n    hash: c94b8e1a0367\n    name: ts-flow-graph-gate\n    type: implementation\n    description: >\n      Flow graph gate compares implemented routes and task transitions to the\n      approved service-flow graph and fails on missing states, dead ends,\n      unreachable critical actions, or unexpected branching.\n    links:\n      - {target: ab7ab23512ad, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-025\n    hash: caca24810626\n    name: ts-targeted-visual-regression-gate\n    type: implementation\n    description: >\n      Targeted visual regression gate captures headless Playwright\n      screenshots for whitelisted critical screens and states, then compares\n      them against approved baselines. Missing baselines or excessive drift\n      block merge.\n    links:\n      - {target: 8b04a200f070, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-026\n    hash: 41329311a3f5\n    name: ts-performance-rendering-sanity-gate\n    type: implementation\n    description: >\n      Performance and rendering sanity gate checks that critical pages render\n      without hydration failures, blank first paint, or unacceptable layout\n      instability before merge.\n    links:\n      - {target: 24f52c5dd608, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-027\n    hash: b1c4a3d12f01\n    name: ts-saliency-scoring-warning\n    type: implementation\n    description: >\n      Saliency scoring job computes warning-only focal-point scores and\n      heatmaps for critical pages and states. Output is advisory until a\n      calibrated threshold promotes it to a gate.\n    links:\n      - {target: d14e2f6a9b01, rel: implements}\n      - {target: 4bf26c1a8d31, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-028\n    hash: b1c4a3d12f02\n    name: ts-screenshot-layout-parsing-warning\n    type: implementation\n    description: >\n      Screenshot layout parsing job extracts warning-only hierarchy and\n      balance signals from headless screenshots. Output is recorded for\n      review, not used as a merge blocker.\n    links:\n      - {target: d14e2f6a9b02, rel: implements}\n      - {target: 4bf26c1a8d31, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-029\n    hash: b1c4a3d12f03\n    name: ts-model-assisted-ux-lint-warning\n    type: implementation\n    description: >\n      Model-assisted UX lint job produces warning-only findings for clutter,\n      ambiguous labels, and unsupported interaction patterns. Promotion to a\n      blocking signal requires calibration evidence.\n    links:\n      - {target: d14e2f6a9b03, rel: implements}\n      - {target: 4bf26c1a8d31, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-030\n    hash: b1c4a3d12f04\n    name: ts-synthetic-walkthrough-quality-warning\n    type: implementation\n    description: >\n      Synthetic walkthrough quality job scores end-to-end journeys for\n      friction, detours, and state-coverage gaps. Output stays warning-only\n      until calibrated and explicitly promoted.\n    links:\n      - {target: d14e2f6a9b04, rel: implements}\n      - {target: 4bf26c1a8d31, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-031\n    hash: b1c4a3d12f05\n    name: ts-soft-signal-promotion-criteria\n    type: implementation\n    description: >\n      Soft-signal promotion criteria define the labeled baseline, threshold,\n      and error-budget requirements that must exist before any threshold-scored signal\n      can become merge-blocking.\n    links:\n      - {target: d14e2f6a9b05, rel: implements}\n      - {target: 4bf26c1a8d31, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-032\n    hash: b1c4a3d12f06\n    name: ts-soft-signal-report-section\n    type: implementation\n    description: >\n      UX conformance report includes a soft_signals section with per-page\n      threshold-scored signal scores, evidence pointers, warning status, and calibration\n      metadata. It remains separate from blocking hard checks.\n    links:\n      - {target: d14e2f6a9b06, rel: implements}\n      - {target: 4bf26c1a8d31, rel: implements}\n    deprecated: false\n\n  - number: IMPL-UX-033\n    hash: e146ee03816b\n    name: state-matrix-json-contract\n    type: implementation\n    description: >\n      state-matrix.json is the authoritative flow/state coverage contract for\n      each UX surface. In TypeScript it contains route ids, breakpoint sets,\n      required state coverage, max step thresholds, and critical actions. The\n      CI gate reads the contract, compares it against headless Playwright and\n      ARIA evidence, and fails on missing loading, empty, error, success, or\n      permission_denied coverage; dead-end screens; unreachable critical\n      actions; or paths that exceed the configured step threshold.\n    links:\n      - {target: 8a969646ab51, rel: implements}\n      - {target: 68678e6ff182, rel: verifies}\n      - {target: 1cdc130608fa, rel: verifies}\n      - {target: 173636ad122f, rel: implements}\n    deprecated: false\n"
   },
   "nodes": [
     {
@@ -13338,6 +13875,110 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "type": "implementation"
     },
     {
+      "domain": "impl-task-queue",
+      "hash": "a3f7d2e1b490",
+      "name": "api-server-pg-listen-manager",
+      "ruleId": "IMPL-TQ-TS-001",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "c8b1e4a09f23",
+      "name": "sse-fan-out-registry",
+      "ruleId": "IMPL-TQ-TS-002",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "e2d5f8c0a174",
+      "name": "sse-heartbeat-poll-loop",
+      "ruleId": "IMPL-TQ-TS-003",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "f91a3c7d2e05",
+      "name": "task-stream-sse-endpoint",
+      "ruleId": "IMPL-TQ-TS-004",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "b70e9d1c3f48",
+      "name": "service-token-validation",
+      "ruleId": "IMPL-TQ-TS-005",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "d4a8f2c1e937",
+      "name": "atomic-claim-endpoint",
+      "ruleId": "IMPL-TQ-TS-006",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "c1b5e8f0d362",
+      "name": "worker-sse-client",
+      "ruleId": "IMPL-TQ-TS-007",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "a9f3d0e7b215",
+      "name": "worker-startup-credential-guard",
+      "ruleId": "IMPL-TQ-TS-008",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "f6c2b8a1d047",
+      "name": "pg-notify-trigger",
+      "ruleId": "IMPL-TQ-TS-009",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "e3a9c0f7b182",
+      "name": "worker-kubernetes-manifest",
+      "ruleId": "IMPL-TQ-TS-010",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "a7e2d0f9c341",
+      "name": "sse-token-query-param-redaction",
+      "ruleId": "IMPL-TQ-TS-011",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "b8d1f4e2a039",
+      "name": "worker-pg-import",
+      "ruleId": "IMPL-TQ-TS-X-001",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "antipattern"
+    },
+    {
+      "domain": "impl-task-queue",
+      "hash": "c5f0a3d8e917",
+      "name": "sse-token-in-url-logged",
+      "ruleId": "IMPL-TQ-TS-X-002",
+      "sourceFile": "implementations/ts/task-queue-ts",
+      "type": "antipattern"
+    },
+    {
       "domain": "impl-ux",
       "hash": "c9183c1222df",
       "name": "monorepo-surface-layout",
@@ -13458,6 +14099,150 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "type": "implementation"
     },
     {
+      "domain": "impl-ux",
+      "hash": "9a6f2c1d7b80",
+      "name": "ux-governance-canonical-json-contracts",
+      "ruleId": "IMPL-UX-016",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "f1d2c3b4a5e6",
+      "name": "ux-governance-gate-status",
+      "ruleId": "IMPL-UX-017",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "cc11dd22ee33",
+      "name": "ux-governance-gate-definition",
+      "ruleId": "IMPL-UX-018",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "b1c2d3e4f5a6",
+      "name": "ux-governance-critique-record",
+      "ruleId": "IMPL-UX-019",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "dd22ee33ff44",
+      "name": "ux-governance-revision-loop",
+      "ruleId": "IMPL-UX-020",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "8b0fe15f404f",
+      "name": "ts-ci-conformance-report-json",
+      "ruleId": "IMPL-UX-021",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "263e6e5a93e7",
+      "name": "ts-accessibility-structure-gate",
+      "ruleId": "IMPL-UX-022",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "0ee6280f581a",
+      "name": "ts-dom-css-layout-token-gate",
+      "ruleId": "IMPL-UX-023",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "c94b8e1a0367",
+      "name": "ts-flow-graph-gate",
+      "ruleId": "IMPL-UX-024",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "caca24810626",
+      "name": "ts-targeted-visual-regression-gate",
+      "ruleId": "IMPL-UX-025",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "41329311a3f5",
+      "name": "ts-performance-rendering-sanity-gate",
+      "ruleId": "IMPL-UX-026",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "b1c4a3d12f01",
+      "name": "ts-saliency-scoring-warning",
+      "ruleId": "IMPL-UX-027",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "b1c4a3d12f02",
+      "name": "ts-screenshot-layout-parsing-warning",
+      "ruleId": "IMPL-UX-028",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "b1c4a3d12f03",
+      "name": "ts-model-assisted-ux-lint-warning",
+      "ruleId": "IMPL-UX-029",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "b1c4a3d12f04",
+      "name": "ts-synthetic-walkthrough-quality-warning",
+      "ruleId": "IMPL-UX-030",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "b1c4a3d12f05",
+      "name": "ts-soft-signal-promotion-criteria",
+      "ruleId": "IMPL-UX-031",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "b1c4a3d12f06",
+      "name": "ts-soft-signal-report-section",
+      "ruleId": "IMPL-UX-032",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux",
+      "hash": "e146ee03816b",
+      "name": "state-matrix-json-contract",
+      "ruleId": "IMPL-UX-033",
+      "sourceFile": "implementations/ts/ux-ts",
+      "type": "implementation"
+    },
+    {
       "domain": "impl-ux-rs",
       "hash": "197fab2bb25e",
       "name": "workspace-surface-layout",
@@ -13550,6 +14335,150 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "hash": "0d46ff382cb6",
       "name": "no-gui-dependent-tooling",
       "ruleId": "IMPL-UX-RS-012",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "4c9d1a7e3b52",
+      "name": "ux-governance-canonical-json-contracts",
+      "ruleId": "IMPL-UX-RS-013",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "f6e5d4c3b2a1",
+      "name": "ux-governance-gate-status",
+      "ruleId": "IMPL-UX-RS-014",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "e6d5c4b3a2f1",
+      "name": "ux-governance-gate-definition",
+      "ruleId": "IMPL-UX-RS-015",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "d6c5b4a3f2e1",
+      "name": "ux-governance-critique-record",
+      "ruleId": "IMPL-UX-RS-016",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "c6b5a4f3e2d1",
+      "name": "ux-governance-revision-loop",
+      "ruleId": "IMPL-UX-RS-017",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "9b9c58337afc",
+      "name": "rs-ci-conformance-report-json",
+      "ruleId": "IMPL-UX-RS-018",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "426a543e01fe",
+      "name": "rs-accessibility-structure-gate",
+      "ruleId": "IMPL-UX-RS-019",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "9010ca853a3b",
+      "name": "rs-dom-css-layout-token-gate",
+      "ruleId": "IMPL-UX-RS-020",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "7a11dfdbfea0",
+      "name": "rs-flow-graph-gate",
+      "ruleId": "IMPL-UX-RS-021",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "2ad505fd6f2b",
+      "name": "rs-targeted-visual-regression-gate",
+      "ruleId": "IMPL-UX-RS-022",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "d028d5a8f1bb",
+      "name": "rs-performance-rendering-sanity-gate",
+      "ruleId": "IMPL-UX-RS-023",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "8a7f2c4e1101",
+      "name": "rs-saliency-scoring-warning",
+      "ruleId": "IMPL-UX-RS-024",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "8a7f2c4e1102",
+      "name": "rs-screenshot-layout-parsing-warning",
+      "ruleId": "IMPL-UX-RS-025",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "8a7f2c4e1103",
+      "name": "rs-model-assisted-ux-lint-warning",
+      "ruleId": "IMPL-UX-RS-026",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "8a7f2c4e1104",
+      "name": "rs-synthetic-walkthrough-quality-warning",
+      "ruleId": "IMPL-UX-RS-027",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "8a7f2c4e1105",
+      "name": "rs-soft-signal-promotion-criteria",
+      "ruleId": "IMPL-UX-RS-028",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "8a7f2c4e1106",
+      "name": "rs-soft-signal-report-section",
+      "ruleId": "IMPL-UX-RS-029",
+      "sourceFile": "implementations/rs/ux-rs",
+      "type": "implementation"
+    },
+    {
+      "domain": "impl-ux-rs",
+      "hash": "6e6af3d5c695",
+      "name": "state-matrix-json-contract",
+      "ruleId": "IMPL-UX-RS-030",
       "sourceFile": "implementations/rs/ux-rs",
       "type": "implementation"
     },
@@ -15148,7 +16077,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "task-queue",
       "hash": "9110f8b7a172",
-      "name": "startup-role-verification-tested",
+      "name": "startup-credential-absence-verified",
       "ruleId": "TQ-C-008",
       "sourceFile": "blueprints/task-queue",
       "type": "checklist"
@@ -15188,7 +16117,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "task-queue",
       "hash": "869d373d9461",
-      "name": "listen-notify-wake",
+      "name": "api-server-listen-notify-sse-fanout",
       "ruleId": "TQ-D-005",
       "sourceFile": "blueprints/task-queue",
       "type": "design_pattern"
@@ -15346,6 +16275,14 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "type": "antipattern"
     },
     {
+      "domain": "task-queue",
+      "hash": "d9c4e1b72a30",
+      "name": "worker-direct-database-connection",
+      "ruleId": "TQ-X-006",
+      "sourceFile": "blueprints/task-queue",
+      "type": "antipattern"
+    },
+    {
       "domain": "ux",
       "hash": "67863239eb85",
       "name": "unified-service-layer-multiple-surfaces",
@@ -15366,6 +16303,14 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "hash": "63355717824e",
       "name": "agent-mediated-administration",
       "ruleId": "UX-A-003",
+      "sourceFile": "blueprints/ux",
+      "type": "architecture"
+    },
+    {
+      "domain": "ux",
+      "hash": "1f4c2d9a7b8e",
+      "name": "compliance-framework-gate-dag",
+      "ruleId": "UX-A-004",
       "sourceFile": "blueprints/ux",
       "type": "architecture"
     },
@@ -15547,6 +16492,278 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     },
     {
       "domain": "ux",
+      "hash": "5a3c8e1b6d0f",
+      "name": "ux-governance-artifacts-versioned",
+      "ruleId": "UX-C-023",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "2b7d1e9f4a6c",
+      "name": "governance-gates-declared",
+      "ruleId": "UX-C-024",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "7c2e1a9d5b4f",
+      "name": "structured-critiques-and-revision-loop",
+      "ruleId": "UX-C-025",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "e25d3654327e",
+      "name": "accessibility-structure-invariants-enforced",
+      "ruleId": "UX-C-026",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "46ed8e8e96d6",
+      "name": "dom-css-design-token-layout-conformance",
+      "ruleId": "UX-C-027",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "ab7ab23512ad",
+      "name": "flow-graph-invariants-enforced",
+      "ruleId": "UX-C-028",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "8b04a200f070",
+      "name": "targeted-visual-regression-enforced",
+      "ruleId": "UX-C-029",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "24f52c5dd608",
+      "name": "performance-and-rendering-sanity-enforced",
+      "ruleId": "UX-C-030",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "f9b2be6bec16",
+      "name": "ux-conformance-report-emitted",
+      "ruleId": "UX-C-031",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "d14e2f6a9b01",
+      "name": "saliency-scoring-warning-only",
+      "ruleId": "UX-C-032",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "d14e2f6a9b02",
+      "name": "screenshot-layout-parsing-warning-only",
+      "ruleId": "UX-C-033",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "d14e2f6a9b03",
+      "name": "model-assisted-ux-lint-warning-only",
+      "ruleId": "UX-C-034",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "d14e2f6a9b04",
+      "name": "synthetic-walkthrough-quality-warning-only",
+      "ruleId": "UX-C-035",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "d14e2f6a9b05",
+      "name": "soft-signal-promotion-criteria-defined",
+      "ruleId": "UX-C-036",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "d14e2f6a9b06",
+      "name": "soft-signals-recorded-in-conformance-report",
+      "ruleId": "UX-C-037",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "68678e6ff182",
+      "name": "state-matrix-coverage-complete",
+      "ruleId": "UX-C-038",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "1cdc130608fa",
+      "name": "flow-path-invariants-verified",
+      "ruleId": "UX-C-039",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "5c2a9e8f3b7d",
+      "name": "user-goal-declared-from-jtbd-vocabulary",
+      "ruleId": "UX-C-040",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "6d3b1a7e4f8c",
+      "name": "primary-action-placement-invariant-verified",
+      "ruleId": "UX-C-041",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "7e4c2b8a5d1f",
+      "name": "density-budget-declared-and-verified",
+      "ruleId": "UX-C-042",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "8f5d3c9b6e2a",
+      "name": "baseline-grid-conformance-verified",
+      "ruleId": "UX-C-043",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "9a6e4d1c7b3f",
+      "name": "interaction-inventory-matches-dom",
+      "ruleId": "UX-C-044",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "1b7f5e2d8c4a",
+      "name": "controlled-vocabularies-present-and-referenced",
+      "ruleId": "UX-C-045",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "2c8a6f3e9d5b",
+      "name": "derivation-artifact-chain-complete",
+      "ruleId": "UX-C-046",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "3d9b7a4f1e6c",
+      "name": "spec-conformance-gate-passes-before-implementation",
+      "ruleId": "UX-C-047",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "4e1c8b5a2f7d",
+      "name": "spec-field-provenance-recorded",
+      "ruleId": "UX-C-048",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "1a9f7e5c4b2d",
+      "name": "view-directory-contains-required-artifacts",
+      "ruleId": "UX-C-049",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "2b8e6f4d5c3a",
+      "name": "source-file-imports-view-spec",
+      "ruleId": "UX-C-050",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "3c7d5a8e6f1b",
+      "name": "interaction-inventory-selectors-resolve-in-dom",
+      "ruleId": "UX-C-051",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "5a8c3e7d1f9b",
+      "name": "user-contracts-artifact-present",
+      "ruleId": "UX-C-052",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "6b9d4f8e2c1a",
+      "name": "information-architecture-artifact-present",
+      "ruleId": "UX-C-053",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "7c1e5a9f3d8b",
+      "name": "design-system-binding-artifact-present",
+      "ruleId": "UX-C-054",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "8d2f6b1a4e9c",
+      "name": "data-availability-artifact-present",
+      "ruleId": "UX-C-055",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
+      "hash": "9e3a7c2b5f1d",
+      "name": "edge-case-coverage-artifact-present",
+      "ruleId": "UX-C-056",
+      "sourceFile": "blueprints/ux",
+      "type": "checklist"
+    },
+    {
+      "domain": "ux",
       "hash": "173636ad122f",
       "name": "service-flow-mapping",
       "ruleId": "UX-D-001",
@@ -15582,6 +16799,158 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "hash": "9b929c73ac69",
       "name": "progressive-disclosure",
       "ruleId": "UX-D-005",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "1f7f7b6a4c21",
+      "name": "artifact-contracts-as-source-of-truth",
+      "ruleId": "UX-D-006",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "130d0ff25610",
+      "name": "implementation-conformance-report",
+      "ruleId": "UX-D-007",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "4bf26c1a8d31",
+      "name": "threshold-scored-signal-analysis",
+      "ruleId": "UX-D-008",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "8a969646ab51",
+      "name": "state-matrix-contract",
+      "ruleId": "UX-D-009",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "6a3d1f8b2e9c",
+      "name": "user-goal-declaration-per-view",
+      "ruleId": "UX-D-010",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "7b4e2f9c1a8d",
+      "name": "reading-pattern-and-primary-action-placement",
+      "ruleId": "UX-D-011",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "8c5f3a1e7b2d",
+      "name": "information-density-budget",
+      "ruleId": "UX-D-012",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "9d6a4b2f8c1e",
+      "name": "baseline-grid-conformance",
+      "ruleId": "UX-D-013",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "1e7c5d3a9b4f",
+      "name": "interaction-inventory",
+      "ruleId": "UX-D-014",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "2f8d6e4b1c5a",
+      "name": "controlled-vocabularies-for-spec-fields",
+      "ruleId": "UX-D-015",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "3a9e7f5c2b6d",
+      "name": "artifact-derivation-rules",
+      "ruleId": "UX-D-016",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "4b1f8d6a3c7e",
+      "name": "spec-conformance-report",
+      "ruleId": "UX-D-017",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "8e5c3a9f2b1d",
+      "name": "ui-source-co-locates-view-artifacts",
+      "ruleId": "UX-D-018",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "9f6d4b1a3c8e",
+      "name": "source-imports-view-spec",
+      "ruleId": "UX-D-019",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "9e4c7a3b1d8f",
+      "name": "user-contract-clarity-gate",
+      "ruleId": "UX-D-020",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "1c5b9d7e4a2f",
+      "name": "information-architecture-integrity-gate",
+      "ruleId": "UX-D-021",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "2d8a6f4c3b9e",
+      "name": "design-system-compliance-gate",
+      "ruleId": "UX-D-022",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "3e1f5b8d7a6c",
+      "name": "data-feasibility-gate",
+      "ruleId": "UX-D-023",
+      "sourceFile": "blueprints/ux",
+      "type": "design_pattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "4f7e2c9a5b3d",
+      "name": "edge-case-coverage-gate",
+      "ruleId": "UX-D-024",
       "sourceFile": "blueprints/ux",
       "type": "design_pattern"
     },
@@ -15628,8 +16997,40 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "ux",
       "hash": "e49ebcb9644c",
-      "name": "designers-specify-needs-not-implementations",
+      "name": "specifications-describe-needs-not-implementations",
       "ruleId": "UX-P-006",
+      "sourceFile": "blueprints/ux",
+      "type": "principle"
+    },
+    {
+      "domain": "ux",
+      "hash": "2f4a8b1c6d9e",
+      "name": "blueprint-grammar-constrains-specification",
+      "ruleId": "UX-P-007",
+      "sourceFile": "blueprints/ux",
+      "type": "principle"
+    },
+    {
+      "domain": "ux",
+      "hash": "3e7b9d1f4c8a",
+      "name": "generative-ui-artifact-harmony",
+      "ruleId": "UX-P-008",
+      "sourceFile": "blueprints/ux",
+      "type": "principle"
+    },
+    {
+      "domain": "ux",
+      "hash": "5c8e2a7b3f1d",
+      "name": "spec-field-provenance",
+      "ruleId": "UX-P-009",
+      "sourceFile": "blueprints/ux",
+      "type": "principle"
+    },
+    {
+      "domain": "ux",
+      "hash": "6b8d3e1c9a4f",
+      "name": "canonical-ux-vocabulary",
+      "ruleId": "UX-P-010",
       "sourceFile": "blueprints/ux",
       "type": "principle"
     },
@@ -15770,6 +17171,62 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "type": "antipattern"
     },
     {
+      "domain": "ux",
+      "hash": "8c1b6d4f2a90",
+      "name": "derived-artifacts-treated-as-authority",
+      "ruleId": "UX-X-009",
+      "sourceFile": "blueprints/ux",
+      "type": "antipattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "ad4e1c7f9b20",
+      "name": "single-pass-review-approval",
+      "ruleId": "UX-X-010",
+      "sourceFile": "blueprints/ux",
+      "type": "antipattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "5f2d9c6b3a8e",
+      "name": "spec-authored-outside-blueprint-grammar",
+      "ruleId": "UX-X-011",
+      "sourceFile": "blueprints/ux",
+      "type": "antipattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "6a3e1d7c4b9f",
+      "name": "implementation-gated-without-spec-gate",
+      "ruleId": "UX-X-012",
+      "sourceFile": "blueprints/ux",
+      "type": "antipattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "7b4f2e8d5c1a",
+      "name": "free-text-spec-fields",
+      "ruleId": "UX-X-013",
+      "sourceFile": "blueprints/ux",
+      "type": "antipattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "7c9a4b2e1f6d",
+      "name": "inline-contract-in-source-comments",
+      "ruleId": "UX-X-014",
+      "sourceFile": "blueprints/ux",
+      "type": "antipattern"
+    },
+    {
+      "domain": "ux",
+      "hash": "8d1e5f3b2c7a",
+      "name": "view-artifacts-outside-view-directory",
+      "ruleId": "UX-X-015",
+      "sourceFile": "blueprints/ux",
+      "type": "antipattern"
+    },
+    {
       "domain": "worker",
       "hash": "293e98fe383a",
       "name": "single-agent-single-replica",
@@ -15796,7 +17253,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "worker",
       "hash": "ba3b855fc0a5",
-      "name": "select-only-db-role",
+      "name": "no-database-credentials",
       "ruleId": "WORKER-C-002",
       "sourceFile": "blueprints/worker",
       "type": "checklist"
@@ -15892,7 +17349,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "worker",
       "hash": "f020f72a449a",
-      "name": "per-type-db-role-isolation",
+      "name": "per-type-api-token-isolation",
       "ruleId": "WORKER-C-014",
       "sourceFile": "blueprints/worker",
       "type": "checklist"
@@ -15980,7 +17437,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "worker",
       "hash": "fec546a4edeb",
-      "name": "task-queue-read-only-view",
+      "name": "api-streaming-task-discovery",
       "ruleId": "WORKER-D-001",
       "sourceFile": "blueprints/worker",
       "type": "design_pattern"
@@ -16028,7 +17485,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "worker",
       "hash": "cebee7387f5b",
-      "name": "per-agent-type-database-role",
+      "name": "per-agent-type-service-token",
       "ruleId": "WORKER-D-007",
       "sourceFile": "blueprints/worker",
       "type": "design_pattern"
@@ -16044,7 +17501,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "worker",
       "hash": "828eead860c0",
-      "name": "read-only-database-access",
+      "name": "zero-database-connectivity",
       "ruleId": "WORKER-P-001",
       "sourceFile": "blueprints/worker",
       "type": "principle"
@@ -16124,7 +17581,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "worker",
       "hash": "dc243cc9fac7",
-      "name": "compromised-credential-grants-db-write",
+      "name": "compromised-credential-grants-api-overreach",
       "ruleId": "WORKER-T-002",
       "sourceFile": "blueprints/worker",
       "type": "threat"
@@ -16196,7 +17653,7 @@ export const BLUEPRINT_DATA: BlueprintSource = {
     {
       "domain": "worker",
       "hash": "a76fb9bc6f9a",
-      "name": "direct-database-writes",
+      "name": "direct-database-access",
       "ruleId": "WORKER-X-001",
       "sourceFile": "blueprints/worker",
       "type": "antipattern"
@@ -16256,7 +17713,15 @@ export const BLUEPRINT_DATA: BlueprintSource = {
       "ruleId": "WORKER-X-008",
       "sourceFile": "blueprints/worker",
       "type": "antipattern"
+    },
+    {
+      "domain": "worker",
+      "hash": "b1e3f7a2c849",
+      "name": "worker-with-database-credentials",
+      "ruleId": "WORKER-X-009",
+      "sourceFile": "blueprints/worker",
+      "type": "antipattern"
     }
   ],
-  "ruleCount": 1231
+  "ruleCount": 1347
 } as unknown as BlueprintSource;

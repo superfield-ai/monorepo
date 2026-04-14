@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "build:bin": "bun run --cwd ../.. blueprint:compile && SUPERFIELD_BUILD_VERSION=$(git describe --tags --always 2>/dev/null || echo dev) SUPERFIELD_BUILD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) SUPERFIELD_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) bun build --compile ./bin/superfield.ts --outfile \"$HOME/.bun/bin/superfield\"",
+    "build:bin": "bun run --cwd ../.. blueprint:compile && SUPERFIELD_BUILD_VERSION=$(git describe --tags --always 2>/dev/null || echo dev) SUPERFIELD_BUILD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) SUPERFIELD_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) SUPERFIELD_BUILD_BLUEPRINT_COMMIT=$(git -C ../../blueprint rev-parse --short HEAD 2>/dev/null || echo unknown) bun build --compile ./bin/superfield.ts --outfile \"$HOME/.bun/bin/superfield\"",
     "local-install": "mkdir -p \"$HOME/.bun/bin\" && bun run build:bin",
     "release": "bun run build:bin"
   },

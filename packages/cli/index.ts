@@ -6,6 +6,8 @@ import { deployCommand } from "./commands/deploy.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
+const BUILD_BLUEPRINT_COMMIT =
+  process.env.SUPERFIELD_BUILD_BLUEPRINT_COMMIT ?? "unknown";
 
 function usage(): string {
   return `
@@ -13,6 +15,7 @@ superfield — GitOps AI orchestrator
 
 Version: ${BUILD_VERSION}
 Commit: ${BUILD_COMMIT}
+Blueprint: ${BUILD_BLUEPRINT_COMMIT}
 Build date: ${BUILD_DATE}
 
 Commands:
