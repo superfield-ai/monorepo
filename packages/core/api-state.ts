@@ -5,9 +5,9 @@ export interface SlotInfo {
   sessionId: string;
   backend: string;
   model: string;
-  startedAt: string;         // ISO timestamp
+  startedAt: string; // ISO timestamp
   elapsedMs: number;
-  heartbeatAt?: number;      // Date.now() of last heartbeat
+  heartbeatAt?: number; // Date.now() of last heartbeat
 }
 
 export interface LoopHealth {
@@ -40,8 +40,8 @@ export class ApiState {
   slots = new Map<number, SlotInfo>();
   loops: Record<"plan" | "dev" | "doc", LoopHealth> = {
     plan: { circuitTripped: false, consecutiveFailures: 0 },
-    dev:  { circuitTripped: false, consecutiveFailures: 0 },
-    doc:  { circuitTripped: false, consecutiveFailures: 0 },
+    dev: { circuitTripped: false, consecutiveFailures: 0 },
+    doc: { circuitTripped: false, consecutiveFailures: 0 },
   };
   costs: CostAccumulator = {
     totalUsd: 0,
@@ -60,20 +60,33 @@ export class ApiState {
     this.slots.set(info.slot, { ...info, elapsedMs: 0 });
   }
 
-  recordAgentEnd(slot: number, costUsd: number, backend: string, isError: boolean): void {
+  recordAgentEnd(
+    slot: number,
+    costUsd: number,
+    backend: string,
+    isError: boolean,
+  ): void {
     this.slots.delete(slot);
     this.costs.totalUsd += costUsd;
-    this.costs.byBackend[backend] = (this.costs.byBackend[backend] ?? 0) + costUsd;
+    this.costs.byBackend[backend] =
+      (this.costs.byBackend[backend] ?? 0) + costUsd;
     this.costs.agentCount += 1;
     if (isError) this.costs.errorCount += 1;
   }
 
   recordHeartbeat(slot: number, elapsedMs: number): void {
     const s = this.slots.get(slot);
-    if (s) { s.elapsedMs = elapsedMs; s.heartbeatAt = Date.now(); }
+    if (s) {
+      s.elapsedMs = elapsedMs;
+      s.heartbeatAt = Date.now();
+    }
   }
 
-  recordLoopTick(loop: "plan" | "dev" | "doc", durationMs: number, idleReason?: string): void {
+  recordLoopTick(
+    loop: "plan" | "dev" | "doc",
+    durationMs: number,
+    idleReason?: string,
+  ): void {
     this.loops[loop].lastTickAt = Date.now();
     this.loops[loop].lastTickDurationMs = durationMs;
     this.loops[loop].idleReason = idleReason;

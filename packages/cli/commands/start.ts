@@ -30,7 +30,10 @@ const LOG_LEVEL_RANK: Record<LogLevel, number> = {
 export interface StartDeps {
   loadConfig?: () => Promise<Config>;
   resolveRepo?: (dir: string) => Promise<{ owner: string; repo: string }>;
-  runPlanningLoop?: (config: Config, opts?: { apiState?: ApiState }) => Promise<void>;
+  runPlanningLoop?: (
+    config: Config,
+    opts?: { apiState?: ApiState },
+  ) => Promise<void>;
   runDevLoop?: (opts: DevLoopOpts) => Promise<void>;
   runDocLoop?: (opts: DocLoopOpts) => Promise<void>;
   createClient?: (token: string) => DevLoopOpts["client"];
@@ -156,7 +159,10 @@ export async function startCommand(
   if (!noApi) {
     const apiLogger = {
       currentLevel: "info" as const,
-      emit: (level: "error" | "warn" | "info" | "debug" | "trace", message: string) => emit(level, message),
+      emit: (
+        level: "error" | "warn" | "info" | "debug" | "trace",
+        message: string,
+      ) => emit(level, message),
     };
     startApiServer({ port: apiPort, state: apiState, logger: apiLogger });
   }

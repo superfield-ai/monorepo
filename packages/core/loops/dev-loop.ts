@@ -601,13 +601,21 @@ async function executeAgentWithAudit(
     // Consume steer if queued for this session
     const steer = opts.apiState?.consumeSteer(pendingSessionId);
     if (steer) {
-      devLog("info", `steering context received (requestId=${steer.requestId})`, slot);
+      devLog(
+        "info",
+        `steering context received (requestId=${steer.requestId})`,
+        slot,
+      );
       pendingSteeringContext = steer.context;
     }
     // Consume escalation if queued for this issue
     const esc = opts.apiState?.consumeEscalation(entry.number);
     if (esc) {
-      devLog("info", `external escalation triggered (requestId=${esc.requestId})`, slot);
+      devLog(
+        "info",
+        `external escalation triggered (requestId=${esc.requestId})`,
+        slot,
+      );
       nextEscalatedFromSteer = true;
     }
   }, 60_000);
@@ -666,7 +674,12 @@ async function executeAgentWithAudit(
       }
     })();
     clearInterval(heartbeatInterval);
-    opts.apiState?.recordAgentEnd(slot, agentResult.costUsd ?? 0, "claude", agentResult.isError);
+    opts.apiState?.recordAgentEnd(
+      slot,
+      agentResult.costUsd ?? 0,
+      "claude",
+      agentResult.isError,
+    );
   } catch (err) {
     clearInterval(heartbeatInterval);
     opts.apiState?.recordAgentEnd(slot, 0, "claude", true);
@@ -678,7 +691,11 @@ async function executeAgentWithAudit(
     try {
       const superfieldDir = join(wt.path, ".superfield");
       await fs.mkdir(superfieldDir, { recursive: true });
-      await fs.writeFile(join(superfieldDir, "steer.md"), pendingSteeringContext, "utf8");
+      await fs.writeFile(
+        join(superfieldDir, "steer.md"),
+        pendingSteeringContext,
+        "utf8",
+      );
     } catch {
       // best-effort: log but don't abort
     }
@@ -693,7 +710,9 @@ async function executeAgentWithAudit(
 
   // Latch escalation on the first true and persist.
   const nextEscalated =
-    escalated || agentResult.needsBlueprintEscalation === true || nextEscalatedFromSteer;
+    escalated ||
+    agentResult.needsBlueprintEscalation === true ||
+    nextEscalatedFromSteer;
   if (!escalated && nextEscalated) {
     console.log(
       `[dev] blueprint escalation latched for #${entry.number} — subsequent turns will include expanded context`,

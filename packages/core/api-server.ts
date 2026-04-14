@@ -1,11 +1,15 @@
-import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from "node:http";
 import { randomUUID } from "node:crypto";
 import type { ApiState } from "./api-state.js";
 import type { Logger } from "./logger.js";
 
 export interface ApiServerOpts {
-  host?: string;    // default "127.0.0.1"
-  port?: number;    // default 7837
+  host?: string; // default "127.0.0.1"
+  port?: number; // default 7837
   state: ApiState;
   logger: Logger;
 }
@@ -19,9 +23,15 @@ function json(res: ServerResponse, status: number, body: unknown): void {
 async function readBody(req: IncomingMessage): Promise<unknown> {
   return new Promise((resolve, reject) => {
     let buf = "";
-    req.on("data", (c) => { buf += c; });
+    req.on("data", (c) => {
+      buf += c;
+    });
     req.on("end", () => {
-      try { resolve(JSON.parse(buf)); } catch { resolve({}); }
+      try {
+        resolve(JSON.parse(buf));
+      } catch {
+        resolve({});
+      }
     });
     req.on("error", reject);
   });
@@ -88,13 +98,21 @@ export function startApiServer(opts: ApiServerOpts): void {
 
     // POST /steer/context
     if (method === "POST" && url === "/steer/context") {
-      const body = await readBody(req) as { session_id?: string; context?: string };
+      const body = (await readBody(req)) as {
+        session_id?: string;
+        context?: string;
+      };
       if (!body.session_id || !body.context) {
         return json(res, 400, { error: "session_id and context are required" });
       }
-      const active = [...state.slots.values()].some((s) => s.sessionId === body.session_id);
+      const active = [...state.slots.values()].some(
+        (s) => s.sessionId === body.session_id,
+      );
       if (!active) {
-        return json(res, 404, { accepted: false, reason: "session not found in active slots" });
+        return json(res, 404, {
+          accepted: false,
+          reason: "session not found in active slots",
+        });
       }
       const requestId = randomUUID();
       state.pendingSteers.set(body.session_id, {
@@ -107,16 +125,24 @@ export function startApiServer(opts: ApiServerOpts): void {
 
     // POST /steer/escalate
     if (method === "POST" && url === "/steer/escalate") {
-      const body = await readBody(req) as { issue_number?: number };
+      const body = (await readBody(req)) as { issue_number?: number };
       if (!body.issue_number) {
         return json(res, 400, { error: "issue_number is required" });
       }
-      const active = [...state.slots.values()].some((s) => s.issueNumber === body.issue_number);
+      const active = [...state.slots.values()].some(
+        (s) => s.issueNumber === body.issue_number,
+      );
       if (!active) {
-        return json(res, 404, { accepted: false, reason: "issue not currently active in any slot" });
+        return json(res, 404, {
+          accepted: false,
+          reason: "issue not currently active in any slot",
+        });
       }
       const requestId = randomUUID();
-      state.pendingEscalations.set(body.issue_number, { requestId, queuedAt: Date.now() });
+      state.pendingEscalations.set(body.issue_number, {
+        requestId,
+        queuedAt: Date.now(),
+      });
       return json(res, 200, { requestId, accepted: true });
     }
 

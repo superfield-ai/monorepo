@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, beforeAll } from "vitest";
 import type { Server } from "node:http";
 import { ApiState } from "../../api-state.js";
 import { startApiServer } from "../../api-server.js";
@@ -18,7 +18,7 @@ beforeAll(async () => {
   state = new ApiState();
   // startApiServer is non-blocking; wait a tick for listen to complete
   await new Promise<void>((resolve) => {
-    const origListen = (server: Server) => {
+    const _origListen = (server: Server) => {
       server.once("listening", resolve);
     };
     startApiServer({ port: PORT, state, logger: noopLogger });
@@ -57,9 +57,13 @@ describe("GET /analytics/slots", () => {
 
   it("reflects a recorded slot", async () => {
     state.recordAgentStart({
-      slot: 1, issueNumber: 99, role: "primary",
-      sessionId: "claude-test", backend: "claude",
-      model: "claude-sonnet-4-6", startedAt: new Date().toISOString(),
+      slot: 1,
+      issueNumber: 99,
+      role: "primary",
+      sessionId: "claude-test",
+      backend: "claude",
+      model: "claude-sonnet-4-6",
+      startedAt: new Date().toISOString(),
     });
     const { body } = await get("/analytics/slots");
     expect(body.slots).toHaveLength(1);
@@ -132,9 +136,13 @@ describe("POST /steer/context", () => {
 
   it("accepts and queues steer for active session", async () => {
     state.recordAgentStart({
-      slot: 2, issueNumber: 55, role: "primary",
-      sessionId: "claude-live", backend: "claude",
-      model: "claude-sonnet-4-6", startedAt: new Date().toISOString(),
+      slot: 2,
+      issueNumber: 55,
+      role: "primary",
+      sessionId: "claude-live",
+      backend: "claude",
+      model: "claude-sonnet-4-6",
+      startedAt: new Date().toISOString(),
     });
     const { status, body } = await post("/steer/context", {
       session_id: "claude-live",
@@ -143,7 +151,9 @@ describe("POST /steer/context", () => {
     expect(status).toBe(200);
     expect(body.accepted).toBe(true);
     expect(body.requestId).toBeTruthy();
-    expect(state.pendingSteers.get("claude-live")?.context).toBe("pivot to fixing auth");
+    expect(state.pendingSteers.get("claude-live")?.context).toBe(
+      "pivot to fixing auth",
+    );
     state.recordAgentEnd(2, 0, "claude", false);
   });
 });
@@ -164,9 +174,13 @@ describe("POST /steer/escalate", () => {
 
   it("accepts and queues escalation for active issue", async () => {
     state.recordAgentStart({
-      slot: 3, issueNumber: 77, role: "primary",
-      sessionId: "claude-esc", backend: "claude",
-      model: "claude-sonnet-4-6", startedAt: new Date().toISOString(),
+      slot: 3,
+      issueNumber: 77,
+      role: "primary",
+      sessionId: "claude-esc",
+      backend: "claude",
+      model: "claude-sonnet-4-6",
+      startedAt: new Date().toISOString(),
     });
     const { status, body } = await post("/steer/escalate", {
       issue_number: 77,

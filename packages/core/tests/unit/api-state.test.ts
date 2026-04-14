@@ -5,9 +5,13 @@ describe("ApiState", () => {
   it("tracks a slot from start to end", () => {
     const s = new ApiState();
     s.recordAgentStart({
-      slot: 1, issueNumber: 42, role: "primary",
-      sessionId: "claude-abc", backend: "claude",
-      model: "claude-sonnet-4-6", startedAt: "2026-01-01T00:00:00Z",
+      slot: 1,
+      issueNumber: 42,
+      role: "primary",
+      sessionId: "claude-abc",
+      backend: "claude",
+      model: "claude-sonnet-4-6",
+      startedAt: "2026-01-01T00:00:00Z",
     });
     expect(s.slots.size).toBe(1);
     expect(s.slots.get(1)?.sessionId).toBe("claude-abc");
@@ -20,32 +24,62 @@ describe("ApiState", () => {
 
   it("accumulates errors separately", () => {
     const s = new ApiState();
-    s.recordAgentStart({ slot: 1, issueNumber: 1, role: "primary",
-      sessionId: "s1", backend: "claude", model: "m", startedAt: "" });
+    s.recordAgentStart({
+      slot: 1,
+      issueNumber: 1,
+      role: "primary",
+      sessionId: "s1",
+      backend: "claude",
+      model: "m",
+      startedAt: "",
+    });
     s.recordAgentEnd(1, 0, "claude", true);
     expect(s.costs.errorCount).toBe(1);
   });
 
   it("accumulates cost by backend", () => {
     const s = new ApiState();
-    s.recordAgentStart({ slot: 1, issueNumber: 1, role: "primary",
-      sessionId: "s1", backend: "claude", model: "m", startedAt: "" });
-    s.recordAgentEnd(1, 0.10, "claude", false);
-    s.recordAgentStart({ slot: 2, issueNumber: 2, role: "speculative",
-      sessionId: "s2", backend: "codex", model: "m2", startedAt: "" });
+    s.recordAgentStart({
+      slot: 1,
+      issueNumber: 1,
+      role: "primary",
+      sessionId: "s1",
+      backend: "claude",
+      model: "m",
+      startedAt: "",
+    });
+    s.recordAgentEnd(1, 0.1, "claude", false);
+    s.recordAgentStart({
+      slot: 2,
+      issueNumber: 2,
+      role: "speculative",
+      sessionId: "s2",
+      backend: "codex",
+      model: "m2",
+      startedAt: "",
+    });
     s.recordAgentEnd(2, 0.05, "codex", false);
     expect(s.costs.totalUsd).toBeCloseTo(0.15);
-    expect(s.costs.byBackend["claude"]).toBeCloseTo(0.10);
+    expect(s.costs.byBackend["claude"]).toBeCloseTo(0.1);
     expect(s.costs.byBackend["codex"]).toBeCloseTo(0.05);
     expect(s.costs.agentCount).toBe(2);
   });
 
   it("consumeSteer returns and removes the pending steer", () => {
     const s = new ApiState();
-    s.recordAgentStart({ slot: 1, issueNumber: 1, role: "primary",
-      sessionId: "claude-xyz", backend: "claude", model: "m", startedAt: "" });
+    s.recordAgentStart({
+      slot: 1,
+      issueNumber: 1,
+      role: "primary",
+      sessionId: "claude-xyz",
+      backend: "claude",
+      model: "m",
+      startedAt: "",
+    });
     s.pendingSteers.set("claude-xyz", {
-      requestId: "r1", context: "do this instead", queuedAt: Date.now(),
+      requestId: "r1",
+      context: "do this instead",
+      queuedAt: Date.now(),
     });
     const steer = s.consumeSteer("claude-xyz");
     expect(steer?.context).toBe("do this instead");
@@ -88,8 +122,15 @@ describe("ApiState", () => {
 
   it("recordHeartbeat updates elapsed time and heartbeatAt", () => {
     const s = new ApiState();
-    s.recordAgentStart({ slot: 1, issueNumber: 1, role: "primary",
-      sessionId: "s1", backend: "claude", model: "m", startedAt: "" });
+    s.recordAgentStart({
+      slot: 1,
+      issueNumber: 1,
+      role: "primary",
+      sessionId: "s1",
+      backend: "claude",
+      model: "m",
+      startedAt: "",
+    });
     const before = Date.now();
     s.recordHeartbeat(1, 30_000);
     const after = Date.now();
