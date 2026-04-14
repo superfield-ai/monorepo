@@ -1,3 +1,5 @@
+import * as fs from "node:fs/promises";
+import { join } from "node:path";
 import type {
   GitHubClientPort as GitHubClient,
   Issue,
@@ -36,6 +38,7 @@ import {
 } from "../steps/pre-pr-self-audit.ts";
 import type { BlueprintViolation } from "../steps/blueprint-conformance.ts";
 import { formatError } from "../format-error.ts";
+import type { ApiState } from "../api-state.ts";
 
 /** Cap on remediation passes per issue (#81). */
 export const SELF_AUDIT_REMEDIATION_CAP = 3;
@@ -80,6 +83,8 @@ export interface DevLoopOpts {
   _tickFn?: (opts: DevLoopOpts) => Promise<DevLoopTickResult>;
   /** @internal Test seam — override the supervised loop driver. */
   _runSupervisedLoop?: typeof runSupervisedLoop;
+  /** Optional shared API state for analytics and steering. */
+  apiState?: ApiState;
 }
 
 export interface PruneResult {
@@ -181,6 +186,7 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
   let firstTick = true;
   const pruneIntervalMs = opts.pruneIntervalMs ?? DEFAULT_PRUNE_INTERVAL_MS;
   let lastPruneAt = Date.now();
+  let prevCircuitOpen = circuit.isOpen;
   await supervisedLoop({
     runOnce: async () => {
       console.log("[dev] tick start");
@@ -234,6 +240,23 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
         );
       }
       firstTick = false;
+
+      // Track circuit breaker state changes
+      const nowCircuitOpen = circuit.isOpen;
+      if (!prevCircuitOpen && nowCircuitOpen) {
+        opts.apiState?.recordCircuitTripped(circuit.consecutiveFailures);
+      } else if (prevCircuitOpen && !nowCircuitOpen) {
+        opts.apiState?.recordCircuitReset();
+      }
+      prevCircuitOpen = nowCircuitOpen;
+
+      // Record loop tick for API analytics
+      opts.apiState?.recordLoopTick(
+        "dev",
+        Date.now() - tickStartMs,
+        result.idle ? (result.reason ?? "idle") : undefined,
+      );
+
       if (result.idle) {
         console.log(`[dev] idle — next check in ${idleMs / 1000}s`);
         // Run maintenance on idle ticks — prune stale worktrees + stale sessions
@@ -557,57 +580,128 @@ async function executeAgentWithAudit(
   const spawnFn = opts.spawn ?? spawnAgent;
   const circuit = opts.circuit;
 
-  let effectiveSessionId = sessionId;
-  const agentResult = await (async () => {
-    try {
-      return await withRetry(
-        () => {
-          const call = () =>
-            spawnFn({
-              prompt,
-              worktreePath: wt.path,
-              sessionId: effectiveSessionId,
-              model: "sonnet",
-              loop: "dev",
-              task: entry.kind,
-              jobType:
-                entry.kind === "dev-scout"
-                  ? "dev-scout"
-                  : entry.kind === "ci-failure"
-                    ? "ci-failure"
-                    : "dev",
-            });
-          return circuit ? circuit.call(call) : call();
-        },
-        { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
+  // Record agent start for API analytics
+  const agentStartMs = Date.now();
+  const pendingSessionId = sessionId ?? `pending-${slot}`;
+  opts.apiState?.recordAgentStart({
+    slot,
+    issueNumber: entry.number,
+    role,
+    sessionId: pendingSessionId,
+    backend: "claude",
+    model: "sonnet",
+    startedAt: new Date().toISOString(),
+  });
+
+  // Heartbeat interval: runs while the agent is alive (every 60s)
+  let pendingSteeringContext: string | undefined;
+  let nextEscalatedFromSteer = false;
+  const heartbeatInterval = setInterval(() => {
+    opts.apiState?.recordHeartbeat(slot, Date.now() - agentStartMs);
+    // Consume steer if queued for this session
+    const steer = opts.apiState?.consumeSteer(pendingSessionId);
+    if (steer) {
+      devLog(
+        "info",
+        `steering context received (requestId=${steer.requestId})`,
+        slot,
       );
-    } catch (err) {
-      if (err instanceof StaleSessionError) {
-        devLog(
-          "warn",
-          `issue #${entry.number} stale session cleared — retrying as new session`,
-          slot,
-        );
-        await deleteSession(client, owner, repo, entry.number);
-        effectiveSessionId = undefined;
-        return await spawnFn({
-          prompt,
-          worktreePath: wt.path,
-          sessionId: undefined,
-          model: "sonnet",
-          loop: "dev",
-          task: entry.kind,
-          jobType:
-            entry.kind === "dev-scout"
-              ? "dev-scout"
-              : entry.kind === "ci-failure"
-                ? "ci-failure"
-                : "dev",
-        });
-      }
-      throw err;
+      pendingSteeringContext = steer.context;
     }
-  })();
+    // Consume escalation if queued for this issue
+    const esc = opts.apiState?.consumeEscalation(entry.number);
+    if (esc) {
+      devLog(
+        "info",
+        `external escalation triggered (requestId=${esc.requestId})`,
+        slot,
+      );
+      nextEscalatedFromSteer = true;
+    }
+  }, 60_000);
+
+  let effectiveSessionId = sessionId;
+  let agentResult: AgentResult;
+  try {
+    agentResult = await (async () => {
+      try {
+        return await withRetry(
+          () => {
+            const call = () =>
+              spawnFn({
+                prompt,
+                worktreePath: wt.path,
+                sessionId: effectiveSessionId,
+                model: "sonnet",
+                loop: "dev",
+                task: entry.kind,
+                jobType:
+                  entry.kind === "dev-scout"
+                    ? "dev-scout"
+                    : entry.kind === "ci-failure"
+                      ? "ci-failure"
+                      : "dev",
+              });
+            return circuit ? circuit.call(call) : call();
+          },
+          { maxAttempts: 3, initialDelayMs: 2000, backoffFactor: 2 },
+        );
+      } catch (err) {
+        if (err instanceof StaleSessionError) {
+          devLog(
+            "warn",
+            `issue #${entry.number} stale session cleared — retrying as new session`,
+            slot,
+          );
+          await deleteSession(client, owner, repo, entry.number);
+          effectiveSessionId = undefined;
+          return await spawnFn({
+            prompt,
+            worktreePath: wt.path,
+            sessionId: undefined,
+            model: "sonnet",
+            loop: "dev",
+            task: entry.kind,
+            jobType:
+              entry.kind === "dev-scout"
+                ? "dev-scout"
+                : entry.kind === "ci-failure"
+                  ? "ci-failure"
+                  : "dev",
+          });
+        }
+        throw err;
+      }
+    })();
+    clearInterval(heartbeatInterval);
+    opts.apiState?.recordAgentEnd(
+      slot,
+      agentResult.costUsd ?? 0,
+      "claude",
+      agentResult.isError,
+    );
+  } catch (err) {
+    clearInterval(heartbeatInterval);
+    opts.apiState?.recordAgentEnd(slot, 0, "claude", true);
+    throw err;
+  }
+
+  // Write pending steering context into the worktree for next invocation
+  if (pendingSteeringContext) {
+    try {
+      const superfieldDir = join(wt.path, ".superfield");
+      await fs.mkdir(superfieldDir, { recursive: true });
+      await fs.writeFile(
+        join(superfieldDir, "steer.md"),
+        pendingSteeringContext,
+        "utf8",
+      );
+    } catch {
+      // best-effort: log but don't abort
+    }
+    pendingSteeringContext = undefined;
+  }
+
   devLog(
     "info",
     `issue #${entry.number} agent run finished is_error=${agentResult.isError}`,
@@ -616,7 +710,9 @@ async function executeAgentWithAudit(
 
   // Latch escalation on the first true and persist.
   const nextEscalated =
-    escalated || agentResult.needsBlueprintEscalation === true;
+    escalated ||
+    agentResult.needsBlueprintEscalation === true ||
+    nextEscalatedFromSteer;
   if (!escalated && nextEscalated) {
     console.log(
       `[dev] blueprint escalation latched for #${entry.number} — subsequent turns will include expanded context`,

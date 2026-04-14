@@ -1,4 +1,5 @@
 import type { Config } from "./config.ts";
+import type { ApiState } from "./api-state.ts";
 import { GitHubClient } from "@superfield/github";
 import type { GitHubClientPort, Issue } from "@superfield/github";
 import { createHash } from "node:crypto";
@@ -48,14 +49,19 @@ interface IssueAuditStateEntry {
  *
  * See PRD §Command: start §Planning loop.
  */
-export async function runPlanningLoop(config: Config): Promise<void> {
+export async function runPlanningLoop(
+  config: Config,
+  opts?: { apiState?: ApiState },
+): Promise<void> {
   console.log(
     `[plan] loop started for ${config.repositories.length} repository(ies)`,
   );
   await runSupervisedLoop({
     runOnce: async () => {
       console.log("[plan] tick start");
+      const tickStartMs = Date.now();
       await tickConfiguredRepositories(config);
+      opts?.apiState?.recordLoopTick("plan", Date.now() - tickStartMs);
     },
     delayMs: () => POLL_INTERVAL_MS,
     onError: (err) => {
