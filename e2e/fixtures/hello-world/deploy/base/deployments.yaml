@@ -14,6 +14,8 @@ spec:
       labels:
         app: postgres
     spec:
+      securityContext:
+        fsGroup: 999
       containers:
         - name: postgres
           image: localhost:5000/postgres:dev
@@ -27,6 +29,9 @@ spec:
               value: "password"
             - name: POSTGRES_DB
               value: "superfield_db"
+          volumeMounts:
+            - name: postgres-data
+              mountPath: /var/lib/postgresql/data
           livenessProbe:
             exec:
               command:
@@ -35,6 +40,10 @@ spec:
                 - superfield
             initialDelaySeconds: 10
             periodSeconds: 5
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: postgres-data
 ---
 # API Server deployment
 apiVersion: apps/v1

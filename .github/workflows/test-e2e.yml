@@ -37,3 +37,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Run E2E tests
         run: bun vitest run packages/*/tests/e2e
+      - name: Dump pod state on failure
+        if: failure()
+        run: |
+          kubectl get pods -A || true
+          kubectl describe pod -l app=postgres || true
+          kubectl logs -l app=postgres --tail=50 || true
