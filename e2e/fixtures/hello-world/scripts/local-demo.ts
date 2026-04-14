@@ -33,3 +33,10 @@ export async function ensureCluster(): Promise<void> {
     stdio: "inherit",
   });
 }
+
+export async function destroyCluster(): Promise<void> {
+  spawnSync("k3d", ["cluster", "delete", CLUSTER_NAME], { stdio: "inherit" });
+  spawnSync("k3d", ["registry", "delete", REGISTRY_K3D_NAME], {
+    stdio: "inherit",
+  });
+}

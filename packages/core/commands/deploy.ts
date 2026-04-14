@@ -108,7 +108,7 @@ export const DEMO_DEPLOY_TARGET: DeployTargetModel = {
 
 const DEMO_REGISTRY = "localhost:5000";
 const DEMO_TAG = "dev";
-const DEFAULT_DEMO_PORT = 58080;
+export const DEFAULT_DEMO_PORT = 58080;
 const WAIT_TIMEOUT = "120s";
 const POSTGRES_PVC_NAME = "postgres-data";
 const VOLUME_PROMPT_TIMEOUT_MS = 10_000;
@@ -141,6 +141,27 @@ export function getDeployTargetModel(
 ): DeployTargetModel {
   if (target === "demo" || target === undefined) return DEMO_DEPLOY_TARGET;
   throw new DeployTargetNotImplementedError(target);
+}
+
+export async function runDemoTeardown(
+  opts: Pick<DeployCommandOpts, "demoRoot" | "env"> = {},
+  deps: Pick<DeployCommandDeps, "runProcess"> = {},
+): Promise<void> {
+  const env = buildDemoEnv(opts.env);
+  const demoRoot =
+    opts.demoRoot ?? path.join(homedir(), "calypso-distribution");
+  const runProcess = deps.runProcess ?? spawnProcess;
+  await runProcess({
+    phase: "provision",
+    label: "cluster teardown",
+    command: "bun",
+    args: [
+      "--eval",
+      'import { destroyCluster } from "./scripts/local-demo.ts"; await destroyCluster();',
+    ],
+    cwd: demoRoot,
+    env,
+  });
 }
 
 export async function runDeployCommand(
