@@ -12,6 +12,7 @@ import {
 import { runLLMTask, type LLMTaskOpts } from "../llm-task.ts";
 import { runSupervisedLoop } from "../supervised-loop.ts";
 import { formatError } from "../format-error.ts";
+import type { ApiState } from "../api-state.ts";
 
 /**
  * The documentation loop. Triggered on every merge to `main`. Runs three
@@ -30,6 +31,8 @@ export interface DocLoopOpts {
   spawn?: LLMTaskOpts["spawn"];
   /** Poll interval in ms between checks for newly merged PRs. Default 60_000. */
   pollIntervalMs?: number;
+  /** Optional shared API state for analytics. */
+  apiState?: ApiState;
 }
 
 export interface DocCoverageMissing {
@@ -90,6 +93,7 @@ export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
   await runSupervisedLoop({
     runOnce: async () => {
       console.log("[doc] tick start");
+      const tickStartMs = Date.now();
       const headSha = await opts.client.getHeadSha(opts.owner, opts.repo);
       const result = await tickDocLoop({ ...opts, lastSeenSha, headSha });
       if (!result.triggered) {
@@ -106,6 +110,11 @@ export async function runDocLoop(opts: DocLoopOpts): Promise<void> {
       if (result.triggered) {
         lastSeenSha = headSha;
       }
+      opts.apiState?.recordLoopTick(
+        "doc",
+        Date.now() - tickStartMs,
+        result.idle ? "no new merged PRs on main" : undefined,
+      );
       return result;
     },
     delayMs: () => pollMs,

@@ -13,6 +13,14 @@ export default defineConfig({
         replacement: path.resolve(__dirname, "../core/loops/doc-loop.ts"),
       },
       {
+        find: "@superfield/core/api-state",
+        replacement: path.resolve(__dirname, "../core/api-state.ts"),
+      },
+      {
+        find: "@superfield/core/api-server",
+        replacement: path.resolve(__dirname, "../core/api-server.ts"),
+      },
+      {
         find: "@superfield/core",
         replacement: path.resolve(__dirname, "../core/index.ts"),
       },

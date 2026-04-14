@@ -93,6 +93,11 @@ export class CircuitBreaker {
     return Date.now() < this.openUntil;
   }
 
+  /** Current consecutive failure count (0 when circuit is open or reset). */
+  get consecutiveFailures(): number {
+    return this.failures;
+  }
+
   /**
    * Calls `fn` if the circuit is closed. Tracks failures; trips after
    * `tripAt` consecutive failures and resets after `resetMs`.

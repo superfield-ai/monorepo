@@ -12,6 +12,8 @@ import { GitClient, WorktreeManager } from "@superfield/git";
 import type { Config } from "@superfield/core";
 import type { DevLoopOpts } from "@superfield/core/loops/dev-loop";
 import type { DocLoopOpts } from "@superfield/core/loops/doc-loop";
+import { ApiState } from "@superfield/core/api-state";
+import { startApiServer } from "@superfield/core/api-server";
 
 type LogLevel = "error" | "warn" | "info" | "debug" | "trace";
 export type StartLoop = "plan" | "dev" | "doc";
@@ -28,12 +30,14 @@ const LOG_LEVEL_RANK: Record<LogLevel, number> = {
 export interface StartDeps {
   loadConfig?: () => Promise<Config>;
   resolveRepo?: (dir: string) => Promise<{ owner: string; repo: string }>;
-  runPlanningLoop?: (config: Config) => Promise<void>;
+  runPlanningLoop?: (config: Config, opts?: { apiState?: ApiState }) => Promise<void>;
   runDevLoop?: (opts: DevLoopOpts) => Promise<void>;
   runDocLoop?: (opts: DocLoopOpts) => Promise<void>;
   createClient?: (token: string) => DevLoopOpts["client"];
   loops?: StartLoop[];
   slotCount?: number;
+  noApi?: boolean;
+  apiPort?: number;
   env?: NodeJS.ProcessEnv;
   log?: (msg: string) => void;
   warn?: (msg: string) => void;
@@ -54,6 +58,8 @@ export async function startCommand(
     createClient = (token) => new GitHubClient(token),
     loops = DEFAULT_LOOPS,
     slotCount,
+    noApi = false,
+    apiPort = 7837,
     env = process.env,
     log = console.log,
     warn = console.warn,
@@ -145,9 +151,19 @@ export async function startCommand(
     "info",
     "[start] Loop cadence: plan=5s, dev(idle)=30s, doc=60s. Set SUPERFIELD_LOG_LEVEL=debug|trace for more detail.",
   );
+
+  const apiState = new ApiState();
+  if (!noApi) {
+    const apiLogger = {
+      currentLevel: "info" as const,
+      emit: (level: "error" | "warn" | "info" | "debug" | "trace", message: string) => emit(level, message),
+    };
+    startApiServer({ port: apiPort, state: apiState, logger: apiLogger });
+  }
+
   const tasks: Array<Promise<void>> = [];
   if (selectedLoops.includes("plan")) {
-    tasks.push(runPlanningLoop(effectiveConfig));
+    tasks.push(runPlanningLoop(effectiveConfig, { apiState }));
   }
   if (selectedLoops.includes("dev")) {
     tasks.push(
@@ -157,12 +173,13 @@ export async function startCommand(
         repo,
         token: user.token,
         worktrees,
+        apiState,
         ...(envSlotCount !== undefined ? { slotCount: envSlotCount } : {}),
       }),
     );
   }
   if (selectedLoops.includes("doc")) {
-    tasks.push(runDocLoop({ client, owner, repo, repoPath: dir }));
+    tasks.push(runDocLoop({ client, owner, repo, repoPath: dir, apiState }));
   }
   await Promise.all(tasks);
 }
