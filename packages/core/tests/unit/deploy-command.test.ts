@@ -94,6 +94,8 @@ describe("deploy command", () => {
           probeIngress: async () => undefined,
           fileExists: () => true,
           copyFile: () => undefined,
+          checkPvcExists: async () => false,
+          promptVolumeReuse: async () => true,
         },
       ),
     ).rejects.toBeInstanceOf(DeployPhaseExecutionError);
@@ -109,6 +111,8 @@ describe("deploy command", () => {
           probeIngress: async () => undefined,
           fileExists: () => true,
           copyFile: () => undefined,
+          checkPvcExists: async () => false,
+          promptVolumeReuse: async () => true,
         },
       ),
     ).rejects.toMatchObject({

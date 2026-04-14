@@ -41,6 +41,7 @@ describe("runDeployCommand — demo wiring", () => {
         probeIngress: async (url) => {
           probedUrls.push(url);
         },
+        checkPvcExists: async () => false,
       },
     );
 
@@ -75,5 +76,88 @@ describe("runDeployCommand — demo wiring", () => {
       TAG: "dev",
     });
     expect(probedUrls).toEqual(["http://localhost:58080/"]);
+  });
+
+  it("skips volume prompt when no postgres PVC exists", async () => {
+    tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "superfield-deploy-"));
+    await fsp.mkdir(path.join(tmpDir, "deploy", "env", "local"), {
+      recursive: true,
+    });
+    await fsp.writeFile(
+      path.join(tmpDir, "deploy", "env", "local", "secrets.yaml.template"),
+      "apiVersion: v1\nkind: Secret\n",
+    );
+
+    let promptCalled = false;
+    await runDeployCommand(
+      { demoRoot: tmpDir },
+      {
+        runProcess: async () => undefined,
+        probeIngress: async () => undefined,
+        checkPvcExists: async () => false,
+        promptVolumeReuse: async () => {
+          promptCalled = true;
+          return true;
+        },
+      },
+    );
+
+    expect(promptCalled).toBe(false);
+  });
+
+  it("reuses existing postgres PVC when user confirms", async () => {
+    tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "superfield-deploy-"));
+    await fsp.mkdir(path.join(tmpDir, "deploy", "env", "local"), {
+      recursive: true,
+    });
+    await fsp.writeFile(
+      path.join(tmpDir, "deploy", "env", "local", "secrets.yaml.template"),
+      "apiVersion: v1\nkind: Secret\n",
+    );
+
+    const steps: DeployProcessStep[] = [];
+    await runDeployCommand(
+      { demoRoot: tmpDir },
+      {
+        runProcess: async (step) => { steps.push(step); },
+        probeIngress: async () => undefined,
+        checkPvcExists: async () => true,
+        promptVolumeReuse: async () => true,
+      },
+    );
+
+    expect(steps.some((s) => s.args.includes("delete"))).toBe(false);
+  });
+
+  it("deletes existing postgres PVC when user requests clean start", async () => {
+    tmpDir = await fsp.mkdtemp(path.join(os.tmpdir(), "superfield-deploy-"));
+    await fsp.mkdir(path.join(tmpDir, "deploy", "env", "local"), {
+      recursive: true,
+    });
+    await fsp.writeFile(
+      path.join(tmpDir, "deploy", "env", "local", "secrets.yaml.template"),
+      "apiVersion: v1\nkind: Secret\n",
+    );
+
+    const steps: DeployProcessStep[] = [];
+    await runDeployCommand(
+      { demoRoot: tmpDir },
+      {
+        runProcess: async (step) => { steps.push(step); },
+        probeIngress: async () => undefined,
+        checkPvcExists: async () => true,
+        promptVolumeReuse: async () => false,
+      },
+    );
+
+    const deleteStep = steps.find(
+      (s) => s.command === "kubectl" && s.args.includes("delete"),
+    );
+    expect(deleteStep).toBeDefined();
+    expect(deleteStep?.args).toEqual(["delete", "pvc", "postgres-data"]);
+    expect(deleteStep?.phase).toBe("deploy");
+    // delete must come before apply
+    const applyStep = steps.find((s) => s.args.includes("apply"));
+    expect(steps.indexOf(deleteStep!)).toBeLessThan(steps.indexOf(applyStep!));
   });
 });
