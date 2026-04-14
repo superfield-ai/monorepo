@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync } from "node:fs";
+import { copyFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
@@ -44,10 +44,11 @@ export interface DeployCommandDeps {
   probeIngress?: (url: string) => Promise<void>;
   fileExists?: (filePath: string) => boolean;
   copyFile?: (source: string, destination: string) => void;
+  readFile?: (filePath: string) => string;
   fetchImpl?: typeof fetch;
   sleep?: (ms: number) => Promise<void>;
-  checkPvcExists?: (name: string) => Promise<boolean>;
-  promptVolumeReuse?: () => Promise<boolean>;
+  promptDeleteDataDir?: (dataPath: string) => Promise<boolean>;
+  deleteDataDir?: (dataPath: string) => void;
 }
 
 export class DeployTargetNotImplementedError extends Error {
@@ -110,8 +111,6 @@ const DEMO_REGISTRY = "localhost:5000";
 const DEMO_TAG = "dev";
 export const DEFAULT_DEMO_PORT = 58080;
 const WAIT_TIMEOUT = "120s";
-const POSTGRES_PVC_NAME = "postgres-data";
-const VOLUME_PROMPT_TIMEOUT_MS = 10_000;
 
 interface DemoContext {
   target: DeployTargetModel;
@@ -121,8 +120,9 @@ interface DemoContext {
   probeIngress: (url: string) => Promise<void>;
   fileExists: (filePath: string) => boolean;
   copyFile: (source: string, destination: string) => void;
-  checkPvcExists: (name: string) => Promise<boolean>;
-  promptVolumeReuse: () => Promise<boolean>;
+  readFile: (filePath: string) => string;
+  promptDeleteDataDir: (dataPath: string) => Promise<boolean>;
+  deleteDataDir: (dataPath: string) => void;
 }
 
 export function parseDeployPhase(
@@ -207,10 +207,11 @@ function buildDemoContext(
         )),
     fileExists: deps.fileExists ?? existsSync,
     copyFile: deps.copyFile ?? copyFileSync,
-    checkPvcExists:
-      deps.checkPvcExists ??
-      ((name) => defaultCheckPvcExists(name, env, demoRoot)),
-    promptVolumeReuse: deps.promptVolumeReuse ?? defaultPromptVolumeReuse,
+    readFile: deps.readFile ?? ((f) => readFileSync(f, "utf8")),
+    promptDeleteDataDir: deps.promptDeleteDataDir ?? defaultPromptDeleteDataDir,
+    deleteDataDir:
+      deps.deleteDataDir ??
+      ((p) => rmSync(p, { recursive: true, force: true })),
   };
 }
 
@@ -273,21 +274,36 @@ async function runDemoProvision(context: DemoContext): Promise<void> {
   });
 }
 
+/**
+ * Reads the postgres manifest from deploy/base/postgres.yaml and extracts
+ * the hostPath.path value, if one is defined. Returns null if the manifest
+ * doesn't exist or declares no hostPath.
+ */
+export function detectPostgresDataPath(
+  demoRoot: string,
+  readFile: (filePath: string) => string,
+  fileExists: (filePath: string) => boolean,
+): string | null {
+  const manifestPath = path.join(demoRoot, "deploy", "base", "postgres.yaml");
+  if (!fileExists(manifestPath)) return null;
+  const content = readFile(manifestPath);
+  const match = /hostPath:\s*\n\s+path:\s*(\S+)/.exec(content);
+  return match?.[1] ?? null;
+}
+
 async function handlePostgresVolume(context: DemoContext): Promise<void> {
-  const exists = await context.checkPvcExists(POSTGRES_PVC_NAME);
-  if (!exists) return;
+  const dataPath = detectPostgresDataPath(
+    context.demoRoot,
+    context.readFile,
+    context.fileExists,
+  );
+  if (!dataPath) return;
+  if (!context.fileExists(dataPath)) return;
 
-  const reuse = await context.promptVolumeReuse();
-  if (reuse) return;
-
-  await executeStep(context, {
-    phase: "deploy",
-    label: "postgres volume cleanup",
-    command: "kubectl",
-    args: ["delete", "pvc", POSTGRES_PVC_NAME],
-    cwd: context.demoRoot,
-    env: context.env,
-  });
+  const shouldDelete = await context.promptDeleteDataDir(dataPath);
+  if (shouldDelete) {
+    context.deleteDataDir(dataPath);
+  }
 }
 
 async function runDemoDeploy(context: DemoContext): Promise<void> {
@@ -452,45 +468,20 @@ async function waitForIngress(
   throw new Error(`Timed out waiting for ${url}`);
 }
 
-async function defaultCheckPvcExists(
-  name: string,
-  env: NodeJS.ProcessEnv,
-  cwd: string,
-): Promise<boolean> {
-  return new Promise((resolve) => {
-    const child = spawn(
-      "kubectl",
-      ["get", "pvc", name, "--ignore-not-found", "-o", "name"],
-      { cwd, env, stdio: ["ignore", "pipe", "ignore"] },
-    );
-    let output = "";
-    child.stdout!.on("data", (chunk: Buffer) => {
-      output += chunk.toString();
-    });
-    child.once("error", () => resolve(false));
-    child.once("exit", () => resolve(output.trim().length > 0));
-  });
-}
-
-async function defaultPromptVolumeReuse(): Promise<boolean> {
-  process.stdout.write(
-    `Found existing postgres data volume. Reuse it? [Y/n] (auto-reusing in ${VOLUME_PROMPT_TIMEOUT_MS / 1000}s): `,
-  );
-
-  return new Promise((resolve) => {
+async function defaultPromptDeleteDataDir(dataPath: string): Promise<boolean> {
+  return new Promise<boolean>((resolve) => {
     const rl = createInterface({ input: process.stdin, terminal: false });
 
-    const timer = setTimeout(() => {
+    process.stdout.write(
+      `Found existing postgres data at ${dataPath}. Delete it for a clean start? [y/N]: `,
+    );
+    rl.once("line", (answer) => {
       rl.close();
-      process.stdout.write("\nNo input received — reusing existing volume.\n");
-      resolve(true);
-    }, VOLUME_PROMPT_TIMEOUT_MS);
-
-    rl.once("line", (line) => {
-      clearTimeout(timer);
-      rl.close();
-      const answer = line.trim().toLowerCase();
-      resolve(answer !== "n" && answer !== "no");
+      const trimmed = answer.trim().toLowerCase();
+      resolve(trimmed === "y" || trimmed === "yes");
+    });
+    rl.once("close", () => {
+      resolve(false);
     });
   });
 }

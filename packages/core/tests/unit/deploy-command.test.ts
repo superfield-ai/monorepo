@@ -4,6 +4,7 @@ import {
   DEMO_DEPLOY_TARGET,
   DeployPhaseExecutionError,
   DeployTargetNotImplementedError,
+  detectPostgresDataPath,
   getDeployTargetModel,
   selectDeployPhases,
   runDeployCommand,
@@ -82,42 +83,61 @@ describe("deploy command", () => {
   });
 
   it("wraps deployment failures with a phase-scoped error", async () => {
+    const noPvcDeps = {
+      runProcess: async (step: { phase: string; command: string }) => {
+        if (step.phase === "deploy" && step.command === "bash") {
+          throw new Error("docker build failed");
+        }
+      },
+      probeIngress: async () => undefined,
+      fileExists: () => true,
+      copyFile: () => undefined,
+      readFile: () => "",
+    };
     await expect(
-      runDeployCommand(
-        { demoRoot: "/tmp/calypso" },
-        {
-          runProcess: async (step) => {
-            if (step.phase === "deploy" && step.command === "bash") {
-              throw new Error("docker build failed");
-            }
-          },
-          probeIngress: async () => undefined,
-          fileExists: () => true,
-          copyFile: () => undefined,
-          checkPvcExists: async () => false,
-          promptVolumeReuse: async () => true,
-        },
-      ),
+      runDeployCommand({ demoRoot: "/tmp/calypso" }, noPvcDeps),
     ).rejects.toBeInstanceOf(DeployPhaseExecutionError);
     await expect(
-      runDeployCommand(
-        { demoRoot: "/tmp/calypso" },
-        {
-          runProcess: async (step) => {
-            if (step.phase === "deploy" && step.command === "bash") {
-              throw new Error("docker build failed");
-            }
-          },
-          probeIngress: async () => undefined,
-          fileExists: () => true,
-          copyFile: () => undefined,
-          checkPvcExists: async () => false,
-          promptVolumeReuse: async () => true,
-        },
-      ),
-    ).rejects.toMatchObject({
-      phase: "deploy",
-      target: "demo",
-    });
+      runDeployCommand({ demoRoot: "/tmp/calypso" }, noPvcDeps),
+    ).rejects.toMatchObject({ phase: "deploy", target: "demo" });
+  });
+
+  it("detectPostgresDataPath returns the hostPath from the manifest", () => {
+    const yaml = `
+volumes:
+  - name: postgres-data
+    hostPath:
+      path: /tmp/calypso-postgres-data
+      type: DirectoryOrCreate
+`;
+    const result = detectPostgresDataPath(
+      "/demo",
+      () => yaml,
+      () => true,
+    );
+    expect(result).toBe("/tmp/calypso-postgres-data");
+  });
+
+  it("detectPostgresDataPath returns null when manifest has no hostPath", () => {
+    const yaml = `
+volumes:
+  - name: postgres-data
+    emptyDir: {}
+`;
+    const result = detectPostgresDataPath(
+      "/demo",
+      () => yaml,
+      () => true,
+    );
+    expect(result).toBeNull();
+  });
+
+  it("detectPostgresDataPath returns null when manifest does not exist", () => {
+    const result = detectPostgresDataPath(
+      "/demo",
+      () => "",
+      () => false,
+    );
+    expect(result).toBeNull();
   });
 });
