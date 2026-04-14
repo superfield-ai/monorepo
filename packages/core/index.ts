@@ -79,6 +79,8 @@ export {
   parseDeployPhase,
   selectDeployPhases,
   runDeployCommand,
+  runDemoTeardown,
+  DEFAULT_DEMO_PORT,
 } from "./commands/deploy.ts";
 export type {
   DeployPhase,
