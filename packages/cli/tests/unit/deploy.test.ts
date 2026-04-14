@@ -1,17 +1,35 @@
-import { describe, it, expect, vi, afterEach } from "vitest";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { deployCommand, parseDeployArgs } from "../../commands/deploy.ts";
 
 const mocks = vi.hoisted(() => ({
   runDeployCommand: vi.fn(),
+  runDemoTeardown: vi.fn(),
 }));
 
 vi.mock("@superfield/core", () => ({
   runDeployCommand: mocks.runDeployCommand,
+  runDemoTeardown: mocks.runDemoTeardown,
+  DEFAULT_DEMO_PORT: 58080,
 }));
+
+const NO_WAIT_DEPS = {
+  fetchPublicIp: async () => null,
+  waitForExit: async () => undefined,
+};
+
+// process.exit is called after teardown in the full deploy path
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockExit: any;
+beforeEach(() => {
+  mockExit = vi
+    .spyOn(process, "exit")
+    .mockImplementation((() => undefined) as never);
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
   mocks.runDeployCommand.mockReset();
+  mocks.runDemoTeardown.mockReset();
 });
 
 describe("parseDeployArgs", () => {
@@ -48,8 +66,9 @@ describe("parseDeployArgs", () => {
 describe("deployCommand", () => {
   it("forwards the default full deploy to the core command", async () => {
     mocks.runDeployCommand.mockResolvedValue(undefined);
+    mocks.runDemoTeardown.mockResolvedValue(undefined);
 
-    await deployCommand([]);
+    await deployCommand([], NO_WAIT_DEPS);
 
     expect(mocks.runDeployCommand).toHaveBeenCalledWith({
       provisionOnly: false,
@@ -71,16 +90,58 @@ describe("deployCommand", () => {
     const error = vi
       .spyOn(console, "error")
       .mockImplementation(() => undefined);
-    const exit = vi
-      .spyOn(process, "exit")
-      .mockImplementation((() => undefined) as never);
 
     await deployCommand(["demo", "staging"]);
 
     expect(error).toHaveBeenCalledWith(
       "Usage: superfield deploy [--provision] [target]",
     );
-    expect(exit).toHaveBeenCalledWith(1);
+    expect(mockExit).toHaveBeenCalledWith(1);
     expect(mocks.runDeployCommand).not.toHaveBeenCalled();
+  });
+
+  it("prints local and public URLs after a full deploy", async () => {
+    mocks.runDeployCommand.mockResolvedValue(undefined);
+    mocks.runDemoTeardown.mockResolvedValue(undefined);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await deployCommand([], {
+      fetchPublicIp: async () => "1.2.3.4",
+      waitForExit: async () => undefined,
+    });
+
+    const lines = log.mock.calls.flatMap((c) => c);
+    expect(lines.some((l) => l.includes("http://localhost:58080/"))).toBe(true);
+    expect(lines.some((l) => l.includes("http://1.2.3.4:58080/"))).toBe(true);
+  });
+
+  it("skips public URL when public IP is unavailable", async () => {
+    mocks.runDeployCommand.mockResolvedValue(undefined);
+    mocks.runDemoTeardown.mockResolvedValue(undefined);
+    const log = vi.spyOn(console, "log").mockImplementation(() => undefined);
+
+    await deployCommand([], NO_WAIT_DEPS);
+
+    const lines = log.mock.calls.flatMap((c) => c);
+    expect(lines.some((l) => l.includes("localhost:58080"))).toBe(true);
+    expect(lines.every((l) => !l.includes("public:"))).toBe(true);
+  });
+
+  it("tears down the cluster after exit signal", async () => {
+    mocks.runDeployCommand.mockResolvedValue(undefined);
+    mocks.runDemoTeardown.mockResolvedValue(undefined);
+
+    await deployCommand([], NO_WAIT_DEPS);
+
+    expect(mocks.runDemoTeardown).toHaveBeenCalled();
+    expect(mockExit).toHaveBeenCalledWith(0);
+  });
+
+  it("does not tear down on provision-only", async () => {
+    mocks.runDeployCommand.mockResolvedValue(undefined);
+
+    await deployCommand(["--provision"]);
+
+    expect(mocks.runDemoTeardown).not.toHaveBeenCalled();
   });
 });
