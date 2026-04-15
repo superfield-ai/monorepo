@@ -136,7 +136,7 @@ export class GitHubClient implements GitHubClientPort {
   private octokit: Octokit;
 
   constructor(token: string) {
-    this.octokit = new Octokit({ auth: token });
+    this.octokit = new Octokit({ auth: token, request: { timeout: 30_000 } });
   }
 
   async getAuthenticatedUser(): Promise<{ login: string }> {
