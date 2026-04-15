@@ -422,7 +422,16 @@ async function runCli(
     const proc = spawn(command, args, {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: { ...process.env },
+      env: {
+        ...process.env,
+        // Claude Code authenticates via OAuth stored in CLAUDE_CONFIG_DIR.
+        // The `claude` binary is often invoked via a shell alias that sets
+        // this var, but aliases don't propagate to child processes — so we
+        // set it explicitly here. Fall back to ~/.claude if not already set.
+        CLAUDE_CONFIG_DIR:
+          process.env.CLAUDE_CONFIG_DIR ??
+          `${process.env.HOME}/.claude`,
+      },
     });
 
     const stdoutChunks: Buffer[] = [];
