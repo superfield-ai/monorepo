@@ -94,7 +94,9 @@ describe("deployCommand", () => {
     await deployCommand(["demo", "staging"]);
 
     expect(error).toHaveBeenCalledWith(
-      expect.stringContaining("Usage: superfield deploy [--provision] [target]"),
+      expect.stringContaining(
+        "Usage: superfield deploy [--provision] [target]",
+      ),
     );
     expect(mockExit).toHaveBeenCalledWith(1);
     expect(mocks.runDeployCommand).not.toHaveBeenCalled();

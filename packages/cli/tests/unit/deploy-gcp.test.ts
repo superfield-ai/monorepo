@@ -1,8 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  deployCommand,
-  parseDeployArgs,
-} from "../../commands/deploy.ts";
+import { deployCommand, parseDeployArgs } from "../../commands/deploy.ts";
 
 const mocks = vi.hoisted(() => ({
   runDeployCommand: vi.fn(),
@@ -53,9 +50,12 @@ describe("parseDeployArgs — GCP flags", () => {
   it("parses --region and --zone", () => {
     const result = parseDeployArgs([
       "gcp",
-      "--project", "p",
-      "--region", "us-east1",
-      "--zone", "us-east1-b",
+      "--project",
+      "p",
+      "--region",
+      "us-east1",
+      "--zone",
+      "us-east1-b",
     ]);
     expect(result.gcpRegion).toBe("us-east1");
     expect(result.gcpZone).toBe("us-east1-b");
@@ -63,7 +63,13 @@ describe("parseDeployArgs — GCP flags", () => {
   });
 
   it("parses --image-tag", () => {
-    const result = parseDeployArgs(["gcp", "--project", "p", "--image-tag", "v1.2.3"]);
+    const result = parseDeployArgs([
+      "gcp",
+      "--project",
+      "p",
+      "--image-tag",
+      "v1.2.3",
+    ]);
     expect(result.gcpImageTag).toBe("v1.2.3");
     expect(result.unknown).toHaveLength(0);
   });
@@ -75,7 +81,12 @@ describe("parseDeployArgs — GCP flags", () => {
   });
 
   it("parses --login flag", () => {
-    const result = parseDeployArgs(["gcp", "--login", "--client-id", "my-client"]);
+    const result = parseDeployArgs([
+      "gcp",
+      "--login",
+      "--client-id",
+      "my-client",
+    ]);
     expect(result.login).toBe(true);
     expect(result.gcpClientId).toBe("my-client");
     expect(result.unknown).toHaveLength(0);
@@ -110,10 +121,9 @@ describe("deployCommand — gcp target", () => {
   });
 
   it("calls runGcpDeployCommand with imageTag when --image-tag is passed", async () => {
-    await deployCommand(
-      ["gcp", "--project", "foo", "--image-tag", "v2.0.0"],
-      { runGcpDeployCommand: mocks.runGcpDeployCommand },
-    );
+    await deployCommand(["gcp", "--project", "foo", "--image-tag", "v2.0.0"], {
+      runGcpDeployCommand: mocks.runGcpDeployCommand,
+    });
 
     expect(mocks.runGcpDeployCommand).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -138,15 +148,15 @@ describe("deployCommand — gcp target", () => {
   });
 
   it("errors and exits when --project is missing", async () => {
-    const error = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    const error = vi
+      .spyOn(console, "error")
+      .mockImplementation(() => undefined);
 
     await deployCommand(["gcp", "--provision"], {
       runGcpDeployCommand: mocks.runGcpDeployCommand,
     });
 
-    expect(error).toHaveBeenCalledWith(
-      expect.stringContaining("--project"),
-    );
+    expect(error).toHaveBeenCalledWith(expect.stringContaining("--project"));
     expect(mockExit).toHaveBeenCalledWith(1);
     expect(mocks.runGcpDeployCommand).not.toHaveBeenCalled();
   });
@@ -155,10 +165,9 @@ describe("deployCommand — gcp target", () => {
     mocks.handleLoginLogout.mockResolvedValue(true);
     mocks.makeDefaultLoginDeps.mockReturnValue({});
 
-    await deployCommand(
-      ["gcp", "--login", "--client-id", "my-client"],
-      { runGcpDeployCommand: mocks.runGcpDeployCommand },
-    );
+    await deployCommand(["gcp", "--login", "--client-id", "my-client"], {
+      runGcpDeployCommand: mocks.runGcpDeployCommand,
+    });
 
     expect(mocks.handleLoginLogout).toHaveBeenCalledWith(
       expect.objectContaining({ login: true, clientId: "my-client" }),

@@ -101,10 +101,7 @@ export type {
   RemoteProvisionDeps,
 } from "./commands/remote-provision.ts";
 
-export {
-  handleLoginLogout,
-  makeDefaultLoginDeps,
-} from "./gcp/index.js";
+export { handleLoginLogout, makeDefaultLoginDeps } from "./gcp/index.js";
 
 export { runBlueprintConformance } from "./steps/blueprint-conformance.ts";
 export type {

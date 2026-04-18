@@ -42,7 +42,9 @@ function makeHttpDeps() {
   };
 }
 
-function makeDeps(overrides: Partial<GcpDeployCommandDeps> = {}): GcpDeployCommandDeps {
+function makeDeps(
+  overrides: Partial<GcpDeployCommandDeps> = {},
+): GcpDeployCommandDeps {
   return {
     runDoctor: vi.fn().mockResolvedValue(GOOD_DOCTOR_RESULT),
     runProvision: vi.fn().mockResolvedValue(undefined),
@@ -61,10 +63,7 @@ describe("runGcpDeployCommand", () => {
   it("provisionOnly=true calls runProvision and not runGcpDeploy", async () => {
     const deps = makeDeps();
 
-    await runGcpDeployCommand(
-      { ...BASE_OPTS, provisionOnly: true },
-      deps,
-    );
+    await runGcpDeployCommand({ ...BASE_OPTS, provisionOnly: true }, deps);
 
     expect(deps.runProvision).toHaveBeenCalledOnce();
     expect(deps.runGcpDeploy).not.toHaveBeenCalled();
@@ -94,8 +93,10 @@ describe("runGcpDeployCommand", () => {
     expect(deps.runGcpDeploy).toHaveBeenCalledOnce();
 
     // Verify runProvision was called before runGcpDeploy
-    const provisionOrder = (deps.runProvision as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0];
-    const deployOrder = (deps.runGcpDeploy as ReturnType<typeof vi.fn>).mock.invocationCallOrder[0];
+    const provisionOrder = (deps.runProvision as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
+    const deployOrder = (deps.runGcpDeploy as ReturnType<typeof vi.fn>).mock
+      .invocationCallOrder[0];
     expect(provisionOrder).toBeLessThan(deployOrder);
   });
 
@@ -107,7 +108,8 @@ describe("runGcpDeployCommand", () => {
       deps,
     );
 
-    const deployCallArgs = (deps.runGcpDeploy as ReturnType<typeof vi.fn>).mock.calls[0];
+    const deployCallArgs = (deps.runGcpDeploy as ReturnType<typeof vi.fn>).mock
+      .calls[0];
     const deployConfig = deployCallArgs[0] as { imageTag: string };
     expect(deployConfig.imageTag).toBe("v2.3.4");
   });
@@ -117,7 +119,10 @@ describe("runGcpDeployCommand", () => {
       ok: false,
       projectId: "test-project",
       projectNumber: "123456789",
-      missingPermissions: ["compute.instances.create", "alloydb.clusters.create"],
+      missingPermissions: [
+        "compute.instances.create",
+        "alloydb.clusters.create",
+      ],
       disabledServices: ["alloydb.googleapis.com"],
       warnings: [],
       credential: { source: "GCP_ACCESS_TOKEN", type: "access-token" },
@@ -127,9 +132,9 @@ describe("runGcpDeployCommand", () => {
       runDoctor: vi.fn().mockResolvedValue(failingDoctorResult),
     });
 
-    await expect(
-      runGcpDeployCommand(BASE_OPTS, deps),
-    ).rejects.toThrow(/Missing permissions:.*compute.instances.create/);
+    await expect(runGcpDeployCommand(BASE_OPTS, deps)).rejects.toThrow(
+      /Missing permissions:.*compute.instances.create/,
+    );
 
     expect(deps.runProvision).not.toHaveBeenCalled();
     expect(deps.runGcpDeploy).not.toHaveBeenCalled();
@@ -150,9 +155,9 @@ describe("runGcpDeployCommand", () => {
       runDoctor: vi.fn().mockResolvedValue(failingDoctorResult),
     });
 
-    await expect(
-      runGcpDeployCommand(BASE_OPTS, deps),
-    ).rejects.toThrow(/Disabled services:.*compute.googleapis.com/);
+    await expect(runGcpDeployCommand(BASE_OPTS, deps)).rejects.toThrow(
+      /Disabled services:.*compute.googleapis.com/,
+    );
   });
 
   it("runProvision is called with the correct project/region/zone", async () => {
@@ -169,7 +174,8 @@ describe("runGcpDeployCommand", () => {
       deps,
     );
 
-    const provisionCallArgs = (deps.runProvision as ReturnType<typeof vi.fn>).mock.calls[0];
+    const provisionCallArgs = (deps.runProvision as ReturnType<typeof vi.fn>)
+      .mock.calls[0];
     const provisionConfig = provisionCallArgs[0] as {
       projectId: string;
       region: string;
