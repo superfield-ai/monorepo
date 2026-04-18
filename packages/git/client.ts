@@ -83,9 +83,11 @@ export function parseGitHubRemote(url: string): {
   repo: string;
 } {
   // https://github.com/owner/repo.git  or  git@github.com:owner/repo.git
+  // Also accepts SSH host aliases (e.g. git@github-work:owner/repo.git)
   const match =
     url.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/) ??
-    url.match(/github\.com\/([^/]+)\/([^/.]+)/);
+    url.match(/github\.com\/([^/]+)\/([^/.]+)/) ??
+    url.match(/^git@[^:]+:([^/]+)\/([^/.]+)(?:\.git)?$/);
   if (!match) throw new Error(`Cannot parse GitHub remote URL: ${url}`);
   return { owner: match[1], repo: match[2] };
 }
