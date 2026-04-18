@@ -44,7 +44,7 @@ export async function runRemoteProvision(
     );
   }
 
-  console.log("\n[3/5] Installing docker.io and kubectl...");
+  console.log("\n[3/6] Installing docker.io and kubectl...");
   await sshRun(
     config,
     `
@@ -71,7 +71,7 @@ fi
 `.trim(),
   );
 
-  console.log("\n[4/5] Installing k3d...");
+  console.log("\n[4/6] Installing k3d...");
   await sshRun(
     config,
     `
@@ -83,7 +83,21 @@ fi
 `.trim(),
   );
 
-  console.log("\n[5/5] Generating deploy key...");
+  console.log("\n[5/6] Installing bun...");
+  await sshRun(
+    config,
+    `
+if command -v bun &>/dev/null; then
+  echo "bun already installed: $(bun --version)"
+else
+  apt-get install -y unzip
+  curl -fsSL https://bun.sh/install | BUN_INSTALL=/usr/local bash
+  echo "bun installed: $(bun --version)"
+fi
+`.trim(),
+  );
+
+  console.log("\n[6/6] Generating deploy key...");
   await sshRun(
     config,
     `
