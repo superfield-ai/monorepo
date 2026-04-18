@@ -61,7 +61,10 @@ if ! groups "$USER" | grep -qw docker; then
   echo "Added $USER to docker group — re-login required for group to take effect"
 fi
 if ! command -v kubectl &>/dev/null; then
-  sudo apt-get install -y kubectl
+  curl -fsSL "https://dl.k8s.io/release/$(curl -fsSL https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" -o /tmp/kubectl
+  sudo install -o root -g root -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+  rm /tmp/kubectl
+  echo "kubectl installed: $(kubectl version --client --short 2>/dev/null || kubectl version --client 2>/dev/null | head -1)"
 else
   echo "kubectl already installed"
 fi
