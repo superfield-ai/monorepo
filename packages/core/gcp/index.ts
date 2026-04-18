@@ -35,3 +35,7 @@ export type {
   DoctorDeps,
 } from "./doctor.ts";
 export { runDoctor } from "./doctor.ts";
+
+export { pollOperation } from "./operations.js";
+export { runProvision } from "./provision.js";
+export type { ProvisionConfig, ProvisionDeps } from "./provision.js";
