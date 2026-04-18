@@ -35,6 +35,7 @@ export interface DeployProcessStep {
   args: string[];
   cwd: string;
   env?: NodeJS.ProcessEnv;
+  installHint?: string;
 }
 
 export type DeployProcessRunner = (step: DeployProcessStep) => Promise<void>;
@@ -82,6 +83,17 @@ export class DeployPhaseExecutionError extends Error {
       { cause: cause instanceof Error ? cause : undefined },
     );
     this.name = "DeployPhaseExecutionError";
+  }
+}
+
+export class MissingDependencyError extends Error {
+  constructor(
+    readonly command: string,
+    readonly installHint?: string,
+  ) {
+    const hint = installHint ? `\n  Install it with: ${installHint}` : "";
+    super(`"${command}" not found on PATH.${hint}`);
+    this.name = "MissingDependencyError";
   }
 }
 
@@ -236,6 +248,7 @@ async function runDemoProvision(context: DemoContext): Promise<void> {
     args: ["--version"],
     cwd: context.demoRoot,
     env: context.env,
+    installHint: "sudo apt install docker.io  (Debian/Ubuntu) or https://docs.docker.com/engine/install/",
   });
   await executeStep(context, {
     phase: "provision",
@@ -244,6 +257,7 @@ async function runDemoProvision(context: DemoContext): Promise<void> {
     args: ["version"],
     cwd: context.demoRoot,
     env: context.env,
+    installHint: "curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash",
   });
   await executeStep(context, {
     phase: "provision",
@@ -252,6 +266,7 @@ async function runDemoProvision(context: DemoContext): Promise<void> {
     args: ["version", "--client"],
     cwd: context.demoRoot,
     env: context.env,
+    installHint: "sudo apt install kubectl  (Debian/Ubuntu) or https://kubernetes.io/docs/tasks/tools/",
   });
   await executeStep(context, {
     phase: "provision",
@@ -494,7 +509,13 @@ async function spawnProcess(step: DeployProcessStep): Promise<void> {
       stdio: "inherit",
     });
 
-    child.once("error", reject);
+    child.once("error", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") {
+        reject(new MissingDependencyError(step.command, step.installHint));
+      } else {
+        reject(err);
+      }
+    });
     child.once("exit", (code) => {
       if (code === 0) {
         resolve();

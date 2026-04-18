@@ -75,6 +75,7 @@ export {
   DeployPhaseExecutionError,
   DeployPhaseNotImplementedError,
   DeployTargetNotImplementedError,
+  MissingDependencyError,
   getDeployTargetModel,
   parseDeployPhase,
   selectDeployPhases,
