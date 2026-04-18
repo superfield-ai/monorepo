@@ -248,7 +248,8 @@ async function runDemoProvision(context: DemoContext): Promise<void> {
     args: ["--version"],
     cwd: context.demoRoot,
     env: context.env,
-    installHint: "sudo apt install docker.io  (Debian/Ubuntu) or https://docs.docker.com/engine/install/",
+    installHint:
+      "sudo apt install docker.io  (Debian/Ubuntu) or https://docs.docker.com/engine/install/",
   });
   await executeStep(context, {
     phase: "provision",
@@ -257,7 +258,8 @@ async function runDemoProvision(context: DemoContext): Promise<void> {
     args: ["version"],
     cwd: context.demoRoot,
     env: context.env,
-    installHint: "curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash",
+    installHint:
+      "curl -s https://raw.githubusercontent.com/k3d-io/k3d/main/install.sh | bash",
   });
   await executeStep(context, {
     phase: "provision",
@@ -266,7 +268,8 @@ async function runDemoProvision(context: DemoContext): Promise<void> {
     args: ["version", "--client"],
     cwd: context.demoRoot,
     env: context.env,
-    installHint: "sudo apt install kubectl  (Debian/Ubuntu) or https://kubernetes.io/docs/tasks/tools/",
+    installHint:
+      "sudo apt install kubectl  (Debian/Ubuntu) or https://kubernetes.io/docs/tasks/tools/",
   });
   await executeStep(context, {
     phase: "provision",
