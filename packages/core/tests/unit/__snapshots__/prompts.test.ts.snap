@@ -250,7 +250,7 @@ Apply these rules to your work. Cite the rule ID in your commit body if you devi
 - **TEST-X-005** \`local-ci-divergence\` [test]: Running one set of commands locally and another in CI. Any divergence breaks confidence in local results.
 - **TEST-X-006** \`duplicated-quality-checks\` [test]: Re-running lint/format/build inside every suite workflow despite having a dedicated quality gate.
 
-…69 rules omitted due to budget.
+…94 rules omitted due to budget.
 
 ## Consulting the Blueprint
 
@@ -678,7 +678,7 @@ Apply these rules to your work. Cite the rule ID in your commit body if you devi
 - **TEST-X-005** \`local-ci-divergence\` [test]: Running one set of commands locally and another in CI. Any divergence breaks confidence in local results.
 - **TEST-X-006** \`duplicated-quality-checks\` [test]: Re-running lint/format/build inside every suite workflow despite having a dedicated quality gate.
 
-…69 rules omitted due to budget.
+…94 rules omitted due to budget.
 
 ## Consulting the Blueprint
 
@@ -826,7 +826,7 @@ Apply these rules to your work. Cite the rule ID in your commit body if you devi
 - **TEST-X-005** \`local-ci-divergence\` [test]: Running one set of commands locally and another in CI. Any divergence breaks confidence in local results.
 - **TEST-X-006** \`duplicated-quality-checks\` [test]: Re-running lint/format/build inside every suite workflow despite having a dedicated quality gate.
 
-…69 rules omitted due to budget.
+…94 rules omitted due to budget.
 
 ## Consulting the Blueprint
 
