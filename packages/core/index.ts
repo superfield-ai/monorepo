@@ -82,6 +82,7 @@ export {
   runDeployCommand,
   runDemoTeardown,
   DEFAULT_DEMO_PORT,
+  runGcpDeployCommand,
 } from "./commands/deploy.ts";
 export type {
   DeployPhase,
@@ -90,6 +91,8 @@ export type {
   DeployCommandOpts,
   DeployProcessStep,
   DeployProcessRunner,
+  GcpDeployCommandOpts,
+  Logger as GcpLogger,
 } from "./commands/deploy.ts";
 export { runRemoteProvision } from "./commands/remote-provision.ts";
 export type {
@@ -97,6 +100,8 @@ export type {
   RemoteProvisionResult,
   RemoteProvisionDeps,
 } from "./commands/remote-provision.ts";
+
+export { handleLoginLogout, makeDefaultLoginDeps } from "./gcp/index.js";
 
 export { runBlueprintConformance } from "./steps/blueprint-conformance.ts";
 export type {

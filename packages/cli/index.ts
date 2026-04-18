@@ -27,6 +27,12 @@ Commands:
   feature "..." Evaluate a feature request and create an issue + Plan entry
   deploy [--provision] [target]
                 Provision the demo target, then deploy it. Use --provision to run setup only.
+  deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
+                Provision and/or deploy to GCP. --provision runs infra setup only.
+  deploy gcp --login [--client-id <id>]
+                Authenticate with Google Cloud via device-code OAuth flow.
+  deploy gcp --logout
+                Delete the local GCP OAuth token and exit.
 `.trim();
 }
 

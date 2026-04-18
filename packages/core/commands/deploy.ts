@@ -3,6 +3,18 @@ import { copyFileSync, existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
+import {
+  makeDefaultAuthDeps,
+  makeDefaultHttpDeps,
+  runDoctor,
+  runProvision,
+  runGcpDeploy,
+  googleJsonRequest,
+  getGoogleCredentialInfo,
+  getGoogleAccessToken,
+} from "../gcp/index.js";
+import type { ProvisionConfig } from "../gcp/index.js";
+import type { GcpDeployConfig, GcpDeployDeps } from "../gcp/index.js";
 
 export const DEPLOY_PHASES = ["provision", "deploy"] as const;
 
@@ -551,4 +563,169 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
     setTimeout(resolve, ms);
   });
+}
+
+// ---------------------------------------------------------------------------
+// GCP deploy command
+// ---------------------------------------------------------------------------
+
+export type Logger = (msg: string) => void;
+
+export interface GcpDeployCommandOpts {
+  projectId: string;
+  region: string;
+  zone: string;
+  imageTag?: string;
+  provisionOnly: boolean;
+  logger: Logger;
+}
+
+export interface GcpDeployCommandDeps {
+  runDoctor?: typeof runDoctor;
+  runProvision?: typeof runProvision;
+  runGcpDeploy?: typeof runGcpDeploy;
+  makeDefaultAuthDeps?: typeof makeDefaultAuthDeps;
+  makeDefaultHttpDeps?: typeof makeDefaultHttpDeps;
+}
+
+const GCP_PROVISION_DEFAULTS: Omit<
+  ProvisionConfig,
+  "projectId" | "region" | "zone"
+> = {
+  networkName: "superfield-vpc",
+  subnetName: "superfield-subnet",
+  subnetCidr: "10.0.0.0/24",
+  podRangeName: "pods",
+  podCidr: "10.1.0.0/16",
+  serviceRangeName: "services",
+  serviceCidr: "10.2.0.0/16",
+  sshFirewallName: "superfield-ssh",
+  appFirewallName: "superfield-app",
+  appPort: "31415",
+  psaAddressName: "superfield-psa",
+  psaAddressCidr: "10.3.0.0/16",
+  alloydbClusterId: "superfield-db",
+  alloydbInstanceId: "superfield-db-primary",
+  alloydbPassword: process.env["ALLOYDB_PASSWORD"] ?? "changeme",
+  vmName: "superfield-vm",
+  vmMachineType: "e2-standard-4",
+  vmDiskSizeGb: 50,
+  vmStartupScript:
+    "#!/bin/bash\napt-get update && apt-get install -y docker.io",
+};
+
+export async function runGcpDeployCommand(
+  opts: GcpDeployCommandOpts,
+  deps: GcpDeployCommandDeps = {},
+): Promise<void> {
+  const log = opts.logger;
+  const _runDoctor = deps.runDoctor ?? runDoctor;
+  const _runProvision = deps.runProvision ?? runProvision;
+  const _runGcpDeploy = deps.runGcpDeploy ?? runGcpDeploy;
+  const _makeDefaultAuthDeps = deps.makeDefaultAuthDeps ?? makeDefaultAuthDeps;
+  const _makeDefaultHttpDeps = deps.makeDefaultHttpDeps ?? makeDefaultHttpDeps;
+
+  // Step 1: Create auth/http deps
+  const authDeps = _makeDefaultAuthDeps();
+  const authDepsWithToken = {
+    ...authDeps,
+    getAccessToken: () => getGoogleAccessToken(authDeps),
+  };
+  const httpDeps = _makeDefaultHttpDeps(authDepsWithToken);
+
+  // Step 2: Run doctor pre-flight checks
+  log("Running GCP pre-flight checks...");
+  const doctorResult = await _runDoctor(
+    { mode: "provision", projectId: opts.projectId },
+    { ...httpDeps, getCredentialInfo: () => getGoogleCredentialInfo(authDeps) },
+  );
+
+  if (!doctorResult.ok) {
+    const parts: string[] = [
+      `GCP pre-flight checks failed for project "${opts.projectId}".`,
+    ];
+    if (doctorResult.missingPermissions.length > 0) {
+      parts.push(
+        `Missing permissions: ${doctorResult.missingPermissions.join(", ")}`,
+      );
+    }
+    if (doctorResult.disabledServices.length > 0) {
+      parts.push(
+        `Disabled services: ${doctorResult.disabledServices.join(", ")}`,
+      );
+    }
+    throw new Error(parts.join("\n"));
+  }
+
+  log("Pre-flight checks passed.");
+
+  // Step 3: Build provision config
+  const provisionConfig: ProvisionConfig = {
+    ...GCP_PROVISION_DEFAULTS,
+    projectId: opts.projectId,
+    region: opts.region,
+    zone: opts.zone,
+  };
+
+  // Step 4: Always run provision (idempotent)
+  log("Running GCP provisioning...");
+  await _runProvision(provisionConfig, { ...httpDeps, log });
+  log("GCP provisioning complete.");
+
+  // Step 5: Return early if provision-only
+  if (opts.provisionOnly || !opts.imageTag) {
+    if (opts.provisionOnly) {
+      log("Provision-only mode: skipping deploy.");
+    }
+    return;
+  }
+
+  // Step 6: Run GCP deploy
+  log(`Deploying image tag "${opts.imageTag}"...`);
+
+  const deployConfig: GcpDeployConfig = {
+    projectId: opts.projectId,
+    region: opts.region,
+    zone: opts.zone,
+    vmName: GCP_PROVISION_DEFAULTS.vmName,
+    alloydbClusterId: GCP_PROVISION_DEFAULTS.alloydbClusterId,
+    alloydbInstanceId: GCP_PROVISION_DEFAULTS.alloydbInstanceId,
+    namespace: "default",
+    secretName: "superfield-secrets",
+    deploymentName: "superfield",
+    imageTag: opts.imageTag,
+    deployScript: "deploy.sh",
+    sshUser: "root",
+  };
+
+  const deployDeps: GcpDeployDeps = {
+    googleJsonRequest,
+    getAccessToken: httpDeps.getAccessToken,
+    fetch: httpDeps.fetch,
+    exec: async (cmd, args, execOpts) => {
+      const { spawn: _spawn } = await import("node:child_process");
+      return new Promise((resolve) => {
+        const chunks: Buffer[] = [];
+        const errChunks: Buffer[] = [];
+        const child = _spawn(cmd, args, {
+          env: execOpts?.env ?? (process.env as Record<string, string>),
+          stdio: ["inherit", "pipe", "pipe"],
+        });
+        child.stdout?.on("data", (d: Buffer) => chunks.push(d));
+        child.stderr?.on("data", (d: Buffer) => errChunks.push(d));
+        child.on("close", (code) => {
+          resolve({
+            stdout: Buffer.concat(chunks).toString(),
+            stderr: Buffer.concat(errChunks).toString(),
+            exitCode: code ?? 1,
+          });
+        });
+      });
+    },
+    log,
+    isGitHubActions: Boolean(process.env["GITHUB_ACTIONS"] === "true"),
+  };
+
+  await _runGcpDeploy(deployConfig, deployDeps);
+  log("GCP deploy complete.");
 }
