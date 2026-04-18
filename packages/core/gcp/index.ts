@@ -39,3 +39,8 @@ export { runDoctor } from "./doctor.ts";
 export { pollOperation } from "./operations.js";
 export { runProvision } from "./provision.js";
 export type { ProvisionConfig, ProvisionDeps } from "./provision.js";
+
+export { openSshTunnel, resolveSshKeyPath } from "./ssh.js";
+export type { SshTunnel, SshTunnelDeps } from "./ssh.js";
+export { runGcpDeploy } from "./deploy.js";
+export type { GcpDeployConfig, GcpDeployDeps } from "./deploy.js";
