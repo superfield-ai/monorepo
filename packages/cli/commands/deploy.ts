@@ -1,26 +1,41 @@
 import {
   runDeployCommand,
   runDemoTeardown,
-  runRemoteProvision,
   DEFAULT_DEMO_PORT,
+  runGcpDeployCommand,
+  handleLoginLogout,
+  makeDefaultLoginDeps,
 } from "@superfield/core";
 
 const USAGE = `Usage: superfield deploy [--provision] [target]
-       superfield deploy <host> --user <sudo-user> [--key <private-key-path>]`;
+       superfield deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
+       superfield deploy gcp --login [--client-id <id>]
+       superfield deploy gcp --logout`;
 
 export interface ParsedDeployArgs {
   provisionOnly: boolean;
   target?: string;
-  remoteUser?: string;
-  remoteKeyPath?: string;
+  // GCP flags
+  login?: boolean;
+  logout?: boolean;
+  gcpProject?: string;
+  gcpRegion?: string;
+  gcpZone?: string;
+  gcpImageTag?: string;
+  gcpClientId?: string;
   unknown: string[];
 }
 
 export function parseDeployArgs(args: string[]): ParsedDeployArgs {
   let provisionOnly = false;
   let target: string | undefined;
-  let remoteUser: string | undefined;
-  let remoteKeyPath: string | undefined;
+  let login: boolean | undefined;
+  let logout: boolean | undefined;
+  let gcpProject: string | undefined;
+  let gcpRegion: string | undefined;
+  let gcpZone: string | undefined;
+  let gcpImageTag: string | undefined;
+  let gcpClientId: string | undefined;
   const unknown: string[] = [];
 
   let i = 0;
@@ -28,14 +43,30 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
     const arg = args[i];
     if (arg === "--provision") {
       provisionOnly = true;
-    } else if (arg === "--user") {
-      remoteUser = args[++i];
-    } else if (arg.startsWith("--user=")) {
-      remoteUser = arg.slice("--user=".length);
-    } else if (arg === "--key") {
-      remoteKeyPath = args[++i];
-    } else if (arg.startsWith("--key=")) {
-      remoteKeyPath = arg.slice("--key=".length);
+    } else if (arg === "--login") {
+      login = true;
+    } else if (arg === "--logout") {
+      logout = true;
+    } else if (arg === "--project") {
+      gcpProject = args[++i];
+    } else if (arg.startsWith("--project=")) {
+      gcpProject = arg.slice("--project=".length);
+    } else if (arg === "--region") {
+      gcpRegion = args[++i];
+    } else if (arg.startsWith("--region=")) {
+      gcpRegion = arg.slice("--region=".length);
+    } else if (arg === "--zone") {
+      gcpZone = args[++i];
+    } else if (arg.startsWith("--zone=")) {
+      gcpZone = arg.slice("--zone=".length);
+    } else if (arg === "--image-tag") {
+      gcpImageTag = args[++i];
+    } else if (arg.startsWith("--image-tag=")) {
+      gcpImageTag = arg.slice("--image-tag=".length);
+    } else if (arg === "--client-id") {
+      gcpClientId = args[++i];
+    } else if (arg.startsWith("--client-id=")) {
+      gcpClientId = arg.slice("--client-id=".length);
     } else if (arg.startsWith("--")) {
       unknown.push(arg);
     } else if (target === undefined) {
@@ -46,7 +77,24 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
     i++;
   }
 
-  return { provisionOnly, target, remoteUser, remoteKeyPath, unknown };
+  return {
+    provisionOnly,
+    target,
+    login,
+    logout,
+    gcpProject,
+    gcpRegion,
+    gcpZone,
+    gcpImageTag,
+    gcpClientId,
+    unknown,
+  };
+}
+
+export interface DeployCommandDeps {
+  fetchPublicIp?: () => Promise<string | null>;
+  waitForExit?: () => Promise<void>;
+  runGcpDeployCommand?: typeof runGcpDeployCommand;
 }
 
 export async function deployCommand(
@@ -54,34 +102,16 @@ export async function deployCommand(
   deps: DeployCommandDeps = {},
 ): Promise<void> {
   const parsed = parseDeployArgs(args);
-  if (parsed.unknown.length > 0) {
-    console.error(USAGE);
-    process.exit(1);
+
+  // GCP target
+  if (parsed.target === "gcp") {
+    await handleGcpTarget(parsed, deps);
     return;
   }
 
-  const isRemote = parsed.target !== undefined && parsed.target !== "demo";
-
-  if (isRemote) {
-    if (!parsed.remoteUser) {
-      console.error(
-        "error: --user <sudo-user> is required for remote deployment",
-      );
-      console.error(USAGE);
-      process.exit(1);
-      return;
-    }
-    const result = await (deps.runRemoteProvision ?? runRemoteProvision)({
-      host: parsed.target!,
-      user: parsed.remoteUser,
-      ...(parsed.remoteKeyPath ? { keyPath: parsed.remoteKeyPath } : {}),
-    });
-    const line = "─".repeat(60);
-    console.log("\n==> Remote provisioning complete!");
-    console.log("\nDeploy key — add to GitHub repo → Settings → Deploy keys:");
-    console.log(line);
-    console.log(result.deployPublicKey);
-    console.log(line);
+  if (parsed.unknown.length > 0) {
+    console.error(USAGE);
+    process.exit(1);
     return;
   }
 
@@ -115,10 +145,51 @@ export async function deployCommand(
   }
 }
 
-export interface DeployCommandDeps {
-  fetchPublicIp?: () => Promise<string | null>;
-  waitForExit?: () => Promise<void>;
-  runRemoteProvision?: typeof runRemoteProvision;
+async function handleGcpTarget(
+  parsed: ParsedDeployArgs,
+  deps: DeployCommandDeps,
+): Promise<void> {
+  const loginDeps = makeDefaultLoginDeps();
+
+  // Handle --login / --logout
+  const wasHandled = await handleLoginLogout(
+    {
+      login: parsed.login,
+      logout: parsed.logout,
+      clientId: parsed.gcpClientId ?? process.env["GCP_OAUTH_CLIENT_ID"],
+    },
+    loginDeps,
+  );
+
+  if (wasHandled) {
+    // --logout exits immediately; --login continues with fresh token
+    if (parsed.logout) return;
+  }
+
+  // Validate --project
+  const projectId = parsed.gcpProject ?? process.env["GCP_PROJECT_ID"];
+  if (!projectId) {
+    console.error(
+      "error: --project <id> (or GCP_PROJECT_ID env var) is required for gcp target",
+    );
+    console.error(USAGE);
+    process.exit(1);
+    return;
+  }
+
+  const region = parsed.gcpRegion ?? "us-central1";
+  const zone = parsed.gcpZone ?? "us-central1-a";
+
+  const _runGcpDeployCommand = deps.runGcpDeployCommand ?? runGcpDeployCommand;
+
+  await _runGcpDeployCommand({
+    projectId,
+    region,
+    zone,
+    imageTag: parsed.gcpImageTag,
+    provisionOnly: parsed.provisionOnly,
+    logger: (msg) => console.log(msg),
+  });
 }
 
 async function fetchPublicIp(): Promise<string | null> {
