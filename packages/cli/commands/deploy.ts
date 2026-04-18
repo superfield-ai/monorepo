@@ -1,43 +1,52 @@
 import {
   runDeployCommand,
   runDemoTeardown,
+  runRemoteProvision,
   DEFAULT_DEMO_PORT,
 } from "@superfield/core";
 
-const USAGE = "Usage: superfield deploy [--provision] [target]";
+const USAGE = `Usage: superfield deploy [--provision] [target]
+       superfield deploy <host> --user <sudo-user> [--key <private-key-path>]`;
 
 export interface ParsedDeployArgs {
   provisionOnly: boolean;
   target?: string;
+  remoteUser?: string;
+  remoteKeyPath?: string;
   unknown: string[];
 }
 
 export function parseDeployArgs(args: string[]): ParsedDeployArgs {
   let provisionOnly = false;
   let target: string | undefined;
+  let remoteUser: string | undefined;
+  let remoteKeyPath: string | undefined;
   const unknown: string[] = [];
 
-  for (const arg of args) {
+  let i = 0;
+  while (i < args.length) {
+    const arg = args[i];
     if (arg === "--provision") {
       provisionOnly = true;
-      continue;
-    }
-    if (arg.startsWith("--")) {
+    } else if (arg === "--user") {
+      remoteUser = args[++i];
+    } else if (arg.startsWith("--user=")) {
+      remoteUser = arg.slice("--user=".length);
+    } else if (arg === "--key") {
+      remoteKeyPath = args[++i];
+    } else if (arg.startsWith("--key=")) {
+      remoteKeyPath = arg.slice("--key=".length);
+    } else if (arg.startsWith("--")) {
       unknown.push(arg);
-      continue;
-    }
-    if (target === undefined) {
+    } else if (target === undefined) {
       target = arg;
-      continue;
+    } else {
+      unknown.push(arg);
     }
-    unknown.push(arg);
+    i++;
   }
 
-  return {
-    provisionOnly,
-    target,
-    unknown,
-  };
+  return { provisionOnly, target, remoteUser, remoteKeyPath, unknown };
 }
 
 export async function deployCommand(
@@ -48,6 +57,29 @@ export async function deployCommand(
   if (parsed.unknown.length > 0) {
     console.error(USAGE);
     process.exit(1);
+    return;
+  }
+
+  const isRemote = parsed.target !== undefined && parsed.target !== "demo";
+
+  if (isRemote) {
+    if (!parsed.remoteUser) {
+      console.error("error: --user <sudo-user> is required for remote deployment");
+      console.error(USAGE);
+      process.exit(1);
+      return;
+    }
+    const result = await (deps.runRemoteProvision ?? runRemoteProvision)({
+      host: parsed.target!,
+      user: parsed.remoteUser,
+      ...(parsed.remoteKeyPath ? { keyPath: parsed.remoteKeyPath } : {}),
+    });
+    const line = "─".repeat(60);
+    console.log("\n==> Remote provisioning complete!");
+    console.log("\nDeploy key — add to GitHub repo → Settings → Deploy keys:");
+    console.log(line);
+    console.log(result.deployPublicKey);
+    console.log(line);
     return;
   }
 
@@ -84,6 +116,7 @@ export async function deployCommand(
 export interface DeployCommandDeps {
   fetchPublicIp?: () => Promise<string | null>;
   waitForExit?: () => Promise<void>;
+  runRemoteProvision?: typeof runRemoteProvision;
 }
 
 async function fetchPublicIp(): Promise<string | null> {

@@ -90,6 +90,12 @@ export type {
   DeployProcessStep,
   DeployProcessRunner,
 } from "./commands/deploy.ts";
+export { runRemoteProvision } from "./commands/remote-provision.ts";
+export type {
+  RemoteProvisionConfig,
+  RemoteProvisionResult,
+  RemoteProvisionDeps,
+} from "./commands/remote-provision.ts";
 
 export { runBlueprintConformance } from "./steps/blueprint-conformance.ts";
 export type {
