@@ -64,7 +64,9 @@ export async function deployCommand(
 
   if (isRemote) {
     if (!parsed.remoteUser) {
-      console.error("error: --user <sudo-user> is required for remote deployment");
+      console.error(
+        "error: --user <sudo-user> is required for remote deployment",
+      );
       console.error(USAGE);
       process.exit(1);
       return;
