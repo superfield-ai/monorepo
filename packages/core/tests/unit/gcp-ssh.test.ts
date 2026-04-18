@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { resolveSshKeyPath } from "../../gcp/ssh.ts";
 
 // Mock the fs module

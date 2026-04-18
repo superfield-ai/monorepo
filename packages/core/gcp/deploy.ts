@@ -5,7 +5,6 @@ import { randomUUID } from "node:crypto";
 import type { googleJsonRequest } from "./http.js";
 import type { SshTunnel } from "./ssh.js";
 import { openSshTunnel } from "./ssh.js";
-import type { ChildProcess } from "node:child_process";
 import { spawn } from "node:child_process";
 
 export interface GcpDeployConfig {
@@ -222,9 +221,9 @@ current-context: superfield
 
   const kubectlEnv: Record<string, string> = {
     ...Object.fromEntries(
-      Object.entries(process.env).filter(
-        ([, v]) => v !== undefined,
-      ) as Array<[string, string]>,
+      Object.entries(process.env).filter(([, v]) => v !== undefined) as Array<
+        [string, string]
+      >,
     ),
     KUBECONFIG: kubeconfigPath,
   };

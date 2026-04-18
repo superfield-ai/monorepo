@@ -44,7 +44,7 @@ function makeConfig(overrides: Partial<GcpDeployConfig> = {}): GcpDeployConfig {
   };
 }
 
-function makeGoogleJsonRequestMock(responses: {
+function _makeGoogleJsonRequestMock(responses: {
   vm?: object | null;
   cluster?: object | null;
   instance?: object | null;
@@ -94,47 +94,76 @@ function makeApiMock(opts: {
 
 type ExecResult = { stdout: string; stderr: string; exitCode: number };
 
-function makeExecMock(
-  overrides: Record<string, ExecResult> = {},
-) {
-  return vi.fn(
-    async (
-      cmd: string,
-      args: string[],
-    ): Promise<ExecResult> => {
-      // talosctl kubeconfig
-      if (cmd === "talosctl" && args.includes("kubeconfig")) {
-        return overrides["talosctl"] ?? { stdout: "apiVersion: v1\nkind: Config\n", stderr: "", exitCode: 0 };
-      }
+function makeExecMock(overrides: Record<string, ExecResult> = {}) {
+  return vi.fn(async (cmd: string, args: string[]): Promise<ExecResult> => {
+    // talosctl kubeconfig
+    if (cmd === "talosctl" && args.includes("kubeconfig")) {
+      return (
+        overrides["talosctl"] ?? {
+          stdout: "apiVersion: v1\nkind: Config\n",
+          stderr: "",
+          exitCode: 0,
+        }
+      );
+    }
 
-      // kubectl get namespace
-      if (cmd === "kubectl" && args.includes("get") && args.includes("namespace")) {
-        return overrides["kubectl-get-namespace"] ?? { stdout: "namespace found", stderr: "", exitCode: 0 };
-      }
+    // kubectl get namespace
+    if (
+      cmd === "kubectl" &&
+      args.includes("get") &&
+      args.includes("namespace")
+    ) {
+      return (
+        overrides["kubectl-get-namespace"] ?? {
+          stdout: "namespace found",
+          stderr: "",
+          exitCode: 0,
+        }
+      );
+    }
 
-      // kubectl get secret
-      if (cmd === "kubectl" && args.includes("get") && args.includes("secret")) {
-        return overrides["kubectl-get-secret"] ?? { stdout: "secret found", stderr: "", exitCode: 0 };
-      }
+    // kubectl get secret
+    if (cmd === "kubectl" && args.includes("get") && args.includes("secret")) {
+      return (
+        overrides["kubectl-get-secret"] ?? {
+          stdout: "secret found",
+          stderr: "",
+          exitCode: 0,
+        }
+      );
+    }
 
-      // kubectl rollout status
-      if (cmd === "kubectl" && args.includes("rollout")) {
-        return overrides["kubectl-rollout"] ?? { stdout: "deployment rolled out", stderr: "", exitCode: 0 };
-      }
+    // kubectl rollout status
+    if (cmd === "kubectl" && args.includes("rollout")) {
+      return (
+        overrides["kubectl-rollout"] ?? {
+          stdout: "deployment rolled out",
+          stderr: "",
+          exitCode: 0,
+        }
+      );
+    }
 
-      // kubectl annotate
-      if (cmd === "kubectl" && args.includes("annotate")) {
-        return overrides["kubectl-annotate"] ?? { stdout: "annotated", stderr: "", exitCode: 0 };
-      }
+    // kubectl annotate
+    if (cmd === "kubectl" && args.includes("annotate")) {
+      return (
+        overrides["kubectl-annotate"] ?? {
+          stdout: "annotated",
+          stderr: "",
+          exitCode: 0,
+        }
+      );
+    }
 
-      // deploy script
-      if (args.includes("sha-abc123") || cmd.includes("deploy.sh")) {
-        return overrides["deploy"] ?? { stdout: "deployed", stderr: "", exitCode: 0 };
-      }
+    // deploy script
+    if (args.includes("sha-abc123") || cmd.includes("deploy.sh")) {
+      return (
+        overrides["deploy"] ?? { stdout: "deployed", stderr: "", exitCode: 0 }
+      );
+    }
 
-      return { stdout: "", stderr: "", exitCode: 0 };
-    },
-  );
+    return { stdout: "", stderr: "", exitCode: 0 };
+  });
 }
 
 function makeDeps(overrides: Partial<GcpDeployDeps> = {}): GcpDeployDeps {
@@ -145,7 +174,8 @@ function makeDeps(overrides: Partial<GcpDeployDeps> = {}): GcpDeployDeps {
       instance: READY_INSTANCE,
     }) as unknown as GcpDeployDeps["googleJsonRequest"],
     getAccessToken: async () => "test-token",
-    fetch: async () => new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
+    fetch: async () =>
+      new Response(JSON.stringify({ status: "ok" }), { status: 200 }),
     exec: makeExecMock(),
     log: vi.fn(),
     isGitHubActions: false,
@@ -198,7 +228,9 @@ describe("runGcpDeploy", () => {
 
   it("throws when deploy.sh exits non-zero", async () => {
     const deps = makeDeps({
-      exec: makeExecMock({ deploy: { stdout: "", stderr: "image not found", exitCode: 1 } }),
+      exec: makeExecMock({
+        deploy: { stdout: "", stderr: "image not found", exitCode: 1 },
+      }),
     });
     await expect(runGcpDeploy(makeConfig(), deps)).rejects.toThrow(
       /Deploy script failed/,
@@ -224,9 +256,19 @@ describe("runGcpDeploy", () => {
     );
     expect(annotateCall).toBeDefined();
     const annotateArgs = annotateCall![1] as string[];
-    expect(annotateArgs.some((a) => a.includes("deploy.superfield.ai/actor=octocat"))).toBe(true);
-    expect(annotateArgs.some((a) => a.includes("deploy.superfield.ai/run-id=12345"))).toBe(true);
-    expect(annotateArgs.some((a) => a.includes("deploy.superfield.ai/image-tag=sha-abc123"))).toBe(true);
+    expect(
+      annotateArgs.some((a) =>
+        a.includes("deploy.superfield.ai/actor=octocat"),
+      ),
+    ).toBe(true);
+    expect(
+      annotateArgs.some((a) => a.includes("deploy.superfield.ai/run-id=12345")),
+    ).toBe(true);
+    expect(
+      annotateArgs.some((a) =>
+        a.includes("deploy.superfield.ai/image-tag=sha-abc123"),
+      ),
+    ).toBe(true);
   });
 
   it("GitHub Actions annotation: kubectl annotate NOT called when isGitHubActions === false", async () => {
