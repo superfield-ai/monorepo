@@ -429,8 +429,7 @@ async function runCli(
         // this var, but aliases don't propagate to child processes — so we
         // set it explicitly here. Fall back to ~/.claude if not already set.
         CLAUDE_CONFIG_DIR:
-          process.env.CLAUDE_CONFIG_DIR ??
-          `${process.env.HOME}/.claude`,
+          process.env.CLAUDE_CONFIG_DIR ?? `${process.env.HOME}/.claude`,
       },
     });
 

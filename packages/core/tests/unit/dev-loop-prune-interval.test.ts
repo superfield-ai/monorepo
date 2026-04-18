@@ -21,9 +21,7 @@ let worktrees: WorktreeManager;
 
 beforeEach(async () => {
   vi.clearAllMocks();
-  tmpRoot = await fs.mkdtemp(
-    path.join(os.tmpdir(), "superfield-prune-test-"),
-  );
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "superfield-prune-test-"));
   worktrees = new WorktreeManager({ root: tmpRoot });
 });
 
@@ -104,12 +102,7 @@ async function runOneSlot(opts: {
   });
 
   // Pre-create the worktree dir so WorktreeManager.create doesn't clone
-  const dir = worktrees.worktreePath(
-    "org",
-    "repo",
-    ISSUE_NUMBER,
-    ISSUE_SLUG,
-  );
+  const dir = worktrees.worktreePath("org", "repo", ISSUE_NUMBER, ISSUE_SLUG);
   await fs.mkdir(dir, { recursive: true });
 
   await runDevLoop({

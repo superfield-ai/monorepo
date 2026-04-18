@@ -27,7 +27,10 @@ describe("parseGitHubRemote", () => {
     const r = parseGitHubRemote(
       "git@github-lucky:superfield-ai/superfield-starter-ts",
     );
-    expect(r).toEqual({ owner: "superfield-ai", repo: "superfield-starter-ts" });
+    expect(r).toEqual({
+      owner: "superfield-ai",
+      repo: "superfield-starter-ts",
+    });
   });
 
   it("throws on non-GitHub remote", () => {
