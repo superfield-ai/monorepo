@@ -18,7 +18,8 @@ vi.mock("@superfield/core", () => ({
   DEFAULT_DEMO_PORT: 58080,
 }));
 
-let mockExit: ReturnType<typeof vi.spyOn>;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+let mockExit: any;
 
 beforeEach(() => {
   mockExit = vi
