@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { pollOperation } from "../../gcp/operations.ts";
 import type { HttpDeps } from "../../gcp/http.ts";
 
@@ -19,8 +19,9 @@ function makeDeps(fetchFn: (url: string) => Promise<Response>): HttpDeps {
 
 describe("pollOperation", () => {
   it("resolves when operation status is DONE", async () => {
-    const deps = makeDeps(async () =>
-      new Response(JSON.stringify({ status: "DONE" }), { status: 200 }),
+    const deps = makeDeps(
+      async () =>
+        new Response(JSON.stringify({ status: "DONE" }), { status: 200 }),
     );
 
     await expect(
@@ -32,14 +33,15 @@ describe("pollOperation", () => {
   });
 
   it("throws when status is DONE with error field", async () => {
-    const deps = makeDeps(async () =>
-      new Response(
-        JSON.stringify({
-          status: "DONE",
-          error: { message: "something went wrong" },
-        }),
-        { status: 200 },
-      ),
+    const deps = makeDeps(
+      async () =>
+        new Response(
+          JSON.stringify({
+            status: "DONE",
+            error: { message: "something went wrong" },
+          }),
+          { status: 200 },
+        ),
     );
 
     await expect(
@@ -51,14 +53,15 @@ describe("pollOperation", () => {
   });
 
   it("throws with JSON-stringified error when error has no message field", async () => {
-    const deps = makeDeps(async () =>
-      new Response(
-        JSON.stringify({
-          status: "DONE",
-          error: { code: 500, status: "INTERNAL" },
-        }),
-        { status: 200 },
-      ),
+    const deps = makeDeps(
+      async () =>
+        new Response(
+          JSON.stringify({
+            status: "DONE",
+            error: { code: 500, status: "INTERNAL" },
+          }),
+          { status: 200 },
+        ),
     );
 
     await expect(
@@ -70,8 +73,9 @@ describe("pollOperation", () => {
   });
 
   it("throws on timeout when operation never completes", async () => {
-    const deps = makeDeps(async () =>
-      new Response(JSON.stringify({ status: "RUNNING" }), { status: 200 }),
+    const deps = makeDeps(
+      async () =>
+        new Response(JSON.stringify({ status: "RUNNING" }), { status: 200 }),
     );
 
     await expect(
@@ -79,7 +83,9 @@ describe("pollOperation", () => {
         intervalMs: 10,
         timeoutMs: 50,
       }),
-    ).rejects.toThrow("Operation timed out: https://example.com/operations/op-slow");
+    ).rejects.toThrow(
+      "Operation timed out: https://example.com/operations/op-slow",
+    );
   });
 
   it("polls multiple times before DONE", async () => {

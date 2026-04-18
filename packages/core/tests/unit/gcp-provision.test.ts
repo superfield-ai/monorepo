@@ -30,7 +30,9 @@ const BASE_CONFIG: ProvisionConfig = {
 /** An operation response that looks "immediately DONE" when polled. */
 function doneOpResponse(kind: "selfLink" | "name", id = "op-123") {
   if (kind === "selfLink") {
-    return { selfLink: `https://www.googleapis.com/compute/v1/operations/${id}` };
+    return {
+      selfLink: `https://www.googleapis.com/compute/v1/operations/${id}`,
+    };
   }
   return { name: `operations/${id}` };
 }
@@ -69,7 +71,9 @@ function makeAllNewFetch(
             { status: 200 },
           );
         }
-        return new Response(JSON.stringify({ connections: [] }), { status: 200 });
+        return new Response(JSON.stringify({ connections: [] }), {
+          status: 200,
+        });
       }
 
       const isExisting = existingResources.some((r) => url.includes(r));
@@ -85,8 +89,9 @@ function makeAllNewFetch(
     }
 
     // POST — return an operation
-    const opKindToUse =
-      url.includes("alloydb.googleapis.com") ? "name" : opKind;
+    const opKindToUse = url.includes("alloydb.googleapis.com")
+      ? "name"
+      : opKind;
     return new Response(JSON.stringify(doneOpResponse(opKindToUse)), {
       status: 200,
     });

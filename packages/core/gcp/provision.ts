@@ -148,7 +148,9 @@ export async function runProvision(
   // ── 3. SSH Firewall rule ─────────────────────────────────────────────────────
   const sshFwUrl = `${computeBase}/projects/${projectId}/global/firewalls/${sshFirewallName}`;
   if (await exists(sshFwUrl, deps)) {
-    deps.log(`SSH firewall rule "${sshFirewallName}" already exists, skipping.`);
+    deps.log(
+      `SSH firewall rule "${sshFirewallName}" already exists, skipping.`,
+    );
   } else {
     deps.log(`Creating SSH firewall rule "${sshFirewallName}"…`);
     const op = await googleJsonRequest<OperationRef>(
@@ -173,7 +175,9 @@ export async function runProvision(
   // ── 4. App Firewall rule ─────────────────────────────────────────────────────
   const appFwUrl = `${computeBase}/projects/${projectId}/global/firewalls/${appFirewallName}`;
   if (await exists(appFwUrl, deps)) {
-    deps.log(`App firewall rule "${appFirewallName}" already exists, skipping.`);
+    deps.log(
+      `App firewall rule "${appFirewallName}" already exists, skipping.`,
+    );
   } else {
     deps.log(`Creating app firewall rule "${appFirewallName}"…`);
     const op = await googleJsonRequest<OperationRef>(
@@ -342,9 +346,7 @@ export async function runProvision(
             {
               network: networkUrl,
               subnetwork: subnetUrl,
-              accessConfigs: [
-                { type: "ONE_TO_ONE_NAT", name: "External NAT" },
-              ],
+              accessConfigs: [{ type: "ONE_TO_ONE_NAT", name: "External NAT" }],
             },
           ],
           disks: [
