@@ -11,7 +11,7 @@ import {
   type PlanIssueMetadata,
   type Plan,
 } from "../plan.ts";
-import { runSupervisedLoop } from "../supervised-loop.ts";
+import { defaultSleep } from "../retry.ts";
 import {
   buildDevelopIssuePrompt,
   buildDevScoutPrompt,
@@ -71,18 +71,16 @@ export interface DevLoopOpts {
    * (trips at 5 consecutive failures, 5min reset) is created internally.
    */
   circuit?: CircuitBreaker;
-  /** One-time startup handoff from runDevLoop to the first tick only. */
-  startupPrioritizedIssueNumbers?: number[];
-  /** One-time startup handoff from runDevLoop to the first tick only. */
-  startupReapedSessions?: number[];
-  /** Startup plan issue preloaded by runDevLoop for first tick/session scan. */
-  startupPlanIssue?: Issue;
   /** @internal Test seam — override the prune function used by runDevLoop. */
   _pruneFn?: (opts: DevLoopOpts) => Promise<PruneResult>;
-  /** @internal Test seam — override the tick function used by runDevLoop. */
-  _tickFn?: (opts: DevLoopOpts) => Promise<DevLoopTickResult>;
-  /** @internal Test seam — override the supervised loop driver. */
-  _runSupervisedLoop?: typeof runSupervisedLoop;
+  /** @internal Test seam — signal slot workers to exit cleanly. */
+  _abortSignal?: AbortSignal;
+  /** @internal Used by tickDevLoop tests to inject a pre-loaded plan issue. */
+  startupPlanIssue?: Issue;
+  /** @internal Used by tickDevLoop tests to inject prioritized issue numbers. */
+  startupPrioritizedIssueNumbers?: number[];
+  /** @internal Used by tickDevLoop tests to inject reaped session numbers. */
+  startupReapedSessions?: number[];
   /** Optional shared API state for analytics and steering. */
   apiState?: ApiState;
 }
@@ -153,12 +151,12 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
     `[dev] plan issue ready: #${startupPlan.number} ${startupPlan.title}`,
   );
   const idleMs = opts.idlePollMs ?? DEFAULT_IDLE_MS;
+  const pruneIntervalMs = opts.pruneIntervalMs ?? DEFAULT_PRUNE_INTERVAL_MS;
   const pruneFn = opts._pruneFn ?? runPrunePass;
-  const tickFn = opts._tickFn ?? tickDevLoop;
-  const supervisedLoop = opts._runSupervisedLoop ?? runSupervisedLoop;
-  // Shared circuit breaker across all slots in this loop instance
   const circuit =
     opts.circuit ?? new CircuitBreaker({ tripAt: 5, resetMs: 5 * 60 * 1000 });
+  const optsWithCircuit: DevLoopOpts = { ...opts, circuit };
+
   let startupHandoff: {
     prioritizedIssueNumbers: number[];
     reapedSessions: number[];
@@ -183,109 +181,321 @@ export async function runDevLoop(opts: DevLoopOpts): Promise<void> {
       `[error] [dev] startup prune pass failed: ${formatError(err)}`,
     );
   }
-  let firstTick = true;
-  const pruneIntervalMs = opts.pruneIntervalMs ?? DEFAULT_PRUNE_INTERVAL_MS;
-  let lastPruneAt = Date.now();
-  let prevCircuitOpen = circuit.isOpen;
-  await supervisedLoop({
-    runOnce: async () => {
-      console.log("[dev] tick start");
-      const tickStartMs = Date.now();
-      const result = await tickFn({
-        ...opts,
-        circuit,
-        startupPlanIssue: firstTick ? startupPlan : undefined,
-        startupPrioritizedIssueNumbers: firstTick
-          ? startupHandoff.prioritizedIssueNumbers
-          : undefined,
-        startupReapedSessions: firstTick
-          ? startupHandoff.reapedSessions
-          : undefined,
-      });
-      if (result.idle) {
-        if (result.reason === "no Plan issue exists") {
-          throw new FatalDevLoopError(
-            `Plan issue disappeared for ${opts.owner}/${opts.repo}. Stopping start command.`,
-          );
-        }
-        if (result.reason?.startsWith("plan has no entries")) {
-          console.error(`[error] [dev] tick idle: ${result.reason}`);
-        } else if (
-          result.reason?.startsWith("open issues are not referenced in Plan")
-        ) {
-          console.error(`[error] [dev] tick idle: ${result.reason}`);
-        } else if (result.reason === "merge gate blocked") {
-          const blockedText =
-            result.mergeGateBlocked.length > 0
-              ? result.mergeGateBlocked.map((n) => `#${n}`).join(", ")
-              : "unknown";
-          console.warn(
-            `[warn] [dev] tick idle: merge gate blocked. Waiting on: ${blockedText}`,
-          );
-        } else {
-          console.log(
-            `[dev] tick idle: ${result.reason ?? "no eligible work"}`,
-          );
-        }
-      } else {
-        const speculativeCount = result.speculativeIssues.length;
-        const blockedCount = result.mergeGateBlocked.length;
-        const elapsedS = Math.round((Date.now() - tickStartMs) / 1000);
-        const blockedPart =
-          blockedCount > 0
-            ? ` blocked=${blockedCount}(${result.mergeGateBlocked.map((n) => `#${n}`).join(",")})`
-            : " blocked=0";
-        console.log(
-          `[dev] tick: primary=#${result.primaryIssue} closed=${result.closed} speculative=${speculativeCount}${blockedPart} elapsed=${elapsedS}s`,
-        );
-      }
-      firstTick = false;
 
-      // Track circuit breaker state changes
-      const nowCircuitOpen = circuit.isOpen;
-      if (!prevCircuitOpen && nowCircuitOpen) {
+  const slotCount = Math.max(1, opts.slotCount ?? 3);
+  // Shared across slots: prevents two slots from picking the same issue.
+  const activeIssues = new Set<number>();
+  // Serialises work-selection so slots don't race to claim the same entry.
+  const selectionMutex = new SelectionMutex();
+  // Shared prune timestamp — only one slot prunes at a time.
+  const lastPruneAt = { value: Date.now() };
+  // Circuit state tracking for analytics (updated by slot 1 only).
+  const prevCircuitOpen = { value: circuit.isOpen };
+
+  await Promise.all(
+    Array.from({ length: slotCount }, (_, i) =>
+      runSlotWorker({
+        slot: i + 1,
+        opts: optsWithCircuit,
+        circuit,
+        activeIssues,
+        selectionMutex,
+        pruneFn,
+        idleMs,
+        pruneIntervalMs,
+        lastPruneAt,
+        prevCircuitOpen,
+        startupPlan,
+        startupPrioritizedIssueNumbers:
+          i === 0 ? startupHandoff.prioritizedIssueNumbers : [],
+      }),
+    ),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Slot-worker model
+// ---------------------------------------------------------------------------
+
+/**
+ * Serialises work-selection across concurrent slot workers so two slots
+ * cannot race to claim the same issue. Once a slot adds an entry to
+ * `activeIssues` inside the mutex, subsequent slots skip it.
+ */
+class SelectionMutex {
+  private chain = Promise.resolve();
+
+  run<T>(fn: () => Promise<T>): Promise<T> {
+    const result = this.chain.then(fn);
+    // Keep the chain moving even if fn throws.
+    this.chain = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    return result;
+  }
+}
+
+interface SlotWorkerCtx {
+  slot: number;
+  opts: DevLoopOpts;
+  circuit: CircuitBreaker;
+  /** Issue numbers currently being worked by some slot. */
+  activeIssues: Set<number>;
+  selectionMutex: SelectionMutex;
+  pruneFn: (opts: DevLoopOpts) => Promise<PruneResult>;
+  idleMs: number;
+  pruneIntervalMs: number;
+  /** Shared mutable ref — prevents concurrent prune runs across slots. */
+  lastPruneAt: { value: number };
+  /** Shared mutable ref — used by slot 1 to track circuit state for analytics. */
+  prevCircuitOpen: { value: boolean };
+  /** Pre-loaded plan issue used for first selection only. */
+  startupPlan: Issue;
+  /** Issue numbers from session scan used for first selection only (slot 1). */
+  startupPrioritizedIssueNumbers: number[];
+}
+
+/**
+ * Runs one slot forever: select work → run it → select again.
+ * Only re-checks for work after the current task finishes, so no unnecessary
+ * polling happens while all slots are busy.
+ */
+async function runSlotWorker(ctx: SlotWorkerCtx): Promise<void> {
+  const {
+    slot,
+    opts,
+    circuit,
+    activeIssues,
+    selectionMutex,
+    pruneFn,
+    idleMs,
+    pruneIntervalMs,
+    lastPruneAt,
+    prevCircuitOpen,
+  } = ctx;
+
+  let isFirstSelection = true;
+  let errorDelayMs = 1_000;
+  const MAX_ERROR_DELAY_MS = 30_000;
+
+  while (!opts._abortSignal?.aborted) {
+    // Track circuit state changes for analytics (slot 1 only).
+    if (slot === 1) {
+      const nowOpen = circuit.isOpen;
+      if (!prevCircuitOpen.value && nowOpen) {
         opts.apiState?.recordCircuitTripped(circuit.consecutiveFailures);
-      } else if (prevCircuitOpen && !nowCircuitOpen) {
+      } else if (prevCircuitOpen.value && !nowOpen) {
         opts.apiState?.recordCircuitReset();
       }
-      prevCircuitOpen = nowCircuitOpen;
+      prevCircuitOpen.value = nowOpen;
+    }
 
-      // Record loop tick for API analytics
-      opts.apiState?.recordLoopTick(
-        "dev",
-        Date.now() - tickStartMs,
-        result.idle ? (result.reason ?? "idle") : undefined,
+    // Select work — serialised so slots don't race to pick the same issue.
+    let work: {
+      plan: Plan;
+      entry: PlanIssueMetadata;
+      role: "primary" | "speculative";
+      blocked: number[];
+    } | null = null;
+
+    try {
+      work = await selectionMutex.run(() =>
+        selectWorkForSlot(
+          opts,
+          activeIssues,
+          isFirstSelection ? ctx.startupPlan : undefined,
+          isFirstSelection ? ctx.startupPrioritizedIssueNumbers : [],
+        ),
       );
+      isFirstSelection = false;
+      errorDelayMs = 1_000;
+    } catch (err) {
+      if (err instanceof FatalDevLoopError) throw err;
+      console.error(`[error] [dev] loop failed: ${formatError(err)}`);
+      await defaultSleep(errorDelayMs);
+      errorDelayMs = Math.min(errorDelayMs * 2, MAX_ERROR_DELAY_MS);
+      continue;
+    }
 
-      if (result.idle) {
+    if (!work) {
+      opts.apiState?.recordLoopTick("dev", 0, "idle");
+      // Only slot 1 logs idle and runs prune, to avoid duplicate output.
+      if (slot === 1) {
         console.log(`[dev] idle — next check in ${idleMs / 1000}s`);
-        // Run maintenance on idle ticks — prune stale worktrees + stale sessions
         try {
           await pruneFn(opts);
-          lastPruneAt = Date.now();
+          lastPruneAt.value = Date.now();
         } catch (err) {
           console.error(`[error] [dev] prune pass failed: ${formatError(err)}`);
         }
-      } else if (Date.now() - lastPruneAt >= pruneIntervalMs) {
-        // Wall-clock interval prune — ensures pruning even during long busy streaks
-        try {
-          await pruneFn(opts);
-        } catch (err) {
-          console.error(
-            `[error] [dev] periodic prune pass failed: ${formatError(err)}`,
-          );
-        }
-        lastPruneAt = Date.now();
       }
-      return result;
-    },
-    delayMs: (result) => (result.idle ? idleMs : 0),
-    onError: (err) => {
+      await defaultSleep(idleMs);
+      continue;
+    }
+
+    // Run the slot to completion — no re-check happens until it finishes.
+    const tickStartMs = Date.now();
+    try {
+      await runSlot(opts, work.plan, work.entry, work.role, slot);
+      errorDelayMs = 1_000;
+    } catch (err) {
+      if (err instanceof FatalDevLoopError) throw err;
       console.error(`[error] [dev] loop failed: ${formatError(err)}`);
-    },
-    stopOnError: (err) => err instanceof FatalDevLoopError,
-  });
+      await defaultSleep(errorDelayMs);
+      errorDelayMs = Math.min(errorDelayMs * 2, MAX_ERROR_DELAY_MS);
+    } finally {
+      activeIssues.delete(work.entry.number);
+    }
+
+    opts.apiState?.recordLoopTick("dev", Date.now() - tickStartMs);
+
+    // Wall-clock prune after each completed slot (slot 1 only, on interval).
+    if (slot === 1 && Date.now() - lastPruneAt.value >= pruneIntervalMs) {
+      try {
+        await pruneFn(opts);
+        lastPruneAt.value = Date.now();
+      } catch (err) {
+        console.error(
+          `[error] [dev] periodic prune pass failed: ${formatError(err)}`,
+        );
+      }
+    }
+  }
 }
+
+/**
+ * Selects the next unit of work for a slot from the plan, skipping issues
+ * already claimed by another slot. Adds the chosen entry to `activeIssues`
+ * before returning so the caller holds the claim.
+ * Returns null when no eligible work exists (idle).
+ */
+async function selectWorkForSlot(
+  opts: DevLoopOpts,
+  activeIssues: Set<number>,
+  startupPlan?: Issue,
+  startupPrioritizedIssueNumbers: number[] = [],
+): Promise<{
+  plan: Plan;
+  entry: PlanIssueMetadata;
+  role: "primary" | "speculative";
+  blocked: number[];
+} | null> {
+  const { client, owner, repo } = opts;
+
+  const planIssue =
+    startupPlan ?? (await findOpenPlanIssue(client, owner, repo));
+  if (!planIssue) return null;
+
+  const plan = parsePlan(planIssue.body ?? "");
+  const allPlanNumbers = [
+    ...plan.ciFailures.map((e) => e.number),
+    ...plan.phases.flatMap((p) => p.issues.map((e) => e.number)),
+  ];
+  devLog(
+    "trace",
+    `plan has ${plan.phases.length} phase(s), ${allPlanNumbers.length} issue(s) total`,
+  );
+  devLog("info", `prefetching ${allPlanNumbers.length} plan issue(s)...`);
+
+  const issueCache = new Map<number, Issue>();
+  await Promise.all(
+    allPlanNumbers.map(async (n) => {
+      try {
+        issueCache.set(n, await client.getIssue(owner, repo, n));
+      } catch {
+        // leave uncached — selection helpers fall back to live fetch
+      }
+    }),
+  );
+  const cachedClient = withIssueCache(client, issueCache);
+
+  // Startup: resume sessions from the pre-boot scan first.
+  if (startupPrioritizedIssueNumbers.length > 0) {
+    const startupEntry = await selectStartupPrimary(
+      cachedClient,
+      owner,
+      repo,
+      plan,
+      startupPrioritizedIssueNumbers,
+    );
+    if (startupEntry && !activeIssues.has(startupEntry.number)) {
+      const blocked = await collectMergeGateBlocked(
+        cachedClient,
+        owner,
+        repo,
+        plan,
+        startupEntry.number,
+      );
+      devLog(
+        "info",
+        `picked primary issue #${startupEntry.number} kind=${startupEntry.kind} phase=${startupEntry.phase} (startup resume)`,
+      );
+      activeIssues.add(startupEntry.number);
+      return { plan, entry: startupEntry, role: "primary", blocked };
+    }
+  }
+
+  devLog("info", "selecting primary issue...");
+  const { entry: primaryEntry, blocked } = await selectPrimary(
+    cachedClient,
+    owner,
+    repo,
+    plan,
+  );
+
+  if (primaryEntry && !activeIssues.has(primaryEntry.number)) {
+    devLog(
+      "info",
+      `picked primary issue #${primaryEntry.number} kind=${primaryEntry.kind} phase=${primaryEntry.phase}`,
+    );
+    if (blocked.length > 0) {
+      devLog(
+        "debug",
+        `current merge-gate blocked issues while picking primary: ${blocked.map((n) => `#${n}`).join(", ")}`,
+      );
+    }
+    activeIssues.add(primaryEntry.number);
+    return { plan, entry: primaryEntry, role: "primary", blocked };
+  }
+
+  // Primary is busy or unavailable — try a speculative candidate.
+  if (primaryEntry) {
+    const slotCount = Math.max(1, opts.slotCount ?? 3);
+    const candidates = await selectSpeculative(
+      cachedClient,
+      owner,
+      repo,
+      plan,
+      primaryEntry,
+      slotCount - 1,
+    );
+    for (const candidate of candidates) {
+      if (!activeIssues.has(candidate.number)) {
+        devLog(
+          "info",
+          `picked speculative issue #${candidate.number} kind=${candidate.kind}`,
+        );
+        activeIssues.add(candidate.number);
+        return { plan, entry: candidate, role: "speculative", blocked };
+      }
+    }
+    devLog("debug", "no speculative issues picked for this slot");
+  }
+
+  if (blocked.length > 0) {
+    devLog(
+      "debug",
+      `no work available — merge-gate blocked: ${blocked.map((n) => `#${n}`).join(", ")}`,
+    );
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// tickDevLoop — kept for unit tests; no longer used by runDevLoop
+// ---------------------------------------------------------------------------
 
 /** One iteration of the dev loop. Exported for testing. */
 export async function tickDevLoop(
@@ -772,15 +982,21 @@ async function executeAgentWithAudit(
     }
   }
 
-  await upsertSession(client, owner, repo, entry.number, {
-    sessionId: agentResult.sessionId,
-    role,
-    slot,
-    startedAt: existing?.session.startedAt ?? new Date().toISOString(),
-    blueprintEscalated: nextEscalated || undefined,
-    selfAuditRemediationCount: nextRemediationCount || undefined,
-    selfAuditPendingViolations: nextPendingViolations,
-  });
+  if (agentResult.isError) {
+    // Clear the session so the next tick starts a fresh agent rather than
+    // repeatedly resuming a broken session.
+    await deleteSession(client, owner, repo, entry.number);
+  } else {
+    await upsertSession(client, owner, repo, entry.number, {
+      sessionId: agentResult.sessionId,
+      role,
+      slot,
+      startedAt: existing?.session.startedAt ?? new Date().toISOString(),
+      blueprintEscalated: nextEscalated || undefined,
+      selfAuditRemediationCount: nextRemediationCount || undefined,
+      selfAuditPendingViolations: nextPendingViolations,
+    });
+  }
 
   return { proceedToMerge: !auditFailed };
 }

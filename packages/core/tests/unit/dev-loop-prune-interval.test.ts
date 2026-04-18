@@ -1,51 +1,75 @@
 /**
- * Unit tests for wall-clock prune interval in runDevLoop.
+ * Tests for prune timing in runDevLoop's slot-worker model.
  *
  * Issue #106: prune stale sessions on wall-clock interval so that pruning
- * fires even during long busy streaks (no idle ticks).
+ * fires even during long busy streaks.
+ *
+ * Strategy: run runDevLoop with one slot. The mock spawn succeeds on the
+ * first call then signals abort so the loop exits cleanly after exactly one
+ * slot completion. We then check whether the post-slot prune fired.
  */
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { DevLoopTickResult } from "../../loops/dev-loop.ts";
-import type { SupervisedLoopOpts } from "../../supervised-loop.ts";
-
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import * as fs from "node:fs/promises";
+import * as path from "node:path";
+import * as os from "node:os";
 import { runDevLoop } from "../../loops/dev-loop.ts";
+import { WorktreeManager } from "@superfield/git";
+import type { AgentResult } from "../../agent.ts";
 
-let capturedRunOnce: (() => Promise<DevLoopTickResult>) | undefined;
-const mockPruneFn = vi
-  .fn()
-  .mockResolvedValue({ prunedWorktrees: [], reapedSessions: [] });
-const mockTickFn = vi.fn<() => Promise<DevLoopTickResult>>();
-const mockRunSupervisedLoop = vi.fn(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  async (opts: SupervisedLoopOpts<any>) => {
-    capturedRunOnce = opts.runOnce;
-  },
-);
+let tmpRoot: string;
+let worktrees: WorktreeManager;
 
-beforeEach(() => {
+beforeEach(async () => {
   vi.clearAllMocks();
-  capturedRunOnce = undefined;
+  tmpRoot = await fs.mkdtemp(path.join(os.tmpdir(), "superfield-prune-test-"));
+  worktrees = new WorktreeManager({ root: tmpRoot });
 });
+
+afterEach(async () => {
+  try {
+    await fs.rm(tmpRoot, { recursive: true, force: true });
+  } catch {
+    // ignore
+  }
+});
+
+const ISSUE_NUMBER = 1;
+const ISSUE_SLUG = "feat-do-thing";
+
+const PLAN_BODY = `## Phase: Alpha
+
+Goal: Do the thing.
+Depends on phases: None.
+Scout gate: None.
+
+- #${ISSUE_NUMBER} — feat: do thing [risk: 1]
+  <!-- superfield: {"number":${ISSUE_NUMBER},"title":"feat: do thing","phase":"Alpha","kind":"feature","risk":1,"dependencies":[],"parallel_safe":false} -->
+`;
 
 function makeClient() {
   const planIssue = {
     number: 61,
     state: "open",
     title: "Plan",
-    body: "",
+    body: PLAN_BODY,
     html_url: "",
     labels: ["plan"],
   };
+  const workIssue = {
+    number: ISSUE_NUMBER,
+    state: "open",
+    title: "feat: do thing",
+    body: "## Phase\nAlpha\n\n## Motivation\nbecause\n\n## Features\n- [ ] x\n\n## Test Plan\n- [ ] y",
+    html_url: "https://github.com/org/repo/issues/1",
+    labels: [],
+  };
   return {
     listIssues: vi.fn().mockResolvedValue([planIssue]),
-    getIssue: vi.fn().mockResolvedValue({
-      number: 1,
-      state: "open",
-      title: "",
-      body: null,
-      html_url: "",
-      labels: [],
-    }),
+    getIssue: vi
+      .fn()
+      .mockImplementation(async (_o: string, _r: string, n: number) =>
+        n === 61 ? planIssue : workIssue,
+      ),
     listIssueComments: vi.fn().mockResolvedValue([]),
     deleteIssueComment: vi.fn().mockResolvedValue(undefined),
     createIssueComment: vi.fn().mockResolvedValue({ id: 1 }),
@@ -54,74 +78,68 @@ function makeClient() {
   } as any;
 }
 
-function busyResult(): DevLoopTickResult {
-  return {
-    primaryIssue: 1,
-    speculativeIssues: [],
-    mergeGateBlocked: [],
-    reapedSessions: [],
-    closed: false,
-    idle: false,
-  };
-}
+const okResult: AgentResult = {
+  sessionId: "aaaaaaaa-0000-0000-0000-000000000000",
+  output: "",
+  isError: true, // isError=true skips self-audit, so only one spawn call needed
+  costUsd: 0,
+  needsBlueprintEscalation: false,
+};
 
-function idleResult(): DevLoopTickResult {
-  return {
-    primaryIssue: null,
-    speculativeIssues: [],
-    mergeGateBlocked: [],
-    reapedSessions: [],
-    closed: false,
-    idle: true,
-    reason: "no eligible primary",
-  };
-}
+/**
+ * Runs runDevLoop with one slot. The spawn mock succeeds once then aborts
+ * the loop, so exactly one slot completion is observed before exit.
+ */
+async function runOneSlot(opts: {
+  pruneIntervalMs: number;
+  pruneFn: ReturnType<typeof vi.fn>;
+}): Promise<void> {
+  const controller = new AbortController();
 
-async function initLoop(
-  pruneIntervalMs: number | undefined,
-  tickResult: DevLoopTickResult,
-) {
-  mockTickFn.mockResolvedValue(tickResult);
+  const spawn = vi.fn().mockImplementation(async (): Promise<AgentResult> => {
+    controller.abort();
+    return okResult;
+  });
+
+  // Pre-create the worktree dir so WorktreeManager.create doesn't clone
+  const dir = worktrees.worktreePath("org", "repo", ISSUE_NUMBER, ISSUE_SLUG);
+  await fs.mkdir(dir, { recursive: true });
 
   await runDevLoop({
     client: makeClient(),
     owner: "org",
     repo: "repo",
     token: "tok",
-    pruneIntervalMs,
-    _pruneFn: mockPruneFn,
-    _tickFn: mockTickFn,
-    _runSupervisedLoop: mockRunSupervisedLoop,
+    slotCount: 1,
+    idlePollMs: 0,
+    pruneIntervalMs: opts.pruneIntervalMs,
+    _pruneFn: opts.pruneFn,
+    _abortSignal: controller.signal,
+    worktrees,
+    spawn,
   });
-  // Clear the startup prune call
-  mockPruneFn.mockClear();
-  return capturedRunOnce!;
 }
 
-describe("runDevLoop wall-clock prune interval (#106)", () => {
-  it("fires prune after interval elapses on busy ticks", async () => {
-    const runOnce = await initLoop(0, busyResult());
-    await runOnce();
-    expect(mockPruneFn).toHaveBeenCalledTimes(1);
+describe("runDevLoop prune interval (slot-worker model)", () => {
+  it("fires prune after completing a slot when interval has elapsed", async () => {
+    const pruneFn = vi
+      .fn()
+      .mockResolvedValue({ prunedWorktrees: [], reapedSessions: [] });
+
+    await runOneSlot({ pruneIntervalMs: 0, pruneFn });
+
+    // startup prune + post-slot prune (interval=0 so always fires)
+    expect(pruneFn.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it("does not fire prune on busy tick before interval elapses", async () => {
-    const runOnce = await initLoop(60_000, busyResult());
-    await runOnce();
-    expect(mockPruneFn).not.toHaveBeenCalled();
-  });
+  it("does not fire post-slot prune before interval elapses", async () => {
+    const pruneFn = vi
+      .fn()
+      .mockResolvedValue({ prunedWorktrees: [], reapedSessions: [] });
 
-  it("idle tick still fires prune immediately (existing behaviour)", async () => {
-    const runOnce = await initLoop(60_000, idleResult());
-    await runOnce();
-    expect(mockPruneFn).toHaveBeenCalledTimes(1);
-  });
+    await runOneSlot({ pruneIntervalMs: 60_000, pruneFn });
 
-  it("injectable pruneIntervalMs: 0 triggers on every busy tick", async () => {
-    const runOnce = await initLoop(0, busyResult());
-    await runOnce();
-    await runOnce();
-    await runOnce();
-    expect(mockPruneFn).toHaveBeenCalledTimes(3);
+    // Only the startup prune; post-slot interval check is skipped
+    expect(pruneFn).toHaveBeenCalledTimes(1);
   });
 });
