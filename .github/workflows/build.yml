@@ -15,7 +15,9 @@ on:
 jobs:
   typecheck:
     name: Typecheck
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: mcr.microsoft.com/devcontainers/base:bookworm
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -24,7 +26,9 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: mcr.microsoft.com/devcontainers/base:bookworm
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -33,7 +37,9 @@ jobs:
 
   format:
     name: Format
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: mcr.microsoft.com/devcontainers/base:bookworm
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -42,7 +48,9 @@ jobs:
 
   blueprint-freshness:
     name: Blueprint freshness
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: mcr.microsoft.com/devcontainers/base:bookworm
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2

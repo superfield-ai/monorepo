@@ -15,7 +15,9 @@ on:
 jobs:
   test-unit:
     name: Unit tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: mcr.microsoft.com/devcontainers/base:bookworm
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
