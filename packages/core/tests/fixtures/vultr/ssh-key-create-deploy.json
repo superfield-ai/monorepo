@@ -1,0 +1,8 @@
+{
+  "ssh_key": {
+    "id": "ssh-deploy-id",
+    "date_created": "2026-04-18T00:00:00+00:00",
+    "name": "superfield-test-deploy",
+    "ssh_key": "ssh-ed25519 AAAA-deploy-key-stub"
+  }
+}

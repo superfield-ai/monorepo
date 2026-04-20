@@ -1,0 +1,14 @@
+{
+  "database": {
+    "id": "db-xyz-789",
+    "date_created": "2026-04-18T00:00:00+00:00",
+    "plan": "vultr-dbaas-startup-cc-1-55-2",
+    "region": "ewr",
+    "database_engine": "pg",
+    "database_engine_version": "16",
+    "status": "Rebuilding",
+    "label": "superfield-test-db",
+    "tag": "superfield-env=test",
+    "tags": ["superfield-env=test"]
+  }
+}

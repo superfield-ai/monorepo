@@ -1,0 +1,17 @@
+{
+  "instance": {
+    "id": "inst-abc-123",
+    "os": "Ubuntu 24.04 LTS x64",
+    "ram": 2048,
+    "disk": 50,
+    "main_ip": "0.0.0.0",
+    "vcpu_count": 1,
+    "region": "ewr",
+    "plan": "vc2-1c-2gb",
+    "date_created": "2026-04-18T00:00:00+00:00",
+    "status": "pending",
+    "label": "superfield-test",
+    "tag": "superfield-env=test",
+    "tags": ["superfield-env=test"]
+  }
+}
