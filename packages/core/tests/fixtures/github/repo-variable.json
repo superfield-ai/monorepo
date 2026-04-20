@@ -1,0 +1,6 @@
+{
+  "name": "DEPLOY_KEY_PROD_FP",
+  "value": "sha256:abc123def456",
+  "created_at": "2026-04-18T12:00:00Z",
+  "updated_at": "2026-04-18T12:00:00Z"
+}
