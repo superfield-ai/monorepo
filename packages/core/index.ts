@@ -120,6 +120,18 @@ export type {
 } from "./commands/sync-workflows.ts";
 
 export { runRemoteProvision } from "./commands/remote-provision.ts";
+
+export {
+  deployEnv,
+  resolveTagToDigest,
+  SshKubeRunner,
+} from "./commands/deploy-env.ts";
+export type {
+  DeployEnvOptions,
+  DeployEnvResult,
+  KubeRunner,
+  KubeRunResult,
+} from "./commands/deploy-env.ts";
 export type {
   RemoteProvisionConfig,
   RemoteProvisionResult,
