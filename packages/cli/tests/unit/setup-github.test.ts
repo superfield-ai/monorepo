@@ -13,8 +13,11 @@ describe("parseSetupGithubArgs", () => {
       ]),
     ).toEqual({
       deployKey: true,
+      secrets: false,
       env: "demo",
       repo: "owner/name",
+      host: undefined,
+      databaseUrl: undefined,
       unknown: [],
     });
   });
@@ -28,8 +31,11 @@ describe("parseSetupGithubArgs", () => {
       ]),
     ).toEqual({
       deployKey: true,
+      secrets: false,
       env: "staging",
       repo: "acme/app",
+      host: undefined,
+      databaseUrl: undefined,
       unknown: [],
     });
   });
@@ -39,8 +45,11 @@ describe("parseSetupGithubArgs", () => {
       parseSetupGithubArgs(["--deploy-key", "--surprise", "--env", "demo"]),
     ).toEqual({
       deployKey: true,
+      secrets: false,
       env: "demo",
       repo: undefined,
+      host: undefined,
+      databaseUrl: undefined,
       unknown: ["--surprise"],
     });
   });
