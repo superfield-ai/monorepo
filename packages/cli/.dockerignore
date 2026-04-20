@@ -1,0 +1,4 @@
+# Only the pre-built binaries from dist/ are needed inside the build context.
+*
+!dist/superfield-linux-amd64
+!dist/superfield-linux-arm64
