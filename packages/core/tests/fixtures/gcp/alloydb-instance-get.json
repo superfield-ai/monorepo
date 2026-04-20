@@ -1,0 +1,12 @@
+{
+  "name": "projects/my-project/locations/us-central1/clusters/superfield-test-db/instances/superfield-test-db-primary",
+  "instanceType": "PRIMARY",
+  "state": "READY",
+  "ipAddress": "10.20.30.40",
+  "machineConfig": {
+    "cpuCount": 2
+  },
+  "labels": {
+    "superfield-env": "test"
+  }
+}

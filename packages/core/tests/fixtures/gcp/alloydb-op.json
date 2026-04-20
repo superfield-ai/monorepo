@@ -1,0 +1,7 @@
+{
+  "name": "projects/my-project/locations/us-central1/operations/operation-alloydb-1",
+  "metadata": {
+    "@type": "type.googleapis.com/google.cloud.alloydb.v1.OperationMetadata"
+  },
+  "done": false
+}

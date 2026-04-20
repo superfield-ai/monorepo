@@ -1,0 +1,22 @@
+{
+  "kind": "compute#instance",
+  "id": "9876543210",
+  "name": "superfield-test-vm",
+  "labels": {
+    "superfield-env": "test"
+  },
+  "status": "RUNNING",
+  "networkInterfaces": [
+    {
+      "name": "nic0",
+      "networkIP": "10.10.0.2",
+      "accessConfigs": [
+        {
+          "type": "ONE_TO_ONE_NAT",
+          "name": "External NAT",
+          "natIP": "203.0.113.42"
+        }
+      ]
+    }
+  ]
+}
