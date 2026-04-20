@@ -37,6 +37,10 @@ Commands:
   setup-github --deploy-key --env <e> --repo <owner/name>
                 Register the per-environment SSH deploy key on the application repo
                 and store the matching private key as the DEPLOY_KEY_<ENV> secret.
+  setup-github --secrets --env <e> --repo <owner/name> --host <h> --database-url <u>
+                Push per-env Actions secrets (DEPLOY_HOST, DATABASE_URL,
+                WEBHOOK_SECRET, COOKIE_SECRET) idempotently. Skips uploads
+                whose SHA-256 fingerprint matches the recorded variable.
 `.trim();
 }
 

@@ -97,10 +97,14 @@ export type {
 export {
   registerEnvDeployKey,
   sshSha256Fingerprint,
+  pushEnvSecrets,
+  sha256Fingerprint,
 } from "./commands/setup-github.ts";
 export type {
   RegisterEnvDeployKeyOptions,
   RegisterEnvDeployKeyResult,
+  PushEnvSecretsOptions,
+  PushEnvSecretsResult,
 } from "./commands/setup-github.ts";
 
 export { readMnemonic } from "./secrets/index.ts";
