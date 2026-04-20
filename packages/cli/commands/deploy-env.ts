@@ -4,6 +4,7 @@ import { deployEnv } from "@superfield/core";
 const USAGE = `Usage: superfield deploy-env --repo <owner/name> --env <e> --tag <t> --app-name <name>
                             [--workers <a,b,c>] [--health-path <p>]
                             [--namespace <ns>] [--dry-run] [--json]
+                            [--clean-room] [--db-mode <local|managed>]
 
 Environment:
   DEPLOY_HOST           SSH host of the target VM (required)
@@ -24,11 +25,18 @@ export interface ParsedDeployEnvArgs {
   namespace?: string;
   dryRun: boolean;
   json: boolean;
+  cleanRoom: boolean;
+  dbMode?: "local" | "managed";
   unknown: string[];
 }
 
 export function parseDeployEnvArgs(args: string[]): ParsedDeployEnvArgs {
-  const out: ParsedDeployEnvArgs = { dryRun: false, json: false, unknown: [] };
+  const out: ParsedDeployEnvArgs = {
+    dryRun: false,
+    json: false,
+    cleanRoom: false,
+    unknown: [],
+  };
   let i = 0;
   while (i < args.length) {
     const a = args[i]!;
@@ -50,7 +58,16 @@ export function parseDeployEnvArgs(args: string[]): ParsedDeployEnvArgs {
     else if (eq("--namespace=") !== null) out.namespace = eq("--namespace=")!;
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--json") out.json = true;
-    else out.unknown.push(a);
+    else if (a === "--clean-room") out.cleanRoom = true;
+    else if (a === "--db-mode") {
+      const v = take();
+      if (v === "local" || v === "managed") out.dbMode = v;
+      else out.unknown.push(`--db-mode=${v ?? ""}`);
+    } else if (eq("--db-mode=") !== null) {
+      const v = eq("--db-mode=")!;
+      if (v === "local" || v === "managed") out.dbMode = v;
+      else out.unknown.push(a);
+    } else out.unknown.push(a);
     i++;
   }
   return out;
@@ -122,6 +139,13 @@ export async function deployEnvCommand(args: string[]): Promise<void> {
       knownHostsPath,
       ...(process.env.DEPLOY_IMAGE_REPO ? { imageRepo: process.env.DEPLOY_IMAGE_REPO } : {}),
       dryRun: parsed.dryRun,
+      // When --clean-room is requested without an explicit --db-mode the
+      // operator's intent is unambiguous: clean-room only applies to
+      // local-mode databases, so default the mode there.
+      ...(parsed.cleanRoom ? { cleanRoom: true } : {}),
+      ...(parsed.cleanRoom || parsed.dbMode
+        ? { dbMode: parsed.dbMode ?? "local" }
+        : {}),
       onLog,
     });
     if (parsed.json) {
