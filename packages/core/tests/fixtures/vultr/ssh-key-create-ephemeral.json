@@ -1,0 +1,8 @@
+{
+  "ssh_key": {
+    "id": "ssh-ephemeral-id",
+    "date_created": "2026-04-18T00:00:00+00:00",
+    "name": "superfield-test-ephemeral",
+    "ssh_key": "ssh-ed25519 AAAA-replaced-at-runtime"
+  }
+}
