@@ -1,4 +1,9 @@
 import { renderMigrateJobManifest } from "../templates/k8s/render-migrate-job.ts";
+import {
+  renderCleanRoomPvcManifest,
+  renderSeedJobManifest,
+} from "../templates/k8s/render-seed-job.ts";
+import { renderPostgresManifest } from "../templates/k8s/render.ts";
 import { SshClient } from "../ssh/client.ts";
 import { getAuthToken } from "../github/auth.ts";
 
@@ -68,6 +73,25 @@ export interface DeployEnvOptions {
   imageRepo?: string;
   onLog?: (line: string) => void;
   dryRun?: boolean;
+  /**
+   * If true, before the normal deploy flow runs:
+   *   - reject when {@link DeployEnvOptions.dbMode} !== "local"
+   *   - provision a fresh PVC named `postgres-data-<env>-<YYYYMMDDHHMMSS>`
+   *   - re-create the postgres StatefulSet pointing at the new PVC (the
+   *     `--cascade=orphan` delete + re-apply dance is required because
+   *     `volumeClaimTemplates` is immutable in standard k8s)
+   *   - wait for the new postgres pod to become Ready
+   *   - run a one-shot seed Job (`/app seed`) and wait for Complete
+   *   - print the prior PVC name and a `kubectl delete pvc` hint at the end
+   */
+  cleanRoom?: boolean;
+  /**
+   * Required when {@link DeployEnvOptions.cleanRoom} is true.
+   * Clean-room is rejected for `managed` (RDS/CloudSQL/etc) databases.
+   */
+  dbMode?: "local" | "managed";
+  /** Test seam for clean-room timestamp generation. Default: `() => new Date()`. */
+  now?: () => Date;
   deps?: {
     ghcrFetch?: typeof fetch;
     githubFetch?: typeof fetch;
@@ -88,6 +112,15 @@ export interface DeployEnvResult {
   digest: string;
   rolledOut: string[];
   healthy: true;
+  /**
+   * Set when clean-room ran successfully. The new PVC is in use; the
+   * `preservedPvcs` were not deleted and remain bound to the (now
+   * orphaned) data on disk.
+   */
+  cleanRoom?: {
+    newPvc: string;
+    preservedPvcs: string[];
+  };
 }
 
 const HEALTH_TIMEOUT_MS = 30_000;
@@ -302,6 +335,19 @@ export async function deployEnv(
 
   log(`deploy-env starting: repo=${opts.repo} env=${env} tag=${opts.tag}`);
 
+  // ── Clean-room precondition ─────────────────────────────────────────────
+  // Reject before any network or kubectl side-effect when --clean-room is
+  // requested against a managed (RDS/CloudSQL/etc.) database. Operators must
+  // reset managed DBs out of band; clean-room is strictly for the local
+  // postgres-StatefulSet + PVC topology.
+  if (opts.cleanRoom && opts.dbMode !== "local") {
+    throw new Error(
+      `deploy-env: --clean-room is only supported when dbMode=local `
+      + `(got dbMode=${opts.dbMode ?? "<unset>"} for env=${env}). `
+      + `Reset managed databases out of band.`,
+    );
+  }
+
   // ── Step 1: resolve tag → digest ────────────────────────────────────────
   const githubToken =
     opts.deps?.githubToken
@@ -394,7 +440,137 @@ export async function deployEnv(
     }
   };
 
+  // Clean-room state captured for the result + end-of-run hint.
+  let cleanRoomState: { newPvc: string; preservedPvcs: string[] } | null = null;
+
   try {
+    // ── Step 2.5: clean-room preparation (optional) ──────────────────────
+    // The flow:
+    //   a. render + apply a fresh PVC named with a YYYYMMDDHHMMSS suffix
+    //   b. delete the existing postgres StatefulSet with --cascade=orphan
+    //      (Kubernetes forbids mutating volumeClaimTemplates in place;
+    //      deleting with orphan retains the existing pod momentarily, then
+    //      the re-applied StatefulSet adopts a fresh template pointing at
+    //      the new PVC and the pod is recreated bound to the new volume)
+    //   c. apply the postgres manifest with the new volumeClaimTemplate
+    //      name + matching pod volumes reference
+    //   d. wait for the new postgres pod to be Ready
+    //   e. render + apply the seed Job; abort on failure
+    //   The previous PVC is intentionally left in place; operators reclaim
+    //   it explicitly with `kubectl delete pvc <name>` once they no longer
+    //   want the prior dataset.
+    if (opts.cleanRoom) {
+      const nowFn = opts.now ?? (() => new Date());
+      const timestamp = formatTimestamp(nowFn());
+      const newPvcName = `postgres-data-${env}-${timestamp}`;
+      // Old PVCs the operator may want to delete after verification.
+      // We always include the unsuffixed name (the very first deploy
+      // creates it) and leave any prior timestamp-suffixed names to be
+      // surfaced by `kubectl get pvc` — we cannot enumerate them here
+      // without an extra round-trip and the operator-facing hint is the
+      // same either way.
+      const preservedPvcs = [`postgres-data-${env}`];
+      cleanRoomState = { newPvc: newPvcName, preservedPvcs };
+
+      log(`clean-room: provisioning fresh PVC ${newPvcName}`);
+      const pvcManifest = renderCleanRoomPvcManifest({
+        env,
+        pvcName: newPvcName,
+      });
+      const pvcApply = await runner.exec(
+        `kubectl apply -n ${appNamespace} -f -`,
+        { stdin: pvcManifest },
+      );
+      if (pvcApply.exitCode !== 0) {
+        throw new DeployStepError(
+          "clean-room-pvc-apply",
+          `kubectl apply (PVC) failed (exit ${pvcApply.exitCode}): `
+          + (pvcApply.stderr.trim() || pvcApply.stdout.trim()),
+        );
+      }
+
+      log(
+        `clean-room: deleting StatefulSet postgres-${env} `
+        + `with --cascade=orphan (volumeClaimTemplates is immutable)`,
+      );
+      const stsDelete = await runner.exec(
+        `kubectl delete sts -n ${appNamespace} postgres-${env} `
+        + `--cascade=orphan --ignore-not-found`,
+      );
+      if (stsDelete.exitCode !== 0) {
+        throw new DeployStepError(
+          "clean-room-sts-delete",
+          `kubectl delete sts failed (exit ${stsDelete.exitCode}): `
+          + (stsDelete.stderr.trim() || stsDelete.stdout.trim()),
+        );
+      }
+
+      log(`clean-room: re-applying postgres manifest pointing at ${newPvcName}`);
+      const postgresManifest = rewritePostgresManifestPvcName(
+        renderPostgresManifest(env),
+        env,
+        newPvcName,
+      );
+      const stsApply = await runner.exec(
+        `kubectl apply -n ${appNamespace} -f -`,
+        { stdin: postgresManifest },
+      );
+      if (stsApply.exitCode !== 0) {
+        throw new DeployStepError(
+          "clean-room-sts-apply",
+          `kubectl apply (StatefulSet) failed (exit ${stsApply.exitCode}): `
+          + (stsApply.stderr.trim() || stsApply.stdout.trim()),
+        );
+      }
+
+      log(`clean-room: waiting for postgres-${env} pod to be Ready`);
+      const pgWait = await runner.exec(
+        `kubectl wait -n ${appNamespace} `
+        + `--for=condition=Ready --timeout=${ROLLOUT_TIMEOUT} `
+        + `pod -l app=postgres,env=${env}`,
+      );
+      if (pgWait.exitCode !== 0) {
+        throw new DeployStepError(
+          "clean-room-pg-ready",
+          `postgres pod did not reach Ready: `
+          + (pgWait.stderr.trim() || pgWait.stdout.trim()),
+        );
+      }
+
+      log(`clean-room: applying db-seed Job`);
+      const seedManifest = renderSeedJobManifest({
+        env,
+        tag: digest,
+        imageRepo,
+      });
+      const seedJobName = extractJobName(seedManifest);
+      const seedApply = await runner.exec(
+        `kubectl apply -n ${appNamespace} -f -`,
+        { stdin: seedManifest },
+      );
+      if (seedApply.exitCode !== 0) {
+        throw new DeployStepError(
+          "clean-room-seed-apply",
+          `kubectl apply (seed Job) failed (exit ${seedApply.exitCode}): `
+          + (seedApply.stderr.trim() || seedApply.stdout.trim()),
+        );
+      }
+      log(`clean-room: waiting for seed Job ${seedJobName} to complete`);
+      const seedWait = await runner.exec(
+        `kubectl wait -n ${appNamespace} `
+        + `--for=condition=Complete --timeout=${ROLLOUT_TIMEOUT} `
+        + `job/${seedJobName}`,
+      );
+      if (seedWait.exitCode !== 0) {
+        throw new DeployStepError(
+          "clean-room-seed-wait",
+          `seed Job did not complete: `
+          + (seedWait.stderr.trim() || seedWait.stdout.trim()),
+        );
+      }
+      log(`clean-room: seed Job complete`);
+    }
+
     // ── Step 3: migration ────────────────────────────────────────────────
     const manifest = renderMigrateJobManifest({
       env,
@@ -474,11 +650,23 @@ export async function deployEnv(
     log(`health check passed`);
 
     await annotateOutcome("success", `deployed ${digest}`);
+    if (cleanRoomState) {
+      log(
+        `clean-room: previous PVC name(s) preserved: `
+        + cleanRoomState.preservedPvcs.join(", "),
+      );
+      log(
+        `clean-room: to reclaim, run `
+        + `kubectl delete pvc -n ${appNamespace} `
+        + cleanRoomState.preservedPvcs.join(" "),
+      );
+    }
     log(`deploy-env complete: digest=${digest}`);
     return {
       digest,
       rolledOut: [opts.appName, ...workerNames],
       healthy: true,
+      ...(cleanRoomState ? { cleanRoom: cleanRoomState } : {}),
     };
   } catch (err) {
     const stepErr = err instanceof DeployStepError ? err : null;
@@ -555,6 +743,50 @@ async function healthGate(opts: {
     await new Promise((r) => setTimeout(r, HEALTH_RETRY_INTERVAL_MS));
   }
   return false;
+}
+
+/**
+ * Format a Date as YYYYMMDDHHMMSS in UTC. Used for clean-room PVC naming so
+ * the suffix sorts lexicographically by creation order.
+ */
+function formatTimestamp(d: Date): string {
+  const pad = (n: number, w = 2) => n.toString().padStart(w, "0");
+  return (
+    `${d.getUTCFullYear()}`
+    + `${pad(d.getUTCMonth() + 1)}`
+    + `${pad(d.getUTCDate())}`
+    + `${pad(d.getUTCHours())}`
+    + `${pad(d.getUTCMinutes())}`
+    + `${pad(d.getUTCSeconds())}`
+  );
+}
+
+/**
+ * Rewrite the postgres StatefulSet manifest to point at a new PVC name.
+ *
+ * The vendored template names its volumeClaimTemplate `postgres-data-<env>`
+ * and the pod's `volumeMounts[0].name` references the same. To swap PVCs we
+ * substitute every literal occurrence of the old name with the new one. The
+ * Service document in the same manifest is unaffected because it only
+ * references the StatefulSet name.
+ *
+ * Replacement is a literal string swap rather than a YAML rewrite because
+ * the renderer's output is a deterministic stringification — the only place
+ * `postgres-data-<env>` appears as a value is in the volume references.
+ */
+function rewritePostgresManifestPvcName(
+  manifest: string,
+  env: string,
+  newName: string,
+): string {
+  const oldName = `postgres-data-${env}`;
+  // Replace exact occurrences only (avoid clobbering label values that
+  // happen to share a prefix). The renderer emits `name: postgres-data-<env>`
+  // with no quoting; values are written one per line.
+  // Negative lookahead `(?!-)` keeps us from re-rewriting an already
+  // suffixed name (e.g. `postgres-data-demo-20260418123456`).
+  const pattern = new RegExp(`\\b${oldName}(?!-)\\b`, "g");
+  return manifest.replace(pattern, newName);
 }
 
 async function randomLocalPort(): Promise<number> {
