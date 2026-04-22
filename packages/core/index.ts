@@ -109,6 +109,16 @@ export type {
 
 export { readMnemonic } from "./secrets/index.ts";
 
+export {
+  syncWorkflows,
+  substitute as substituteWorkflowPlaceholders,
+  normalizeWhitespace as normalizeWorkflowWhitespace,
+} from "./commands/sync-workflows.ts";
+export type {
+  SyncWorkflowsOptions,
+  SyncWorkflowsResult,
+} from "./commands/sync-workflows.ts";
+
 export { runRemoteProvision } from "./commands/remote-provision.ts";
 export type {
   RemoteProvisionConfig,

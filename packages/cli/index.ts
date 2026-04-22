@@ -4,6 +4,7 @@ import { planCommand } from "./commands/plan.ts";
 import { featureCommand } from "./commands/feature.ts";
 import { deployCommand, type DeployCommandDeps } from "./commands/deploy.ts";
 import { setupGithubCommand } from "./commands/setup-github.ts";
+import { syncCommand } from "./commands/sync.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -41,6 +42,10 @@ Commands:
                 Push per-env Actions secrets (DEPLOY_HOST, DATABASE_URL,
                 WEBHOOK_SECRET, COOKIE_SECRET) idempotently. Skips uploads
                 whose SHA-256 fingerprint matches the recorded variable.
+  sync --repo <owner/name> --app-name <name> [--image-repo <r>] [--deployments <a,b,c>]
+                Render vendored .github/workflows/{release,deploy,rollback}.yml
+                templates and open a PR if the rendered set differs from the
+                target repo's current files.
 `.trim();
 }
 
@@ -103,6 +108,11 @@ export async function runCLI(
 
   if (cmd === "setup-github") {
     await setupGithubCommand(args.slice(1));
+    return;
+  }
+
+  if (cmd === "sync") {
+    await syncCommand(args.slice(1));
     return;
   }
 
