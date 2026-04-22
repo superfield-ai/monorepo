@@ -9,6 +9,7 @@ import { rollbackEnvCommand } from "./commands/rollback-env.ts";
 import { setupGithubCommand } from "./commands/setup-github.ts";
 import { syncCommand } from "./commands/sync.ts";
 import { doctorCommand } from "./commands/doctor.ts";
+import { exportDbCommand } from "./commands/export-db.ts";
 import { initCommand } from "./commands/init.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
@@ -76,6 +77,10 @@ Commands:
                 Tear down all provider infrastructure for the given environment
                 and remove the associated GitHub Actions secrets. Requires
                 --yes-i-really-mean-it when env is "prod".
+  export-db --env <e> --out <path> [--repo <owner/name>] [--provider <p>]
+                Export the database for the given environment. Detects DB mode
+                from DATABASE_URL_<ENV> (local → pg_dump via SSH; managed →
+                provider snapshot API). Prints final size and SHA-256.
 `.trim();
 }
 
@@ -168,6 +173,11 @@ export async function runCLI(
 
   if (cmd === "destroy") {
     await destroyCommand(args.slice(1));
+    return;
+  }
+
+  if (cmd === "export-db") {
+    await exportDbCommand(args.slice(1));
     return;
   }
 

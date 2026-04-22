@@ -158,6 +158,20 @@ export type {
   ProvisionResult as InitProvisionResult,
 } from "./commands/init.ts";
 
+export {
+  exportDb,
+  detectDbMode,
+  detectProvider,
+} from "./commands/export-db.ts";
+export type {
+  ExportDbOptions,
+  ExportDbResult,
+  ExportDbDeps,
+  DbMode,
+  DbProvider,
+  SshClientLike,
+} from "./commands/export-db.ts";
+
 export { runBlueprintConformance } from "./steps/blueprint-conformance.ts";
 export type {
   BlueprintViolation,
