@@ -1,87 +1,51 @@
-import { describe, it, expect, vi } from "vitest";
-import { runDoctor, type DoctorDeps } from "../../commands/doctor.ts";
-import type { Config } from "@superfield/core";
+import { describe, it, expect } from "vitest";
+import { parseDoctorArgs } from "../../commands/doctor.ts";
 
-function makeDeps(overrides: Partial<DoctorDeps> = {}): DoctorDeps {
-  return {
-    loadConfig: vi.fn(),
-    saveConfig: vi.fn(),
-    prompt: vi.fn(),
-    resolveRepo: vi.fn(),
-    authenticateToken: vi.fn(),
-    log: vi.fn(),
-    error: vi.fn(),
-    ...overrides,
-  } as DoctorDeps;
-}
-
-describe("runDoctor", () => {
-  it("adds the current repository when it is missing from config", async () => {
-    const config: Config = {
-      users: [{ handle: "octocat", token: "ghp_valid" }],
-      repositories: [],
-    };
-
-    const deps = makeDeps({
-      loadConfig: vi.fn().mockResolvedValue(config),
-      resolveRepo: vi
-        .fn()
-        .mockResolvedValue({ owner: "my-org", repo: "my-repo" }),
-      authenticateToken: vi.fn().mockResolvedValue("octocat"),
-      prompt: vi.fn().mockResolvedValue(""),
-      saveConfig: vi.fn().mockResolvedValue(undefined),
-    });
-
-    const report = await runDoctor("/tmp/my-repo", deps);
-
-    expect(report).toEqual({ dirty: true, unresolved: false });
-    expect(deps.saveConfig).toHaveBeenCalledTimes(1);
-    expect(config.repositories).toEqual([
-      { owner: "my-org", repo: "my-repo", assignedUser: "octocat" },
+describe("parseDoctorArgs", () => {
+  it("parses --env and --repo flags", () => {
+    const result = parseDoctorArgs([
+      "--env",
+      "staging",
+      "--repo",
+      "my-org/my-repo",
     ]);
+    expect(result.env).toBe("staging");
+    expect(result.repo).toBe("my-org/my-repo");
+    expect(result.json).toBe(false);
+    expect(result.unknown).toEqual([]);
   });
 
-  it("renames a configured user when the token authenticates as a different login", async () => {
-    const config: Config = {
-      users: [{ handle: "octocat", token: "ghp_old" }],
-      repositories: [],
-    };
-
-    const deps = makeDeps({
-      loadConfig: vi.fn().mockResolvedValue(config),
-      authenticateToken: vi.fn().mockImplementation(async (token: string) => {
-        if (token === "ghp_old") return "alice";
-        return null;
-      }),
-      saveConfig: vi.fn().mockResolvedValue(undefined),
-    });
-
-    const report = await runDoctor(undefined, deps);
-
-    expect(report).toEqual({ dirty: true, unresolved: false });
-    expect(config.users).toEqual([{ handle: "alice", token: "ghp_old" }]);
-    expect(deps.saveConfig).toHaveBeenCalledTimes(1);
+  it("parses --env=value form", () => {
+    const result = parseDoctorArgs(["--env=prod", "--repo=org/repo"]);
+    expect(result.env).toBe("prod");
+    expect(result.repo).toBe("org/repo");
   });
 
-  it("marks invalid auth as unresolved and points users back to gh-login", async () => {
-    const config: Config = {
-      users: [{ handle: "octocat", token: "ghp_old" }],
-      repositories: [],
-    };
+  it("parses --json flag", () => {
+    const result = parseDoctorArgs([
+      "--env",
+      "demo",
+      "--repo",
+      "a/b",
+      "--json",
+    ]);
+    expect(result.json).toBe(true);
+  });
 
-    const deps = makeDeps({
-      loadConfig: vi.fn().mockResolvedValue(config),
-      authenticateToken: vi.fn().mockResolvedValue(null),
-      saveConfig: vi.fn().mockResolvedValue(undefined),
-    });
+  it("collects unknown flags", () => {
+    const result = parseDoctorArgs([
+      "--env",
+      "demo",
+      "--repo",
+      "a/b",
+      "--unknown",
+    ]);
+    expect(result.unknown).toEqual(["--unknown"]);
+  });
 
-    const report = await runDoctor(undefined, deps);
-
-    expect(report).toEqual({ dirty: false, unresolved: true });
-    expect(config.users).toEqual([{ handle: "octocat", token: "ghp_old" }]);
-    expect(deps.saveConfig).not.toHaveBeenCalled();
-    expect(deps.error).toHaveBeenCalledWith(
-      "  Run `superfield github add` to refresh the GitHub App authorization.",
-    );
+  it("returns undefined for missing required flags", () => {
+    const result = parseDoctorArgs([]);
+    expect(result.env).toBeUndefined();
+    expect(result.repo).toBeUndefined();
   });
 });

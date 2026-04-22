@@ -7,6 +7,7 @@ import { deployEnvCommand } from "./commands/deploy-env.ts";
 import { rollbackEnvCommand } from "./commands/rollback-env.ts";
 import { setupGithubCommand } from "./commands/setup-github.ts";
 import { syncCommand } from "./commands/sync.ts";
+import { doctorCommand } from "./commands/doctor.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -60,6 +61,10 @@ Commands:
                 provisioned VM. Reads DEPLOY_HOST and DEPLOY_KEY (or
                 DEPLOY_KEY_FILE) from the environment. Exits non-zero on
                 health-check failure without rolling forward.
+  doctor --env <e> --repo <owner/name> [--json]
+                Run preflight checks: gh-auth, ghcr-pull, secrets-present,
+                secret-fingerprints, ssh-reachable, k3s-healthy, db-reachable.
+                Exits 0 if all pass, 1 if any fail.
 `.trim();
 }
 
@@ -137,6 +142,11 @@ export async function runCLI(
 
   if (cmd === "rollback-env") {
     await rollbackEnvCommand(args.slice(1));
+    return;
+  }
+
+  if (cmd === "doctor") {
+    await doctorCommand(args.slice(1));
     return;
   }
 
