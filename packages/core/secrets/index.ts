@@ -1,8 +1,4 @@
-import {
-  createPrivateKey,
-  createPublicKey,
-  hkdfSync,
-} from "node:crypto";
+import { createPrivateKey, createPublicKey, hkdfSync } from "node:crypto";
 import { mnemonicToSeedSync, validateMnemonic } from "@scure/bip39";
 import { wordlist as englishWordlist } from "@scure/bip39/wordlists/english";
 
@@ -219,10 +215,7 @@ function formatOpenSshEd25519(spkiDer: Buffer): string {
   // SPKI for Ed25519 is a fixed 12-byte prefix + 32-byte raw key.
   const raw = spkiDer.subarray(spkiDer.length - 32);
   const algo = Buffer.from("ssh-ed25519", "utf8");
-  const payload = Buffer.concat([
-    sshString(algo),
-    sshString(raw),
-  ]);
+  const payload = Buffer.concat([sshString(algo), sshString(raw)]);
   return `ssh-ed25519 ${payload.toString("base64")}`;
 }
 

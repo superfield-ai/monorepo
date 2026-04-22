@@ -70,9 +70,9 @@ describe("namespace enforcement", () => {
 
   it("deriveEd25519Key throws when purpose contains a slash", () => {
     const m = Buffer.from(TEST_MNEMONIC);
-    expect(() =>
-      deriveEd25519Key(m, "prod", "../v2/ssh-deploy-key"),
-    ).toThrow("namespace must be versioned (v1/...)");
+    expect(() => deriveEd25519Key(m, "prod", "../v2/ssh-deploy-key")).toThrow(
+      "namespace must be versioned (v1/...)",
+    );
   });
 
   it("deriveHmacToken throws when env is empty", () => {
@@ -102,7 +102,12 @@ describe("known-answer vectors", () => {
   it("derivePassword returns a 64-character hex string matching the vector", () => {
     const m = Buffer.from(TEST_MNEMONIC);
     const { password } = VECTORS;
-    const out = derivePassword(m, password.env, password.purpose, password.length);
+    const out = derivePassword(
+      m,
+      password.env,
+      password.purpose,
+      password.length,
+    );
     expect(out).toMatch(/^[0-9a-f]{64}$/);
     expect(out).toHaveLength(64);
     expect(out).toBe(password.hex);
@@ -189,10 +194,7 @@ describe("mnemonic never leaks", () => {
     fsSync.mkdirSync(tmp);
 
     const driverPath = path.join(sandbox, "driver.mjs");
-    const modulePath = path.resolve(
-      __dirname,
-      "../../../secrets/index.ts",
-    );
+    const modulePath = path.resolve(__dirname, "../../../secrets/index.ts");
     fsSync.writeFileSync(
       driverPath,
       `import { deriveEd25519Key, derivePassword, deriveHmacToken } from ${JSON.stringify(
@@ -205,19 +207,15 @@ m = Buffer.from(M); deriveHmacToken(m, "staging", "webhook", 32);
 `,
     );
 
-    const result = spawnSync(
-      process.execPath,
-      ["--bun", "run", driverPath],
-      {
-        env: {
-          PATH: process.env.PATH,
-          HOME: home,
-          TMPDIR: tmp,
-          SUPERFIELD_TEST_MNEMONIC: TEST_MNEMONIC,
-        },
-        encoding: "utf8",
+    const result = spawnSync(process.execPath, ["--bun", "run", driverPath], {
+      env: {
+        PATH: process.env.PATH,
+        HOME: home,
+        TMPDIR: tmp,
+        SUPERFIELD_TEST_MNEMONIC: TEST_MNEMONIC,
       },
-    );
+      encoding: "utf8",
+    });
 
     expect(result.status).toBe(0);
     expect(result.stdout).not.toContain(TEST_MNEMONIC);
