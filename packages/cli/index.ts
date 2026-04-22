@@ -2,7 +2,7 @@ import { githubCommand } from "./commands/github.ts";
 import { startCommand, type StartLoop } from "./commands/start.ts";
 import { planCommand } from "./commands/plan.ts";
 import { featureCommand } from "./commands/feature.ts";
-import { deployCommand } from "./commands/deploy.ts";
+import { deployCommand, type DeployCommandDeps } from "./commands/deploy.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -36,7 +36,14 @@ Commands:
 `.trim();
 }
 
-export async function runCLI(args: string[]): Promise<void> {
+export interface RunCLIDeps {
+  deployCommandDeps?: DeployCommandDeps;
+}
+
+export async function runCLI(
+  args: string[],
+  deps: RunCLIDeps = {},
+): Promise<void> {
   const [cmd, sub, third] = args;
 
   if (cmd === "--help" || cmd === "-h" || cmd === "help") {
@@ -82,7 +89,7 @@ export async function runCLI(args: string[]): Promise<void> {
   }
 
   if (cmd === "deploy") {
-    await deployCommand(args.slice(1));
+    await deployCommand(args.slice(1), deps.deployCommandDeps);
     return;
   }
 

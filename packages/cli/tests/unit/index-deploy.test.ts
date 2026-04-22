@@ -37,44 +37,35 @@ describe("runCLI deploy", () => {
   });
 
   it("passes the default deploy flow through to core", async () => {
-    // Verify that a no-args `deploy` call reaches runDeployCommand with
-    // provisionOnly: false. We inject SIGINT so the subsequent waitForSigint
-    // resolves without relying on an actual signal from outside.
-    let sigintListener: (() => void) | undefined;
-    const origOnce = process.once.bind(process);
-    vi.spyOn(process, "once").mockImplementation(
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (event: any, listener: any) => {
-        if (event === "SIGINT") {
-          sigintListener = listener;
-          return process;
-        }
-        return origOnce(event, listener);
-      },
-    );
+    mocks.runDeployCommand.mockResolvedValue(undefined);
+    mocks.runDemoTeardown.mockResolvedValue(undefined);
 
-    vi.spyOn(process, "exit").mockImplementation((() => undefined) as never);
+    vi.doMock("@superfield/core", async (importOriginal) => {
+      const actual = await importOriginal<typeof import("@superfield/core")>();
+      return {
+        ...actual,
+        runDeployCommand: mocks.runDeployCommand,
+        runDemoTeardown: mocks.runDemoTeardown,
+        DEFAULT_DEMO_PORT: 58080,
+      };
+    });
 
     const { runCLI } = await import("../../index.ts");
 
-    // Run in background, then resolve waitForSigint by calling the captured
-    // listener directly once it has been registered.
-    const runPromise = runCLI(["deploy"]).catch(() => undefined);
+    // Inject no-op deps so the test doesn't hang waiting for SIGINT or a
+    // live network call. process.exit is called after teardown, so mock it.
+    const mockExit = vi
+      .spyOn(process, "exit")
+      .mockImplementation((() => undefined) as never);
 
-    // Poll until waitForSigint's listener is registered, then fire it.
-    await new Promise<void>((resolve) => {
-      const check = () => {
-        if (sigintListener) {
-          sigintListener();
-          resolve();
-        } else {
-          setTimeout(check, 10);
-        }
-      };
-      setTimeout(check, 10);
+    await runCLI(["deploy"], {
+      deployCommandDeps: {
+        fetchPublicIp: async () => null,
+        waitForExit: async () => undefined,
+      },
     });
 
-    await runPromise;
+    mockExit.mockRestore();
 
     expect(mocks.runDeployCommand).toHaveBeenCalledWith({
       provisionOnly: false,
