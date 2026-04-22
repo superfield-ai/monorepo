@@ -146,6 +146,15 @@ export type {
 
 export { handleLoginLogout, makeDefaultLoginDeps } from "./gcp/index.js";
 
+export { init } from "./commands/init.ts";
+export type {
+  InitOpts,
+  InitResult,
+  InitDeps,
+  InitProvider,
+  ProvisionResult as InitProvisionResult,
+} from "./commands/init.ts";
+
 export { runBlueprintConformance } from "./steps/blueprint-conformance.ts";
 export type {
   BlueprintViolation,

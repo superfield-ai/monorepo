@@ -8,6 +8,7 @@ import { rollbackEnvCommand } from "./commands/rollback-env.ts";
 import { setupGithubCommand } from "./commands/setup-github.ts";
 import { syncCommand } from "./commands/sync.ts";
 import { doctorCommand } from "./commands/doctor.ts";
+import { initCommand } from "./commands/init.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -65,6 +66,10 @@ Commands:
                 Run preflight checks: gh-auth, ghcr-pull, secrets-present,
                 secret-fingerprints, ssh-reachable, k3s-healthy, db-reachable.
                 Exits 0 if all pass, 1 if any fail.
+  init --env <e> --provider <gcp|aws|digitalocean|vultr> --repo <owner/name> --image-tag <t>
+       [--managed-db] [--region <r>] [--from-step <n>]
+                One-shot environment initialisation: provision, bootstrap,
+                deploy-key, secrets, sync, and deploy in sequence.
 `.trim();
 }
 
@@ -147,6 +152,11 @@ export async function runCLI(
 
   if (cmd === "doctor") {
     await doctorCommand(args.slice(1));
+    return;
+  }
+
+  if (cmd === "init") {
+    await initCommand(args.slice(1));
     return;
   }
 
