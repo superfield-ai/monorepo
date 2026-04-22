@@ -19,9 +19,14 @@ export {
   getRepoPublicKey,
   sealedBoxEncrypt,
   putRepoSecret,
+  deleteRepoSecret,
 } from "./secrets.ts";
 
-export { getRepoVariable, putRepoVariable } from "./variables.ts";
+export {
+  getRepoVariable,
+  putRepoVariable,
+  deleteRepoVariable,
+} from "./variables.ts";
 
 export { openPullRequest } from "./pull-request.ts";
 export type { OpenPullRequestOptions } from "./pull-request.ts";

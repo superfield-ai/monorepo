@@ -119,6 +119,9 @@ export type {
   SyncWorkflowsResult,
 } from "./commands/sync-workflows.ts";
 
+export { destroy } from "./commands/destroy.ts";
+export type { DestroyOpts, DestroyDeps, Provider } from "./commands/destroy.ts";
+
 export { runRemoteProvision } from "./commands/remote-provision.ts";
 
 export {
