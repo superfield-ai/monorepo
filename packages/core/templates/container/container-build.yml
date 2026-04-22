@@ -1,0 +1,73 @@
+# GitHub Actions template: compile Bun binaries and publish a multi-arch
+# distroless container image to GHCR on tag pushes.
+#
+# Replace `<name>` placeholders with the binary name and adjust the
+# `bun run --cwd` path to the binary package.
+
+name: Container build
+
+on:
+  push:
+    branches: [main]
+    tags:
+      - "v*"
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  build:
+    name: Compile and build container image
+    runs-on: ubuntu-latest
+    env:
+      IMAGE: ghcr.io/${{ github.repository_owner }}/<name>
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+
+      - run: bun install --frozen-lockfile
+
+      - name: Compile native binaries (amd64 + arm64)
+        run: bun run --cwd packages/<name> build:compile:all
+
+      - name: Smoke test compiled binary
+        run: ./packages/<name>/dist/<name>-linux-amd64 --help | head -n 5
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        if: github.event_name == 'push' && github.ref_type == 'tag'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Compute image tags
+        id: tags
+        run: |
+          tags="${IMAGE}:sha-${GITHUB_SHA}"
+          if [ "${GITHUB_REF_TYPE}" = "tag" ]; then
+            tags="${tags},${IMAGE}:${GITHUB_REF_NAME}"
+          fi
+          echo "tags=${tags}" >> "$GITHUB_OUTPUT"
+
+      - name: Build (and push on tag) multi-arch image
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/<name>
+          file: packages/<name>/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name == 'push' && github.ref_type == 'tag' }}
+          tags: ${{ steps.tags.outputs.tags }}

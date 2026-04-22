@@ -1,0 +1,4 @@
+# Only the pre-built binaries are needed inside the build context.
+*
+!dist/<name>-linux-amd64
+!dist/<name>-linux-arm64
