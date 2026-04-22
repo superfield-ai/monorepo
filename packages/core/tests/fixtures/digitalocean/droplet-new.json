@@ -1,0 +1,9 @@
+{
+  "droplet": {
+    "id": 100001,
+    "name": "superfield-test",
+    "status": "new",
+    "tags": ["superfield-env=test"],
+    "networks": { "v4": [] }
+  }
+}

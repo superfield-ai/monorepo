@@ -1,0 +1,12 @@
+{
+  "database": {
+    "id": "db-uuid-0001",
+    "name": "superfield-test",
+    "status": "online",
+    "tags": ["superfield-env=test"],
+    "connection": {
+      "host": "db-uuid-0001.db.ondigitalocean.com",
+      "port": 25060
+    }
+  }
+}

@@ -1,0 +1,8 @@
+{
+  "database": {
+    "id": "db-uuid-0001",
+    "name": "superfield-test",
+    "status": "creating",
+    "tags": ["superfield-env=test"]
+  }
+}

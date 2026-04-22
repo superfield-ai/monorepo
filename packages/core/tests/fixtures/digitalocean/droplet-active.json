@@ -1,0 +1,14 @@
+{
+  "droplet": {
+    "id": 100001,
+    "name": "superfield-test",
+    "status": "active",
+    "tags": ["superfield-env=test"],
+    "networks": {
+      "v4": [
+        { "ip_address": "10.0.0.1", "type": "private" },
+        { "ip_address": "203.0.113.42", "type": "public" }
+      ]
+    }
+  }
+}
