@@ -3,6 +3,7 @@ import { startCommand, type StartLoop } from "./commands/start.ts";
 import { planCommand } from "./commands/plan.ts";
 import { featureCommand } from "./commands/feature.ts";
 import { deployCommand, type DeployCommandDeps } from "./commands/deploy.ts";
+import { deployEnvCommand } from "./commands/deploy-env.ts";
 import { setupGithubCommand } from "./commands/setup-github.ts";
 import { syncCommand } from "./commands/sync.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
@@ -46,6 +47,11 @@ Commands:
                 Render vendored .github/workflows/{release,deploy,rollback}.yml
                 templates and open a PR if the rendered set differs from the
                 target repo's current files.
+  deploy-env --repo <owner/name> --env <e> --tag <t> --app-name <name>
+             [--workers <a,b,c>] [--health-path <p>] [--namespace <ns>]
+             [--dry-run] [--json]
+                Drive a rolling update on a provisioned VM. Reads DEPLOY_HOST
+                and DEPLOY_KEY (or DEPLOY_KEY_FILE) from the environment.
 `.trim();
 }
 
@@ -113,6 +119,11 @@ export async function runCLI(
 
   if (cmd === "sync") {
     await syncCommand(args.slice(1));
+    return;
+  }
+
+  if (cmd === "deploy-env") {
+    await deployEnvCommand(args.slice(1));
     return;
   }
 
