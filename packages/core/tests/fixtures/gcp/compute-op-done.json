@@ -1,0 +1,7 @@
+{
+  "kind": "compute#operation",
+  "id": "1234567890",
+  "name": "operation-1234-abcd",
+  "status": "DONE",
+  "selfLink": "https://www.googleapis.com/compute/v1/projects/my-project/global/operations/operation-1234-abcd"
+}
