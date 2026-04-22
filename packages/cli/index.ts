@@ -4,6 +4,7 @@ import { planCommand } from "./commands/plan.ts";
 import { featureCommand } from "./commands/feature.ts";
 import { deployCommand, type DeployCommandDeps } from "./commands/deploy.ts";
 import { deployEnvCommand } from "./commands/deploy-env.ts";
+import { rollbackEnvCommand } from "./commands/rollback-env.ts";
 import { setupGithubCommand } from "./commands/setup-github.ts";
 import { syncCommand } from "./commands/sync.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
@@ -52,6 +53,13 @@ Commands:
              [--dry-run] [--json]
                 Drive a rolling update on a provisioned VM. Reads DEPLOY_HOST
                 and DEPLOY_KEY (or DEPLOY_KEY_FILE) from the environment.
+  rollback-env --repo <owner/name> --env <e> --app-name <name>
+               [--workers <a,b,c>] [--health-path <p>] [--namespace <ns>]
+               [--json]
+                Roll each deployment back to its previous revision on a
+                provisioned VM. Reads DEPLOY_HOST and DEPLOY_KEY (or
+                DEPLOY_KEY_FILE) from the environment. Exits non-zero on
+                health-check failure without rolling forward.
 `.trim();
 }
 
@@ -124,6 +132,11 @@ export async function runCLI(
 
   if (cmd === "deploy-env") {
     await deployEnvCommand(args.slice(1));
+    return;
+  }
+
+  if (cmd === "rollback-env") {
+    await rollbackEnvCommand(args.slice(1));
     return;
   }
 

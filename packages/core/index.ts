@@ -132,6 +132,12 @@ export type {
   KubeRunner,
   KubeRunResult,
 } from "./commands/deploy-env.ts";
+
+export { rollbackEnv } from "./commands/rollback-env.ts";
+export type {
+  RollbackEnvOptions,
+  RollbackEnvResult,
+} from "./commands/rollback-env.ts";
 export type {
   RemoteProvisionConfig,
   RemoteProvisionResult,
