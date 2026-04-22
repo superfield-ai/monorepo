@@ -3,13 +3,13 @@ name: test-bootstrap
 on:
   pull_request:
     paths:
-      - 'packages/core/bootstrap/**'
-      - '.github/workflows/test-bootstrap.yml'
+      - "packages/core/bootstrap/**"
+      - ".github/workflows/test-bootstrap.yml"
   push:
     branches: [main]
     paths:
-      - 'packages/core/bootstrap/**'
-      - '.github/workflows/test-bootstrap.yml'
+      - "packages/core/bootstrap/**"
+      - ".github/workflows/test-bootstrap.yml"
 
 jobs:
   posix-syntax:
@@ -78,7 +78,7 @@ jobs:
 
       - name: Run install.sh (first invocation)
         env:
-          TEST_KEY: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci'
+          TEST_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci"
         run: docker exec -e TEST_KEY="$TEST_KEY" bootstrap-test sh -c 'sh /root/install.sh "$TEST_KEY"'
 
       - name: Assert kubectl get nodes Ready
@@ -131,7 +131,7 @@ jobs:
 
       - name: Assert authorized_keys exact
         env:
-          TEST_KEY: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci'
+          TEST_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci"
         run: |
           set -eu
           actual=$(docker exec bootstrap-test cat /root/.ssh/authorized_keys)
@@ -151,7 +151,7 @@ jobs:
 
       - name: Assert re-run is a no-op
         env:
-          TEST_KEY: 'ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci'
+          TEST_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci"
         run: |
           set -eu
           first=$(docker exec bootstrap-test awk -F= '$1=="timestamp"{print $2}' /etc/superfield/bootstrap.done)
