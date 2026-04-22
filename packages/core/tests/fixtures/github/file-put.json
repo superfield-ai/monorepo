@@ -1,0 +1,12 @@
+{
+  "content": {
+    "name": "deploy.yml",
+    "path": ".github/workflows/deploy.yml",
+    "sha": "filesha123",
+    "type": "file"
+  },
+  "commit": {
+    "sha": "commitsha123",
+    "message": "feat: add deploy workflow"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "id": 1234567,
+  "key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIExampleDeployKeyMaterial1",
+  "url": "https://api.github.com/repos/test-org/test-repo/keys/1234567",
+  "title": "deploy-key-prod",
+  "verified": true,
+  "created_at": "2026-04-18T12:00:00Z",
+  "read_only": true
+}

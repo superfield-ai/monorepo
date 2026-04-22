@@ -8,10 +8,13 @@
   },
   "dependencies": {
     "@scure/bip39": "1.4.0",
-    "isomorphic-git": "^1.37.5"
+    "isomorphic-git": "^1.37.5",
+    "libsodium-wrappers": "^0.8.4"
   },
   "devDependencies": {
+    "@types/libsodium-wrappers": "^0.8.2",
     "@types/node": "^20.0.0",
+    "msw": "^2.0.0",
     "yaml": "^2.8.3"
   }
 }
