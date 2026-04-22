@@ -3,6 +3,7 @@ import { startCommand, type StartLoop } from "./commands/start.ts";
 import { planCommand } from "./commands/plan.ts";
 import { featureCommand } from "./commands/feature.ts";
 import { deployCommand, type DeployCommandDeps } from "./commands/deploy.ts";
+import { destroyCommand } from "./commands/destroy.ts";
 import { deployEnvCommand } from "./commands/deploy-env.ts";
 import { rollbackEnvCommand } from "./commands/rollback-env.ts";
 import { setupGithubCommand } from "./commands/setup-github.ts";
@@ -70,6 +71,11 @@ Commands:
        [--managed-db] [--region <r>] [--from-step <n>]
                 One-shot environment initialisation: provision, bootstrap,
                 deploy-key, secrets, sync, and deploy in sequence.
+  destroy --env <e> --provider <gcp|aws|digitalocean|vultr> --repo <owner/name>
+          [--yes] [--yes-i-really-mean-it]
+                Tear down all provider infrastructure for the given environment
+                and remove the associated GitHub Actions secrets. Requires
+                --yes-i-really-mean-it when env is "prod".
 `.trim();
 }
 
@@ -157,6 +163,11 @@ export async function runCLI(
 
   if (cmd === "init") {
     await initCommand(args.slice(1));
+    return;
+  }
+
+  if (cmd === "destroy") {
+    await destroyCommand(args.slice(1));
     return;
   }
 

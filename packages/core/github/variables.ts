@@ -1,6 +1,29 @@
 import { GitHubApiError, githubRequest } from "./http.ts";
 import type { GitHubHttpDeps } from "./types.ts";
 
+/**
+ * Delete a repository Actions variable. If the variable does not exist (404),
+ * the call is silently ignored so callers are idempotent.
+ */
+export async function deleteRepoVariable(
+  repo: string,
+  name: string,
+  deps: GitHubHttpDeps,
+): Promise<void> {
+  try {
+    await githubRequest<null>(
+      `/repos/${repo}/actions/variables/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+      deps,
+    );
+  } catch (e) {
+    if (e instanceof GitHubApiError && e.status === 404) {
+      return;
+    }
+    throw e;
+  }
+}
+
 interface RepoVariable {
   name: string;
   value: string;

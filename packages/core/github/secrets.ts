@@ -1,7 +1,7 @@
 import sodium from "libsodium-wrappers";
 
-import { githubRequest } from "./http.ts";
-import type { GitHubHttpDeps, RepoPublicKey } from "./types.ts";
+import { GitHubApiError, githubRequest } from "./http.ts";
+import type { GitHubHttpDeps } from "./types.ts";
 
 let sodiumReady: Promise<void> | null = null;
 
@@ -15,8 +15,8 @@ async function ensureSodium(): Promise<void> {
 export async function getRepoPublicKey(
   repo: string,
   deps: GitHubHttpDeps,
-): Promise<RepoPublicKey> {
-  const { data } = await githubRequest<RepoPublicKey>(
+): Promise<{ key_id: string; key: string }> {
+  const { data } = await githubRequest<{ key_id: string; key: string }>(
     `/repos/${repo}/actions/secrets/public-key`,
     { method: "GET" },
     deps,
@@ -60,4 +60,27 @@ export async function putRepoSecret(
     },
     deps,
   );
+}
+
+/**
+ * Delete a repository Actions secret. If the secret does not exist (404),
+ * the call is silently ignored so callers are idempotent.
+ */
+export async function deleteRepoSecret(
+  repo: string,
+  name: string,
+  deps: GitHubHttpDeps,
+): Promise<void> {
+  try {
+    await githubRequest<null>(
+      `/repos/${repo}/actions/secrets/${encodeURIComponent(name)}`,
+      { method: "DELETE" },
+      deps,
+    );
+  } catch (e) {
+    if (e instanceof GitHubApiError && e.status === 404) {
+      return;
+    }
+    throw e;
+  }
 }
