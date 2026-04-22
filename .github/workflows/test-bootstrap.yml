@@ -1,0 +1,168 @@
+name: test-bootstrap
+
+on:
+  pull_request:
+    paths:
+      - "packages/core/bootstrap/**"
+      - ".github/workflows/test-bootstrap.yml"
+  push:
+    branches: [main]
+    paths:
+      - "packages/core/bootstrap/**"
+      - ".github/workflows/test-bootstrap.yml"
+
+jobs:
+  posix-syntax:
+    name: dash -n install.sh
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install dash
+        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends dash
+      - name: POSIX syntax check
+        run: dash -n packages/core/bootstrap/install.sh
+
+  container-smoke:
+    name: install.sh smoke test (ubuntu:24.04)
+    runs-on: ubuntu-24.04
+    needs: posix-syntax
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build systemd-enabled ubuntu:24.04 image
+        run: |
+          mkdir -p /tmp/bootstrap-img
+          cat > /tmp/bootstrap-img/Dockerfile <<'EOF'
+          FROM ubuntu:24.04
+          ENV container=docker
+          RUN apt-get update -y \
+           && DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends \
+                  systemd systemd-sysv dbus openssh-server iproute2 \
+           && apt-get clean \
+           && rm -rf /var/lib/apt/lists/* \
+           && rm -f /lib/systemd/system/multi-user.target.wants/* \
+                    /etc/systemd/system/*.wants/* \
+                    /lib/systemd/system/local-fs.target.wants/* \
+                    /lib/systemd/system/sockets.target.wants/*udev* \
+                    /lib/systemd/system/sockets.target.wants/*initctl* \
+                    /lib/systemd/system/basic.target.wants/* \
+                    /lib/systemd/system/anaconda.target.wants/*
+          STOPSIGNAL SIGRTMIN+3
+          CMD ["/sbin/init"]
+          EOF
+          docker build -t bootstrap-test-img /tmp/bootstrap-img
+
+      - name: Start systemd-booted container
+        run: |
+          docker run -d --privileged --name bootstrap-test \
+            --cgroupns=host \
+            --tmpfs /run --tmpfs /run/lock \
+            -v /sys/fs/cgroup:/sys/fs/cgroup:rw \
+            bootstrap-test-img
+
+      - name: Wait for systemd ready
+        run: |
+          set -eu
+          i=0
+          while [ $i -lt 30 ]; do
+            if docker exec bootstrap-test systemctl is-system-running --wait 2>/dev/null | grep -qE 'running|degraded'; then
+              break
+            fi
+            i=$((i + 1))
+            sleep 1
+          done
+          docker exec bootstrap-test systemctl is-system-running || true
+
+      - name: Copy install.sh into container
+        run: docker cp packages/core/bootstrap/install.sh bootstrap-test:/root/install.sh
+
+      - name: Run install.sh (first invocation)
+        env:
+          TEST_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci"
+        run: docker exec -e TEST_KEY="$TEST_KEY" bootstrap-test sh -c 'sh /root/install.sh "$TEST_KEY"'
+
+      - name: Assert kubectl get nodes Ready
+        run: |
+          set -eu
+          i=0
+          while [ $i -lt 45 ]; do
+            if docker exec bootstrap-test sh -c 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get nodes --no-headers 2>/dev/null | grep -q " Ready "'; then
+              break
+            fi
+            i=$((i + 1))
+            sleep 2
+          done
+          docker exec bootstrap-test sh -c 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get nodes'
+          docker exec bootstrap-test sh -c 'KUBECONFIG=/etc/rancher/k3s/k3s.yaml k3s kubectl get nodes --no-headers | grep -q " Ready "'
+
+      - name: Assert k3s API bound only on 127.0.0.1
+        run: |
+          set -eu
+          out=$(docker exec bootstrap-test sh -c 'ss -tlnp 2>/dev/null | grep ":6443" || true')
+          echo "$out"
+          echo "$out" | grep -q '127.0.0.1:6443'
+          if echo "$out" | grep -qE '(0\.0\.0\.0|\*|\[::\]):6443'; then
+            echo "::error::k3s API is bound to a non-loopback address"
+            exit 1
+          fi
+
+      - name: Assert ufw allows only 22/tcp
+        run: |
+          set -eu
+          out=$(docker exec bootstrap-test sh -c 'ufw status 2>/dev/null || true')
+          echo "$out"
+          echo "$out" | grep -qE '^22/tcp[[:space:]]+ALLOW'
+          extra=$(echo "$out" | grep -E 'ALLOW' | grep -vE '^22/tcp' || true)
+          if [ -n "$extra" ]; then
+            echo "::error::ufw has ALLOW rules beyond 22/tcp"
+            echo "$extra"
+            exit 1
+          fi
+
+      - name: Assert sshd hardened
+        run: |
+          set -eu
+          out=$(docker exec bootstrap-test sh -c 'sshd -T 2>/dev/null | grep -E "^(passwordauthentication|permitrootlogin|kbdinteractiveauthentication|maxauthtries) "')
+          echo "$out"
+          echo "$out" | grep -qi '^passwordauthentication no$'
+          echo "$out" | grep -qi '^permitrootlogin no$'
+          echo "$out" | grep -qi '^kbdinteractiveauthentication no$'
+          echo "$out" | grep -qi '^maxauthtries 3$'
+
+      - name: Assert authorized_keys exact
+        env:
+          TEST_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci"
+        run: |
+          set -eu
+          actual=$(docker exec bootstrap-test cat /root/.ssh/authorized_keys)
+          if [ "$actual" != "$TEST_KEY" ]; then
+            echo "expected: $TEST_KEY"
+            echo "actual:   $actual"
+            exit 1
+          fi
+
+      - name: Assert marker file present
+        run: |
+          set -eu
+          out=$(docker exec bootstrap-test cat /etc/superfield/bootstrap.done)
+          echo "$out"
+          echo "$out" | grep -q '^version='
+          echo "$out" | grep -q '^timestamp='
+
+      - name: Assert re-run is a no-op
+        env:
+          TEST_KEY: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAITestKeyForBootstrapCIDoNotUseInProduction test@superfield-ci"
+        run: |
+          set -eu
+          first=$(docker exec bootstrap-test awk -F= '$1=="timestamp"{print $2}' /etc/superfield/bootstrap.done)
+          sleep 2
+          docker exec -e TEST_KEY="$TEST_KEY" bootstrap-test sh -c 'sh /root/install.sh "$TEST_KEY"'
+          second=$(docker exec bootstrap-test awk -F= '$1=="timestamp"{print $2}' /etc/superfield/bootstrap.done)
+          if [ "$first" != "$second" ]; then
+            echo "::error::marker timestamp changed across re-runs: $first -> $second"
+            exit 1
+          fi
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f bootstrap-test || true
