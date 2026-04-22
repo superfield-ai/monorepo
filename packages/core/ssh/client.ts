@@ -178,9 +178,7 @@ export class SshClient {
         child.on("close", (code) => {
           if (code === null) {
             reject(
-              new Error(
-                `ssh process terminated by signal; stderr:\n${stderr}`,
-              ),
+              new Error(`ssh process terminated by signal; stderr:\n${stderr}`),
             );
             return;
           }
@@ -304,10 +302,7 @@ export class SshClient {
   }
 }
 
-function runCapture(
-  cmd: string,
-  args: string[],
-): Promise<SshExecResult> {
+function runCapture(cmd: string, args: string[]): Promise<SshExecResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
     let stdout = "";
@@ -321,11 +316,7 @@ function runCapture(
     child.on("error", reject);
     child.on("close", (code) => {
       if (code === null) {
-        reject(
-          new Error(
-            `${cmd} terminated by signal; stderr:\n${stderr}`,
-          ),
-        );
+        reject(new Error(`${cmd} terminated by signal; stderr:\n${stderr}`));
         return;
       }
       resolve({ stdout, stderr, exitCode: code });

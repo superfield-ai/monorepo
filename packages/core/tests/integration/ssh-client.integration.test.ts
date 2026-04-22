@@ -33,9 +33,13 @@ let skipReason: string | undefined;
 
 function dockerAvailable(): boolean {
   try {
-    const r = spawnSync("docker", ["version", "--format", "{{.Server.Version}}"], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const r = spawnSync(
+      "docker",
+      ["version", "--format", "{{.Server.Version}}"],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     return r.status === 0 && r.stdout.toString().trim().length > 0;
   } catch {
     return false;
@@ -84,7 +88,11 @@ async function waitForSsh(port: number, timeoutMs = 60_000): Promise<void> {
       const s = connect({ port, host: "127.0.0.1" });
       let buf = "";
       const done = (val: string | null) => {
-        try { s.destroy(); } catch { /* ignore */ }
+        try {
+          s.destroy();
+        } catch {
+          /* ignore */
+        }
         resolve(val);
       };
       s.setTimeout(2000);
@@ -231,7 +239,10 @@ function f(): Fixture {
   return fixture;
 }
 
-function makeClient(opts?: { port?: number; knownHostsPath?: string }): SshClient {
+function makeClient(opts?: {
+  port?: number;
+  knownHostsPath?: string;
+}): SshClient {
   const fx = f();
   return new SshClient({
     host: "127.0.0.1",
@@ -312,13 +323,7 @@ describe("SshClient (integration, real sshd container)", () => {
       (line) => lines.push(line),
     );
     expect(exit).toBe(0);
-    expect(lines).toEqual([
-      "line-1",
-      "line-2",
-      "line-3",
-      "line-4",
-      "line-5",
-    ]);
+    expect(lines).toEqual(["line-1", "line-2", "line-3", "line-4", "line-5"]);
   }, 30_000);
 
   it("upload round-trips a 1MB file with matching checksum", async () => {
@@ -490,4 +495,3 @@ describe("SshClient (integration, real sshd container)", () => {
     expect(leftovers).toEqual([]);
   }, 30_000);
 });
-
