@@ -3,6 +3,7 @@ import { startCommand, type StartLoop } from "./commands/start.ts";
 import { planCommand } from "./commands/plan.ts";
 import { featureCommand } from "./commands/feature.ts";
 import { deployCommand, type DeployCommandDeps } from "./commands/deploy.ts";
+import { setupGithubCommand } from "./commands/setup-github.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -33,6 +34,9 @@ Commands:
                 Authenticate with Google Cloud via device-code OAuth flow.
   deploy gcp --logout
                 Delete the local GCP OAuth token and exit.
+  setup-github --deploy-key --env <e> --repo <owner/name>
+                Register the per-environment SSH deploy key on the application repo
+                and store the matching private key as the DEPLOY_KEY_<ENV> secret.
 `.trim();
 }
 
@@ -90,6 +94,11 @@ export async function runCLI(
 
   if (cmd === "deploy") {
     await deployCommand(args.slice(1), deps.deployCommandDeps);
+    return;
+  }
+
+  if (cmd === "setup-github") {
+    await setupGithubCommand(args.slice(1));
     return;
   }
 

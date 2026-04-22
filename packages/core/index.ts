@@ -94,6 +94,17 @@ export type {
   GcpDeployCommandOpts,
   Logger as GcpLogger,
 } from "./commands/deploy.ts";
+export {
+  registerEnvDeployKey,
+  sshSha256Fingerprint,
+} from "./commands/setup-github.ts";
+export type {
+  RegisterEnvDeployKeyOptions,
+  RegisterEnvDeployKeyResult,
+} from "./commands/setup-github.ts";
+
+export { readMnemonic } from "./secrets/index.ts";
+
 export { runRemoteProvision } from "./commands/remote-provision.ts";
 export type {
   RemoteProvisionConfig,
