@@ -69,9 +69,8 @@ describe("putRepoSecret", () => {
     let putBody: { encrypted_value?: string; key_id?: string } | null = null;
 
     server.use(
-      http.get(
-        `${BASE}/repos/${REPO}/actions/secrets/public-key`,
-        () => HttpResponse.json(publicKeyFixture),
+      http.get(`${BASE}/repos/${REPO}/actions/secrets/public-key`, () =>
+        HttpResponse.json(publicKeyFixture),
       ),
       http.put(
         `${BASE}/repos/${REPO}/actions/secrets/DEPLOY_KEY_PROD`,

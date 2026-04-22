@@ -32,7 +32,9 @@ function defaultSpawnGhAuthToken(): Promise<{
   });
 }
 
-export async function getAuthToken(deps: GetAuthTokenDeps = {}): Promise<string> {
+export async function getAuthToken(
+  deps: GetAuthTokenDeps = {},
+): Promise<string> {
   const run = deps.spawnGhAuthToken ?? defaultSpawnGhAuthToken;
   let result;
   try {

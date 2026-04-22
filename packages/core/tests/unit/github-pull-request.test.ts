@@ -41,8 +41,7 @@ describe("openPullRequest", () => {
       // branch ref lookups
       http.get(
         `${BASE}/repos/${REPO}/git/ref/heads/superfield%2Fdeploy-workflow`,
-        () =>
-          HttpResponse.json({ message: "Not Found" }, { status: 404 }),
+        () => HttpResponse.json({ message: "Not Found" }, { status: 404 }),
       ),
       http.get(`${BASE}/repos/${REPO}/git/ref/heads/main`, () =>
         HttpResponse.json(branchRefBase),

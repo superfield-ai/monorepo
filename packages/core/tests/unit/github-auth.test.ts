@@ -23,7 +23,9 @@ describe("getAuthToken", () => {
           code: 1,
         }),
       }),
-    ).rejects.toThrow(/exited with code 1.*You are not logged in.*gh auth login/s);
+    ).rejects.toThrow(
+      /exited with code 1.*You are not logged in.*gh auth login/s,
+    );
   });
 
   it("throws when stdout is empty even on zero exit", async () => {

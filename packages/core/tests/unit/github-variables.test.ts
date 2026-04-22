@@ -2,10 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
-import {
-  getRepoVariable,
-  putRepoVariable,
-} from "../../github/variables.ts";
+import { getRepoVariable, putRepoVariable } from "../../github/variables.ts";
 import type { GitHubHttpDeps } from "../../github/types.ts";
 import variableFixture from "../fixtures/github/repo-variable.json" with { type: "json" };
 
@@ -33,20 +30,14 @@ describe("getRepoVariable", () => {
         () => HttpResponse.json(variableFixture),
       ),
     );
-    const value = await getRepoVariable(
-      REPO,
-      "DEPLOY_KEY_PROD_FP",
-      makeDeps(),
-    );
+    const value = await getRepoVariable(REPO, "DEPLOY_KEY_PROD_FP", makeDeps());
     expect(value).toBe("sha256:abc123def456");
   });
 
   it("returns null on 404", async () => {
     server.use(
-      http.get(
-        `${BASE}/repos/${REPO}/actions/variables/MISSING`,
-        () =>
-          HttpResponse.json({ message: "Not Found" }, { status: 404 }),
+      http.get(`${BASE}/repos/${REPO}/actions/variables/MISSING`, () =>
+        HttpResponse.json({ message: "Not Found" }, { status: 404 }),
       ),
     );
     const value = await getRepoVariable(REPO, "MISSING", makeDeps());
@@ -58,10 +49,8 @@ describe("putRepoVariable", () => {
   it("POSTs when variable does not exist", async () => {
     let postBody: unknown = null;
     server.use(
-      http.get(
-        `${BASE}/repos/${REPO}/actions/variables/NEW_VAR`,
-        () =>
-          HttpResponse.json({ message: "Not Found" }, { status: 404 }),
+      http.get(`${BASE}/repos/${REPO}/actions/variables/NEW_VAR`, () =>
+        HttpResponse.json({ message: "Not Found" }, { status: 404 }),
       ),
       http.post(
         `${BASE}/repos/${REPO}/actions/variables`,
@@ -79,9 +68,8 @@ describe("putRepoVariable", () => {
   it("PATCHes when variable already exists", async () => {
     let patchBody: unknown = null;
     server.use(
-      http.get(
-        `${BASE}/repos/${REPO}/actions/variables/EXISTING`,
-        () => HttpResponse.json(variableFixture),
+      http.get(`${BASE}/repos/${REPO}/actions/variables/EXISTING`, () =>
+        HttpResponse.json(variableFixture),
       ),
       http.patch(
         `${BASE}/repos/${REPO}/actions/variables/EXISTING`,
