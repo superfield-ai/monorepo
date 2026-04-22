@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 
-import { deriveEd25519Key } from "../secrets/index.ts";
+import { deriveEd25519Key, deriveHmacToken } from "../secrets/index.ts";
 import {
   listDeployKeys,
   registerDeployKey,
@@ -118,6 +118,121 @@ export async function registerEnvDeployKey(
   }
 }
 
+export interface PushEnvSecretsOptions {
+  /** Application repository in `owner/name` form. */
+  repo: string;
+  /** Logical environment slug, e.g. "demo", "staging", "prod". */
+  env: string;
+  /** Deploy host (typically the provisioner's public IP / DNS name). */
+  host: string;
+  /**
+   * Application database URL. For managed targets this is the provisioner's
+   * output; for the local k3s mode this is the in-cluster service URL.
+   */
+  databaseUrl: string;
+  /**
+   * BIP-39 mnemonic. Will be zeroed before this function returns. The caller
+   * must not reuse the buffer.
+   */
+  mnemonic: Buffer;
+  /**
+   * Optional dependency injection for tests. Defaults to a real fetch + the
+   * `gh auth token` token source.
+   */
+  deps?: GitHubHttpDeps;
+}
+
+export interface PushEnvSecretsResult {
+  /** Secret names whose values were (re)uploaded. */
+  uploaded: string[];
+  /**
+   * Secret names that were skipped because the SHA-256 fingerprint of the
+   * derived/supplied value matched the recorded `<NAME>_FP` repo variable.
+   */
+  skipped: string[];
+}
+
+/**
+ * Idempotently push the per-environment Actions secrets that are not the
+ * deploy key (which is owned by `registerEnvDeployKey`).
+ *
+ * Pushed secrets (UPPERCASE_<ENV> suffix):
+ *   - `DEPLOY_HOST_<ENV>`     ← `opts.host`
+ *   - `DATABASE_URL_<ENV>`    ← `opts.databaseUrl`
+ *   - `WEBHOOK_SECRET_<ENV>`  ← `deriveHmacToken(mnemonic, env, "webhook-secret", 32)`
+ *   - `COOKIE_SECRET_<ENV>`   ← `deriveHmacToken(mnemonic, env, "cookie-secret", 32)`
+ *
+ * For each, we compute SHA-256 of the value, compare it to the existing
+ * `<NAME>_FP` repo variable, and skip the upload if they match. Otherwise we
+ * call `putRepoSecret` and `putRepoVariable` for the new fingerprint.
+ *
+ * Plain-text secret values are NEVER written to stdout or stderr by this
+ * function — callers should likewise restrict their own logging to the
+ * returned name lists.
+ */
+export async function pushEnvSecrets(
+  opts: PushEnvSecretsOptions,
+): Promise<PushEnvSecretsResult> {
+  const deps = opts.deps ?? makeDefaultGithubDeps();
+  const envUpper = opts.env.toUpperCase();
+
+  // Derive the two secret tokens from the mnemonic. `deriveHmacToken` zeroes
+  // its mnemonic argument, so we duplicate the buffer for the first call and
+  // pass the original (which still holds the bytes) to the second. The
+  // duplicate is zeroed in the `finally` block at the bottom of this fn.
+  const mnemonicCopy = Buffer.from(opts.mnemonic);
+  let webhookSecret: string | undefined;
+  let cookieSecret: string | undefined;
+  try {
+    webhookSecret = deriveHmacToken(
+      mnemonicCopy,
+      opts.env,
+      "webhook-secret",
+      32,
+    );
+    cookieSecret = deriveHmacToken(
+      opts.mnemonic,
+      opts.env,
+      "cookie-secret",
+      32,
+    );
+
+    const targets: Array<{ name: string; value: string }> = [
+      { name: `DEPLOY_HOST_${envUpper}`, value: opts.host },
+      { name: `DATABASE_URL_${envUpper}`, value: opts.databaseUrl },
+      { name: `WEBHOOK_SECRET_${envUpper}`, value: webhookSecret },
+      { name: `COOKIE_SECRET_${envUpper}`, value: cookieSecret },
+    ];
+
+    const uploaded: string[] = [];
+    const skipped: string[] = [];
+
+    for (const target of targets) {
+      const fpName = `${target.name}_FP`;
+      const fp = sha256Fingerprint(target.value);
+      const recorded = await getRepoVariable(opts.repo, fpName, deps);
+      if (recorded === fp) {
+        skipped.push(target.name);
+        continue;
+      }
+      await putRepoSecret(opts.repo, target.name, target.value, deps);
+      await putRepoVariable(opts.repo, fpName, fp, deps);
+      uploaded.push(target.name);
+    }
+
+    return { uploaded, skipped };
+  } finally {
+    // Best-effort scrub of the closure-local copy. The derived hex strings
+    // are immutable; dropping the bindings is the most we can do.
+    mnemonicCopy.fill(0);
+    // Defensive re-zero of the caller's buffer in case `deriveHmacToken`
+    // ever changes its zero-on-finally contract.
+    opts.mnemonic.fill(0);
+    webhookSecret = undefined;
+    cookieSecret = undefined;
+  }
+}
+
 /**
  * Compute the OpenSSH-style SHA-256 fingerprint of an OpenSSH public key
  * (`SHA256:<base64-no-padding>`), matching `ssh-keygen -lf <key> -E sha256`.
@@ -133,4 +248,13 @@ function openSshKeyBody(openSsh: string): string {
   const parts = openSsh.trim().split(/\s+/);
   if (parts.length < 2) return openSsh.trim();
   return parts[1]!;
+}
+
+/**
+ * SHA-256 fingerprint of a UTF-8 string, formatted as `sha256:<hex>`. Stored
+ * as a non-secret repo variable so re-runs can detect unchanged values
+ * without holding the secret server-side.
+ */
+export function sha256Fingerprint(value: string): string {
+  return `sha256:${createHash("sha256").update(value, "utf8").digest("hex")}`;
 }
