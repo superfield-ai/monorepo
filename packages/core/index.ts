@@ -167,6 +167,14 @@ export type {
   BlueprintRuleType,
 } from "./blueprint.ts";
 
+export { doctor, renderDoctorReport } from "./commands/doctor.ts";
+export type {
+  CheckResult,
+  DoctorReport as EnvDoctorReport,
+  DoctorOpts,
+  DoctorDeps as EnvDoctorDeps,
+} from "./commands/doctor.ts";
+
 export { spawnAgent } from "./agent.ts";
 export type {
   AgentOpts,
