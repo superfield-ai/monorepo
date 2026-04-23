@@ -18,10 +18,14 @@ permissions:
   contents: read
   packages: write
 
+concurrency:
+  group: container-build-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     name: Compile and build container image
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/superfield-cli
     steps:
@@ -29,8 +33,6 @@ jobs:
         with:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
-
-      - uses: oven-sh/setup-bun@v2
 
       - run: bun install --frozen-lockfile
 

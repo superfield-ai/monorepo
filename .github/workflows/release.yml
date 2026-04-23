@@ -9,16 +9,19 @@ permissions:
   contents: write
 
 jobs:
+  test-unit:
+    uses: ./.github/workflows/test-unit.yml
+    secrets: inherit
+
   release:
     name: Build and publish release
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
+    needs: test-unit
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
-
-      - uses: oven-sh/setup-bun@v2
 
       - run: bun install --frozen-lockfile
 
