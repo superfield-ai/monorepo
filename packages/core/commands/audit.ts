@@ -5,10 +5,7 @@ import { spawnAgent } from "../agent.ts";
 import { githubRequest } from "../github/http.ts";
 import { makeDefaultGithubDeps } from "../github/index.ts";
 import type { GitHubHttpDeps } from "../github/types.ts";
-import {
-  CAPABILITIES,
-  type AuditCapability,
-} from "../audit/capabilities.ts";
+import { CAPABILITIES, type AuditCapability } from "../audit/capabilities.ts";
 import { buildAuditCapabilityPrompt } from "../prompts/audit.ts";
 
 // ── Public types ──────────────────────────────────────────────────────────────
@@ -116,7 +113,9 @@ function buildIssueBody(
 
   const canonicalDocs =
     capability.blueprintRuleIds && capability.blueprintRuleIds.length > 0
-      ? capability.blueprintRuleIds.map((id) => `- Blueprint rule \`${id}\``).join("\n")
+      ? capability.blueprintRuleIds
+          .map((id) => `- Blueprint rule \`${id}\``)
+          .join("\n")
       : "- Superfield blueprint";
 
   const testPlan = [
@@ -160,15 +159,18 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
   const outputDir =
     opts.outputDir ?? path.join(opts.repoPath, ".superfield", "audit");
 
-  const mkdirFn = deps.mkdir ?? ((p) => mkdir(p, { recursive: true }).then(() => undefined));
+  const mkdirFn =
+    deps.mkdir ?? ((p) => mkdir(p, { recursive: true }).then(() => undefined));
   const writeFn = deps.writeFile ?? ((p, c) => writeFile(p, c, "utf8"));
-  const readFn = deps.readFile ?? (async (p) => {
-    try {
-      return await readFile(p, "utf8");
-    } catch {
-      return null;
-    }
-  });
+  const readFn =
+    deps.readFile ??
+    (async (p) => {
+      try {
+        return await readFile(p, "utf8");
+      } catch {
+        return null;
+      }
+    });
 
   await mkdirFn(outputDir);
 
@@ -227,7 +229,10 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
 
     const finding = extractFinding(agentResult.output);
     if (!finding) {
-      log(deps, `[audit] could not parse finding for ${cap.id} — raw output saved`);
+      log(
+        deps,
+        `[audit] could not parse finding for ${cap.id} — raw output saved`,
+      );
       await writeFn(
         path.join(outputDir, `${cap.id}.raw.txt`),
         agentResult.output,
@@ -257,7 +262,10 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
       try {
         const issue = await createIssueFn(opts.repo, title, body, githubDeps);
         issueUrls[cap.id] = issue.url;
-        log(deps, `[audit] opened issue #${issue.number} for ${cap.id}: ${issue.url}`);
+        log(
+          deps,
+          `[audit] opened issue #${issue.number} for ${cap.id}: ${issue.url}`,
+        );
       } catch (err) {
         log(
           deps,

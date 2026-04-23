@@ -44,10 +44,18 @@ export function parseAuditArgs(args: string[]): ParsedAuditArgs {
     else if (eq("--output-dir=") !== null) out.outputDir = eq("--output-dir=")!;
     else if (a === "--capabilities") {
       const v = take();
-      out.capabilities = v ? v.split(",").map((s) => s.trim()).filter(Boolean) : [];
+      out.capabilities = v
+        ? v
+            .split(",")
+            .map((s) => s.trim())
+            .filter(Boolean)
+        : [];
     } else if (eq("--capabilities=") !== null) {
       const v = eq("--capabilities=")!;
-      out.capabilities = v.split(",").map((s) => s.trim()).filter(Boolean);
+      out.capabilities = v
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean);
     } else if (a === "--no-issues") out.noIssues = true;
     else out.unknown.push(a);
 
