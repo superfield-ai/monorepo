@@ -1,17 +1,18 @@
-# Implementation Plan
+# Superfield — Implementation Plan
 
-All 10 phases of the PRD roadmap landed. This document is now a snapshot of
-what was built; future work should reopen specific items.
+Current build status. For product scope see [`product.md`](./product.md); for delivery sequence see [`roadmap.md`](./roadmap.md).
 
 ## Status legend
 
 - ✅ Done — landed on `main`
-- 🟡 Partial — exists but incomplete
+- 🟡 Partial — exists but has known correctness gaps
 - ⬜ Not started
 
 ---
 
-## Phase 1 — Foundation ✅
+## Track A — GitOps Orchestrator
+
+### Phase A-1 — Foundation ✅
 
 - ✅ Monorepo: `packages/cli`, `packages/core`, `packages/github`, `packages/git`
 - ✅ Config read/write at `~/.superfield/config.yaml`
@@ -21,114 +22,134 @@ what was built; future work should reopen specific items.
 - ✅ Golden fixtures recorder (`bun record-fixtures`)
 - ✅ `superfield github add` (device flow + app installation polling + repo registration)
 - ✅ `superfield github forget` (account-type-aware uninstall URL)
-- ✅ `superfield doctor`
-- ✅ Calypso Blueprint integrated as git subtree at `blueprint/` with bidirectional sync workflows
+- ✅ Calypso Blueprint integrated as git subtree at `blueprint/`
 
-## Phase 2 — Planning loop: CI watchdog ✅
+### Phase A-2 — Planning loop: CI watchdog ✅
 
 - ✅ Detect failed checks on `main` via `getCheckRuns`
 - ✅ Create `ci-failure` issue with deduplication by SHA + check name
-- ✅ Issue body uses unified `IssueBody` schema (Phase / Motivation / Canonical docs / Features / Test Plan)
 - ✅ Insert ci-failure at top of Plan via `Plan` parser/serializer
-- ✅ Plan entry format: `- #N — title [risk: 6]\n  <!-- superfield: {...} -->`
-- ✅ Renamed `runOuterLoop` → `runPlanningLoop`
 - ✅ `packages/core/plan.ts` parser + 17 unit tests
 
-## Phase 3 — Planning loop: issue audit + Plan coverage ✅
+### Phase A-3 — Planning loop: issue audit + Plan coverage ✅
 
 - ✅ `runIssueAudit` — LLM-driven schema conformance via `buildIssueAuditPrompt`
-- ✅ Posts findings comment with `<!-- superfield-audit -->` dedupe marker
-- ✅ Bounded concurrency (default 3 parallel agent invocations)
 - ✅ `runPlanCoverage` — pure deterministic, appends missing open issues to Backlog phase
-- ✅ Skips plan/ci-failure labelled issues; classifies dev-scout label
-- ✅ `runLLMTask` reusable helper with `extractJson` (handles fenced + bare JSON)
+- ✅ `runLLMTask` reusable helper with `extractJson`
 
-## Phase 4 — Planning loop: blueprint conformance ✅
+### Phase A-4 — Planning loop: blueprint conformance ✅
 
 - ✅ `loadBlueprint` — parses `blueprint/rules/graph.yaml` + per-domain yamls
-- ✅ Handles graph hash collisions with `uniqueKeys: false`
-- ✅ `pickCandidateDomains` — naive keyword heuristic across 13 domains, max 4 candidates
-- ✅ `runBlueprintConformance` — LLM-driven advisory check, posts/updates `<!-- superfield-blueprint -->` comments
-- ✅ Deletes stale advisory when violations are resolved
-- ✅ Skips issues with no candidate domains (no LLM call)
+- ✅ `runBlueprintConformance` — LLM-driven advisory check, posts `<!-- superfield-blueprint -->` comments
 
-## Phase 5 — Agent infrastructure ✅
+### Phase A-5 — Agent infrastructure ✅
 
 - ✅ `spawnAgent` (`packages/core/agent.ts`) — `claude` / `codex` subprocess wrapper
 - ✅ Forge-stored sessions (`packages/core/sessions.ts`) — `<!-- superfield-session: -->` comments
-- ✅ `findStaleSessions` — deadman switch scan
 - ✅ Prompt templating system (`packages/core/prompts/`) — fragments + 10 builders
 - ✅ Snapshot tests for all 10 prompt builders
-- ✅ MSW-style mock-based tests for forge session CRUD
 - ✅ Worktree manager (`packages/git/worktree.ts`) using isomorphic-git
-- ✅ `WorktreeManager.create` falls back to base branch if issue branch absent
-- ✅ `pruneClosed` cleanup helper
 
-## Phase 6 — `plan` command ✅
+### Phase A-6 — `plan` command ✅
 
 - ✅ `runPlanCommand` — collect → evaluate (LLM) → create-scouts → validate → apply
-- ✅ `PlanProposal` shape: phases, ordered_issues, scout_specs
-- ✅ `patchScoutNumber` — replaces null-numbered scouts with real issue numbers
-- ✅ `validateProposal` — duplicate detection, scout-first per phase, exactly one scout, acyclic phase deps (DFS coloring)
-- ✅ `validatePlan` — structural validation of the rendered Plan body before write-back
-- ✅ `renderIssueBody` — blueprint-aligned IssueBody markdown
-- ✅ CLI wired: `superfield plan [path]`
+- ✅ `validateProposal` — duplicate detection, scout-first, acyclic phase deps
 
-## Phase 7 — Dev loop primary agent ✅
+### Phase A-7 — Dev loop: primary agent ✅
 
 - ✅ `runDevLoop` / `tickDevLoop` — primary-only loop
-- ✅ `selectPrimary` — ci-failures first, then phase issues; skips closed and waits for predecessors
-- ✅ `runSlot` extracted as per-slot helper
-- ✅ Builds prompt by `kind`: dev-scout / develop-issue / ci-failure
-- ✅ Claims slot via session comment BEFORE spawning (deadman switch)
-- ✅ Resumes existing session when comment present
-- ✅ Detects close on post-spawn refetch and clears session
+- ✅ `selectPrimary` — ci-failures first, then phase issues
 
-## Phase 8 — Dev loop speculative slots ✅
+### Phase A-8 — Dev loop: speculative slots ✅
 
 - ✅ `selectSpeculative` — scout-gated; only opens if phase scout is CLOSED on `main`
 - ✅ Configurable `slotCount` (default 3 = 1 primary + 2 speculative)
-- ✅ Primary + speculative dispatched in parallel via `Promise.all`
-- ✅ Speculative agents do not check issue close (they exit at checklist complete)
-- ✅ Never pairs speculative work with a ci-failure primary
 
-## Phase 9 — `feature` command ✅
+### Phase A-9 — `feature` command ✅
 
 - ✅ `runFeatureCommand` — collect → evaluate (LLM) → handle duplicate → create issue → append to Plan
-- ✅ Returns `duplicateOf` when LLM identifies a duplicate (no issue created)
-- ✅ `parseFeatureEvaluation` validates required fields
-- ✅ Appends to existing Plan or creates new Plan with phase
-- ✅ CLI wired: `superfield feature "<description>" [path]`
 
-## Phase 10 — Documentation loop ✅
+### Phase A-10 — Documentation loop ✅
 
 - ✅ `runDocLoop` / `tickDocLoop` — third concurrent loop
-- ✅ Watermark-based merge detection (in-memory)
-- ✅ Three doc tasks parallel: `runCoverageScan`, `runCanonicalSync`, `runConsistencyCheck`
 - ✅ `openDocPR` — creates `docs/auto-N` branch, applies patches via Contents API, opens PR
-- ✅ Patch validation: only applies if `old_text` matches current file content
-- ✅ CI gating: `paths-ignore` on `**/*.md` and `docs/**` in build/test-unit/test-integration workflows
-- ✅ New GitHubClient API: `listMergedPullRequests`, `listPullRequestFiles`, `createBranch`,
-  `getFileContents`, `putFileContents`, `createPullRequest`
+
+### Phase A-11 — Analytics & Steering API ⬜
+
+- ⬜ `ApiState` — shared in-memory state object passed to all three loops
+- ⬜ `startApiServer` — in-process HTTP server on `127.0.0.1:7837`
+- ⬜ Analytics endpoints: `/health`, `/analytics/status`, `/analytics/slots`, `/analytics/loops`, `/analytics/costs`, `/analytics/circuit`
+- ⬜ Steering endpoints: `/steer/context` (inject context into running agent), `/steer/escalate`
+- ⬜ Wire into `superfield start` with `--no-api` and `--api-port` flags
+- ⬜ Instrument dev loop, planning loop, doc loop with `recordLoopTick`, `recordAgentStart`, `recordAgentEnd`
+
+### Cross-cutting A (remaining)
+
+- ⬜ Wire all three loops in `superfield start` (currently only planning loop runs)
+- ⬜ Integration test: full planning-loop tick end-to-end against MSW
+- ⬜ Integration tests for dev-loop and doc-loop using recorded fixtures
 
 ---
 
-## Cross-cutting tech debt
+## Track B — Ops / Deploy CLI
 
-- ✅ Pre-existing TypeScript errors fixed (deleted dead `setup.ts` + narrowed `string[] | "all"` types)
-- ✅ Snapshot tests for each prompt builder
-- ✅ All tests passing: 183 unit + 3 integration
+### Phase B-0 — GitHub API client ✅
 
-## Remaining cross-cutting work (not in PRD scope)
+- ✅ Deploy key CRUD, repo secrets push, PR creation via `@octokit/rest`
 
-- ⬜ Wire all three loops together inside `superfield start` (currently only the planning loop runs;
-  the dev loop and doc loop are exported but not launched from `startCommand`)
-- ⬜ Integration test that exercises a full planning-loop tick end-to-end against MSW
-- ⬜ Integration tests for dev-loop and doc-loop using recorded fixtures
+### Phase B-1 — Bootstrap ✅
 
-## Out of scope (entire roadmap)
+- ✅ `scripts/install.sh` — k3s install + sshd hardening
+- ✅ TS orchestrator connects over SSH and runs install script
 
-- Slack / webhook notifications
-- Web UI
-- Forges other than GitHub
-- Self-hosted LLM backends (Claude and Codex CLIs are supported)
+### Phase B-2 — Cloud providers ✅
+
+- ✅ GCP: VM + optional AlloyDB (`packages/core/commands/remote-provision.ts`)
+- ✅ DigitalOcean: Droplet + optional Managed PG
+- ✅ AWS: EC2 + optional RDS
+- ✅ Vultr: VM
+
+### Phase B-3 — GitHub environment setup ✅
+
+- ✅ Per-env deploy key registration (`setup-github` step 1)
+- ✅ Per-env Actions secrets push (`DEPLOY_HOST_<ENV>`, `DEPLOY_KEY_<ENV>`, `DATABASE_URL_<ENV>`)
+- ✅ Workflow YAML templates synced via PR (`sync-workflows`)
+
+### Phase B-4 — Kubernetes manifests ✅
+
+- ✅ Distroless container build (`Dockerfile`)
+- ✅ Postgres StatefulSet with named PVC
+- ✅ One-shot DB migration Job
+
+### Phase B-5 — Deployment commands ✅
+
+- ✅ `deploy-env` — rolling update: build → push image → apply manifests → health gate
+- ✅ `deploy-env --clean-room` — fresh PVC + seed Job, old PVC preserved
+- ✅ `rollback-env` — roll back to previous deployment
+
+### Phase B-6 — Operator CLI 🟡
+
+- ✅ `doctor` — SSH, k3s, DB, and secrets reachability checks (has bugs — see below)
+- ✅ `init` — one-shot: provision → setup-github → deploy (has bugs — see below)
+- ✅ `destroy` — tear down deployment with prod safety gate
+- ✅ `export-db` — pg_dump for local postgres, snapshot for managed DB (has bugs — see below)
+
+#### Phase B-6 known issues
+
+| Severity | Location | Description |
+| -------- | -------- | ----------- |
+| Critical | `core/commands/doctor.ts:288,368,429,497` | Four checks require `opts.mnemonic` which the CLI never provides; `allOk` is permanently false |
+| Critical | `core/commands/doctor.ts:350` vs `core/commands/setup-github.ts:200` | `doctor` reads `DEPLOY_HOST_<ENV>` as a repo variable; `setup-github` writes it as a secret |
+| High | `core/commands/init.ts:253` | Step 6 reads `DEPLOY_KEY`/`DEPLOY_KEY_FILE` from env instead of using the key derived in steps 1–5 |
+| High | `core/commands/init.ts:335` | `--provider gcp` always throws unless `deps.provision` is injected; not callable from the CLI |
+| High | `core/commands/export-db.ts:210,252` | AWS branch: `buildAwsAuthHeader()` emits `Signature=placeholder`; RDS calls fail auth |
+| High | `cli/commands/export-db.ts:4,91` | `export-db` does not follow per-env naming (`DEPLOY_HOST`/`DEPLOY_KEY` vs `_<ENV>` suffix) |
+| Medium | All ops commands | Host/key resolution reimplemented separately in each command — root cause of the above |
+
+### Cross-cutting B (remaining)
+
+- ⬜ Fix Phase B-6 known issues
+- ⬜ Extract shared `resolveEnvCredentials(env)` used by all ops commands
+- ⬜ Self-hosted runner CI for ops integration tests (see GitHub issue)
+- ⬜ AWS RDS: implement real SigV4 signing
+- ⬜ GCP provision path functional from the CLI

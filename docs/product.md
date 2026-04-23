@@ -46,6 +46,37 @@ superfield feature          # ticket a new feature issue and update the Plan
 
 ---
 
+## Ops Commands
+
+Superfield also owns the full lifecycle of the k3s deployment that the orchestrator runs against. These are operator-facing, one-shot commands — not part of the continuous loop.
+
+```
+superfield init <env>          # provision host, register GitHub secrets, and deploy in one shot
+superfield doctor <env>        # preflight health check — SSH reachability, k3s, DB, GitHub secrets
+superfield deploy-env <env>    # rolling update: build → push → apply manifests → health gate
+superfield rollback-env <env>  # roll back to the previous deployment
+superfield destroy <env>       # tear down the deployment (prod requires explicit confirmation)
+superfield export-db <env>     # dump the database to a local file
+```
+
+### Design constraints
+
+- **Per-env secrets.** All host, key, and connection information is stored as GitHub Actions secrets named `DEPLOY_HOST_<ENV>`, `DEPLOY_KEY_<ENV>`, `DATABASE_URL_<ENV>`. No ambient environment variables with bare names.
+- **Idempotent.** Every command is safe to re-run. `init` can be interrupted and restarted without duplicating resources.
+- **Provider-agnostic.** `init` accepts `--provider` (gcp | digitalocean | aws | vultr). The k3s stack and GitHub wiring are identical across providers; only the VM/DB provisioning step differs.
+- **Prod safety gate.** `destroy` refuses to proceed in the `prod` environment without an explicit `--confirm` flag.
+
+### Supported providers
+
+| Provider     | VM  | Managed DB |
+| ------------ | --- | ---------- |
+| GCP          | ✅  | AlloyDB    |
+| DigitalOcean | ✅  | Managed PG |
+| AWS          | ✅  | RDS        |
+| Vultr        | ✅  | —          |
+
+---
+
 ## Out of Scope (entire roadmap)
 
 - Slack / webhook notifications
