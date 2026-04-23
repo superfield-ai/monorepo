@@ -10,15 +10,15 @@ concurrency:
 jobs:
   test-e2e:
     name: E2E deploy (k3d)
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 25
     container:
-      image: oven/bun:1
-      options: --privileged -v /var/run/docker.sock:/var/run/docker.sock
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-      - name: Install Docker CLI
-        run: apt-get update -y && apt-get install -y --no-install-recommends docker.io
       - name: Verify Docker
         run: docker version
       - name: Install k3d

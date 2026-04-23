@@ -10,8 +10,12 @@ concurrency:
 jobs:
   posix-syntax:
     name: dash -n install.sh
-    runs-on: [self-hosted, linux]
-    container: ubuntu:24.04
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Install dash
@@ -21,17 +25,16 @@ jobs:
 
   container-smoke:
     name: install.sh smoke test (ubuntu:24.04)
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 25
     needs: posix-syntax
     container:
-      image: ubuntu:24.04
-      options: --privileged -v /var/run/docker.sock:/var/run/docker.sock
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install Docker CLI
-        run: apt-get update -y && apt-get install -y --no-install-recommends docker.io curl
 
       - name: Build systemd-enabled ubuntu:24.04 image
         run: |

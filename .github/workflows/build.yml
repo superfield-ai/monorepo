@@ -19,8 +19,12 @@ concurrency:
 jobs:
   typecheck:
     name: Typecheck
-    runs-on: [self-hosted, linux]
-    container: oven/bun:1
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
@@ -28,8 +32,12 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: [self-hosted, linux]
-    container: oven/bun:1
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
@@ -37,8 +45,12 @@ jobs:
 
   format:
     name: Format
-    runs-on: [self-hosted, linux]
-    container: oven/bun:1
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
@@ -46,8 +58,12 @@ jobs:
 
   blueprint-freshness:
     name: Blueprint freshness
-    runs-on: [self-hosted, linux]
-    container: oven/bun:1
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
