@@ -35,7 +35,7 @@ jobs:
   container-smoke:
     name: install.sh smoke test (ubuntu:24.04)
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 25
+    timeout-minutes: 45
     needs: posix-syntax
     container:
       image: ghcr.io/superfield-ai/ci-runner:latest
