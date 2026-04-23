@@ -37,7 +37,6 @@ export interface StartDeps {
   runDevLoop?: (opts: DevLoopOpts) => Promise<void>;
   runDocLoop?: (opts: DocLoopOpts) => Promise<void>;
   createClient?: (token: string) => DevLoopOpts["client"];
-  loops?: StartLoop[];
   slotCount?: number;
   noApi?: boolean;
   apiPort?: number;
@@ -59,7 +58,6 @@ export async function startCommand(
     runDevLoop = defaultRunDevLoop,
     runDocLoop = defaultRunDocLoop,
     createClient = (token) => new GitHubClient(token),
-    loops = DEFAULT_LOOPS,
     slotCount,
     noApi = false,
     apiPort = 7837,
@@ -121,7 +119,7 @@ export async function startCommand(
   };
 
   const client = createClient(user.token);
-  const selectedLoops = normalizeLoops(loops);
+  const selectedLoops = normalizeLoops(DEFAULT_LOOPS);
   const worktrees = new WorktreeManager();
   const envSlotCount = slotCount ?? resolveEnvSlotCount(env, emit);
   if (envSlotCount !== undefined)

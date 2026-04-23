@@ -153,28 +153,4 @@ describe("startCommand", () => {
     expect(deps.runDocLoop).not.toHaveBeenCalled();
   });
 
-  it("runs only selected loops when loops are provided", async () => {
-    const deps = makeDeps();
-    await startCommand("/home/user/project", {
-      ...deps,
-      loops: ["dev", "plan"],
-    });
-    expect(deps.runPlanningLoop).toHaveBeenCalledOnce();
-    expect(deps.runDevLoop).toHaveBeenCalledOnce();
-    expect(deps.runDocLoop).not.toHaveBeenCalled();
-  });
-
-  it("does not require a plan issue when dev loop is not selected", async () => {
-    const deps = makeDeps({
-      createClient: vi.fn().mockReturnValue({
-        listIssues: vi.fn().mockResolvedValue([]),
-      } as unknown as DevLoopOpts["client"]),
-    });
-    await startCommand("/home/user/project", {
-      ...deps,
-      loops: ["plan"],
-    });
-    expect(deps.runPlanningLoop).toHaveBeenCalledOnce();
-    expect(deps.runDevLoop).not.toHaveBeenCalled();
-  });
 });
