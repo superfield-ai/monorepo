@@ -21,9 +21,13 @@ jobs:
     name: E2E deploy (k3d)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    container:
+      image: oven/bun:1
+      options: --privileged -v /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
+      - name: Install Docker CLI
+        run: apt-get update -y && apt-get install -y --no-install-recommends docker.io
       - name: Verify Docker
         run: docker version
       - name: Install k3d
@@ -32,7 +36,7 @@ jobs:
         uses: azure/setup-kubectl@v4
       - run: bun install --frozen-lockfile
       - name: Run E2E tests
-        run: bun vitest run packages/*/tests/e2e
+        run: bun --bun vitest run packages/*/tests/e2e
       - name: Dump pod state on failure
         if: failure()
         run: |

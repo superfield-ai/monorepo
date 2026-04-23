@@ -12,13 +12,12 @@ jobs:
   release:
     name: Build and publish release
     runs-on: ubuntu-latest
+    container: oven/bun:1
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
-
-      - uses: oven-sh/setup-bun@v2
 
       - run: bun install --frozen-lockfile
 
