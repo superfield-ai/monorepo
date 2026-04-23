@@ -15,6 +15,7 @@ on:
       - "packages/cli/commands/deploy.ts"
       - "e2e/**"
       - ".github/workflows/test-e2e.yml"
+  workflow_dispatch:
 
 concurrency:
   group: test-e2e-${{ github.ref }}
@@ -23,8 +24,13 @@ concurrency:
 jobs:
   test-e2e:
     name: E2E deploy (k3d)
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 25
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Verify Docker
@@ -34,8 +40,20 @@ jobs:
       - name: Install kubectl
         uses: azure/setup-kubectl@v4
       - run: bun install --frozen-lockfile
+      - name: Set host gateway for ingress probe
+        run: |
+          HOST_GW=$(python3 -c "
+          with open('/proc/net/route') as f:
+              for line in f:
+                  p = line.split()
+                  if len(p) > 2 and p[1] == '00000000':
+                      h = p[2]
+                      print('.'.join(str(int(h[i:i+2],16)) for i in [6,4,2,0]))
+                      break
+          ")
+          echo "CALYPSO_DEMO_HOST=${HOST_GW}" >> "$GITHUB_ENV"
       - name: Run E2E tests
-        run: bun vitest run packages/*/tests/e2e
+        run: bun --bun vitest run packages/*/tests/e2e
       - name: Dump pod state on failure
         if: failure()
         run: |

@@ -33,21 +33,20 @@ describe("parseSlotCount", () => {
 });
 
 describe("parseStartArgs", () => {
-  it("defaults to all loops when no loop flags are provided", () => {
+  it("parses path and slotCount positionals", () => {
     const parsed = parseStartArgs(["/tmp/repo", "2"]);
     expect(parsed.repoPath).toBe("/tmp/repo");
     expect(parsed.slotCountRaw).toBe("2");
-    expect(parsed.loops).toEqual(["plan", "dev", "doc"]);
     expect(parsed.unknown).toEqual([]);
-  });
-
-  it("parses selected loop flags", () => {
-    const parsed = parseStartArgs(["/tmp/repo", "--dev", "--plan"]);
-    expect(parsed.loops).toEqual(["dev", "plan"]);
   });
 
   it("captures unknown flags", () => {
     const parsed = parseStartArgs(["/tmp/repo", "--wat"]);
     expect(parsed.unknown).toEqual(["--wat"]);
+  });
+
+  it("treats --plan, --dev, --doc as unknown flags", () => {
+    const parsed = parseStartArgs(["/tmp/repo", "--dev", "--plan", "--doc"]);
+    expect(parsed.unknown).toEqual(["--dev", "--plan", "--doc"]);
   });
 });

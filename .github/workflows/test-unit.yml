@@ -20,7 +20,12 @@ concurrency:
 jobs:
   test-unit:
     name: Unit tests
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:

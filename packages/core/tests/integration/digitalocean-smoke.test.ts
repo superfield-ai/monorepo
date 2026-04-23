@@ -9,10 +9,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import {
-  provision,
-  destroy,
-} from "../../providers/digitalocean/index.ts";
+import { provision, destroy } from "../../providers/digitalocean/index.ts";
 
 const HAS_TOKEN =
   typeof process.env.DIGITALOCEAN_TOKEN === "string" &&
@@ -22,22 +19,26 @@ const SMOKE_ENABLED = process.env.RUN_DO_SMOKE === "1";
 const describeIf = HAS_TOKEN && SMOKE_ENABLED ? describe : describe.skip;
 
 describeIf("digitalocean smoke (real DO API)", () => {
-  it("provisions and tears down a droplet", async () => {
-    const env = `smoke-${Date.now().toString(36)}`;
-    const derived =
-      "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAm5sIeRkpTrcZRn9C5Q3xZRFNjjwOe6oHMzS6jL3sUm smoke";
-    try {
-      const result = await provision({
-        env,
-        managedDb: false,
-        derivedDeployKeyPublicOpenSsh: derived,
-      });
-      expect(result.host).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
-      expect(result.initialPrivateKeyPem).toMatch(/BEGIN PRIVATE KEY/);
-    } finally {
-      await destroy({ env });
-    }
-  }, 5 * 60_000);
+  it(
+    "provisions and tears down a droplet",
+    async () => {
+      const env = `smoke-${Date.now().toString(36)}`;
+      const derived =
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAm5sIeRkpTrcZRn9C5Q3xZRFNjjwOe6oHMzS6jL3sUm smoke";
+      try {
+        const result = await provision({
+          env,
+          managedDb: false,
+          derivedDeployKeyPublicOpenSsh: derived,
+        });
+        expect(result.host).toMatch(/^\d+\.\d+\.\d+\.\d+$/);
+        expect(result.initialPrivateKeyPem).toMatch(/BEGIN PRIVATE KEY/);
+      } finally {
+        await destroy({ env });
+      }
+    },
+    5 * 60_000,
+  );
 });
 
 if (!HAS_TOKEN || !SMOKE_ENABLED) {

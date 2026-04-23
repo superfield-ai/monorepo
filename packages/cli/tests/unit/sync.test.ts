@@ -3,12 +3,7 @@ import { parseSyncArgs } from "../../commands/sync.ts";
 
 describe("parseSyncArgs", () => {
   it("parses --repo and --app-name (space form)", () => {
-    const r = parseSyncArgs([
-      "--repo",
-      "owner/name",
-      "--app-name",
-      "my-app",
-    ]);
+    const r = parseSyncArgs(["--repo", "owner/name", "--app-name", "my-app"]);
     expect(r.repo).toBe("owner/name");
     expect(r.appName).toBe("my-app");
     expect(r.imageRepo).toBeUndefined();

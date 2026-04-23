@@ -56,12 +56,15 @@ export interface BootstrapResult {
 export async function bootstrapHost(
   opts: BootstrapHostOptions,
 ): Promise<BootstrapResult> {
-  const onLine = opts.onLine ?? ((line: string) => {
-    process.stdout.write(`${line}\n`);
-  });
+  const onLine =
+    opts.onLine ??
+    ((line: string) => {
+      process.stdout.write(`${line}\n`);
+    });
   const readinessTimeoutMs = opts.readinessTimeoutMs ?? 60_000;
   const readinessIntervalMs = opts.readinessIntervalMs ?? 2_000;
-  const installScriptPath = opts.installScriptPath ?? defaultInstallScriptPath();
+  const installScriptPath =
+    opts.installScriptPath ?? defaultInstallScriptPath();
 
   // Validate the install script exists locally before touching the network so
   // we fail fast with a clear error.
@@ -179,7 +182,10 @@ export function ed25519Pkcs8PemToOpenSshPem(pkcs8Pem: string): string {
     format: "pem",
     type: "pkcs8",
   });
-  const pkcs8Der = privateKey.export({ format: "der", type: "pkcs8" }) as Buffer;
+  const pkcs8Der = privateKey.export({
+    format: "der",
+    type: "pkcs8",
+  }) as Buffer;
   // PKCS#8 for Ed25519 is the 16-byte fixed prefix used by `secrets/index.ts`
   // followed by the 32-byte raw seed. Slice the trailing 32 bytes.
   const seed = pkcs8Der.subarray(pkcs8Der.length - 32);
@@ -229,9 +235,9 @@ export function ed25519Pkcs8PemToOpenSshPem(pkcs8Pem: string): string {
 
   const body = Buffer.concat([
     magic,
-    sshString(none),       // ciphername
-    sshString(none),       // kdfname
-    sshString(empty),      // kdfoptions
+    sshString(none), // ciphername
+    sshString(none), // kdfname
+    sshString(empty), // kdfoptions
     numKeys,
     sshString(publicBlob),
     sshString(privSection),

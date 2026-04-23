@@ -546,8 +546,9 @@ async function spawnProcess(step: DeployProcessStep): Promise<void> {
 }
 
 function getDemoUrl(env: NodeJS.ProcessEnv): string {
+  const host = env.CALYPSO_DEMO_HOST ?? "localhost";
   const port = Number(env.CALYPSO_DEMO_PORT ?? DEFAULT_DEMO_PORT);
-  return `http://localhost:${port}/`;
+  return `http://${host}:${port}/`;
 }
 
 function phaseTitle(phase: DeployPhase): string {

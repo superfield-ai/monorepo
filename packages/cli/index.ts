@@ -1,5 +1,5 @@
 import { githubCommand } from "./commands/github.ts";
-import { startCommand, type StartLoop } from "./commands/start.ts";
+import { startCommand } from "./commands/start.ts";
 import { planCommand } from "./commands/plan.ts";
 import { featureCommand } from "./commands/feature.ts";
 import { deployCommand, type DeployCommandDeps } from "./commands/deploy.ts";
@@ -11,6 +11,7 @@ import { syncCommand } from "./commands/sync.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { exportDbCommand } from "./commands/export-db.ts";
 import { initCommand } from "./commands/init.ts";
+import { auditCommand } from "./commands/audit.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -29,10 +30,14 @@ Build date: ${BUILD_DATE}
 Commands:
   github add    Authenticate and register a repository
   github forget Remove credentials and print app uninstall link
-  start <path> [slotCount] [--plan] [--dev] [--doc]
-                Begin loop(s). Defaults to all three when no --<loop> flags are provided.
+  start <path> [slotCount]
+                Begin all three loops (plan, dev, doc).
   plan          Replan: group issues into phases, create scouts, write Plan
   feature "..." Evaluate a feature request and create an issue + Plan entry
+  audit --path <dir> [--repo <owner/name>] [--capabilities <id,...>]
+         [--output-dir <dir>] [--no-issues]
+                Audit an app repo against expected blueprint capabilities.
+                Saves per-capability findings to JSON; opens issues for gaps.
   deploy [--provision] [target]
                 Provision the demo target, then deploy it. Use --provision to run setup only.
   deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
@@ -121,7 +126,6 @@ export async function runCLI(
     }
     await startCommand(parsed.repoPath, {
       ...(slotCount !== null ? { slotCount } : {}),
-      loops: parsed.loops,
     });
     return;
   }
@@ -133,6 +137,11 @@ export async function runCLI(
 
   if (cmd === "feature") {
     await featureCommand(sub, third);
+    return;
+  }
+
+  if (cmd === "audit") {
+    await auditCommand(args.slice(1));
     return;
   }
 
@@ -195,28 +204,14 @@ export function parseSlotCount(raw: string | undefined): number | null {
 export interface ParsedStartArgs {
   repoPath: string | undefined;
   slotCountRaw: string | undefined;
-  loops: StartLoop[];
   unknown: string[];
 }
 
 export function parseStartArgs(args: string[]): ParsedStartArgs {
-  const loopSet = new Set<StartLoop>();
   const positionals: string[] = [];
   const unknown: string[] = [];
 
   for (const arg of args) {
-    if (arg === "--plan") {
-      loopSet.add("plan");
-      continue;
-    }
-    if (arg === "--dev") {
-      loopSet.add("dev");
-      continue;
-    }
-    if (arg === "--doc") {
-      loopSet.add("doc");
-      continue;
-    }
     if (arg.startsWith("--")) {
       unknown.push(arg);
       continue;
@@ -228,13 +223,9 @@ export function parseStartArgs(args: string[]): ParsedStartArgs {
     unknown.push(...positionals.slice(2));
   }
 
-  const loops: StartLoop[] =
-    loopSet.size > 0 ? Array.from(loopSet) : ["plan", "dev", "doc"];
-
   return {
     repoPath: positionals[0],
     slotCountRaw: positionals[1],
-    loops,
     unknown,
   };
 }

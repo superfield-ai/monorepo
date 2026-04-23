@@ -10,6 +10,7 @@ on:
     paths:
       - "packages/core/bootstrap/**"
       - ".github/workflows/test-bootstrap.yml"
+  workflow_dispatch:
 
 concurrency:
   group: test-bootstrap-${{ github.ref }}
@@ -18,19 +19,33 @@ concurrency:
 jobs:
   posix-syntax:
     name: dash -n install.sh
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - name: Install dash
-        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends dash
+        run: apt-get update -y && apt-get install -y --no-install-recommends dash
       - name: POSIX syntax check
         run: dash -n packages/core/bootstrap/install.sh
 
   container-smoke:
     name: install.sh smoke test (ubuntu:24.04)
-    runs-on: [self-hosted, linux]
-    timeout-minutes: 25
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
+    # systemd+k3s inside a nested container hangs indefinitely waiting for
+    # cgroups that aren't available from within the CI runner container.
+    # Run manually with workflow_dispatch when testing bootstrap changes.
+    if: github.event_name == 'workflow_dispatch'
     needs: posix-syntax
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
 

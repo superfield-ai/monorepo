@@ -38,14 +38,16 @@ export interface KubeRunner {
 export class SshKubeRunner implements KubeRunner {
   constructor(private readonly ssh: SshClient) {}
 
-  async exec(command: string, opts?: { stdin?: string }): Promise<KubeRunResult> {
+  async exec(
+    command: string,
+    opts?: { stdin?: string },
+  ): Promise<KubeRunResult> {
     if (opts?.stdin === undefined) {
       return this.ssh.exec(command);
     }
     // Heredoc avoids quoting issues when piping multi-line manifests.
     // SF_STDIN_EOF is unlikely to appear in a Kubernetes manifest.
-    const wrapped =
-      `cat <<'SF_STDIN_EOF' | ${command}\n${opts.stdin}\nSF_STDIN_EOF`;
+    const wrapped = `cat <<'SF_STDIN_EOF' | ${command}\n${opts.stdin}\nSF_STDIN_EOF`;
     return this.ssh.exec(wrapped);
   }
 }
@@ -190,8 +192,8 @@ export async function resolveTagToDigest(opts: {
     const challenge = probe.headers.get("www-authenticate") ?? "";
     const realm = /realm="([^"]+)"/.exec(challenge)?.[1];
     const service = /service="([^"]+)"/.exec(challenge)?.[1];
-    const scope = /scope="([^"]+)"/.exec(challenge)?.[1]
-      ?? `repository:${image}:pull`;
+    const scope =
+      /scope="([^"]+)"/.exec(challenge)?.[1] ?? `repository:${image}:pull`;
     if (!realm) {
       throw new Error(
         `GHCR 401 missing realm in WWW-Authenticate: ${challenge || "(empty)"}`,
@@ -211,7 +213,10 @@ export async function resolveTagToDigest(opts: {
         `GHCR token exchange failed (${tokenRes.status}) at ${tokenUrl.toString()}`,
       );
     }
-    const tokenJson = (await tokenRes.json()) as { token?: string; access_token?: string };
+    const tokenJson = (await tokenRes.json()) as {
+      token?: string;
+      access_token?: string;
+    };
     bearerToken = tokenJson.token ?? tokenJson.access_token;
     if (!bearerToken) {
       throw new Error(`GHCR token exchange returned no token`);
@@ -221,9 +226,7 @@ export async function resolveTagToDigest(opts: {
       `GHCR tag not found: ${image}:${opts.tag} — verify the image and tag exist`,
     );
   } else {
-    throw new Error(
-      `GHCR HEAD ${url} failed with status ${probe.status}`,
-    );
+    throw new Error(`GHCR HEAD ${url} failed with status ${probe.status}`);
   }
 
   const authed = await fetchImpl(url, {
@@ -342,16 +345,15 @@ export async function deployEnv(
   // postgres-StatefulSet + PVC topology.
   if (opts.cleanRoom && opts.dbMode !== "local") {
     throw new Error(
-      `deploy-env: --clean-room is only supported when dbMode=local `
-      + `(got dbMode=${opts.dbMode ?? "<unset>"} for env=${env}). `
-      + `Reset managed databases out of band.`,
+      `deploy-env: --clean-room is only supported when dbMode=local ` +
+        `(got dbMode=${opts.dbMode ?? "<unset>"} for env=${env}). ` +
+        `Reset managed databases out of band.`,
     );
   }
 
   // ── Step 1: resolve tag → digest ────────────────────────────────────────
   const githubToken =
-    opts.deps?.githubToken
-    ?? (await getAuthToken().catch(() => ""));
+    opts.deps?.githubToken ?? (await getAuthToken().catch(() => ""));
   if (!githubToken) {
     throw new Error(
       "deploy-env: no GitHub token available (set GITHUB_TOKEN or run `gh auth login`)",
@@ -367,12 +369,18 @@ export async function deployEnv(
 
   // ── Dry-run short-circuit ───────────────────────────────────────────────
   if (opts.dryRun) {
-    log(`[dry-run] would render+apply migrate Job for env=${env} tag=${digest}`);
-    log(`[dry-run] would set image deployment/${opts.appName} → ${imageRepo}@${digest}`);
+    log(
+      `[dry-run] would render+apply migrate Job for env=${env} tag=${digest}`,
+    );
+    log(
+      `[dry-run] would set image deployment/${opts.appName} → ${imageRepo}@${digest}`,
+    );
     for (const w of workerNames) {
       log(`[dry-run] would set image deployment/${w} → ${imageRepo}@${digest}`);
     }
-    log(`[dry-run] would health-check ${opts.appName}.${appNamespace}${healthPath}`);
+    log(
+      `[dry-run] would health-check ${opts.appName}.${appNamespace}${healthPath}`,
+    );
     return { digest, rolledOut: [opts.appName, ...workerNames], healthy: true };
   }
 
@@ -415,7 +423,9 @@ export async function deployEnv(
     });
     if (deployment) log(`created GitHub deployment ${deployment.id}`);
   } catch (err) {
-    log(`warning: failed to create GitHub deployment record: ${(err as Error).message}`);
+    log(
+      `warning: failed to create GitHub deployment record: ${(err as Error).message}`,
+    );
   }
 
   const annotateOutcome = async (
@@ -423,7 +433,9 @@ export async function deployEnv(
     description: string,
   ): Promise<void> => {
     if (!deployment) {
-      log(`outcome=${state} digest=${digest} (no deployment record to annotate)`);
+      log(
+        `outcome=${state} digest=${digest} (no deployment record to annotate)`,
+      );
       return;
     }
     try {
@@ -436,7 +448,9 @@ export async function deployEnv(
         token: githubToken,
       });
     } catch (err) {
-      log(`warning: failed to update deployment status: ${(err as Error).message}`);
+      log(
+        `warning: failed to update deployment status: ${(err as Error).message}`,
+      );
     }
   };
 
@@ -484,28 +498,30 @@ export async function deployEnv(
       if (pvcApply.exitCode !== 0) {
         throw new DeployStepError(
           "clean-room-pvc-apply",
-          `kubectl apply (PVC) failed (exit ${pvcApply.exitCode}): `
-          + (pvcApply.stderr.trim() || pvcApply.stdout.trim()),
+          `kubectl apply (PVC) failed (exit ${pvcApply.exitCode}): ` +
+            (pvcApply.stderr.trim() || pvcApply.stdout.trim()),
         );
       }
 
       log(
-        `clean-room: deleting StatefulSet postgres-${env} `
-        + `with --cascade=orphan (volumeClaimTemplates is immutable)`,
+        `clean-room: deleting StatefulSet postgres-${env} ` +
+          `with --cascade=orphan (volumeClaimTemplates is immutable)`,
       );
       const stsDelete = await runner.exec(
-        `kubectl delete sts -n ${appNamespace} postgres-${env} `
-        + `--cascade=orphan --ignore-not-found`,
+        `kubectl delete sts -n ${appNamespace} postgres-${env} ` +
+          `--cascade=orphan --ignore-not-found`,
       );
       if (stsDelete.exitCode !== 0) {
         throw new DeployStepError(
           "clean-room-sts-delete",
-          `kubectl delete sts failed (exit ${stsDelete.exitCode}): `
-          + (stsDelete.stderr.trim() || stsDelete.stdout.trim()),
+          `kubectl delete sts failed (exit ${stsDelete.exitCode}): ` +
+            (stsDelete.stderr.trim() || stsDelete.stdout.trim()),
         );
       }
 
-      log(`clean-room: re-applying postgres manifest pointing at ${newPvcName}`);
+      log(
+        `clean-room: re-applying postgres manifest pointing at ${newPvcName}`,
+      );
       const postgresManifest = rewritePostgresManifestPvcName(
         renderPostgresManifest(env),
         env,
@@ -518,22 +534,22 @@ export async function deployEnv(
       if (stsApply.exitCode !== 0) {
         throw new DeployStepError(
           "clean-room-sts-apply",
-          `kubectl apply (StatefulSet) failed (exit ${stsApply.exitCode}): `
-          + (stsApply.stderr.trim() || stsApply.stdout.trim()),
+          `kubectl apply (StatefulSet) failed (exit ${stsApply.exitCode}): ` +
+            (stsApply.stderr.trim() || stsApply.stdout.trim()),
         );
       }
 
       log(`clean-room: waiting for postgres-${env} pod to be Ready`);
       const pgWait = await runner.exec(
-        `kubectl wait -n ${appNamespace} `
-        + `--for=condition=Ready --timeout=${ROLLOUT_TIMEOUT} `
-        + `pod -l app=postgres,env=${env}`,
+        `kubectl wait -n ${appNamespace} ` +
+          `--for=condition=Ready --timeout=${ROLLOUT_TIMEOUT} ` +
+          `pod -l app=postgres,env=${env}`,
       );
       if (pgWait.exitCode !== 0) {
         throw new DeployStepError(
           "clean-room-pg-ready",
-          `postgres pod did not reach Ready: `
-          + (pgWait.stderr.trim() || pgWait.stdout.trim()),
+          `postgres pod did not reach Ready: ` +
+            (pgWait.stderr.trim() || pgWait.stdout.trim()),
         );
       }
 
@@ -551,21 +567,21 @@ export async function deployEnv(
       if (seedApply.exitCode !== 0) {
         throw new DeployStepError(
           "clean-room-seed-apply",
-          `kubectl apply (seed Job) failed (exit ${seedApply.exitCode}): `
-          + (seedApply.stderr.trim() || seedApply.stdout.trim()),
+          `kubectl apply (seed Job) failed (exit ${seedApply.exitCode}): ` +
+            (seedApply.stderr.trim() || seedApply.stdout.trim()),
         );
       }
       log(`clean-room: waiting for seed Job ${seedJobName} to complete`);
       const seedWait = await runner.exec(
-        `kubectl wait -n ${appNamespace} `
-        + `--for=condition=Complete --timeout=${ROLLOUT_TIMEOUT} `
-        + `job/${seedJobName}`,
+        `kubectl wait -n ${appNamespace} ` +
+          `--for=condition=Complete --timeout=${ROLLOUT_TIMEOUT} ` +
+          `job/${seedJobName}`,
       );
       if (seedWait.exitCode !== 0) {
         throw new DeployStepError(
           "clean-room-seed-wait",
-          `seed Job did not complete: `
-          + (seedWait.stderr.trim() || seedWait.stdout.trim()),
+          `seed Job did not complete: ` +
+            (seedWait.stderr.trim() || seedWait.stdout.trim()),
         );
       }
       log(`clean-room: seed Job complete`);
@@ -632,7 +648,9 @@ export async function deployEnv(
     }
 
     // ── Step 6: health gate ──────────────────────────────────────────────
-    log(`health-checking http://${opts.appName}.${appNamespace}.svc.cluster.local${healthPath}`);
+    log(
+      `health-checking http://${opts.appName}.${appNamespace}.svc.cluster.local${healthPath}`,
+    );
     const healthy = await healthGate({
       runner,
       appName: opts.appName,
@@ -652,13 +670,13 @@ export async function deployEnv(
     await annotateOutcome("success", `deployed ${digest}`);
     if (cleanRoomState) {
       log(
-        `clean-room: previous PVC name(s) preserved: `
-        + cleanRoomState.preservedPvcs.join(", "),
+        `clean-room: previous PVC name(s) preserved: ` +
+          cleanRoomState.preservedPvcs.join(", "),
       );
       log(
-        `clean-room: to reclaim, run `
-        + `kubectl delete pvc -n ${appNamespace} `
-        + cleanRoomState.preservedPvcs.join(" "),
+        `clean-room: to reclaim, run ` +
+          `kubectl delete pvc -n ${appNamespace} ` +
+          cleanRoomState.preservedPvcs.join(" "),
       );
     }
     log(`deploy-env complete: digest=${digest}`);
@@ -683,10 +701,14 @@ export async function deployEnv(
           `kubectl rollout undo -n ${appNamespace} deployment/${name}`,
         );
         if (undo.exitCode !== 0) {
-          log(`warning: rollout undo for ${name} returned exit ${undo.exitCode}: ${undo.stderr.trim()}`);
+          log(
+            `warning: rollout undo for ${name} returned exit ${undo.exitCode}: ${undo.stderr.trim()}`,
+          );
         }
       } catch (undoErr) {
-        log(`warning: rollout undo for ${name} threw: ${(undoErr as Error).message}`);
+        log(
+          `warning: rollout undo for ${name} threw: ${(undoErr as Error).message}`,
+        );
       }
     }
 
@@ -734,9 +756,9 @@ async function healthGate(opts: {
   while (Date.now() < deadline) {
     const probeName = `sf-health-${Date.now().toString(36)}`;
     const cmd =
-      `kubectl run ${probeName} -n ${opts.namespace} --rm -i --restart=Never `
-      + `--image=curlimages/curl:8.10.1 --quiet --command -- `
-      + `curl -fsS --max-time 5 ${url}`;
+      `kubectl run ${probeName} -n ${opts.namespace} --rm -i --restart=Never ` +
+      `--image=curlimages/curl:8.10.1 --quiet --command -- ` +
+      `curl -fsS --max-time 5 ${url}`;
     const result = await opts.runner.exec(cmd);
     if (result.exitCode === 0) return true;
     opts.log(`health probe non-zero (${result.exitCode}); retrying`);
@@ -752,12 +774,12 @@ async function healthGate(opts: {
 function formatTimestamp(d: Date): string {
   const pad = (n: number, w = 2) => n.toString().padStart(w, "0");
   return (
-    `${d.getUTCFullYear()}`
-    + `${pad(d.getUTCMonth() + 1)}`
-    + `${pad(d.getUTCDate())}`
-    + `${pad(d.getUTCHours())}`
-    + `${pad(d.getUTCMinutes())}`
-    + `${pad(d.getUTCSeconds())}`
+    `${d.getUTCFullYear()}` +
+    `${pad(d.getUTCMonth() + 1)}` +
+    `${pad(d.getUTCDate())}` +
+    `${pad(d.getUTCHours())}` +
+    `${pad(d.getUTCMinutes())}` +
+    `${pad(d.getUTCSeconds())}`
   );
 }
 

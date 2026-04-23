@@ -54,28 +54,31 @@ const MAIN_SHA = "deadbeefdeadbeefdeadbeefdeadbeefdeadbeef";
 function installFakeGithub(state: FakeRepo): void {
   server.use(
     // Read content from default branch (used by syncWorkflows to compare).
-    http.get(`${BASE}/repos/${REPO}/contents/:p1/:p2/:p3`, ({ params, request }) => {
-      const url = new URL(request.url);
-      const ref = url.searchParams.get("ref");
-      const pathStr = `${params.p1}/${params.p2}/${params.p3}`;
-      // Distinguish between the read against base (ref=main) and the read
-      // against the new branch (ref=superfield/sync-...) which openPullRequest
-      // performs to find an existing sha. For reads against the new branch,
-      // always 404 (file does not yet exist on the freshly created branch).
-      if (ref && ref.startsWith("superfield/sync-")) {
-        return HttpResponse.json({ message: "Not Found" }, { status: 404 });
-      }
-      const content = state.files.get(pathStr);
-      if (content === undefined) {
-        return HttpResponse.json({ message: "Not Found" }, { status: 404 });
-      }
-      return HttpResponse.json({
-        type: "file",
-        sha: "sha-" + pathStr,
-        encoding: "base64",
-        content: Buffer.from(content, "utf8").toString("base64"),
-      });
-    }),
+    http.get(
+      `${BASE}/repos/${REPO}/contents/:p1/:p2/:p3`,
+      ({ params, request }) => {
+        const url = new URL(request.url);
+        const ref = url.searchParams.get("ref");
+        const pathStr = `${params.p1}/${params.p2}/${params.p3}`;
+        // Distinguish between the read against base (ref=main) and the read
+        // against the new branch (ref=superfield/sync-...) which openPullRequest
+        // performs to find an existing sha. For reads against the new branch,
+        // always 404 (file does not yet exist on the freshly created branch).
+        if (ref && ref.startsWith("superfield/sync-")) {
+          return HttpResponse.json({ message: "Not Found" }, { status: 404 });
+        }
+        const content = state.files.get(pathStr);
+        if (content === undefined) {
+          return HttpResponse.json({ message: "Not Found" }, { status: 404 });
+        }
+        return HttpResponse.json({
+          type: "file",
+          sha: "sha-" + pathStr,
+          encoding: "base64",
+          content: Buffer.from(content, "utf8").toString("base64"),
+        });
+      },
+    ),
     // Branch ref lookups for openPullRequest.ensureBranch.
     http.get(`${BASE}/repos/${REPO}/git/ref/heads/main`, () =>
       HttpResponse.json({

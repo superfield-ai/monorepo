@@ -180,6 +180,16 @@ export type {
   BlueprintConformanceOpts,
 } from "./steps/blueprint-conformance.ts";
 
+export { runAudit } from "./commands/audit.ts";
+export type {
+  AuditOpts,
+  AuditDeps,
+  AuditSummary,
+  CapabilityFinding,
+} from "./commands/audit.ts";
+export { CAPABILITIES, getCapability } from "./audit/capabilities.ts";
+export type { AuditCapability } from "./audit/capabilities.ts";
+
 export {
   loadBlueprint,
   pickCandidateDomains,

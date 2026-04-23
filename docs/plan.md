@@ -83,6 +83,19 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 - ⬜ Wire into `superfield start` with `--no-api` and `--api-port` flags
 - ⬜ Instrument dev loop, planning loop, doc loop with `recordLoopTick`, `recordAgentStart`, `recordAgentEnd`
 
+### Phase A-12 — `audit` command 🟡
+
+- ✅ `superfield audit --path <dir>` — audit an app repo against expected blueprint capabilities
+- ✅ Initial capability set: `property-graph-db`, `authentication`, `error-tracing`, `pwa`
+- ✅ Per-capability agent call via `spawnAgent` (`jobType: "audit"`, `maxTurns: 100`)
+- ✅ Findings saved incrementally to `<output-dir>/<capability-id>.json` (resume on crash)
+- ✅ Summary written to `<output-dir>/summary.json`
+- ✅ Gap → GitHub issue in blueprint issue format (skipped when `--no-issues` or no `--repo`)
+- ✅ `"audit"` job type registered in job registry (medium dev spec)
+- ⬜ Expand capability set from blueprint YAML `checklist` rules
+- ⬜ Parallel capability runs
+- ⬜ Stale-check: skip re-running capabilities where finding mtime > repo HEAD mtime
+
 ### Cross-cutting A (remaining)
 
 - ⬜ Wire all three loops in `superfield start` (currently only planning loop runs)
@@ -136,15 +149,15 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 
 #### Phase B-6 known issues
 
-| Severity | Location | Description |
-| -------- | -------- | ----------- |
-| Critical | `core/commands/doctor.ts:288,368,429,497` | Four checks require `opts.mnemonic` which the CLI never provides; `allOk` is permanently false |
-| Critical | `core/commands/doctor.ts:350` vs `core/commands/setup-github.ts:200` | `doctor` reads `DEPLOY_HOST_<ENV>` as a repo variable; `setup-github` writes it as a secret |
-| High | `core/commands/init.ts:253` | Step 6 reads `DEPLOY_KEY`/`DEPLOY_KEY_FILE` from env instead of using the key derived in steps 1–5 |
-| High | `core/commands/init.ts:335` | `--provider gcp` always throws unless `deps.provision` is injected; not callable from the CLI |
-| High | `core/commands/export-db.ts:210,252` | AWS branch: `buildAwsAuthHeader()` emits `Signature=placeholder`; RDS calls fail auth |
-| High | `cli/commands/export-db.ts:4,91` | `export-db` does not follow per-env naming (`DEPLOY_HOST`/`DEPLOY_KEY` vs `_<ENV>` suffix) |
-| Medium | All ops commands | Host/key resolution reimplemented separately in each command — root cause of the above |
+| Severity | Location                                                             | Description                                                                                        |
+| -------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Critical | `core/commands/doctor.ts:288,368,429,497`                            | Four checks require `opts.mnemonic` which the CLI never provides; `allOk` is permanently false     |
+| Critical | `core/commands/doctor.ts:350` vs `core/commands/setup-github.ts:200` | `doctor` reads `DEPLOY_HOST_<ENV>` as a repo variable; `setup-github` writes it as a secret        |
+| High     | `core/commands/init.ts:253`                                          | Step 6 reads `DEPLOY_KEY`/`DEPLOY_KEY_FILE` from env instead of using the key derived in steps 1–5 |
+| High     | `core/commands/init.ts:335`                                          | `--provider gcp` always throws unless `deps.provision` is injected; not callable from the CLI      |
+| High     | `core/commands/export-db.ts:210,252`                                 | AWS branch: `buildAwsAuthHeader()` emits `Signature=placeholder`; RDS calls fail auth              |
+| High     | `cli/commands/export-db.ts:4,91`                                     | `export-db` does not follow per-env naming (`DEPLOY_HOST`/`DEPLOY_KEY` vs `_<ENV>` suffix)         |
+| Medium   | All ops commands                                                     | Host/key resolution reimplemented separately in each command — root cause of the above             |
 
 ### Cross-cutting B (remaining)
 

@@ -65,13 +65,13 @@ describe("aws provision", () => {
     expect(ec2Order.indexOf("CreateSecurityGroupCommand")).toBeLessThan(
       ec2Order.indexOf("AuthorizeSecurityGroupIngressCommand"),
     );
-    expect(ec2Order.indexOf("AuthorizeSecurityGroupIngressCommand")).toBeLessThan(
-      ec2Order.indexOf("ImportKeyPairCommand"),
-    );
-    // Both key pairs imported before RunInstances.
     expect(
-      ec2Order.lastIndexOf("ImportKeyPairCommand"),
-    ).toBeLessThan(ec2Order.indexOf("RunInstancesCommand"));
+      ec2Order.indexOf("AuthorizeSecurityGroupIngressCommand"),
+    ).toBeLessThan(ec2Order.indexOf("ImportKeyPairCommand"));
+    // Both key pairs imported before RunInstances.
+    expect(ec2Order.lastIndexOf("ImportKeyPairCommand")).toBeLessThan(
+      ec2Order.indexOf("RunInstancesCommand"),
+    );
 
     // Both key pairs registered, with derived deploy key second.
     expect(state.keyPairs.has(resourceNames("demo").ephemeralKeyPairName)).toBe(
@@ -100,9 +100,9 @@ describe("aws provision", () => {
       { clients: clients(state, log1), sleep: async () => {} },
     );
     expect(log1.ec2.filter((n) => n === "RunInstancesCommand")).toHaveLength(1);
-    expect(log1.ec2.filter((n) => n === "CreateSecurityGroupCommand")).toHaveLength(
-      1,
-    );
+    expect(
+      log1.ec2.filter((n) => n === "CreateSecurityGroupCommand"),
+    ).toHaveLength(1);
 
     const log2 = freshLog();
     const second = await provision(
@@ -221,10 +221,7 @@ describe("aws destroy", () => {
     // Reuse the same fakes for destroy by re-deriving clients on the same state.
     const dlog = freshLog();
     const c = clients(state, dlog);
-    await destroy(
-      { env: "demo" },
-      { clients: { ec2: c.ec2, rds: c.rds } },
-    );
+    await destroy({ env: "demo" }, { clients: { ec2: c.ec2, rds: c.rds } });
     // Destroy issued terminate, db delete, sg deletes.
     expect(dlog.ec2).toContain("TerminateInstancesCommand");
     expect(dlog.rds).toContain("DeleteDBInstanceCommand");

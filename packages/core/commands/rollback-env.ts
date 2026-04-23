@@ -1,9 +1,6 @@
 import { SshClient } from "../ssh/client.ts";
 import { getAuthToken } from "../github/auth.ts";
-import {
-  SshKubeRunner,
-  type KubeRunner,
-} from "./deploy-env.ts";
+import { SshKubeRunner, type KubeRunner } from "./deploy-env.ts";
 
 /**
  * Options for {@link rollbackEnv}.
@@ -104,8 +101,7 @@ async function createDeploymentStatus(opts: {
   fetchImpl: typeof fetch;
   token: string;
 }): Promise<void> {
-  const url =
-    `https://api.github.com/repos/${opts.repo}/deployments/${opts.deploymentId}/statuses`;
+  const url = `https://api.github.com/repos/${opts.repo}/deployments/${opts.deploymentId}/statuses`;
   await opts.fetchImpl(url, {
     method: "POST",
     headers: {
@@ -122,7 +118,10 @@ async function createDeploymentStatus(opts: {
 }
 
 class RollbackStepError extends Error {
-  constructor(readonly step: string, message: string) {
+  constructor(
+    readonly step: string,
+    message: string,
+  ) {
     super(`[${step}] ${message}`);
     this.name = "RollbackStepError";
   }
@@ -157,8 +156,7 @@ export async function rollbackEnv(
 
   // GitHub token — best-effort for the deployment annotation only.
   const githubToken =
-    opts.deps?.githubToken
-    ?? (await getAuthToken().catch(() => ""));
+    opts.deps?.githubToken ?? (await getAuthToken().catch(() => ""));
 
   // ── Step 1: open SSH + tunnel ───────────────────────────────────────────
   const ssh = new SshClient({
@@ -323,9 +321,9 @@ async function healthGate(opts: {
   while (Date.now() < deadline) {
     const probeName = `sf-health-${Date.now().toString(36)}`;
     const cmd =
-      `kubectl run ${probeName} -n ${opts.namespace} --rm -i --restart=Never `
-      + `--image=curlimages/curl:8.10.1 --quiet --command -- `
-      + `curl -fsS --max-time 5 ${url}`;
+      `kubectl run ${probeName} -n ${opts.namespace} --rm -i --restart=Never ` +
+      `--image=curlimages/curl:8.10.1 --quiet --command -- ` +
+      `curl -fsS --max-time 5 ${url}`;
     const result = await opts.runner.exec(cmd);
     if (result.exitCode === 0) return true;
     opts.log(`health probe non-zero (${result.exitCode}); retrying`);

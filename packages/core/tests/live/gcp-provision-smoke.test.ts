@@ -1,9 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { provision, destroy } from "../../providers/gcp/index.ts";
-import {
-  getGoogleAccessToken,
-  makeDefaultAuthDeps,
-} from "../../gcp/auth.ts";
+import { getGoogleAccessToken, makeDefaultAuthDeps } from "../../gcp/auth.ts";
 
 /**
  * Layer 3 — live smoke test against a real GCP project.

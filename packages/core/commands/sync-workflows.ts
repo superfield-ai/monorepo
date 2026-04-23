@@ -81,8 +81,10 @@ export async function syncWorkflows(
 
   for (const file of rendered) {
     const existing = await getFileContent(opts.repo, file.path, base, deps);
-    if (existing !== null && normalizeWhitespace(existing) ===
-      normalizeWhitespace(file.content)) {
+    if (
+      existing !== null &&
+      normalizeWhitespace(existing) === normalizeWhitespace(file.content)
+    ) {
       unchanged.push(file.path);
       continue;
     }

@@ -19,7 +19,12 @@ concurrency:
 jobs:
   typecheck:
     name: Typecheck
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
@@ -27,7 +32,12 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
@@ -35,7 +45,12 @@ jobs:
 
   format:
     name: Format
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
@@ -43,7 +58,12 @@ jobs:
 
   blueprint-freshness:
     name: Blueprint freshness
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:
@@ -51,4 +71,6 @@ jobs:
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
       - name: Check blueprint freshness
-        run: bun run blueprint:compile && git diff --exit-code packages/core/blueprint-data.generated.ts
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          bun run blueprint:compile && git diff --exit-code packages/core/blueprint-data.generated.ts
