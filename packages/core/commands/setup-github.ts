@@ -1,10 +1,7 @@
 import { createHash } from "node:crypto";
 
 import { deriveEd25519Key, deriveHmacToken } from "../secrets/index.ts";
-import {
-  listDeployKeys,
-  registerDeployKey,
-} from "../github/deploy-keys.ts";
+import { listDeployKeys, registerDeployKey } from "../github/deploy-keys.ts";
 import { putRepoSecret } from "../github/secrets.ts";
 import { getRepoVariable, putRepoVariable } from "../github/variables.ts";
 import { makeDefaultGithubDeps } from "../github/index.ts";

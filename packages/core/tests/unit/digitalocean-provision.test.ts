@@ -22,10 +22,7 @@ import {
 import { derivePassword } from "../../secrets/index.ts";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const FIXTURES = path.resolve(
-  __dirname,
-  "../fixtures/digitalocean",
-);
+const FIXTURES = path.resolve(__dirname, "../fixtures/digitalocean");
 
 function loadFixture(name: string): Record<string, unknown> {
   const raw = fs.readFileSync(path.join(FIXTURES, `${name}.json`), "utf8");
@@ -122,7 +119,10 @@ function installHandlers(): void {
         );
         if (existing) {
           return HttpResponse.json(
-            { id: "unprocessable_entity", message: "SSH Key is already in use" },
+            {
+              id: "unprocessable_entity",
+              message: "SSH Key is already in use",
+            },
             { status: 422 },
           );
         }
@@ -169,9 +169,7 @@ function installHandlers(): void {
       });
       if (state.droplet) {
         return HttpResponse.json({
-          droplets: [
-            (state.droplet as { droplet: unknown }).droplet,
-          ],
+          droplets: [(state.droplet as { droplet: unknown }).droplet],
         });
       }
       return HttpResponse.json({ droplets: [] });
@@ -188,36 +186,30 @@ function installHandlers(): void {
         return HttpResponse.json(state.droplet, { status: 202 });
       },
     ),
-    http.get(
-      "https://api.digitalocean.com/v2/droplets/:id",
-      ({ params }) => {
-        state.calls.push({
-          method: "GET",
-          url: `/v2/droplets/${params.id}`,
-        });
-        // Flip to active on first poll
-        if (state.dropletStatus === "new") {
-          state.dropletStatus = "active";
-          state.droplet = loadFixture("droplet-active") as Record<
-            string,
-            unknown
-          >;
-        }
-        return HttpResponse.json(state.droplet);
-      },
-    ),
-    http.delete(
-      "https://api.digitalocean.com/v2/droplets",
-      ({ request }) => {
-        const url = new URL(request.url);
-        state.calls.push({
-          method: "DELETE",
-          url: `/v2/droplets?tag_name=${url.searchParams.get("tag_name") ?? ""}`,
-        });
-        state.droplet = null;
-        return new HttpResponse(null, { status: 204 });
-      },
-    ),
+    http.get("https://api.digitalocean.com/v2/droplets/:id", ({ params }) => {
+      state.calls.push({
+        method: "GET",
+        url: `/v2/droplets/${params.id}`,
+      });
+      // Flip to active on first poll
+      if (state.dropletStatus === "new") {
+        state.dropletStatus = "active";
+        state.droplet = loadFixture("droplet-active") as Record<
+          string,
+          unknown
+        >;
+      }
+      return HttpResponse.json(state.droplet);
+    }),
+    http.delete("https://api.digitalocean.com/v2/droplets", ({ request }) => {
+      const url = new URL(request.url);
+      state.calls.push({
+        method: "DELETE",
+        url: `/v2/droplets?tag_name=${url.searchParams.get("tag_name") ?? ""}`,
+      });
+      state.droplet = null;
+      return new HttpResponse(null, { status: 204 });
+    }),
 
     // Databases
     http.get("https://api.digitalocean.com/v2/databases", ({ request }) => {
@@ -228,9 +220,7 @@ function installHandlers(): void {
       });
       if (state.database) {
         return HttpResponse.json({
-          databases: [
-            (state.database as { database: unknown }).database,
-          ],
+          databases: [(state.database as { database: unknown }).database],
         });
       }
       return HttpResponse.json({ databases: [] });
@@ -248,23 +238,20 @@ function installHandlers(): void {
         return HttpResponse.json(state.database, { status: 201 });
       },
     ),
-    http.get(
-      "https://api.digitalocean.com/v2/databases/:id",
-      ({ params }) => {
-        state.calls.push({
-          method: "GET",
-          url: `/v2/databases/${params.id}`,
-        });
-        if (state.databaseStatus === "creating") {
-          state.databaseStatus = "online";
-          state.database = loadFixture("database-online") as Record<
-            string,
-            unknown
-          >;
-        }
-        return HttpResponse.json(state.database);
-      },
-    ),
+    http.get("https://api.digitalocean.com/v2/databases/:id", ({ params }) => {
+      state.calls.push({
+        method: "GET",
+        url: `/v2/databases/${params.id}`,
+      });
+      if (state.databaseStatus === "creating") {
+        state.databaseStatus = "online";
+        state.database = loadFixture("database-online") as Record<
+          string,
+          unknown
+        >;
+      }
+      return HttpResponse.json(state.database);
+    }),
     http.post(
       "https://api.digitalocean.com/v2/databases/:id/dbs",
       async ({ request, params }) => {
@@ -274,10 +261,7 @@ function installHandlers(): void {
         });
         await request.json();
         state.appDbCreated = true;
-        return HttpResponse.json(
-          { db: { name: "app" } },
-          { status: 201 },
-        );
+        return HttpResponse.json({ db: { name: "app" } }, { status: 201 });
       },
     ),
     http.post(
@@ -362,9 +346,7 @@ describe("digitalocean.provision (first run)", () => {
     expect(ordered[1]).toBe("POST /v2/tags");
     expect(ordered[2]).toBe("POST /v2/account/keys");
     expect(ordered[3]).toBe("POST /v2/account/keys");
-    expect(ordered[4]).toBe(
-      "GET /v2/droplets?tag_name=superfield-env=test",
-    );
+    expect(ordered[4]).toBe("GET /v2/droplets?tag_name=superfield-env=test");
     expect(ordered[5]).toBe("POST /v2/droplets");
     expect(ordered[6]).toBe("GET /v2/droplets/100001");
 
@@ -449,7 +431,9 @@ describe("digitalocean.provision (managedDb=true)", () => {
     // Firewall trusted sources include both the droplet and its IP.
     const rules = state.firewallRules as { type: string; value: string }[];
     expect(rules.some((r) => r.type === "droplet")).toBe(true);
-    expect(rules.some((r) => r.type === "ip_addr" && r.value === "203.0.113.42")).toBe(true);
+    expect(
+      rules.some((r) => r.type === "ip_addr" && r.value === "203.0.113.42"),
+    ).toBe(true);
   });
 });
 
@@ -458,7 +442,9 @@ describe("digitalocean.provision (managedDb=false)", () => {
     state = newState();
     installHandlers();
     await provision({ ...baseOpts, managedDb: false });
-    const dbCalls = state.calls.filter((c) => c.url.startsWith("/v2/databases"));
+    const dbCalls = state.calls.filter((c) =>
+      c.url.startsWith("/v2/databases"),
+    );
     expect(dbCalls.length).toBe(0);
   });
 });

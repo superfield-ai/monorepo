@@ -25,7 +25,12 @@ concurrency:
 jobs:
   build:
     name: Compile and build container image
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/superfield-cli
     steps:

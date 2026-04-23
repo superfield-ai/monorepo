@@ -4,6 +4,7 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,8 +16,13 @@ jobs:
 
   release:
     name: Build and publish release
-    runs-on: [self-hosted, linux]
+    runs-on: [self-hosted, Linux, X64]
     needs: test-unit
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v4
         with:

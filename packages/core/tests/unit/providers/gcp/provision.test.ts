@@ -13,10 +13,7 @@ import { derivePassword } from "../../../../secrets/index.ts";
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
 
-const FIXTURES_DIR = join(
-  import.meta.dirname,
-  "../../../fixtures/gcp",
-);
+const FIXTURES_DIR = join(import.meta.dirname, "../../../fixtures/gcp");
 
 function fixture<T = unknown>(name: string): T {
   const raw = readFileSync(join(FIXTURES_DIR, name), "utf8");

@@ -55,27 +55,29 @@ afterAll(() => server.close());
 
 function ghcrHandlers() {
   return [
-    http.head(`https://ghcr.io/v2/${IMAGE_LC}/manifests/${TAG}`, ({ request }) => {
-      const auth = request.headers.get("authorization");
-      if (!auth) {
+    http.head(
+      `https://ghcr.io/v2/${IMAGE_LC}/manifests/${TAG}`,
+      ({ request }) => {
+        const auth = request.headers.get("authorization");
+        if (!auth) {
+          return new HttpResponse(null, {
+            status: 401,
+            headers: {
+              "www-authenticate": `Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:${IMAGE_LC}:pull"`,
+            },
+          });
+        }
         return new HttpResponse(null, {
-          status: 401,
-          headers: {
-            "www-authenticate": `Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:${IMAGE_LC}:pull"`,
-          },
+          status: 200,
+          headers: { "docker-content-digest": DIGEST },
         });
-      }
-      return new HttpResponse(null, {
-        status: 200,
-        headers: { "docker-content-digest": DIGEST },
-      });
-    }),
+      },
+    ),
     http.get(`https://ghcr.io/token`, () =>
       HttpResponse.json({ token: "ghcr-registry-token" }),
     ),
-    http.post(
-      `https://api.github.com/repos/${REPO}/deployments`,
-      async () => HttpResponse.json({ id: 9001 }, { status: 201 }),
+    http.post(`https://api.github.com/repos/${REPO}/deployments`, async () =>
+      HttpResponse.json({ id: 9001 }, { status: 201 }),
     ),
     http.post(
       `https://api.github.com/repos/${REPO}/deployments/:id/statuses`,
@@ -131,8 +133,9 @@ describe("deployEnv --clean-room", () => {
     // 1. New PVC apply via stdin (precise lookup: first apply whose stdin
     //    contains a PVC kind).
     const firstApply = runner.calls.findIndex(
-      (c) => c.command === "kubectl apply -n default -f -"
-        && (c.stdin?.includes("PersistentVolumeClaim") ?? false),
+      (c) =>
+        c.command === "kubectl apply -n default -f -" &&
+        (c.stdin?.includes("PersistentVolumeClaim") ?? false),
     );
     expect(firstApply).toBeGreaterThanOrEqual(0);
     expect(runner.calls[firstApply]!.stdin).toContain(
@@ -144,14 +147,17 @@ describe("deployEnv --clean-room", () => {
     //    delete and the subsequent apply with the new volumeClaimTemplates
     //    name.
     const stsDelete = cmds.findIndex(
-      (c) => c.includes("delete sts") && c.includes("postgres-demo")
-        && c.includes("--cascade=orphan"),
+      (c) =>
+        c.includes("delete sts") &&
+        c.includes("postgres-demo") &&
+        c.includes("--cascade=orphan"),
     );
     expect(stsDelete).toBeGreaterThanOrEqual(0);
     const stsApply = runner.calls.findIndex(
-      (c, i) => i > stsDelete
-        && c.command === "kubectl apply -n default -f -"
-        && (c.stdin?.includes("kind: StatefulSet") ?? false),
+      (c, i) =>
+        i > stsDelete &&
+        c.command === "kubectl apply -n default -f -" &&
+        (c.stdin?.includes("kind: StatefulSet") ?? false),
     );
     expect(stsApply).toBeGreaterThan(stsDelete);
     expect(runner.calls[stsApply]!.stdin).toContain(
@@ -160,36 +166,43 @@ describe("deployEnv --clean-room", () => {
 
     // 3. Wait for postgres pod ready
     const pgReady = cmds.findIndex(
-      (c) => c.includes("kubectl wait")
-        && c.includes("--for=condition=Ready")
-        && c.includes("app=postgres,env=demo"),
+      (c) =>
+        c.includes("kubectl wait") &&
+        c.includes("--for=condition=Ready") &&
+        c.includes("app=postgres,env=demo"),
     );
     expect(pgReady).toBeGreaterThan(stsApply);
 
     // 4. Seed Job apply + wait
     const seedApply = runner.calls.findIndex(
-      (c, i) => i > pgReady
-        && c.command === "kubectl apply -n default -f -"
-        && (c.stdin?.includes("db-seed-demo") ?? false),
+      (c, i) =>
+        i > pgReady &&
+        c.command === "kubectl apply -n default -f -" &&
+        (c.stdin?.includes("db-seed-demo") ?? false),
     );
     expect(seedApply).toBeGreaterThan(pgReady);
     const seedWait = cmds.findIndex(
-      (c, i) => i > seedApply
-        && c.includes("kubectl wait")
-        && c.includes("--for=condition=Complete")
-        && c.includes("job/db-seed-demo-"),
+      (c, i) =>
+        i > seedApply &&
+        c.includes("kubectl wait") &&
+        c.includes("--for=condition=Complete") &&
+        c.includes("job/db-seed-demo-"),
     );
     expect(seedWait).toBeGreaterThan(seedApply);
 
     // 5. After seed: normal migrate Job, then app rollout
     const migrateApply = runner.calls.findIndex(
-      (c, i) => i > seedWait
-        && c.command === "kubectl apply -n default -f -"
-        && (c.stdin?.includes("db-migrate-demo") ?? false),
+      (c, i) =>
+        i > seedWait &&
+        c.command === "kubectl apply -n default -f -" &&
+        (c.stdin?.includes("db-migrate-demo") ?? false),
     );
     expect(migrateApply).toBeGreaterThan(seedWait);
     const setImage = cmds.findIndex(
-      (c, i) => i > migrateApply && c.includes("set image") && c.includes("deployment/app"),
+      (c, i) =>
+        i > migrateApply &&
+        c.includes("set image") &&
+        c.includes("deployment/app"),
     );
     expect(setImage).toBeGreaterThan(migrateApply);
 
@@ -225,9 +238,7 @@ describe("deployEnv --clean-room", () => {
       return ok();
     });
 
-    await expect(
-      deployEnv(commonOpts({}, runner)),
-    ).rejects.toThrow(/seed/i);
+    await expect(deployEnv(commonOpts({}, runner))).rejects.toThrow(/seed/i);
 
     const cmds = runner.calls.map((c) => c.command);
     // No app rollout / set-image happened.
