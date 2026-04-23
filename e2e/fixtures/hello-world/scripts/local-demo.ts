@@ -1,5 +1,5 @@
 import { spawnSync, execFileSync } from "node:child_process";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import * as path from "node:path";
 
@@ -52,17 +52,26 @@ export async function ensureCluster(): Promise<void> {
 
   spawnSync("k3d", clusterArgs, { stdio: "pipe" });
 
-  // Replace 0.0.0.0 with the host gateway so kubectl can reach the API server
-  // from inside the CI runner container.
-  if (hostGateway) {
-    const kubeconfigPath = path.join(homedir(), ".kube", "config");
-    if (existsSync(kubeconfigPath)) {
-      const patched = readFileSync(kubeconfigPath, "utf8").replace(
+  // Always explicitly fetch the kubeconfig — k3d won't re-merge it if the
+  // cluster already existed, so we can't rely on ~/.kube/config being current.
+  const kubeconfigResult = spawnSync(
+    "k3d",
+    ["kubeconfig", "get", CLUSTER_NAME],
+    { encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] },
+  );
+  if (kubeconfigResult.stdout) {
+    let kubeconfig = kubeconfigResult.stdout;
+    // Replace 0.0.0.0 with the host gateway so kubectl can reach the API
+    // server from inside the CI runner container.
+    if (hostGateway) {
+      kubeconfig = kubeconfig.replace(
         /https:\/\/0\.0\.0\.0:(\d+)/g,
         `https://${hostGateway}:$1`,
       );
-      writeFileSync(kubeconfigPath, patched, "utf8");
     }
+    const kubeconfigDir = path.join(homedir(), ".kube");
+    mkdirSync(kubeconfigDir, { recursive: true });
+    writeFileSync(path.join(kubeconfigDir, "config"), kubeconfig, "utf8");
   }
 
   // Verify cluster is accessible
