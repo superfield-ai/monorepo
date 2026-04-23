@@ -1,8 +1,21 @@
 name: Unit Tests
 
 on:
-  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  pull_request:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
   workflow_call:
+
+concurrency:
+  group: test-unit-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-unit:
