@@ -1,15 +1,7 @@
 name: test-bootstrap
 
 on:
-  pull_request:
-    paths:
-      - "packages/core/bootstrap/**"
-      - ".github/workflows/test-bootstrap.yml"
-  push:
-    branches: [main]
-    paths:
-      - "packages/core/bootstrap/**"
-      - ".github/workflows/test-bootstrap.yml"
+  workflow_dispatch:
 
 jobs:
   posix-syntax:

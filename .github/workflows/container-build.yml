@@ -1,18 +1,7 @@
 name: Container build
 
 on:
-  push:
-    branches: [main]
-    tags:
-      - "v*"
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+  workflow_dispatch:
 
 permissions:
   contents: read

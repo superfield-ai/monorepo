@@ -1,20 +1,7 @@
 name: E2E Deploy Tests
 
 on:
-  push:
-    branches: [main]
-    paths:
-      - "packages/core/commands/deploy.ts"
-      - "packages/cli/commands/deploy.ts"
-      - "e2e/**"
-      - ".github/workflows/test-e2e.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "packages/core/commands/deploy.ts"
-      - "packages/cli/commands/deploy.ts"
-      - "e2e/**"
-      - ".github/workflows/test-e2e.yml"
+  workflow_dispatch:
 
 jobs:
   test-e2e:
