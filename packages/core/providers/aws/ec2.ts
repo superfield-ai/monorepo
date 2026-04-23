@@ -28,16 +28,6 @@ function xmlText(xml: string, tag: string): string | undefined {
   return re.exec(xml)?.[1] ?? undefined;
 }
 
-/** Extract all text values of a repeated tag. */
-function xmlAll(xml: string, tag: string): string[] {
-  const re = new RegExp(`<${tag}[^>]*>([^<]*)</${tag}>`, "g");
-  const results: string[] = [];
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(xml)) !== null) {
-    results.push(m[1] as string);
-  }
-  return results;
-}
 
 /**
  * Extract repeated blocks between open/close tags (non-nested, returns inner

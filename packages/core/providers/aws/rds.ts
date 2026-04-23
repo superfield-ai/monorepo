@@ -228,7 +228,7 @@ export async function waitForDbAvailable(
           return { address, port: parseInt(portStr, 10) };
         }
       }
-    } catch (e) {
+    } catch (_e) {
       // swallow transient errors during polling
     }
     if (Date.now() > deadline) {
