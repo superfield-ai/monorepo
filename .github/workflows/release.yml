@@ -1,9 +1,7 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -17,6 +15,7 @@ jobs:
     name: Build and publish release
     runs-on: [self-hosted, linux]
     needs: test-unit
+    container: oven/bun:1
     steps:
       - uses: actions/checkout@v4
         with:

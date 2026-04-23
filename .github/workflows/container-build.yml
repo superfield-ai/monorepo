@@ -1,18 +1,7 @@
 name: Container build
 
 on:
-  push:
-    branches: [main]
-    tags:
-      - "v*"
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -26,6 +15,9 @@ jobs:
   build:
     name: Compile and build container image
     runs-on: [self-hosted, linux]
+    container:
+      image: oven/bun:1
+      options: --privileged -v /var/run/docker.sock:/var/run/docker.sock
     env:
       IMAGE: ghcr.io/${{ github.repository_owner }}/superfield-cli
     steps:
@@ -33,6 +25,9 @@ jobs:
         with:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+
+      - name: Install Docker CLI
+        run: apt-get update -y && apt-get install -y --no-install-recommends docker.io
 
       - run: bun install --frozen-lockfile
 

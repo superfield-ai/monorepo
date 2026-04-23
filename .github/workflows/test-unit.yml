@@ -1,26 +1,14 @@
 name: Unit Tests
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+  workflow_dispatch:
   workflow_call:
-
-concurrency:
-  group: test-unit-${{ github.ref }}
-  cancel-in-progress: true
 
 jobs:
   test-unit:
     name: Unit tests
     runs-on: [self-hosted, linux]
+    container: oven/bun:1
     steps:
       - uses: actions/checkout@v4
         with:

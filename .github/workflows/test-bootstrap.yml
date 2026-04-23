@@ -1,15 +1,7 @@
 name: test-bootstrap
 
 on:
-  pull_request:
-    paths:
-      - "packages/core/bootstrap/**"
-      - ".github/workflows/test-bootstrap.yml"
-  push:
-    branches: [main]
-    paths:
-      - "packages/core/bootstrap/**"
-      - ".github/workflows/test-bootstrap.yml"
+  workflow_dispatch:
 
 concurrency:
   group: test-bootstrap-${{ github.ref }}
@@ -19,10 +11,11 @@ jobs:
   posix-syntax:
     name: dash -n install.sh
     runs-on: [self-hosted, linux]
+    container: ubuntu:24.04
     steps:
       - uses: actions/checkout@v4
       - name: Install dash
-        run: sudo apt-get update -y && sudo apt-get install -y --no-install-recommends dash
+        run: apt-get update -y && apt-get install -y --no-install-recommends dash
       - name: POSIX syntax check
         run: dash -n packages/core/bootstrap/install.sh
 
@@ -31,8 +24,14 @@ jobs:
     runs-on: [self-hosted, linux]
     timeout-minutes: 25
     needs: posix-syntax
+    container:
+      image: ubuntu:24.04
+      options: --privileged -v /var/run/docker.sock:/var/run/docker.sock
     steps:
       - uses: actions/checkout@v4
+
+      - name: Install Docker CLI
+        run: apt-get update -y && apt-get install -y --no-install-recommends docker.io curl
 
       - name: Build systemd-enabled ubuntu:24.04 image
         run: |

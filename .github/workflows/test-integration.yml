@@ -1,16 +1,7 @@
 name: Integration Tests
 
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+  workflow_dispatch:
 
 concurrency:
   group: test-integration-${{ github.ref }}
@@ -20,7 +11,11 @@ jobs:
   test-integration:
     name: Integration (API) tests
     runs-on: [self-hosted, linux]
+    container: oven/bun:1
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
       - run: bun --bun vitest run packages/*/tests/integration
