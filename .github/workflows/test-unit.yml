@@ -11,16 +11,20 @@ on:
     paths-ignore:
       - "**/*.md"
       - "docs/**"
+  workflow_call:
+
+concurrency:
+  group: test-unit-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   test-unit:
     name: Unit tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
-      - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun --bun vitest run packages/*/tests/unit

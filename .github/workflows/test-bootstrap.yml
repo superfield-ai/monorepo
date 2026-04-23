@@ -11,10 +11,14 @@ on:
       - "packages/core/bootstrap/**"
       - ".github/workflows/test-bootstrap.yml"
 
+concurrency:
+  group: test-bootstrap-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   posix-syntax:
     name: dash -n install.sh
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v4
       - name: Install dash
@@ -24,7 +28,8 @@ jobs:
 
   container-smoke:
     name: install.sh smoke test (ubuntu:24.04)
-    runs-on: ubuntu-24.04
+    runs-on: [self-hosted, linux]
+    timeout-minutes: 25
     needs: posix-syntax
     steps:
       - uses: actions/checkout@v4

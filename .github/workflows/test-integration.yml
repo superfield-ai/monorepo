@@ -12,12 +12,15 @@ on:
       - "**/*.md"
       - "docs/**"
 
+concurrency:
+  group: test-integration-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test-integration:
     name: Integration (API) tests
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, linux]
     steps:
       - uses: actions/checkout@v4
-      - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun --bun vitest run packages/*/tests/integration
