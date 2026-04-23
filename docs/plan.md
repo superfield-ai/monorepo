@@ -136,15 +136,15 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 
 #### Phase B-6 known issues
 
-| Severity | Location | Description |
-| -------- | -------- | ----------- |
-| Critical | `core/commands/doctor.ts:288,368,429,497` | Four checks require `opts.mnemonic` which the CLI never provides; `allOk` is permanently false |
-| Critical | `core/commands/doctor.ts:350` vs `core/commands/setup-github.ts:200` | `doctor` reads `DEPLOY_HOST_<ENV>` as a repo variable; `setup-github` writes it as a secret |
-| High | `core/commands/init.ts:253` | Step 6 reads `DEPLOY_KEY`/`DEPLOY_KEY_FILE` from env instead of using the key derived in steps 1–5 |
-| High | `core/commands/init.ts:335` | `--provider gcp` always throws unless `deps.provision` is injected; not callable from the CLI |
-| High | `core/commands/export-db.ts:210,252` | AWS branch: `buildAwsAuthHeader()` emits `Signature=placeholder`; RDS calls fail auth |
-| High | `cli/commands/export-db.ts:4,91` | `export-db` does not follow per-env naming (`DEPLOY_HOST`/`DEPLOY_KEY` vs `_<ENV>` suffix) |
-| Medium | All ops commands | Host/key resolution reimplemented separately in each command — root cause of the above |
+| Severity | Location                                                             | Description                                                                                        |
+| -------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Critical | `core/commands/doctor.ts:288,368,429,497`                            | Four checks require `opts.mnemonic` which the CLI never provides; `allOk` is permanently false     |
+| Critical | `core/commands/doctor.ts:350` vs `core/commands/setup-github.ts:200` | `doctor` reads `DEPLOY_HOST_<ENV>` as a repo variable; `setup-github` writes it as a secret        |
+| High     | `core/commands/init.ts:253`                                          | Step 6 reads `DEPLOY_KEY`/`DEPLOY_KEY_FILE` from env instead of using the key derived in steps 1–5 |
+| High     | `core/commands/init.ts:335`                                          | `--provider gcp` always throws unless `deps.provision` is injected; not callable from the CLI      |
+| High     | `core/commands/export-db.ts:210,252`                                 | AWS branch: `buildAwsAuthHeader()` emits `Signature=placeholder`; RDS calls fail auth              |
+| High     | `cli/commands/export-db.ts:4,91`                                     | `export-db` does not follow per-env naming (`DEPLOY_HOST`/`DEPLOY_KEY` vs `_<ENV>` suffix)         |
+| Medium   | All ops commands                                                     | Host/key resolution reimplemented separately in each command — root cause of the above             |
 
 ### Cross-cutting B (remaining)
 

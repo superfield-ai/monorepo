@@ -92,7 +92,17 @@ async function generateKeypair(
   const keyPath = path.join(workDir, name);
   const r = spawnSync(
     "ssh-keygen",
-    ["-q", "-t", "ed25519", "-N", "", "-f", keyPath, "-C", `bootstrap-orch-${name}`],
+    [
+      "-q",
+      "-t",
+      "ed25519",
+      "-N",
+      "",
+      "-f",
+      keyPath,
+      "-C",
+      `bootstrap-orch-${name}`,
+    ],
     { stdio: ["ignore", "pipe", "pipe"] },
   );
   if (r.status !== 0) {
@@ -113,7 +123,11 @@ async function waitForSsh(port: number, timeoutMs = 60_000): Promise<void> {
       const s = connect({ port, host: "127.0.0.1" });
       let buf = "";
       const done = (val: string | null) => {
-        try { s.destroy(); } catch { /* ignore */ }
+        try {
+          s.destroy();
+        } catch {
+          /* ignore */
+        }
         resolve(val);
       };
       s.setTimeout(2000);
@@ -228,7 +242,10 @@ async function startContainer(): Promise<Fixture> {
   const buildDir = await fsp.mkdtemp(
     path.join(os.tmpdir(), "bootstrap-orch-build-"),
   );
-  await fsp.writeFile(path.join(buildDir, "authorized_keys"), `${initial.pub}\n`);
+  await fsp.writeFile(
+    path.join(buildDir, "authorized_keys"),
+    `${initial.pub}\n`,
+  );
   const dockerfile = `FROM ubuntu:24.04
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update -y \\
@@ -248,11 +265,9 @@ CMD ["/usr/sbin/sshd", "-D", "-e"]
   await fsp.writeFile(path.join(buildDir, "Dockerfile"), dockerfile);
 
   const tag = await buildImage();
-  const build = spawnSync(
-    "docker",
-    ["build", "-q", "-t", tag, buildDir],
-    { stdio: ["ignore", "pipe", "pipe"] },
-  );
+  const build = spawnSync("docker", ["build", "-q", "-t", tag, buildDir], {
+    stdio: ["ignore", "pipe", "pipe"],
+  });
   if (build.status !== 0) {
     throw new Error(
       `docker build failed: ${build.stderr.toString() || build.stdout.toString()}`,
@@ -363,8 +378,12 @@ describe("bootstrapHost (integration)", () => {
 
     expect(result).toEqual({ k3sReady: true });
     // The orchestrator streamed the install script's stdout line-by-line.
-    expect(lines.some((l) => l.includes("[fixture-bootstrap] starting"))).toBe(true);
-    expect(lines.some((l) => l.includes("[fixture-bootstrap] complete"))).toBe(true);
+    expect(lines.some((l) => l.includes("[fixture-bootstrap] starting"))).toBe(
+      true,
+    );
+    expect(lines.some((l) => l.includes("[fixture-bootstrap] complete"))).toBe(
+      true,
+    );
 
     // /etc/superfield/bootstrap.done exists on the host. Use the derived key
     // (the only one that authenticates after rotation) to verify. The derived

@@ -41,7 +41,8 @@ export function parseDeployEnvArgs(args: string[]): ParsedDeployEnvArgs {
   while (i < args.length) {
     const a = args[i]!;
     const take = () => args[++i];
-    const eq = (prefix: string) => a.startsWith(prefix) ? a.slice(prefix.length) : null;
+    const eq = (prefix: string) =>
+      a.startsWith(prefix) ? a.slice(prefix.length) : null;
     if (a === "--repo") out.repo = take();
     else if (eq("--repo=") !== null) out.repo = eq("--repo=")!;
     else if (a === "--env") out.env = take();
@@ -50,10 +51,13 @@ export function parseDeployEnvArgs(args: string[]): ParsedDeployEnvArgs {
     else if (eq("--tag=") !== null) out.tag = eq("--tag=")!;
     else if (a === "--app-name") out.appName = take();
     else if (eq("--app-name=") !== null) out.appName = eq("--app-name=")!;
-    else if (a === "--workers") out.workers = (take() ?? "").split(",").filter(Boolean);
-    else if (eq("--workers=") !== null) out.workers = eq("--workers=")!.split(",").filter(Boolean);
+    else if (a === "--workers")
+      out.workers = (take() ?? "").split(",").filter(Boolean);
+    else if (eq("--workers=") !== null)
+      out.workers = eq("--workers=")!.split(",").filter(Boolean);
     else if (a === "--health-path") out.healthPath = take();
-    else if (eq("--health-path=") !== null) out.healthPath = eq("--health-path=")!;
+    else if (eq("--health-path=") !== null)
+      out.healthPath = eq("--health-path=")!;
     else if (a === "--namespace") out.namespace = take();
     else if (eq("--namespace=") !== null) out.namespace = eq("--namespace=")!;
     else if (a === "--dry-run") out.dryRun = true;
@@ -116,8 +120,8 @@ export async function deployEnvCommand(args: string[]): Promise<void> {
     sshPrivateKeyPem = readFileSync(keyFile, "utf8");
   }
   const knownHostsPath =
-    process.env.DEPLOY_KNOWN_HOSTS
-    ?? `${process.env.HOME ?? ""}/.ssh/known_hosts.superfield`;
+    process.env.DEPLOY_KNOWN_HOSTS ??
+    `${process.env.HOME ?? ""}/.ssh/known_hosts.superfield`;
 
   const collected: { line: string }[] = [];
   const onLog = parsed.json
@@ -137,7 +141,9 @@ export async function deployEnvCommand(args: string[]): Promise<void> {
       sshUser,
       sshPrivateKeyPem,
       knownHostsPath,
-      ...(process.env.DEPLOY_IMAGE_REPO ? { imageRepo: process.env.DEPLOY_IMAGE_REPO } : {}),
+      ...(process.env.DEPLOY_IMAGE_REPO
+        ? { imageRepo: process.env.DEPLOY_IMAGE_REPO }
+        : {}),
       dryRun: parsed.dryRun,
       // When --clean-room is requested without an explicit --db-mode the
       // operator's intent is unambiguous: clean-room only applies to

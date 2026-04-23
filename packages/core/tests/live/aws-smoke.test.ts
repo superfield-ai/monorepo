@@ -26,10 +26,13 @@ describeMaybe("aws provider live smoke", () => {
   // Use a unique env per run so concurrent CI shards don't collide.
   const env = `smoke-${Math.random().toString(36).slice(2, 8)}`;
 
-  afterAll(async () => {
-    if (!PROFILE) return;
-    await destroy({ env });
-  }, 10 * 60 * 1000);
+  afterAll(
+    async () => {
+      if (!PROFILE) return;
+      await destroy({ env });
+    },
+    10 * 60 * 1000,
+  );
 
   it(
     "provisions an EC2 instance and returns a public host + private key",

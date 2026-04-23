@@ -107,7 +107,9 @@ export async function ensureSecurityGroup(
           IpProtocol: "tcp",
           FromPort: 22,
           ToPort: 22,
-          IpRanges: [{ CidrIp: "0.0.0.0/0", Description: SSH_INGRESS_DESCRIPTION }],
+          IpRanges: [
+            { CidrIp: "0.0.0.0/0", Description: SSH_INGRESS_DESCRIPTION },
+          ],
         },
       ],
     }),

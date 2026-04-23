@@ -54,7 +54,10 @@ interface RecordedSecret {
 
 interface FakeRepoState {
   /** Registered deploy keys, keyed by id. */
-  deployKeys: Map<number, { id: number; key: string; title: string; read_only: boolean }>;
+  deployKeys: Map<
+    number,
+    { id: number; key: string; title: string; read_only: boolean }
+  >;
   /** Recorded body of the most recent `PUT actions/secrets/<name>`. */
   secrets: Map<string, RecordedSecret>;
   /** Counts of how many times each secret was PUT. */
@@ -111,29 +114,23 @@ function installFakeGithub(state: FakeRepoState): void {
         const name = params.name as string;
         const body = (await request.json()) as RecordedSecret;
         state.secrets.set(name, body);
-        state.secretPuts.set(
-          name,
-          (state.secretPuts.get(name) ?? 0) + 1,
-        );
+        state.secretPuts.set(name, (state.secretPuts.get(name) ?? 0) + 1);
         return new HttpResponse(null, { status: 201 });
       },
     ),
-    http.get(
-      `${BASE}/repos/${REPO}/actions/variables/:name`,
-      ({ params }) => {
-        const name = params.name as string;
-        const value = state.variables.get(name);
-        if (value === undefined) {
-          return HttpResponse.json({ message: "Not Found" }, { status: 404 });
-        }
-        return HttpResponse.json({
-          name,
-          value,
-          created_at: "2026-04-18T12:00:00Z",
-          updated_at: "2026-04-18T12:00:00Z",
-        });
-      },
-    ),
+    http.get(`${BASE}/repos/${REPO}/actions/variables/:name`, ({ params }) => {
+      const name = params.name as string;
+      const value = state.variables.get(name);
+      if (value === undefined) {
+        return HttpResponse.json({ message: "Not Found" }, { status: 404 });
+      }
+      return HttpResponse.json({
+        name,
+        value,
+        created_at: "2026-04-18T12:00:00Z",
+        updated_at: "2026-04-18T12:00:00Z",
+      });
+    }),
     http.post(
       `${BASE}/repos/${REPO}/actions/variables`,
       async ({ request }) => {
@@ -165,9 +162,7 @@ function newState(): FakeRepoState {
   };
 }
 
-async function decryptSealedBox(
-  recorded: RecordedSecret,
-): Promise<string> {
+async function decryptSealedBox(recorded: RecordedSecret): Promise<string> {
   await sodium.ready;
   const ciphertext = sodium.from_base64(
     recorded.encrypted_value,

@@ -2,9 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
 
-import {
-  rollbackEnv,
-} from "../../../commands/rollback-env.ts";
+import { rollbackEnv } from "../../../commands/rollback-env.ts";
 import type {
   KubeRunner,
   KubeRunResult,
@@ -63,13 +61,11 @@ function githubDeploymentHandlers() {
   return {
     statuses,
     handlers: [
-      http.post(
-        `https://api.github.com/repos/${REPO}/deployments`,
-        async () =>
-          HttpResponse.json(
-            { id: nextId++, environment: "prod" },
-            { status: 201 },
-          ),
+      http.post(`https://api.github.com/repos/${REPO}/deployments`, async () =>
+        HttpResponse.json(
+          { id: nextId++, environment: "prod" },
+          { status: 201 },
+        ),
       ),
       http.post(
         `https://api.github.com/repos/${REPO}/deployments/:id/statuses`,
@@ -147,7 +143,9 @@ describe("rollbackEnv", () => {
 
     const cmds = runner.calls.map((c) => c.command);
     // app: undo, status, get
-    expect(cmds[0]).toMatch(/^kubectl rollout undo -n default deployment\/app$/);
+    expect(cmds[0]).toMatch(
+      /^kubectl rollout undo -n default deployment\/app$/,
+    );
     expect(cmds[1]).toMatch(
       /^kubectl rollout status -n default deployment\/app --timeout=5m$/,
     );

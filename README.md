@@ -45,12 +45,12 @@ Each command reads per-env secrets (`DEPLOY_HOST_<ENV>`, `DEPLOY_KEY_<ENV>`, `DA
 
 ### Supported cloud providers
 
-| Provider      | VM  | Managed DB    |
-| ------------- | --- | ------------- |
-| GCP           | ✅  | AlloyDB       |
-| DigitalOcean  | ✅  | Managed PG    |
-| AWS           | ✅  | RDS (partial) |
-| Vultr         | ✅  | —             |
+| Provider     | VM  | Managed DB    |
+| ------------ | --- | ------------- |
+| GCP          | ✅  | AlloyDB       |
+| DigitalOcean | ✅  | Managed PG    |
+| AWS          | ✅  | RDS (partial) |
+| Vultr        | ✅  | —             |
 
 ---
 

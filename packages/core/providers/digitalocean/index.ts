@@ -95,10 +95,7 @@ interface Caller {
   ) => Promise<Response>;
 }
 
-function makeCaller(
-  token: string,
-  fetchImpl: typeof fetch,
-): Caller {
+function makeCaller(token: string, fetchImpl: typeof fetch): Caller {
   async function callRaw(
     path: string,
     init?: { method?: string; body?: unknown },
@@ -158,8 +155,7 @@ export function generateEphemeralSshKey(): {
   const wire = Buffer.concat([sshString(algo), sshString(raw)]);
   const publicKeyOpenSsh = `ssh-ed25519 ${wire.toString("base64")}`;
   const md5 = createHash("md5").update(wire).digest("hex");
-  const fingerprint =
-    md5.match(/.{1,2}/g)?.join(":") ?? md5;
+  const fingerprint = md5.match(/.{1,2}/g)?.join(":") ?? md5;
   return { publicKeyOpenSsh, privateKeyPem: pem, fingerprint };
 }
 
@@ -330,12 +326,7 @@ export async function provision(opts: ProvisionOpts): Promise<ProvisionResult> {
       pollMaxAttempts,
     );
   } else if (droplet.status !== "active" || !publicIp(droplet)) {
-    droplet = await pollDroplet(
-      c,
-      droplet.id,
-      pollIntervalMs,
-      pollMaxAttempts,
-    );
+    droplet = await pollDroplet(c, droplet.id, pollIntervalMs, pollMaxAttempts);
   }
 
   const host = publicIp(droplet);
@@ -352,30 +343,22 @@ export async function provision(opts: ProvisionOpts): Promise<ProvisionResult> {
     // derivePassword zeroes the mnemonic — copy first because the caller may
     // still hold the buffer reference and we must not mutate it here.
     const mnemonicCopy = Buffer.from(opts.mnemonic);
-    const password = derivePassword(
-      mnemonicCopy,
-      opts.env,
-      "db-password",
-      32,
-    );
+    const password = derivePassword(mnemonicCopy, opts.env, "db-password", 32);
 
     let db = await findDatabaseByTag(c, opts.env);
     if (!db) {
-      const created = await c.call<{ database: DoDatabase }>(
-        "/v2/databases",
-        {
-          method: "POST",
-          body: {
-            name: `superfield-${opts.env}`,
-            engine: DB_ENGINE,
-            version: DB_VERSION,
-            size: DEFAULT_DB_SIZE,
-            region,
-            num_nodes: 1,
-            tags: [tag],
-          },
+      const created = await c.call<{ database: DoDatabase }>("/v2/databases", {
+        method: "POST",
+        body: {
+          name: `superfield-${opts.env}`,
+          engine: DB_ENGINE,
+          version: DB_VERSION,
+          size: DEFAULT_DB_SIZE,
+          region,
+          num_nodes: 1,
+          tags: [tag],
         },
-      );
+      });
       db = await pollDatabase(
         c,
         created.database.id,
@@ -501,9 +484,9 @@ export async function destroy(opts: DestroyOpts): Promise<void> {
 
   // Databases: list and delete one by one (no bulk-by-tag delete on DO).
   const dbs = await c
-    .call<{ databases?: DoDatabase[] }>(
-      `/v2/databases?tag_name=${encodeURIComponent(tag)}`,
-    )
+    .call<{
+      databases?: DoDatabase[];
+    }>(`/v2/databases?tag_name=${encodeURIComponent(tag)}`)
     .catch(() => ({ databases: [] }));
   for (const db of dbs.databases ?? []) {
     const res = await c.callRaw(`/v2/databases/${db.id}`, {

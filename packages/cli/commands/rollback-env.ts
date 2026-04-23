@@ -96,8 +96,8 @@ export async function rollbackEnvCommand(args: string[]): Promise<void> {
     sshPrivateKeyPem = readFileSync(keyFile, "utf8");
   }
   const knownHostsPath =
-    process.env.DEPLOY_KNOWN_HOSTS
-    ?? `${process.env.HOME ?? ""}/.ssh/known_hosts.superfield`;
+    process.env.DEPLOY_KNOWN_HOSTS ??
+    `${process.env.HOME ?? ""}/.ssh/known_hosts.superfield`;
 
   const collected: { line: string }[] = [];
   const onLog = parsed.json
@@ -120,8 +120,8 @@ export async function rollbackEnvCommand(args: string[]): Promise<void> {
     });
     if (parsed.json) {
       process.stdout.write(
-        JSON.stringify({ ok: result.healthy, ...result, log: collected })
-          + "\n",
+        JSON.stringify({ ok: result.healthy, ...result, log: collected }) +
+          "\n",
       );
     } else {
       process.stdout.write(`\nrolledBackTo:\n`);

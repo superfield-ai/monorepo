@@ -56,10 +56,7 @@ export interface AwsState {
     tags: Record<string, string>;
   }>;
   dbSubnetGroups: Set<string>;
-  dbInstances: Map<
-    string,
-    { status: string; address: string; port: number }
-  >;
+  dbInstances: Map<string, { status: string; address: string; port: number }>;
 }
 
 export function freshState(): AwsState {
@@ -151,7 +148,10 @@ export function makeFakeEc2(state: AwsState, log: CallLog): EC2Client {
       return {};
     }
     if (command instanceof DescribeKeyPairsCommand) {
-      const filters = input.Filters as Array<{ Name: string; Values: string[] }>;
+      const filters = input.Filters as Array<{
+        Name: string;
+        Values: string[];
+      }>;
       const nameFilter = filters.find((f) => f.Name === "key-name");
       const kn = nameFilter?.Values[0] as string;
       return {

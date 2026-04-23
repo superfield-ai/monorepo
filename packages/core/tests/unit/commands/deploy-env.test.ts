@@ -60,24 +60,27 @@ afterAll(() => server.close());
 function ghcrHandlers(opts: { tag?: string; missing?: boolean } = {}) {
   const tag = opts.tag ?? TAG;
   return [
-    http.head(`https://ghcr.io/v2/${IMAGE_LC}/manifests/${tag}`, ({ request }) => {
-      const auth = request.headers.get("authorization");
-      if (!auth) {
+    http.head(
+      `https://ghcr.io/v2/${IMAGE_LC}/manifests/${tag}`,
+      ({ request }) => {
+        const auth = request.headers.get("authorization");
+        if (!auth) {
+          return new HttpResponse(null, {
+            status: 401,
+            headers: {
+              "www-authenticate": `Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:${IMAGE_LC}:pull"`,
+            },
+          });
+        }
+        if (opts.missing) {
+          return new HttpResponse(null, { status: 404 });
+        }
         return new HttpResponse(null, {
-          status: 401,
-          headers: {
-            "www-authenticate": `Bearer realm="https://ghcr.io/token",service="ghcr.io",scope="repository:${IMAGE_LC}:pull"`,
-          },
+          status: 200,
+          headers: { "docker-content-digest": DIGEST },
         });
-      }
-      if (opts.missing) {
-        return new HttpResponse(null, { status: 404 });
-      }
-      return new HttpResponse(null, {
-        status: 200,
-        headers: { "docker-content-digest": DIGEST },
-      });
-    }),
+      },
+    ),
     http.get(`https://ghcr.io/token`, () =>
       HttpResponse.json({ token: "ghcr-registry-token" }),
     ),
@@ -90,15 +93,19 @@ function githubDeploymentHandlers() {
   return {
     statuses,
     handlers: [
-      http.post(
-        `https://api.github.com/repos/${REPO}/deployments`,
-        async () =>
-          HttpResponse.json({ id: nextId++, environment: "prod" }, { status: 201 }),
+      http.post(`https://api.github.com/repos/${REPO}/deployments`, async () =>
+        HttpResponse.json(
+          { id: nextId++, environment: "prod" },
+          { status: 201 },
+        ),
       ),
       http.post(
         `https://api.github.com/repos/${REPO}/deployments/:id/statuses`,
         async ({ request, params }) => {
-          const body = (await request.json()) as { state: string; description: string };
+          const body = (await request.json()) as {
+            state: string;
+            description: string;
+          };
           statuses.push({
             id: Number(params.id),
             state: body.state,
@@ -194,9 +201,13 @@ describe("deployEnv", () => {
     );
     expect(cmds[3]).toMatch(/kubectl rollout status .* deployment\/app/);
     // 4. worker-a, worker-b in order
-    expect(cmds[4]).toMatch(/deployment\/worker-a worker-a=ghcr\.io\/owner\/app@sha256:/);
+    expect(cmds[4]).toMatch(
+      /deployment\/worker-a worker-a=ghcr\.io\/owner\/app@sha256:/,
+    );
     expect(cmds[5]).toMatch(/rollout status .* deployment\/worker-a/);
-    expect(cmds[6]).toMatch(/deployment\/worker-b worker-b=ghcr\.io\/owner\/app@sha256:/);
+    expect(cmds[6]).toMatch(
+      /deployment\/worker-b worker-b=ghcr\.io\/owner\/app@sha256:/,
+    );
     expect(cmds[7]).toMatch(/rollout status .* deployment\/worker-b/);
     // 5. health probe via kubectl run + curl
     expect(cmds[8]).toMatch(

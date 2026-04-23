@@ -193,7 +193,9 @@ export async function waitForDbAvailable(
       return { address: inst.Endpoint.Address, port: inst.Endpoint.Port };
     }
     if (Date.now() > deadline) {
-      throw new Error(`timed out waiting for RDS ${identifier} to be available`);
+      throw new Error(
+        `timed out waiting for RDS ${identifier} to be available`,
+      );
     }
     await opts.sleep(opts.intervalMs);
   }

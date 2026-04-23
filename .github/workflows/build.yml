@@ -71,4 +71,6 @@ jobs:
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
       - name: Check blueprint freshness
-        run: bun run blueprint:compile && git diff --exit-code packages/core/blueprint-data.generated.ts
+        run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
+          bun run blueprint:compile && git diff --exit-code packages/core/blueprint-data.generated.ts
