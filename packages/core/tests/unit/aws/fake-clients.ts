@@ -1,41 +1,16 @@
 /**
- * Hand-rolled AWS SDK v3 client doubles for the AWS provider tests.
+ * Hand-rolled AWS client doubles for the AWS provider tests.
  *
  * NOT a mocking library — repo policy forbids `vi.fn`, `vi.mock`,
- * `vi.spyOn`, `vi.stubGlobal`, and tools like `aws-sdk-client-mock`. The
- * doubles below are real objects whose `.send(command)` is a switch on
- * `command.constructor.name` returning fixture-shaped plain objects.
+ * `vi.spyOn`, `vi.stubGlobal`. The doubles below are real objects whose
+ * `.query(params)` method dispatches on `params.Action` and returns fixture-
+ * shaped XML strings that mirror the real AWS Query API response format.
  *
- * Each double also records the sequence of commands it receives so tests
- * can assert ordering and the second-run-reuses-by-tag behavior.
+ * Each double also records the sequence of actions it receives so tests can
+ * assert ordering and the second-run-reuses-by-tag behavior.
  */
 
-import {
-  AuthorizeSecurityGroupIngressCommand,
-  CreateSecurityGroupCommand,
-  CreateTagsCommand,
-  DeleteKeyPairCommand,
-  DeleteSecurityGroupCommand,
-  DescribeInstancesCommand,
-  DescribeKeyPairsCommand,
-  DescribeSecurityGroupsCommand,
-  DescribeSubnetsCommand,
-  DescribeVpcsCommand,
-  ImportKeyPairCommand,
-  RunInstancesCommand,
-  TerminateInstancesCommand,
-  type EC2Client,
-} from "@aws-sdk/client-ec2";
-import {
-  CreateDBInstanceCommand,
-  CreateDBSubnetGroupCommand,
-  DeleteDBInstanceCommand,
-  DeleteDBSubnetGroupCommand,
-  DescribeDBInstancesCommand,
-  DescribeDBSubnetGroupsCommand,
-  type RDSClient,
-} from "@aws-sdk/client-rds";
-import { GetParameterCommand, type SSMClient } from "@aws-sdk/client-ssm";
+import type { AwsClient } from "../../../providers/aws/clients.js";
 
 export interface AwsState {
   amiId: string;
@@ -56,10 +31,7 @@ export interface AwsState {
     tags: Record<string, string>;
   }>;
   dbSubnetGroups: Set<string>;
-  dbInstances: Map<
-    string,
-    { status: string; address: string; port: number }
-  >;
+  dbInstances: Map<string, { status: string; address: string; port: number }>;
 }
 
 export function freshState(): AwsState {
@@ -89,229 +61,396 @@ export function freshLog(): CallLog {
   return { ec2: [], rds: [], ssm: [] };
 }
 
-export function makeFakeEc2(state: AwsState, log: CallLog): EC2Client {
+// ---------------------------------------------------------------------------
+// XML builders — produce minimal but structurally correct Query API responses.
+// ---------------------------------------------------------------------------
+
+function wrap(root: string, inner: string): string {
+  return `<${root}></${root}>${inner}`;
+}
+
+function tag(name: string, value: string | undefined): string {
+  if (value === undefined) return "";
+  return `<${name}>${value}</${name}>`;
+}
+
+// ---------------------------------------------------------------------------
+// Fake EC2
+// ---------------------------------------------------------------------------
+
+export function makeFakeEc2(state: AwsState, log: CallLog): AwsClient {
   let sgCounter = 0;
   let instCounter = 0;
-  const send = async (command: object): Promise<unknown> => {
-    const name = command.constructor.name;
-    log.ec2.push(name);
-    const input = (command as { input: Record<string, unknown> }).input;
 
-    if (command instanceof DescribeVpcsCommand) {
-      return { Vpcs: [{ VpcId: state.vpcId }] };
-    }
-    if (command instanceof DescribeSubnetsCommand) {
-      return {
-        Subnets: state.subnets.map((s) => ({
-          SubnetId: s.id,
-          AvailabilityZone: s.az,
-        })),
-      };
-    }
-    if (command instanceof DescribeSecurityGroupsCommand) {
-      const filters = (input.Filters ?? []) as Array<{
-        Name: string;
-        Values: string[];
-      }>;
-      const nameFilter = filters.find((f) => f.Name === "group-name");
-      if (nameFilter) {
-        const sg = state.securityGroups.get(nameFilter.Values[0] as string);
-        return {
-          SecurityGroups: sg
-            ? [{ GroupId: sg.id, GroupName: nameFilter.Values[0] }]
-            : [],
-        };
+  const query = async (params: Record<string, string>): Promise<string> => {
+    const action = params["Action"] ?? "Unknown";
+    log.ec2.push(`${action}Command`);
+
+    switch (action) {
+      case "DescribeVpcs": {
+        return `<DescribeVpcsResponse>
+          <vpcSet>
+            <item>${tag("vpcId", state.vpcId)}</item>
+          </vpcSet>
+        </DescribeVpcsResponse>`;
       }
-      const tagFilter = filters.find((f) => f.Name.startsWith("tag:"));
-      if (tagFilter) {
-        const env = tagFilter.Values[0] as string;
-        const groups = [...state.securityGroups.entries()]
-          .filter(([, sg]) => sg.tags["superfield-env"] === env)
-          .map(([gname, sg]) => ({ GroupId: sg.id, GroupName: gname }));
-        return { SecurityGroups: groups };
+
+      case "DescribeSubnets": {
+        const items = state.subnets
+          .map(
+            (s) =>
+              `<item>${tag("subnetId", s.id)}${tag("availabilityZone", s.az)}</item>`,
+          )
+          .join("");
+        return `<DescribeSubnetsResponse><subnetSet>${items}</subnetSet></DescribeSubnetsResponse>`;
       }
-      return { SecurityGroups: [] };
-    }
-    if (command instanceof CreateSecurityGroupCommand) {
-      const id = `sg-${++sgCounter}`;
-      const tags: Record<string, string> = {};
-      for (const ts of input.TagSpecifications as Array<{
-        Tags: Array<{ Key: string; Value: string }>;
-      }>) {
-        for (const t of ts.Tags) tags[t.Key] = t.Value;
+
+      case "DescribeSecurityGroups": {
+        const filterName = params["Filter.1.Name"] ?? "";
+        const filterValue = params["Filter.1.Value.1"] ?? "";
+
+        if (filterName === "group-name") {
+          const sg = state.securityGroups.get(filterValue);
+          if (!sg)
+            return `<DescribeSecurityGroupsResponse><securityGroupInfo/></DescribeSecurityGroupsResponse>`;
+          return `<DescribeSecurityGroupsResponse>
+            <securityGroupInfo>
+              <item>${tag("groupId", sg.id)}${tag("groupName", filterValue)}</item>
+            </securityGroupInfo>
+          </DescribeSecurityGroupsResponse>`;
+        }
+        if (filterName === "vpc-id" || filterName.startsWith("tag:")) {
+          // Find groups matching tag filter for the env value.
+          const env = filterValue;
+          const tagKey = filterName.startsWith("tag:")
+            ? filterName.slice(4)
+            : "superfield-env";
+          const matches = [...state.securityGroups.entries()]
+            .filter(([, sg]) => sg.tags[tagKey] === env)
+            .map(
+              ([name, sg]) =>
+                `<item>${tag("groupId", sg.id)}${tag("groupName", name)}</item>`,
+            )
+            .join("");
+          return `<DescribeSecurityGroupsResponse>
+            <securityGroupInfo>${matches}</securityGroupInfo>
+          </DescribeSecurityGroupsResponse>`;
+        }
+        // Check for vpc-id filter combined with group-name (Filter.2)
+        const filter2Name = params["Filter.2.Name"] ?? "";
+        const filter2Value = params["Filter.2.Value.1"] ?? "";
+        if (
+          (filterName === "group-name" || filter2Name === "group-name") &&
+          (filterName === "vpc-id" || filter2Name === "vpc-id")
+        ) {
+          const gname =
+            filterName === "group-name" ? filterValue : filter2Value;
+          const sg = state.securityGroups.get(gname);
+          if (!sg)
+            return `<DescribeSecurityGroupsResponse><securityGroupInfo/></DescribeSecurityGroupsResponse>`;
+          return `<DescribeSecurityGroupsResponse>
+            <securityGroupInfo>
+              <item>${tag("groupId", sg.id)}${tag("groupName", gname)}</item>
+            </securityGroupInfo>
+          </DescribeSecurityGroupsResponse>`;
+        }
+        return `<DescribeSecurityGroupsResponse><securityGroupInfo/></DescribeSecurityGroupsResponse>`;
       }
-      state.securityGroups.set(input.GroupName as string, {
-        id,
-        vpcId: input.VpcId as string,
-        tags,
-      });
-      return { GroupId: id };
-    }
-    if (command instanceof AuthorizeSecurityGroupIngressCommand) {
-      return {};
-    }
-    if (command instanceof DescribeKeyPairsCommand) {
-      const filters = input.Filters as Array<{ Name: string; Values: string[] }>;
-      const nameFilter = filters.find((f) => f.Name === "key-name");
-      const kn = nameFilter?.Values[0] as string;
-      return {
-        KeyPairs: state.keyPairs.has(kn) ? [{ KeyName: kn }] : [],
-      };
-    }
-    if (command instanceof ImportKeyPairCommand) {
-      state.keyPairs.add(input.KeyName as string);
-      return { KeyName: input.KeyName };
-    }
-    if (command instanceof DescribeInstancesCommand) {
-      let matches = state.instances;
-      if (input.InstanceIds) {
-        const wanted = new Set(input.InstanceIds as string[]);
-        matches = matches.filter((i) => wanted.has(i.id));
+
+      case "CreateSecurityGroup": {
+        const id = `sg-${++sgCounter}`;
+        const groupName = params["GroupName"] ?? "unknown";
+        const tags: Record<string, string> = {};
+        // Parse TagSpecification.1.Tag.1.Key / .Value pairs
+        let i = 1;
+        while (params[`TagSpecification.1.Tag.${i}.Key`]) {
+          const k = params[`TagSpecification.1.Tag.${i}.Key`] as string;
+          const v = params[`TagSpecification.1.Tag.${i}.Value`] ?? "";
+          tags[k] = v;
+          i++;
+        }
+        state.securityGroups.set(groupName, {
+          id,
+          vpcId: params["VpcId"] ?? "",
+          tags,
+        });
+        return `<CreateSecurityGroupResponse>${tag("groupId", id)}</CreateSecurityGroupResponse>`;
       }
-      if (input.Filters) {
-        for (const f of input.Filters as Array<{
-          Name: string;
-          Values: string[];
-        }>) {
-          if (f.Name.startsWith("tag:")) {
-            const env = f.Values[0] as string;
-            matches = matches.filter((i) => i.tags["superfield-env"] === env);
+
+      case "AuthorizeSecurityGroupIngress": {
+        return `<AuthorizeSecurityGroupIngressResponse/>`;
+      }
+
+      case "DescribeKeyPairs": {
+        const kn = params["Filter.1.Value.1"] ?? "";
+        if (state.keyPairs.has(kn)) {
+          return `<DescribeKeyPairsResponse>
+            <keySet><item>${tag("keyName", kn)}</item></keySet>
+          </DescribeKeyPairsResponse>`;
+        }
+        return `<DescribeKeyPairsResponse><keySet/></DescribeKeyPairsResponse>`;
+      }
+
+      case "ImportKeyPair": {
+        const kn = params["KeyName"] ?? "";
+        state.keyPairs.add(kn);
+        return `<ImportKeyPairResponse>${tag("keyName", kn)}</ImportKeyPairResponse>`;
+      }
+
+      case "DescribeInstances": {
+        let matches = state.instances;
+
+        // Filter by InstanceId
+        const instanceId1 = params["InstanceId.1"] ?? params["InstanceIds.1"];
+        if (instanceId1) {
+          matches = matches.filter((i) => i.id === instanceId1);
+        }
+
+        // Filter by tag
+        const filterName = params["Filter.1.Name"] ?? "";
+        const filterValue = params["Filter.1.Value.1"] ?? "";
+        if (filterName.startsWith("tag:")) {
+          const tagKey = filterName.slice(4);
+          matches = matches.filter((i) => i.tags[tagKey] === filterValue);
+        }
+
+        // Filter by state
+        const stateFilter = params["Filter.2.Name"] ?? "";
+        if (stateFilter === "instance-state-name") {
+          const allowed = new Set<string>();
+          let vi = 1;
+          while (params[`Filter.2.Value.${vi}`]) {
+            allowed.add(params[`Filter.2.Value.${vi}`] as string);
+            vi++;
           }
-          if (f.Name === "instance-state-name") {
-            const allowed = new Set(f.Values);
-            matches = matches.filter((i) => allowed.has(i.state));
+          matches = matches.filter((i) => allowed.has(i.state));
+        }
+
+        const items = matches
+          .map(
+            (i) =>
+              `<item>
+                ${tag("instanceId", i.id)}
+                <instanceState>${tag("name", i.state)}</instanceState>
+                ${tag("dnsName", i.publicDns)}
+                ${tag("ipAddress", i.publicIp)}
+              </item>`,
+          )
+          .join("");
+        return `<DescribeInstancesResponse>
+          <reservationSet>
+            <item><instancesSet>${items}</instancesSet></item>
+          </reservationSet>
+        </DescribeInstancesResponse>`;
+      }
+
+      case "RunInstances": {
+        const id = `i-${++instCounter}`;
+        const tags: Record<string, string> = {};
+        // Parse TagSpecification.1.Tag.N.Key/.Value for resource-type=instance
+        let si = 1;
+        while (params[`TagSpecification.${si}.ResourceType`]) {
+          if (params[`TagSpecification.${si}.ResourceType`] === "instance") {
+            let ti = 1;
+            while (params[`TagSpecification.${si}.Tag.${ti}.Key`]) {
+              const k = params[
+                `TagSpecification.${si}.Tag.${ti}.Key`
+              ] as string;
+              const v = params[`TagSpecification.${si}.Tag.${ti}.Value`] ?? "";
+              tags[k] = v;
+              ti++;
+            }
+          }
+          si++;
+        }
+        state.instances.push({
+          id,
+          state: "running",
+          publicDns: `ec2-${id}.compute.amazonaws.com`,
+          publicIp: "203.0.113.10",
+          tags,
+        });
+        return `<RunInstancesResponse>
+          <instancesSet>
+            <item>${tag("instanceId", id)}<instanceState>${tag("name", "running")}</instanceState></item>
+          </instancesSet>
+        </RunInstancesResponse>`;
+      }
+
+      case "CreateTags": {
+        return `<CreateTagsResponse/>`;
+      }
+
+      case "TerminateInstances": {
+        const ids = new Set<string>();
+        let i = 1;
+        while (params[`InstanceId.${i}`]) {
+          ids.add(params[`InstanceId.${i}`] as string);
+          i++;
+        }
+        for (const inst of state.instances) {
+          if (ids.has(inst.id)) inst.state = "terminated";
+        }
+        return `<TerminateInstancesResponse/>`;
+      }
+
+      case "DeleteKeyPair": {
+        state.keyPairs.delete(params["KeyName"] ?? "");
+        return `<DeleteKeyPairResponse/>`;
+      }
+
+      case "DeleteSecurityGroup": {
+        const gid = params["GroupId"] ?? "";
+        for (const [name, sg] of state.securityGroups.entries()) {
+          if (sg.id === gid) {
+            state.securityGroups.delete(name);
+            break;
           }
         }
+        return `<DeleteSecurityGroupResponse/>`;
       }
-      return {
-        Reservations: [
-          {
-            Instances: matches.map((i) => ({
-              InstanceId: i.id,
-              State: { Name: i.state },
-              PublicDnsName: i.publicDns,
-              PublicIpAddress: i.publicIp,
-            })),
-          },
-        ],
-      };
+
+      default:
+        throw new Error(`fake EC2: unhandled action ${action}`);
     }
-    if (command instanceof RunInstancesCommand) {
-      const id = `i-${++instCounter}`;
-      const tags: Record<string, string> = {};
-      const tagSpecs = input.TagSpecifications as Array<{
-        ResourceType: string;
-        Tags: Array<{ Key: string; Value: string }>;
-      }>;
-      for (const ts of tagSpecs) {
-        if (ts.ResourceType !== "instance") continue;
-        for (const t of ts.Tags) tags[t.Key] = t.Value;
-      }
-      state.instances.push({
-        id,
-        state: "running",
-        publicDns: `ec2-${id}.compute.amazonaws.com`,
-        publicIp: "203.0.113.10",
-        tags,
-      });
-      return { Instances: [{ InstanceId: id }] };
-    }
-    if (command instanceof CreateTagsCommand) {
-      return {};
-    }
-    if (command instanceof TerminateInstancesCommand) {
-      const ids = new Set(input.InstanceIds as string[]);
-      for (const i of state.instances) {
-        if (ids.has(i.id)) i.state = "terminated";
-      }
-      return {};
-    }
-    if (command instanceof DeleteKeyPairCommand) {
-      state.keyPairs.delete(input.KeyName as string);
-      return {};
-    }
-    if (command instanceof DeleteSecurityGroupCommand) {
-      const id = input.GroupId as string;
-      for (const [name, sg] of state.securityGroups.entries()) {
-        if (sg.id === id) {
-          state.securityGroups.delete(name);
-          break;
-        }
-      }
-      return {};
-    }
-    throw new Error(`fake EC2: unhandled command ${name}`);
   };
-  return { send } as unknown as EC2Client;
+
+  return {
+    region: "us-east-1",
+    service: "ec2",
+    credentials: {
+      accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+      secretAccessKey: "test-secret",
+    },
+    query,
+  } as AwsClient;
 }
 
-export function makeFakeRds(state: AwsState, log: CallLog): RDSClient {
-  const send = async (command: object): Promise<unknown> => {
-    const name = command.constructor.name;
-    log.rds.push(name);
-    const input = (command as { input: Record<string, unknown> }).input;
+// ---------------------------------------------------------------------------
+// Fake RDS
+// ---------------------------------------------------------------------------
 
-    if (command instanceof DescribeDBSubnetGroupsCommand) {
-      const sgName = input.DBSubnetGroupName as string;
-      if (state.dbSubnetGroups.has(sgName)) {
-        return { DBSubnetGroups: [{ DBSubnetGroupName: sgName }] };
-      }
-      const err = new Error("DB subnet group not found");
-      err.name = "DBSubnetGroupNotFoundFault";
-      throw err;
-    }
-    if (command instanceof CreateDBSubnetGroupCommand) {
-      state.dbSubnetGroups.add(input.DBSubnetGroupName as string);
-      return {};
-    }
-    if (command instanceof DescribeDBInstancesCommand) {
-      const id = input.DBInstanceIdentifier as string;
-      const inst = state.dbInstances.get(id);
-      if (!inst) {
-        const err = new Error("DB instance not found");
-        err.name = "DBInstanceNotFoundFault";
+export function makeFakeRds(state: AwsState, log: CallLog): AwsClient {
+  const query = async (params: Record<string, string>): Promise<string> => {
+    const action = params["Action"] ?? "Unknown";
+    log.rds.push(`${action}Command`);
+
+    switch (action) {
+      case "DescribeDBSubnetGroups": {
+        const name = params["DBSubnetGroupName"] ?? "";
+        if (state.dbSubnetGroups.has(name)) {
+          return `<DescribeDBSubnetGroupsResponse>
+            <DescribeDBSubnetGroupsResult>
+              <DBSubnetGroups>
+                <DBSubnetGroup><DBSubnetGroupName>${name}</DBSubnetGroupName></DBSubnetGroup>
+              </DBSubnetGroups>
+            </DescribeDBSubnetGroupsResult>
+          </DescribeDBSubnetGroupsResponse>`;
+        }
+        const err = new Error(
+          `AWS rds DescribeDBSubnetGroups failed (404): DBSubnetGroupNotFoundFault`,
+        );
         throw err;
       }
-      return {
-        DBInstances: [
-          {
-            DBInstanceIdentifier: id,
-            DBInstanceStatus: inst.status,
-            Endpoint: { Address: inst.address, Port: inst.port },
-          },
-        ],
-      };
+
+      case "CreateDBSubnetGroup": {
+        state.dbSubnetGroups.add(params["DBSubnetGroupName"] ?? "");
+        return `<CreateDBSubnetGroupResponse/>`;
+      }
+
+      case "DescribeDBInstances": {
+        const id = params["DBInstanceIdentifier"] ?? "";
+        const inst = state.dbInstances.get(id);
+        if (!inst) {
+          const err = new Error(
+            `AWS rds DescribeDBInstances failed (404): DBInstanceNotFoundFault`,
+          );
+          throw err;
+        }
+        return `<DescribeDBInstancesResponse>
+          <DescribeDBInstancesResult>
+            <DBInstances>
+              <DBInstance>
+                <DBInstanceIdentifier>${id}</DBInstanceIdentifier>
+                <DBInstanceStatus>${inst.status}</DBInstanceStatus>
+                <Endpoint>
+                  <Address>${inst.address}</Address>
+                  <Port>${inst.port}</Port>
+                </Endpoint>
+              </DBInstance>
+            </DBInstances>
+          </DescribeDBInstancesResult>
+        </DescribeDBInstancesResponse>`;
+      }
+
+      case "CreateDBInstance": {
+        const id = params["DBInstanceIdentifier"] ?? "";
+        state.dbInstances.set(id, {
+          status: "available",
+          address: `${id}.cluster-xyz.us-east-1.rds.amazonaws.com`,
+          port: 5432,
+        });
+        return `<CreateDBInstanceResponse/>`;
+      }
+
+      case "DeleteDBInstance": {
+        state.dbInstances.delete(params["DBInstanceIdentifier"] ?? "");
+        return `<DeleteDBInstanceResponse/>`;
+      }
+
+      case "DeleteDBSubnetGroup": {
+        state.dbSubnetGroups.delete(params["DBSubnetGroupName"] ?? "");
+        return `<DeleteDBSubnetGroupResponse/>`;
+      }
+
+      default:
+        throw new Error(`fake RDS: unhandled action ${action}`);
     }
-    if (command instanceof DeleteDBInstanceCommand) {
-      state.dbInstances.delete(input.DBInstanceIdentifier as string);
-      return {};
-    }
-    if (command instanceof DeleteDBSubnetGroupCommand) {
-      state.dbSubnetGroups.delete(input.DBSubnetGroupName as string);
-      return {};
-    }
-    if (command instanceof CreateDBInstanceCommand) {
-      const id = input.DBInstanceIdentifier as string;
-      state.dbInstances.set(id, {
-        status: "available",
-        address: `${id}.cluster-xyz.us-east-1.rds.amazonaws.com`,
-        port: 5432,
-      });
-      return {};
-    }
-    throw new Error(`fake RDS: unhandled command ${name}`);
   };
-  return { send } as unknown as RDSClient;
+
+  return {
+    region: "us-east-1",
+    service: "rds",
+    credentials: {
+      accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+      secretAccessKey: "test-secret",
+    },
+    query,
+  } as AwsClient;
 }
 
-export function makeFakeSsm(state: AwsState, log: CallLog): SSMClient {
-  const send = async (command: object): Promise<unknown> => {
-    const name = command.constructor.name;
-    log.ssm.push(name);
-    if (command instanceof GetParameterCommand) {
-      return { Parameter: { Value: state.amiId } };
+// ---------------------------------------------------------------------------
+// Fake SSM
+// ---------------------------------------------------------------------------
+
+export function makeFakeSsm(state: AwsState, log: CallLog): AwsClient {
+  const query = async (params: Record<string, string>): Promise<string> => {
+    const action = params["Action"] ?? "Unknown";
+    log.ssm.push(`${action}Command`);
+
+    switch (action) {
+      case "GetParameter": {
+        return `<GetParameterResponse>
+          <GetParameterResult>
+            <Parameter>
+              <Value>${state.amiId}</Value>
+            </Parameter>
+          </GetParameterResult>
+        </GetParameterResponse>`;
+      }
+
+      default:
+        throw new Error(`fake SSM: unhandled action ${action}`);
     }
-    throw new Error(`fake SSM: unhandled command ${name}`);
   };
-  return { send } as unknown as SSMClient;
+
+  return {
+    region: "us-east-1",
+    service: "ssm",
+    credentials: {
+      accessKeyId: "AKIAIOSFODNN7EXAMPLE",
+      secretAccessKey: "test-secret",
+    },
+    query,
+  } as AwsClient;
 }

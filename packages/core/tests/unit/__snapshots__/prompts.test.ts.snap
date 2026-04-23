@@ -1306,3 +1306,1310 @@ If a phase has no existing dev-scout issue, set \`scout_issue_number: null\` in 
 - Never repurpose a feature issue as a scout. Scouts must be issues whose labels include \`dev-scout\`.
 - Phase dependencies must be acyclic."
 `;
+
+exports[`prompt builders — snapshots buildDevelopIssuePrompt primary matches snapshot 1`] = `
+"## Project: Superfield
+
+Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source of truth for all orchestration state — issues are the task queue, the Plan tracking issue holds ordered work, PRs are change proposals, and merge to \`main\` means done. There is no local state aside from credentials.
+
+### Canonical references
+
+- Product requirements: \`docs/prd.md\` in this repository
+- Design rules graph: \`blueprint/rules/graph.yaml\` (the Superfield Blueprint)
+- Per-domain blueprint rules: \`blueprint/rules/blueprints/<domain>.yaml\`
+- TypeScript implementation rules: \`blueprint/rules/implementations/ts/\`
+
+When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
+
+## Assignment
+
+- Issue: #42 — feat: example feature
+- Phase: Identity
+- Branch: feat/42
+- URL: https://github.com/o/r/issues/42
+
+## Issue body
+
+## Phase
+Identity
+
+## Motivation
+Because.
+
+## Features
+- [ ] Build it
+
+## Test Plan
+- [ ] Verify it
+
+## Worktree isolation
+
+Your assigned worktree is:
+
+\`/tmp/wt\`
+
+All work must happen inside this directory. Do not:
+
+- Touch files outside the worktree
+- Touch the main repo checkout or any other issue's worktree
+- Modify shared user config or system files
+- Run commands that mutate state outside the worktree (e.g. \`gh repo edit\` on a different repo)
+
+The first thing you do is \`cd\` into the worktree. Every subsequent shell command runs from there.
+
+## Role: PRIMARY
+
+You are the primary agent for this issue. You drive the issue through every stage of the dev-loop lifecycle until the PR is merged and the issue is CLOSED:
+
+1. Branch (already prepared by the orchestrator)
+2. Develop — TDD outside-in, push frequently
+3. Checklist complete — every \`- [ ]\` in the issue body checked off
+4. PR open — open as ready for review (never draft)
+5. CI pass — wait for all check runs to succeed
+6. Merge gate — confirm all preceding Plan issues are CLOSED
+7. Merge — merge to \`main\`, confirm issue closes
+
+You do NOT exit until the PR is merged and the issue is CLOSED. While CI is running, do not idle: re-read the issue, check off any items already evidenced by committed code, audit the implementation against the acceptance criteria.
+
+If a speculative agent already worked on this issue and the checklist is already complete when you arrive, skip straight to step 4 (open the PR).
+
+## TDD outside-in workflow
+
+You work strictly test-first, from the outside in:
+
+1. Read the acceptance criteria and test plan in the issue.
+2. Write the outermost failing integration test first.
+3. Write the minimum implementation to make that test pass.
+4. Drop one level inward: write the next failing unit test.
+5. Implement the minimum code to make it pass.
+6. Repeat until every acceptance-criterion item is met.
+7. Refactor only when tests are green.
+
+Never write implementation code before the test that requires it exists.
+
+### Pushing
+
+Push to the remote branch after every test-green cycle. Do not accumulate large uncommitted diffs — frequent pushes preserve your work.
+
+### Checklist gardening
+
+After every push, re-read the issue and tick off any checklist items already evidenced by committed code. Do not wait for the implementation to be "fully done" before updating the checklist; the orchestrator uses checklist state to decide when stage 3 (checklist complete) is reached.
+
+## Blueprint rules (narrow context — first pass)
+Apply these rules to your work. Cite the rule ID in your commit body if you deviate.
+
+### Implementation rules
+- **IMPL-PROCESS-005** \`early-pull-request-creation\` [process]: Pull requests are created early in the feature lifecycle, not deferred until work is complete.
+- **IMPL-PROCESS-006** \`structured-agent-outcomes\` [process]: Agent tasks produce structured outcomes: OK, NOK, or ABORTED. These are the only valid agent result values.
+- **IMPL-PROCESS-007** \`gh-as-github-surface\` [process]: The gh CLI is the required GitHub control surface for all GitHub operations.
+- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Calypso.
+- **IMPL-PROCESS-016** \`documentation-merge-gitattributes\` [process]: .gitattributes marks documentation files (*.md, *.rst, *.txt) with merge=binary to prevent automatic line-level merges.
+- **IMPL-PROCESS-017** \`documentation-merge-conflict-check\` [process]: .githooks/pre-commit scans staged documentation files and blocks commits containing merge conflict markers.
+- **IMPL-PROCESS-020** \`no-runtime-dependencies\` [process]: The process implementation introduces no runtime dependencies.
+- **IMPL-PROCESS-021** \`workflow-yaml-tracked-artifact\` [process]: The workflow YAML file is a tracked repository artifact, not an ephemeral CLI cache.
+- **IMPL-TEST-004** \`unit-test-location\` [test]: Unit tests reside in /tests/unit, run via Vitest with no browser engine, and execute in Bun runtime.
+- **IMPL-TEST-005** \`api-integration-location\` [test]: API integration tests reside in /tests/integration, run via Vitest with no browser engine, and execute in Bun runtime.
+- **IMPL-TEST-006** \`component-test-location\` [test]: React component tests reside in /tests/component, run via Vitest with Playwright providing the headless Chromium engine.
+- **IMPL-TEST-007** \`e2e-test-location\` [test]: Full-page user story tests reside in /tests/e2e, run via Vitest with Playwright providing the headless Chromium engine.
+- **IMPL-TEST-011** \`merge-gate-all-pass\` [test]: Merge is blocked unless the quality gate and all required test workflows pass.
+- **IMPL-TEST-029** \`release-workflow-gates\` [test]: Release builds must pass the release workflow gates (release.yml) before tagged publication.
+- **IMPL-TEST-017** \`no-fixed-database-url\` [test]: Never rely on a fixed DATABASE_URL for browser/integration suites when the container helper provides a random host port.
+- **IMPL-TEST-019** \`vitest-dependency\` [test]: Vitest is a Buy dependency: mandatory TypeScript test driver owning lifecycle, orchestration, and reporting.
+- **IMPL-TEST-020** \`playwright-dependency\` [test]: Playwright is a Buy dependency: browser provider used by Vitest for real headless browser execution.
+- **IMPL-TEST-021** \`eslint-dependency\` [test]: ESLint is a Buy dependency: linting with ecosystem plugins, infeasible to replicate.
+- **IMPL-TEST-022** \`prettier-dependency\` [test]: Prettier is a Buy dependency: deterministic formatting, agent-generated formatter would diverge.
+- **IMPL-TEST-025** \`no-fixtures-in-env-vars\` [test]: Do not put replay payloads or expected responses in .env values. Fixtures must be committed file artifacts.
+- **IMPL-TEST-026** \`no-local-ci-drift\` [test]: Do not run a suite with one command locally and a different command in CI.
+
+### Antipatterns
+- **PROCESS-X-007** \`plan-as-wishlist\` [process]: Writing implementation plan tasks as vague goals instead of concrete, verifiable actions. Vague tasks produce vague work.
+- **TEST-X-003** \`fixtures-in-env-vars\` [test]: Encoding replay data in .env files or environment variables. Env vars are configuration channels, not fixture storage.
+- **TEST-X-005** \`local-ci-divergence\` [test]: Running one set of commands locally and another in CI. Any divergence breaks confidence in local results.
+- **TEST-X-006** \`duplicated-quality-checks\` [test]: Re-running lint/format/build inside every suite workflow despite having a dedicated quality gate.
+
+…94 rules omitted due to budget.
+
+## Consulting the Blueprint
+
+The Superfield Blueprint at \`blueprint/rules/graph.yaml\` is the authoritative source for architecture, security, design patterns, and antipatterns. Before introducing a new public API, a new dependency, a new module boundary, or a new pattern, search the relevant domain blueprint:
+
+- Architecture: \`blueprint/rules/blueprints/arch.yaml\`
+- Auth & sessions: \`blueprint/rules/blueprints/auth.yaml\`
+- Data layer: \`blueprint/rules/blueprints/data.yaml\`
+- Testing: \`blueprint/rules/blueprints/test.yaml\`
+- Process & PRs: \`blueprint/rules/blueprints/process.yaml\`
+- TypeScript-specific: \`blueprint/rules/implementations/ts/\`
+
+If a rule applies, follow it. If you choose to deviate, document why in the commit body and cite the rule ID you are deviating from.
+
+## Commit standards
+
+- Use conventional commit prefixes: \`feat\`, \`fix\`, \`refactor\`, \`test\`, \`docs\`, \`chore\`, \`security\`.
+- Stage files explicitly by name. Never use \`git add .\` or \`git add -A\`.
+- Never use \`--no-verify\` to bypass pre-commit hooks. If a hook fails, fix the underlying issue.
+- Reference the issue number in the commit body: \`Refs #N\` for in-progress, \`Closes #N\` only on the final commit that completes the work.
+- Cite blueprint rule IDs in commit bodies when the change implements or mitigates a specific rule.
+
+## Begin
+
+\`cd\` into your worktree and start by re-reading the issue. Then write the outermost failing test."
+`;
+
+exports[`prompt builders — snapshots buildDevelopIssuePrompt arch-domain issue matches snapshot 1`] = `
+"## Project: Superfield
+
+Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source of truth for all orchestration state — issues are the task queue, the Plan tracking issue holds ordered work, PRs are change proposals, and merge to \`main\` means done. There is no local state aside from credentials.
+
+### Canonical references
+
+- Product requirements: \`docs/prd.md\` in this repository
+- Design rules graph: \`blueprint/rules/graph.yaml\` (the Superfield Blueprint)
+- Per-domain blueprint rules: \`blueprint/rules/blueprints/<domain>.yaml\`
+- TypeScript implementation rules: \`blueprint/rules/implementations/ts/\`
+
+When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
+
+## Assignment
+
+- Issue: #200 — refactor: architecture module boundary
+- Phase: Arch
+- Branch: feat/200
+- URL: https://github.com/o/r/issues/42
+
+## Issue body
+
+## Phase
+Arch
+
+## Motivation
+Restructure package boundary
+
+## Features
+- [ ] Split package
+
+## Worktree isolation
+
+Your assigned worktree is:
+
+\`/tmp/wt\`
+
+All work must happen inside this directory. Do not:
+
+- Touch files outside the worktree
+- Touch the main repo checkout or any other issue's worktree
+- Modify shared user config or system files
+- Run commands that mutate state outside the worktree (e.g. \`gh repo edit\` on a different repo)
+
+The first thing you do is \`cd\` into the worktree. Every subsequent shell command runs from there.
+
+## Role: PRIMARY
+
+You are the primary agent for this issue. You drive the issue through every stage of the dev-loop lifecycle until the PR is merged and the issue is CLOSED:
+
+1. Branch (already prepared by the orchestrator)
+2. Develop — TDD outside-in, push frequently
+3. Checklist complete — every \`- [ ]\` in the issue body checked off
+4. PR open — open as ready for review (never draft)
+5. CI pass — wait for all check runs to succeed
+6. Merge gate — confirm all preceding Plan issues are CLOSED
+7. Merge — merge to \`main\`, confirm issue closes
+
+You do NOT exit until the PR is merged and the issue is CLOSED. While CI is running, do not idle: re-read the issue, check off any items already evidenced by committed code, audit the implementation against the acceptance criteria.
+
+If a speculative agent already worked on this issue and the checklist is already complete when you arrive, skip straight to step 4 (open the PR).
+
+## TDD outside-in workflow
+
+You work strictly test-first, from the outside in:
+
+1. Read the acceptance criteria and test plan in the issue.
+2. Write the outermost failing integration test first.
+3. Write the minimum implementation to make that test pass.
+4. Drop one level inward: write the next failing unit test.
+5. Implement the minimum code to make it pass.
+6. Repeat until every acceptance-criterion item is met.
+7. Refactor only when tests are green.
+
+Never write implementation code before the test that requires it exists.
+
+### Pushing
+
+Push to the remote branch after every test-green cycle. Do not accumulate large uncommitted diffs — frequent pushes preserve your work.
+
+### Checklist gardening
+
+After every push, re-read the issue and tick off any checklist items already evidenced by committed code. Do not wait for the implementation to be "fully done" before updating the checklist; the orchestrator uses checklist state to decide when stage 3 (checklist complete) is reached.
+
+## Blueprint rules (narrow context — first pass)
+Apply these rules to your work. Cite the rule ID in your commit body if you deviate.
+
+### Implementation rules
+- **IMPL-ARCH-001** \`ts-only-language\` [arch]: TypeScript is the only language across client and server. No plain JavaScript files. Enforces a single type system spanning all boundaries.
+- **IMPL-ARCH-002** \`bun-runtime\` [arch]: Bun is the runtime for the server and the build tool for all packages. No Node.js or alternative runtimes.
+- **IMPL-ARCH-003** \`react-ui-framework\` [arch]: React (latest stable) is the UI framework. No alternative view libraries.
+- **IMPL-ARCH-004** \`tailwind-css-styling\` [arch]: Tailwind CSS (vanilla, no pre/post processors) is the only styling approach. No CSS-in-JS, Sass, or separate CSS modules.
+- **IMPL-ARCH-005** \`react-hooks-state-management\` [arch]: State management uses React hooks and minimal context only. No Redux, MobX, Zustand, or other heavy state libraries.
+- **IMPL-ARCH-006** \`vitest-unit-testing\` [arch]: Vitest is the unit test runner. Tests live in /tests/unit.
+- **IMPL-ARCH-007** \`playwright-e2e-testing\` [arch]: Playwright is the browser and E2E test runner. Tests live in /tests/e2e.
+- **IMPL-ARCH-008** \`rest-api-style\` [arch]: REST is the API style for all business integrations. No GraphQL, WebSockets, or Protobufs unless the product requires massive concurrency or sub-second real-time.
+- **IMPL-ARCH-009** \`monorepo-directory-layout\` [arch]: Fixed directory layout: /apps/web, /apps/server, /packages/ui, /packages/core, /packages/services, /packages/integrations, /tests/unit, /tests/integration, /tests/e2e, /docs.
+- **IMPL-ARCH-010** \`web-browser-only-bundle\` [arch]: /apps/web builds a browser-only bundle. No server imports resolve. Server modules are unreachable from the client import graph.
+- **IMPL-ARCH-011** \`server-bun-binary-only\` [arch]: /apps/server builds a Bun server binary. No browser or DOM imports resolve. Client modules are unreachable from the server import graph.
+- **IMPL-ARCH-012** \`ci-separate-build-pipelines\` [arch]: CI/CD runs separate build pipelines for web and server. No shared build step or single tsconfig.json across runtimes.
+- **IMPL-ARCH-013** \`rest-for-all-integrations\` [arch]: REST APIs for all business integrations. GraphQL, WebSockets, and Protobufs avoided unless the product demands massive concurrency or sub-second real-time.
+- **IMPL-ARCH-014** \`universal-types-in-packages-core\` [arch]: All API input/output types defined as universal TypeScript types in /packages/core. Both client and server import from this single source.
+- **IMPL-ARCH-015** \`avoid-graphql-ws-protobuf\` [arch]: GraphQL, WebSockets, and Protobufs are excluded unless the product requires massive concurrency or sub-second real-time updates.
+- **IMPL-ARCH-016** \`api-contracts-versioned-type-checked\` [arch]: All API contracts are versioned and type-checked against production responses. Breaking changes require type updates in /packages/core.
+- **IMPL-ARCH-017** \`ingestion-in-packages-services\` [arch]: Ingestion and integration REST clients live in /packages/services and /packages/integrations.
+- **IMPL-ARCH-018** \`core-logic-in-packages-core\` [arch]: Core business logic and domain types live in /packages/core.
+- **IMPL-ARCH-019** \`ui-in-packages-ui-and-apps-web\` [arch]: Shared UI components live in /packages/ui. Application-level UI, editors, and workspaces live in /apps/web.
+- **IMPL-ARCH-020** \`integrations-in-packages-integrations\` [arch]: Third-party SDK wrappers and export integrations live in /packages/integrations.
+- **IMPL-ARCH-021** \`auth-in-server-middleware\` [arch]: Authentication and authorization are implemented as middleware in /apps/server. No auth logic in the client bundle.
+- **IMPL-ARCH-023** \`dependency-doc-required\` [arch]: All dependencies documented in docs/dependencies.md with risk/benefit justification. Versions locked. Transitive trees reviewed regularly.
+
+…8 rules omitted due to budget.
+
+## Consulting the Blueprint
+
+The Superfield Blueprint at \`blueprint/rules/graph.yaml\` is the authoritative source for architecture, security, design patterns, and antipatterns. Before introducing a new public API, a new dependency, a new module boundary, or a new pattern, search the relevant domain blueprint:
+
+- Architecture: \`blueprint/rules/blueprints/arch.yaml\`
+- Auth & sessions: \`blueprint/rules/blueprints/auth.yaml\`
+- Data layer: \`blueprint/rules/blueprints/data.yaml\`
+- Testing: \`blueprint/rules/blueprints/test.yaml\`
+- Process & PRs: \`blueprint/rules/blueprints/process.yaml\`
+- TypeScript-specific: \`blueprint/rules/implementations/ts/\`
+
+If a rule applies, follow it. If you choose to deviate, document why in the commit body and cite the rule ID you are deviating from.
+
+## Commit standards
+
+- Use conventional commit prefixes: \`feat\`, \`fix\`, \`refactor\`, \`test\`, \`docs\`, \`chore\`, \`security\`.
+- Stage files explicitly by name. Never use \`git add .\` or \`git add -A\`.
+- Never use \`--no-verify\` to bypass pre-commit hooks. If a hook fails, fix the underlying issue.
+- Reference the issue number in the commit body: \`Refs #N\` for in-progress, \`Closes #N\` only on the final commit that completes the work.
+- Cite blueprint rule IDs in commit bodies when the change implements or mitigates a specific rule.
+
+## Begin
+
+\`cd\` into your worktree and start by re-reading the issue. Then write the outermost failing test."
+`;
+
+exports[`prompt builders — snapshots buildDevelopIssuePrompt auth-domain issue matches snapshot 1`] = `
+"## Project: Superfield
+
+Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source of truth for all orchestration state — issues are the task queue, the Plan tracking issue holds ordered work, PRs are change proposals, and merge to \`main\` means done. There is no local state aside from credentials.
+
+### Canonical references
+
+- Product requirements: \`docs/prd.md\` in this repository
+- Design rules graph: \`blueprint/rules/graph.yaml\` (the Superfield Blueprint)
+- Per-domain blueprint rules: \`blueprint/rules/blueprints/<domain>.yaml\`
+- TypeScript implementation rules: \`blueprint/rules/implementations/ts/\`
+
+When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
+
+## Assignment
+
+- Issue: #201 — feat: add oauth login session
+- Phase: Auth
+- Branch: feat/201
+- URL: https://github.com/o/r/issues/42
+
+## Issue body
+
+## Phase
+Auth
+
+## Motivation
+Users need login
+
+## Features
+- [ ] oauth token
+
+## Worktree isolation
+
+Your assigned worktree is:
+
+\`/tmp/wt\`
+
+All work must happen inside this directory. Do not:
+
+- Touch files outside the worktree
+- Touch the main repo checkout or any other issue's worktree
+- Modify shared user config or system files
+- Run commands that mutate state outside the worktree (e.g. \`gh repo edit\` on a different repo)
+
+The first thing you do is \`cd\` into the worktree. Every subsequent shell command runs from there.
+
+## Role: PRIMARY
+
+You are the primary agent for this issue. You drive the issue through every stage of the dev-loop lifecycle until the PR is merged and the issue is CLOSED:
+
+1. Branch (already prepared by the orchestrator)
+2. Develop — TDD outside-in, push frequently
+3. Checklist complete — every \`- [ ]\` in the issue body checked off
+4. PR open — open as ready for review (never draft)
+5. CI pass — wait for all check runs to succeed
+6. Merge gate — confirm all preceding Plan issues are CLOSED
+7. Merge — merge to \`main\`, confirm issue closes
+
+You do NOT exit until the PR is merged and the issue is CLOSED. While CI is running, do not idle: re-read the issue, check off any items already evidenced by committed code, audit the implementation against the acceptance criteria.
+
+If a speculative agent already worked on this issue and the checklist is already complete when you arrive, skip straight to step 4 (open the PR).
+
+## TDD outside-in workflow
+
+You work strictly test-first, from the outside in:
+
+1. Read the acceptance criteria and test plan in the issue.
+2. Write the outermost failing integration test first.
+3. Write the minimum implementation to make that test pass.
+4. Drop one level inward: write the next failing unit test.
+5. Implement the minimum code to make it pass.
+6. Repeat until every acceptance-criterion item is met.
+7. Refactor only when tests are green.
+
+Never write implementation code before the test that requires it exists.
+
+### Pushing
+
+Push to the remote branch after every test-green cycle. Do not accumulate large uncommitted diffs — frequent pushes preserve your work.
+
+### Checklist gardening
+
+After every push, re-read the issue and tick off any checklist items already evidenced by committed code. Do not wait for the implementation to be "fully done" before updating the checklist; the orchestrator uses checklist state to decide when stage 3 (checklist complete) is reached.
+
+## Blueprint rules (narrow context — first pass)
+Apply these rules to your work. Cite the rule ID in your commit body if you deviate.
+
+### Implementation rules
+- **IMPL-AUTH-002** \`passkey-webauthn-fido2\` [auth]: Passkey-first authentication via WebAuthn (FIDO2). Server stores the public key and credential ID only; no password hash exists.
+- **IMPL-AUTH-003** \`challenge-response-flow\` [auth]: Server generates a random challenge, client signs with the passkey, server verifies the signature against the stored public key.
+- **IMPL-AUTH-005** \`es256-web-crypto-signing\` [auth]: Token signing uses ES256 (ECDSA P-256) via Web Crypto API (crypto.subtle.sign / crypto.subtle.verify). DIY ~50 lines; no JWT library dependency.
+- **IMPL-AUTH-006** \`algorithm-pinning-es256\` [auth]: JWT header alg is verified to be ES256 before validation; any other value is rejected outright.
+- **IMPL-AUTH-007** \`token-httponly-cookie\` [auth]: Tokens stored in HTTP-only, Secure, SameSite=Strict cookies. Never exposed in response bodies, URLs, or client-accessible storage.
+- **IMPL-AUTH-008** \`token-expiry-1h-rotation\` [auth]: Default token expiry is 1 hour. Refresh uses rotation: new token issued on each refresh, old token invalidated immediately.
+- **IMPL-AUTH-009** \`jti-revocation-table\` [auth]: Every token carries a jti claim. Revocation list is a table in calypso_app queried on every authenticated request.
+- **IMPL-AUTH-010** \`revocation-cache-ttl-60s\` [auth]: In-memory caching of revoked jti values is permitted with a TTL of 60 seconds maximum for standard revocations (e.g., logout).
+- **IMPL-AUTH-012** \`revocation-entry-expiry-cleanup\` [auth]: Revocation entries expire from the table after the token's own exp timestamp. Expired entries are cleaned up by a scheduled job.
+- **IMPL-AUTH-013** \`agent-scoped-tokens\` [auth]: Agents receive scoped tokens with an explicit scopes claim (e.g., ['analytics:read', 'schema:read']).
+- **IMPL-AUTH-014** \`agent-max-ttl-24h\` [auth]: Agent token maximum TTL is 24 hours; agents must re-authenticate daily.
+- **IMPL-AUTH-015** \`agent-dedicated-endpoint\` [auth]: Agent tokens are issued by a dedicated endpoint, not the user login flow.
+- **IMPL-AUTH-016** \`agent-kms-scoped-keys\` [auth]: Agents receive KMS-scoped keys that can only decrypt data within their authorized scope.
+- **IMPL-AUTH-035** \`per-username-rate-limiting\` [auth]: Per-username rate limiting applied in addition to per-IP to mitigate shared-NAT blind spots in IP-only limiting.
+- **IMPL-AUTH-036** \`progressive-delay-backoff\` [auth]: Progressive delay (exponential backoff) used instead of hard cutoff for rate limiting on auth endpoints.
+- **IMPL-AUTH-023** \`token-payload-interface\` [auth]: TokenPayload interface: sub, jti, scopes (string[]), exp, iat, kind ('user' | 'agent'). Unified format for both user and agent tokens.
+- **IMPL-AUTH-025** \`dep-simplewebauthn-server\` [auth]: Buy @simplewebauthn/server for FIDO2 protocol handling. Security-critical, full FIDO2 conformance, no native dependencies, actively maintained.
+- **IMPL-AUTH-026** \`dep-jwt-diy-web-crypto\` [auth]: DIY JWT sign/verify (~50 lines) using Web Crypto crypto.subtle.sign with ECDSA. No JWT library dependency.
+- **IMPL-AUTH-027** \`dep-scure-bip39\` [auth]: Buy @scure/bip39 for BIP-39 mnemonic generation. Standardized 2048-word list, well-specified entropy encoding, audited implementation.
+- **IMPL-AUTH-028** \`dep-no-auth-saas\` [auth]: Do not buy Auth SaaS (Auth0, Clerk) unless mandated. Adds latency, cost, and vendor lock-in to the critical login path.
+- **IMPL-AUTH-029** \`dep-rate-limit-diy\` [auth]: DIY rate limiting via simple token bucket (~30 lines). No library dependency.
+- **IMPL-AUTH-032** \`anti-auth-imports-in-browser\` [auth]: Never import server-side auth modules in browser code. Even type-only imports create import paths that lead to runtime auth calls client-side.
+
+…23 rules omitted due to budget.
+
+## Consulting the Blueprint
+
+The Superfield Blueprint at \`blueprint/rules/graph.yaml\` is the authoritative source for architecture, security, design patterns, and antipatterns. Before introducing a new public API, a new dependency, a new module boundary, or a new pattern, search the relevant domain blueprint:
+
+- Architecture: \`blueprint/rules/blueprints/arch.yaml\`
+- Auth & sessions: \`blueprint/rules/blueprints/auth.yaml\`
+- Data layer: \`blueprint/rules/blueprints/data.yaml\`
+- Testing: \`blueprint/rules/blueprints/test.yaml\`
+- Process & PRs: \`blueprint/rules/blueprints/process.yaml\`
+- TypeScript-specific: \`blueprint/rules/implementations/ts/\`
+
+If a rule applies, follow it. If you choose to deviate, document why in the commit body and cite the rule ID you are deviating from.
+
+## Commit standards
+
+- Use conventional commit prefixes: \`feat\`, \`fix\`, \`refactor\`, \`test\`, \`docs\`, \`chore\`, \`security\`.
+- Stage files explicitly by name. Never use \`git add .\` or \`git add -A\`.
+- Never use \`--no-verify\` to bypass pre-commit hooks. If a hook fails, fix the underlying issue.
+- Reference the issue number in the commit body: \`Refs #N\` for in-progress, \`Closes #N\` only on the final commit that completes the work.
+- Cite blueprint rule IDs in commit bodies when the change implements or mitigates a specific rule.
+
+## Begin
+
+\`cd\` into your worktree and start by re-reading the issue. Then write the outermost failing test."
+`;
+
+exports[`prompt builders — snapshots buildDevelopIssuePrompt speculative matches snapshot 1`] = `
+"## Project: Superfield
+
+Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source of truth for all orchestration state — issues are the task queue, the Plan tracking issue holds ordered work, PRs are change proposals, and merge to \`main\` means done. There is no local state aside from credentials.
+
+### Canonical references
+
+- Product requirements: \`docs/prd.md\` in this repository
+- Design rules graph: \`blueprint/rules/graph.yaml\` (the Superfield Blueprint)
+- Per-domain blueprint rules: \`blueprint/rules/blueprints/<domain>.yaml\`
+- TypeScript implementation rules: \`blueprint/rules/implementations/ts/\`
+
+When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
+
+## Assignment
+
+- Issue: #42 — feat: example feature
+- Phase: Identity
+- Branch: feat/42
+- URL: https://github.com/o/r/issues/42
+
+## Issue body
+
+## Phase
+Identity
+
+## Motivation
+Because.
+
+## Features
+- [ ] Build it
+
+## Test Plan
+- [ ] Verify it
+
+## Worktree isolation
+
+Your assigned worktree is:
+
+\`/tmp/wt\`
+
+All work must happen inside this directory. Do not:
+
+- Touch files outside the worktree
+- Touch the main repo checkout or any other issue's worktree
+- Modify shared user config or system files
+- Run commands that mutate state outside the worktree (e.g. \`gh repo edit\` on a different repo)
+
+The first thing you do is \`cd\` into the worktree. Every subsequent shell command runs from there.
+
+## Role: SPECULATIVE
+
+You are a speculative agent for this issue. You drive the issue through stages 1–3 of the dev-loop lifecycle, then exit:
+
+1. Branch (already prepared by the orchestrator)
+2. Develop — TDD outside-in, push frequently
+3. Checklist complete — every \`- [ ]\` in the issue body checked off
+
+Once the checklist is complete, exit immediately. Do NOT:
+
+- Open a pull request — that is the primary's job and would consume CI minutes
+- Wait for CI — there is no CI to wait for at this stage
+- Wait for predecessors — the merge gate is not yours to satisfy
+
+Push your final state to the remote branch before exiting so the primary can pick up exactly where you left off.
+
+## TDD outside-in workflow
+
+You work strictly test-first, from the outside in:
+
+1. Read the acceptance criteria and test plan in the issue.
+2. Write the outermost failing integration test first.
+3. Write the minimum implementation to make that test pass.
+4. Drop one level inward: write the next failing unit test.
+5. Implement the minimum code to make it pass.
+6. Repeat until every acceptance-criterion item is met.
+7. Refactor only when tests are green.
+
+Never write implementation code before the test that requires it exists.
+
+### Pushing
+
+Push to the remote branch after every test-green cycle. Do not accumulate large uncommitted diffs — frequent pushes preserve your work.
+
+### Checklist gardening
+
+After every push, re-read the issue and tick off any checklist items already evidenced by committed code. Do not wait for the implementation to be "fully done" before updating the checklist; the orchestrator uses checklist state to decide when stage 3 (checklist complete) is reached.
+
+## Blueprint rules (narrow context — first pass)
+Apply these rules to your work. Cite the rule ID in your commit body if you deviate.
+
+### Implementation rules
+- **IMPL-PROCESS-005** \`early-pull-request-creation\` [process]: Pull requests are created early in the feature lifecycle, not deferred until work is complete.
+- **IMPL-PROCESS-006** \`structured-agent-outcomes\` [process]: Agent tasks produce structured outcomes: OK, NOK, or ABORTED. These are the only valid agent result values.
+- **IMPL-PROCESS-007** \`gh-as-github-surface\` [process]: The gh CLI is the required GitHub control surface for all GitHub operations.
+- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Calypso.
+- **IMPL-PROCESS-016** \`documentation-merge-gitattributes\` [process]: .gitattributes marks documentation files (*.md, *.rst, *.txt) with merge=binary to prevent automatic line-level merges.
+- **IMPL-PROCESS-017** \`documentation-merge-conflict-check\` [process]: .githooks/pre-commit scans staged documentation files and blocks commits containing merge conflict markers.
+- **IMPL-PROCESS-020** \`no-runtime-dependencies\` [process]: The process implementation introduces no runtime dependencies.
+- **IMPL-PROCESS-021** \`workflow-yaml-tracked-artifact\` [process]: The workflow YAML file is a tracked repository artifact, not an ephemeral CLI cache.
+- **IMPL-TEST-004** \`unit-test-location\` [test]: Unit tests reside in /tests/unit, run via Vitest with no browser engine, and execute in Bun runtime.
+- **IMPL-TEST-005** \`api-integration-location\` [test]: API integration tests reside in /tests/integration, run via Vitest with no browser engine, and execute in Bun runtime.
+- **IMPL-TEST-006** \`component-test-location\` [test]: React component tests reside in /tests/component, run via Vitest with Playwright providing the headless Chromium engine.
+- **IMPL-TEST-007** \`e2e-test-location\` [test]: Full-page user story tests reside in /tests/e2e, run via Vitest with Playwright providing the headless Chromium engine.
+- **IMPL-TEST-011** \`merge-gate-all-pass\` [test]: Merge is blocked unless the quality gate and all required test workflows pass.
+- **IMPL-TEST-029** \`release-workflow-gates\` [test]: Release builds must pass the release workflow gates (release.yml) before tagged publication.
+- **IMPL-TEST-017** \`no-fixed-database-url\` [test]: Never rely on a fixed DATABASE_URL for browser/integration suites when the container helper provides a random host port.
+- **IMPL-TEST-019** \`vitest-dependency\` [test]: Vitest is a Buy dependency: mandatory TypeScript test driver owning lifecycle, orchestration, and reporting.
+- **IMPL-TEST-020** \`playwright-dependency\` [test]: Playwright is a Buy dependency: browser provider used by Vitest for real headless browser execution.
+- **IMPL-TEST-021** \`eslint-dependency\` [test]: ESLint is a Buy dependency: linting with ecosystem plugins, infeasible to replicate.
+- **IMPL-TEST-022** \`prettier-dependency\` [test]: Prettier is a Buy dependency: deterministic formatting, agent-generated formatter would diverge.
+- **IMPL-TEST-025** \`no-fixtures-in-env-vars\` [test]: Do not put replay payloads or expected responses in .env values. Fixtures must be committed file artifacts.
+- **IMPL-TEST-026** \`no-local-ci-drift\` [test]: Do not run a suite with one command locally and a different command in CI.
+
+### Antipatterns
+- **PROCESS-X-007** \`plan-as-wishlist\` [process]: Writing implementation plan tasks as vague goals instead of concrete, verifiable actions. Vague tasks produce vague work.
+- **TEST-X-003** \`fixtures-in-env-vars\` [test]: Encoding replay data in .env files or environment variables. Env vars are configuration channels, not fixture storage.
+- **TEST-X-005** \`local-ci-divergence\` [test]: Running one set of commands locally and another in CI. Any divergence breaks confidence in local results.
+- **TEST-X-006** \`duplicated-quality-checks\` [test]: Re-running lint/format/build inside every suite workflow despite having a dedicated quality gate.
+
+…94 rules omitted due to budget.
+
+## Consulting the Blueprint
+
+The Superfield Blueprint at \`blueprint/rules/graph.yaml\` is the authoritative source for architecture, security, design patterns, and antipatterns. Before introducing a new public API, a new dependency, a new module boundary, or a new pattern, search the relevant domain blueprint:
+
+- Architecture: \`blueprint/rules/blueprints/arch.yaml\`
+- Auth & sessions: \`blueprint/rules/blueprints/auth.yaml\`
+- Data layer: \`blueprint/rules/blueprints/data.yaml\`
+- Testing: \`blueprint/rules/blueprints/test.yaml\`
+- Process & PRs: \`blueprint/rules/blueprints/process.yaml\`
+- TypeScript-specific: \`blueprint/rules/implementations/ts/\`
+
+If a rule applies, follow it. If you choose to deviate, document why in the commit body and cite the rule ID you are deviating from.
+
+## Commit standards
+
+- Use conventional commit prefixes: \`feat\`, \`fix\`, \`refactor\`, \`test\`, \`docs\`, \`chore\`, \`security\`.
+- Stage files explicitly by name. Never use \`git add .\` or \`git add -A\`.
+- Never use \`--no-verify\` to bypass pre-commit hooks. If a hook fails, fix the underlying issue.
+- Reference the issue number in the commit body: \`Refs #N\` for in-progress, \`Closes #N\` only on the final commit that completes the work.
+- Cite blueprint rule IDs in commit bodies when the change implements or mitigates a specific rule.
+
+## Begin
+
+\`cd\` into your worktree and start by re-reading the issue. Then write the outermost failing test."
+`;
+
+exports[`prompt builders — snapshots buildDevScoutPrompt matches snapshot 1`] = `
+"## Project: Superfield
+
+Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source of truth for all orchestration state — issues are the task queue, the Plan tracking issue holds ordered work, PRs are change proposals, and merge to \`main\` means done. There is no local state aside from credentials.
+
+### Canonical references
+
+- Product requirements: \`docs/prd.md\` in this repository
+- Design rules graph: \`blueprint/rules/graph.yaml\` (the Superfield Blueprint)
+- Per-domain blueprint rules: \`blueprint/rules/blueprints/<domain>.yaml\`
+- TypeScript implementation rules: \`blueprint/rules/implementations/ts/\`
+
+When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
+
+## Assignment: dev-scout for phase "Identity"
+
+- Scout issue: #42 — feat: example feature
+- Phase goal: Build the auth seams
+- Branch: chore/scout
+
+### Downstream feature issues you are scaffolding for
+
+- #50: feat: child
+- #51: feat: sibling
+
+## Worktree isolation
+
+Your assigned worktree is:
+
+\`/tmp/wt\`
+
+All work must happen inside this directory. Do not:
+
+- Touch files outside the worktree
+- Touch the main repo checkout or any other issue's worktree
+- Modify shared user config or system files
+- Run commands that mutate state outside the worktree (e.g. \`gh repo edit\` on a different repo)
+
+The first thing you do is \`cd\` into the worktree. Every subsequent shell command runs from there.
+
+## Your role
+
+The dev-scout is the first issue in every phase. You do NOT implement real behavior. You lay out the structural seams that the parallel feature agents will build against:
+
+1. Read the body of every downstream feature issue above to understand the planned scope.
+2. Identify every integration point: new modules, public functions, types, and interfaces that feature agents will depend on.
+3. Create the seams:
+   - TypeScript interfaces and types for all new public API surfaces
+   - No-op function implementations that satisfy the type contracts (\`throw new Error('not implemented')\` or return typed stubs)
+   - Test stubs declared with \`it.todo()\` / \`describe.todo()\` — never \`it.skip()\` and never failing tests
+4. Ensure all existing tests still pass and the project compiles with zero errors.
+5. For each downstream feature issue, post a comment listing the specific stubs and seams you created that it will consume.
+6. Tick off each item in your scout issue's checklist as you complete it.
+
+## Merge qualification
+
+Your PR qualifies for merge when:
+
+1. \`tsc --noEmit\` passes with zero errors
+2. The full test suite passes (todo tests do not count as failures)
+3. New test stubs use \`it.todo()\` — committed but not yet implemented
+4. Every planned interface and stub is present in code
+5. Every downstream feature issue has your handoff comment
+6. Your scout issue checklist is fully checked off
+
+You open the PR yourself once all six are true.
+
+## Rules
+
+- Stubs only. Do NOT implement real behavior.
+- Existing tests must stay green.
+- New test stubs must be \`it.todo()\` — they must not be \`it.skip()\`, must not be commented out, and must not fail.
+
+## Blueprint rules (narrow context — first pass)
+Apply these rules to your work. Cite the rule ID in your commit body if you deviate.
+
+### Implementation rules
+- **IMPL-PROCESS-005** \`early-pull-request-creation\` [process]: Pull requests are created early in the feature lifecycle, not deferred until work is complete.
+- **IMPL-PROCESS-006** \`structured-agent-outcomes\` [process]: Agent tasks produce structured outcomes: OK, NOK, or ABORTED. These are the only valid agent result values.
+- **IMPL-PROCESS-007** \`gh-as-github-surface\` [process]: The gh CLI is the required GitHub control surface for all GitHub operations.
+- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Calypso.
+- **IMPL-PROCESS-016** \`documentation-merge-gitattributes\` [process]: .gitattributes marks documentation files (*.md, *.rst, *.txt) with merge=binary to prevent automatic line-level merges.
+- **IMPL-PROCESS-017** \`documentation-merge-conflict-check\` [process]: .githooks/pre-commit scans staged documentation files and blocks commits containing merge conflict markers.
+- **IMPL-PROCESS-020** \`no-runtime-dependencies\` [process]: The process implementation introduces no runtime dependencies.
+- **IMPL-PROCESS-021** \`workflow-yaml-tracked-artifact\` [process]: The workflow YAML file is a tracked repository artifact, not an ephemeral CLI cache.
+- **IMPL-TEST-004** \`unit-test-location\` [test]: Unit tests reside in /tests/unit, run via Vitest with no browser engine, and execute in Bun runtime.
+- **IMPL-TEST-005** \`api-integration-location\` [test]: API integration tests reside in /tests/integration, run via Vitest with no browser engine, and execute in Bun runtime.
+- **IMPL-TEST-006** \`component-test-location\` [test]: React component tests reside in /tests/component, run via Vitest with Playwright providing the headless Chromium engine.
+- **IMPL-TEST-007** \`e2e-test-location\` [test]: Full-page user story tests reside in /tests/e2e, run via Vitest with Playwright providing the headless Chromium engine.
+- **IMPL-TEST-011** \`merge-gate-all-pass\` [test]: Merge is blocked unless the quality gate and all required test workflows pass.
+- **IMPL-TEST-029** \`release-workflow-gates\` [test]: Release builds must pass the release workflow gates (release.yml) before tagged publication.
+- **IMPL-TEST-017** \`no-fixed-database-url\` [test]: Never rely on a fixed DATABASE_URL for browser/integration suites when the container helper provides a random host port.
+- **IMPL-TEST-019** \`vitest-dependency\` [test]: Vitest is a Buy dependency: mandatory TypeScript test driver owning lifecycle, orchestration, and reporting.
+- **IMPL-TEST-020** \`playwright-dependency\` [test]: Playwright is a Buy dependency: browser provider used by Vitest for real headless browser execution.
+- **IMPL-TEST-021** \`eslint-dependency\` [test]: ESLint is a Buy dependency: linting with ecosystem plugins, infeasible to replicate.
+- **IMPL-TEST-022** \`prettier-dependency\` [test]: Prettier is a Buy dependency: deterministic formatting, agent-generated formatter would diverge.
+- **IMPL-TEST-025** \`no-fixtures-in-env-vars\` [test]: Do not put replay payloads or expected responses in .env values. Fixtures must be committed file artifacts.
+- **IMPL-TEST-026** \`no-local-ci-drift\` [test]: Do not run a suite with one command locally and a different command in CI.
+
+### Antipatterns
+- **PROCESS-X-007** \`plan-as-wishlist\` [process]: Writing implementation plan tasks as vague goals instead of concrete, verifiable actions. Vague tasks produce vague work.
+- **TEST-X-003** \`fixtures-in-env-vars\` [test]: Encoding replay data in .env files or environment variables. Env vars are configuration channels, not fixture storage.
+- **TEST-X-005** \`local-ci-divergence\` [test]: Running one set of commands locally and another in CI. Any divergence breaks confidence in local results.
+- **TEST-X-006** \`duplicated-quality-checks\` [test]: Re-running lint/format/build inside every suite workflow despite having a dedicated quality gate.
+
+…94 rules omitted due to budget.
+
+## Consulting the Blueprint
+
+The Superfield Blueprint at \`blueprint/rules/graph.yaml\` is the authoritative source for architecture, security, design patterns, and antipatterns. Before introducing a new public API, a new dependency, a new module boundary, or a new pattern, search the relevant domain blueprint:
+
+- Architecture: \`blueprint/rules/blueprints/arch.yaml\`
+- Auth & sessions: \`blueprint/rules/blueprints/auth.yaml\`
+- Data layer: \`blueprint/rules/blueprints/data.yaml\`
+- Testing: \`blueprint/rules/blueprints/test.yaml\`
+- Process & PRs: \`blueprint/rules/blueprints/process.yaml\`
+- TypeScript-specific: \`blueprint/rules/implementations/ts/\`
+
+If a rule applies, follow it. If you choose to deviate, document why in the commit body and cite the rule ID you are deviating from.
+
+## Commit standards
+
+- Use conventional commit prefixes: \`feat\`, \`fix\`, \`refactor\`, \`test\`, \`docs\`, \`chore\`, \`security\`.
+- Stage files explicitly by name. Never use \`git add .\` or \`git add -A\`.
+- Never use \`--no-verify\` to bypass pre-commit hooks. If a hook fails, fix the underlying issue.
+- Reference the issue number in the commit body: \`Refs #N\` for in-progress, \`Closes #N\` only on the final commit that completes the work.
+- Cite blueprint rule IDs in commit bodies when the change implements or mitigates a specific rule.
+
+## Begin
+
+\`cd\` into your worktree and start by reading every downstream feature issue body."
+`;
+
+exports[`prompt builders — snapshots buildCIFailurePrompt matches snapshot 1`] = `
+"## Project: Superfield
+
+Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source of truth for all orchestration state — issues are the task queue, the Plan tracking issue holds ordered work, PRs are change proposals, and merge to \`main\` means done. There is no local state aside from credentials.
+
+### Canonical references
+
+- Product requirements: \`docs/prd.md\` in this repository
+- Design rules graph: \`blueprint/rules/graph.yaml\` (the Superfield Blueprint)
+- Per-domain blueprint rules: \`blueprint/rules/blueprints/<domain>.yaml\`
+- TypeScript implementation rules: \`blueprint/rules/implementations/ts/\`
+
+When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
+
+## Situation
+
+The following CI check is failing on \`main\` and is blocking all development:
+
+- Check: test:unit
+- Commit: abc1234
+- Logs: https://github.com/o/r/runs/1
+- Tracking issue: #42 — feat: example feature
+- Branch: fix/ci
+
+Remediating \`main\` takes absolute priority over any feature work.
+
+## Worktree isolation
+
+Your assigned worktree is:
+
+\`/tmp/wt\`
+
+All work must happen inside this directory. Do not:
+
+- Touch files outside the worktree
+- Touch the main repo checkout or any other issue's worktree
+- Modify shared user config or system files
+- Run commands that mutate state outside the worktree (e.g. \`gh repo edit\` on a different repo)
+
+The first thing you do is \`cd\` into the worktree. Every subsequent shell command runs from there.
+
+## Your task
+
+1. Read the CI logs at the URL above to understand exactly what is failing.
+2. Reproduce the failure locally — run the failing check command in this worktree.
+3. Identify the root cause. Do not guess; read the error carefully.
+4. Apply the smallest correct fix. Do not refactor surrounding code.
+5. Verify locally that the fix passes the failing check.
+6. Push your fix to the remote branch.
+7. Tick off each item in issue #42's checklist as you go.
+8. When the checklist is complete, open a PR as ready for review (never draft).
+
+You are the primary agent for this issue. Do not exit until the PR is merged and the issue is CLOSED.
+
+## Rules
+
+- Fix only what is broken. Do not bundle unrelated changes.
+- If the root cause is genuinely ambiguous, post a comment on issue #42 describing what you found before attempting a fix.
+- Never bypass CI checks with \`--no-verify\` or by disabling tests. Fix the underlying problem.
+
+## Commit standards
+
+- Use conventional commit prefixes: \`feat\`, \`fix\`, \`refactor\`, \`test\`, \`docs\`, \`chore\`, \`security\`.
+- Stage files explicitly by name. Never use \`git add .\` or \`git add -A\`.
+- Never use \`--no-verify\` to bypass pre-commit hooks. If a hook fails, fix the underlying issue.
+- Reference the issue number in the commit body: \`Refs #N\` for in-progress, \`Closes #N\` only on the final commit that completes the work.
+- Cite blueprint rule IDs in commit bodies when the change implements or mitigates a specific rule.
+
+## Begin
+
+\`cd\` into your worktree and start by fetching the CI logs."
+`;
+
+exports[`prompt builders — snapshots buildFeatureEvaluatePrompt matches snapshot 1`] = `
+"## Project: Superfield
+
+Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source of truth for all orchestration state — issues are the task queue, the Plan tracking issue holds ordered work, PRs are change proposals, and merge to \`main\` means done. There is no local state aside from credentials.
+
+### Canonical references
+
+- Product requirements: \`docs/prd.md\` in this repository
+- Design rules graph: \`blueprint/rules/graph.yaml\` (the Superfield Blueprint)
+- Per-domain blueprint rules: \`blueprint/rules/blueprints/<domain>.yaml\`
+- TypeScript implementation rules: \`blueprint/rules/implementations/ts/\`
+
+When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
+
+## Task: feature-evaluate (principles-first exploratory pass)
+
+Evaluate the following feature request and emit a structured JSON object describing your decision and a candidate solution shape. A second narrowing pass will apply implementation rules to your chosen candidate.
+
+### Feature request
+
+Add a logout button to the navbar
+
+### Current Plan
+
+## Phase: P
+
+
+### Open issues
+
+- #1: feat: existing
+
+## Blueprint principles (exploratory context — shape the solution freely)
+Apply these rules to your work. Cite the rule ID in your commit body if you deviate.
+
+### Principles
+- **AUTH-P-001** \`passkey-first-password-never\` [auth]: The system uses passkey-based authentication (FIDO2 WebAuthn) as the sole primary credential mechanism. Passwords are never offered. The private key never leaves the user's device, eliminating server-side credential theft, phishing, credential stuffing, and reuse attacks at the protocol level.
+- **AUTH-P-002** \`tokens-opaque-to-browsers\` [auth]: Session tokens are stored in HTTP-only, Secure, SameSite=Strict cookies and are never accessible to client-side JavaScript. This eliminates session hijacking as a consequence of XSS without depending on the application being XSS-free.
+- **AUTH-P-003** \`agent-credentials-scoped-and-short-lived\` [auth]: Every agent credential carries explicit scope claims and expires within 24 hours. Broad, long-lived agent tokens are never issued. Worker daemon service accounts are a distinct credential category with their own lifecycle; the short-lived constraint applies to per-task delegated user tokens.
+- **AUTH-P-004** \`credential-domains-stay-separate\` [auth]: The platform maintains distinct credential classes: end-user session credentials (prove identity), worker service credentials (prove which daemon), delegated authority tokens (prove who authorized a task-scoped action), and twin credentials (prove sandbox-only context). These classes must never collapse into one another.
+- **AUTH-P-005** \`auth-policy-enforced-through-deterministic-gates\` [auth]: Credential policy is enforced through machine-checkable gates, not prose. The workflow must define deterministic checks for accepted credential classes, allowed signing algorithms, revocation behavior, privileged-operation approval requirements, and sandbox boundary separation.
+- **AUTH-P-006** \`authority-and-execution-are-separate-facts\` [auth]: The system must preserve the distinction between the principal that had authority to perform an action and the actor that executed it. Both facts are recorded. "The agent acted on behalf of the user" is not the same as "the user executed the action personally."
+- **AUTH-P-007** \`no-single-actor-authorizes-privileged-operations\` [auth]: Operations touching root key material, bulk data exports, or authentication infrastructure require M-of-N approval from distinct human operators. This is a cryptographic constraint enforced through secret sharing, not a workflow preference.
+- **AUTH-P-008** \`authentication-is-self-hosted\` [auth]: The critical login path (credential verification, token issuance, session creation) runs on infrastructure the team owns. External identity providers may participate in federated flows but are never the sole authentication path. If the external provider goes down, users authenticate via the self-hosted passkey flow.
+- **AUTH-P-009** \`algorithm-pinned-not-negotiated\` [auth]: Token verification accepts exactly one signing algorithm, configured at deployment time and never read from the token header. Algorithm negotiation is the root cause of algorithm confusion attacks. Pinning makes these attacks structurally impossible. The same rule applies to consequential transaction signatures.
+
+**Exploratory instruction:** Propose a solution shape. Do not try to match specific implementation rules yet — those will be applied in a narrowing pass after you pick a candidate approach.
+
+## Consulting the Blueprint
+
+The Superfield Blueprint at \`blueprint/rules/graph.yaml\` is the authoritative source for architecture, security, design patterns, and antipatterns. Before introducing a new public API, a new dependency, a new module boundary, or a new pattern, search the relevant domain blueprint:
+
+- Architecture: \`blueprint/rules/blueprints/arch.yaml\`
+- Auth & sessions: \`blueprint/rules/blueprints/auth.yaml\`
+- Data layer: \`blueprint/rules/blueprints/data.yaml\`
+- Testing: \`blueprint/rules/blueprints/test.yaml\`
+- Process & PRs: \`blueprint/rules/blueprints/process.yaml\`
+- TypeScript-specific: \`blueprint/rules/implementations/ts/\`
+
+If a rule applies, follow it. If you choose to deviate, document why in the commit body and cite the rule ID you are deviating from.
+
+## What you must decide
+
+1. **PRD alignment** — does this feature fit the product as defined in \`docs/prd.md\`? If it conflicts, say so and propose either an alternative scope or a PRD amendment (set \`candidateApproach\` to \`null\` if out of scope).
+2. **Duplicate detection** — search the open issues list for exact duplicates or substantial overlap. If this feature is substantially the same as an existing open issue, set \`duplicate_of\` to that issue number and set \`candidateApproach\` to \`null\`; otherwise set \`duplicate_of\` to \`null\`.
+3. **Phase placement** — which phase does this belong to?
+4. **Smallest clear scope** — prefer the narrowest scope that satisfies the request.
+5. **Candidate approach** — in \`candidateApproach\`, describe in 1–3 sentences the solution shape you'd propose (the "how"). This string will be fed verbatim to the narrowing pass. Use \`null\` only if you're returning a duplicate or declaring the request out of scope.
+
+## Output contract
+
+Emit exactly one JSON object with this shape, and nothing else:
+
+\`\`\`json
+{
+  "title": "feat: short conventional-commit-style title",
+  "phase": "Phase name",
+  "motivation": "1–3 sentences on why this work exists",
+  "candidateApproach": "1–3 sentences describing the proposed solution shape, or null",
+  "features": [
+    "First feature/deliverable",
+    "Second feature/deliverable"
+  ],
+  "test_plan": [
+    "First test scenario",
+    "Second test scenario"
+  ],
+  "canonical_docs": [
+    "docs/prd.md#section",
+    "blueprint/rules/blueprints/<domain>.yaml"
+  ],
+  "duplicate_of": null,
+  "blueprint_rules_cited": ["ARCH-P-001"]
+}
+\`\`\`
+
+If \`duplicate_of\` is non-null (issue number) or \`candidateApproach\` is \`null\` (out-of-scope), the orchestrator will skip the narrowing pass and report the result directly.
+
+## Rules
+
+- Emit JSON only — no surrounding prose, no markdown code fence labels.
+- Do not invent rule IDs that don't exist in the blueprint.
+- Do not include \`acceptance_criteria\` or \`scope\` — those fields no longer exist; everything actionable goes in \`features\` or \`test_plan\`."
+`;
+
+exports[`prompt builders — snapshots buildReplanEvaluatePrompt matches snapshot 1`] = `
+"## Project: Superfield
+
+Superfield is a GitOps AI orchestrator. The forge (GitHub) is the single source of truth for all orchestration state — issues are the task queue, the Plan tracking issue holds ordered work, PRs are change proposals, and merge to \`main\` means done. There is no local state aside from credentials.
+
+### Canonical references
+
+- Product requirements: \`docs/prd.md\` in this repository
+- Design rules graph: \`blueprint/rules/graph.yaml\` (the Superfield Blueprint)
+- Per-domain blueprint rules: \`blueprint/rules/blueprints/<domain>.yaml\`
+- TypeScript implementation rules: \`blueprint/rules/implementations/ts/\`
+
+When in doubt about an architectural or design decision, consult the blueprint rule that applies and cite its rule ID (e.g. \`ARCH-P-001\`) in commit messages and PR bodies.
+
+## Task: replan-evaluate
+
+Group the following open issues into coherent phases, assign each phase a dev-scout, and emit a strict total ordering as JSON.
+
+### Current Plan
+
+(no Plan issue exists yet)
+
+### Open issues
+
+### #10 — feat: A
+Labels: feature
+
+a body
+
+## Consulting the Blueprint
+
+The Superfield Blueprint at \`blueprint/rules/graph.yaml\` is the authoritative source for architecture, security, design patterns, and antipatterns. Before introducing a new public API, a new dependency, a new module boundary, or a new pattern, search the relevant domain blueprint:
+
+- Architecture: \`blueprint/rules/blueprints/arch.yaml\`
+- Auth & sessions: \`blueprint/rules/blueprints/auth.yaml\`
+- Data layer: \`blueprint/rules/blueprints/data.yaml\`
+- Testing: \`blueprint/rules/blueprints/test.yaml\`
+- Process & PRs: \`blueprint/rules/blueprints/process.yaml\`
+- TypeScript-specific: \`blueprint/rules/implementations/ts/\`
+
+If a rule applies, follow it. If you choose to deviate, document why in the commit body and cite the rule ID you are deviating from.
+
+## What you must decide
+
+1. **Phase grouping** — group related issues into phases that share a delivery goal. Each phase needs a name, a one-sentence goal, and an ordered list of issues belonging to it.
+2. **Phase dependencies** — a phase \`B\` may depend on phase \`A\` if every issue in \`A\` must close before any issue in \`B\` may begin.
+3. **Scout assignment** — every phase needs exactly one dev-scout issue placed first. If an open issue with the \`dev-scout\` label exists for a phase, use it. Otherwise, emit a \`scout_spec\` so the orchestrator can create one.
+4. **Risk scoring** — assign each issue a risk score from 1 (trivial) to 6 (unknown territory).
+5. **Total ordering** — produce a strict total order across all phases. Issues in earlier phases come before issues in dependent phases. The scout always comes first within its phase. Break ties by prioritising higher-risk issues first.
+
+## Output contract
+
+Emit exactly one JSON object with this shape, and nothing else:
+
+\`\`\`json
+{
+  "phases": [
+    {
+      "name": "Identity foundation",
+      "goal": "Create the auth and session seams needed by all identity work.",
+      "depends_on": [],
+      "scout_issue_number": 196,
+      "issue_numbers": [196, 201, 205]
+    }
+  ],
+  "ordered_issues": [
+    {
+      "number": 196,
+      "title": "chore: scout identity integration seams",
+      "phase": "Identity foundation",
+      "kind": "dev-scout",
+      "risk": 5,
+      "dependencies": [],
+      "dependents": [201, 205],
+      "parallel_safe": true
+    }
+  ],
+  "scout_specs": []
+}
+\`\`\`
+
+If a phase has no existing dev-scout issue, set \`scout_issue_number: null\` in the phase entry and add a \`scout_spec\` to the \`scout_specs\` array containing a complete \`IssueBody\` for the scout to be created.
+
+## Rules
+
+- Emit JSON only — no surrounding prose.
+- \`ordered_issues\` is a strict total order; never two issues at the same position.
+- Never repurpose a feature issue as a scout. Scouts must be issues whose labels include \`dev-scout\`.
+- Phase dependencies must be acyclic."
+`;
+
+exports[`prompt builders — snapshots buildIssueAuditPrompt matches snapshot 1`] = `
+"## Task: issue-audit
+
+You are auditing 1 GitHub issue(s) for schema conformance and content quality.
+
+### Issue #42 — feat: example feature
+
+## Phase
+Identity
+
+## Motivation
+Because.
+
+## Features
+- [ ] Build it
+
+## Test Plan
+- [ ] Verify it
+
+## Schema requirements
+
+Required sections (level-2 markdown headings with non-empty content):
+
+1. \`## Phase\` — a single line immediately below the heading giving a short phase name
+2. \`## Motivation\` — prose explaining why this work is needed
+3. \`## Canonical docs\` — at least one URL or file link
+4. \`## Features\` — at least one \`- [ ]\` or \`- [x]\` checkbox
+5. \`## Test Plan\` — at least one \`- [ ]\` or \`- [x]\` checkbox
+
+Forbidden sections (must not appear):
+
+- \`## Issue type\` — superseded; classification lives on labels
+- \`## Deliverables\` — superseded by \`## Features\`
+- \`## Acceptance Criteria\` — superseded by \`## Features\`
+- \`## Scope\` — superseded by \`## Features\`
+- Step N / Batch N plan-order metadata in title or body
+
+## Quality requirements
+
+Even if all sections are structurally present, flag and fix:
+
+- **Impossible features**: any \`## Features\` item that cannot realistically be
+  implemented in a single PR (e.g. "rewrite the entire codebase", "make it 100×
+  faster"). Replace with a scoped, achievable version of the same intent.
+- **Untestable tests**: any \`## Test Plan\` item that cannot be verified with a
+  specific assertion (e.g. "make sure it works", "test everything", "manually
+  verify"). Replace with a concrete, specific, automatable assertion.
+- **Vague phase name**: if \`## Phase\` is present but the name is empty, "TBD",
+  or "Unknown", infer a reasonable phase name from the issue's title and context.
+
+## Output contract
+
+Emit exactly one JSON object with a \`reports\` array — one entry per issue:
+
+\`\`\`json
+{
+  "reports": [
+    {
+      "issue_number": 251,
+      "conformant": false,
+      "missing_sections": ["## Phase"],
+      "forbidden_sections": [],
+      "empty_sections": [],
+      "quality_issues": ["Test plan item 2 is not a specific assertion"],
+      "proposed_body": "## Phase\\nFoundation\\n\\n## Motivation\\n..."
+    }
+  ]
+}
+\`\`\`
+
+Rules:
+
+- Every issue in the input must appear exactly once in \`reports\`.
+- Set \`conformant: true\` only when all required sections are present and
+  non-empty with valid content, no forbidden sections exist, and there are no
+  quality issues.
+- When \`conformant\` is \`false\`, always provide a \`proposed_body\` — the full
+  corrected issue body.
+- \`proposed_body\` must preserve all existing content that is correct; only
+  add missing sections, rename forbidden ones, or replace problematic items.
+- When adding a \`## Phase\` section, infer the phase name from the issue title
+  and motivation (e.g. "Foundation", "Auth Layer", "Analytics").
+- Emit JSON only — no surrounding prose."
+`;
+
+exports[`prompt builders — snapshots buildBlueprintConformancePrompt matches snapshot 1`] = `
+"## Task: blueprint-conformance
+
+You are checking one GitHub issue against the Superfield Blueprint for conformance violations. This check is **advisory** — it does not block the issue from being worked. Its purpose is to surface concerns early so the agent picking up the issue knows what to watch out for.
+
+### Issue #42 — feat: example feature
+
+## Phase
+Identity
+
+## Motivation
+Because.
+
+## Features
+- [ ] Build it
+
+## Test Plan
+- [ ] Verify it
+
+### Candidate blueprint domains
+
+- \`blueprint/rules/blueprints/arch.yaml\`
+- \`blueprint/rules/blueprints/auth.yaml\`
+
+## Consulting the Blueprint
+
+The Superfield Blueprint at \`blueprint/rules/graph.yaml\` is the authoritative source for architecture, security, design patterns, and antipatterns. Before introducing a new public API, a new dependency, a new module boundary, or a new pattern, search the relevant domain blueprint:
+
+- Architecture: \`blueprint/rules/blueprints/arch.yaml\`
+- Auth & sessions: \`blueprint/rules/blueprints/auth.yaml\`
+- Data layer: \`blueprint/rules/blueprints/data.yaml\`
+- Testing: \`blueprint/rules/blueprints/test.yaml\`
+- Process & PRs: \`blueprint/rules/blueprints/process.yaml\`
+- TypeScript-specific: \`blueprint/rules/implementations/ts/\`
+
+If a rule applies, follow it. If you choose to deviate, document why in the commit body and cite the rule ID you are deviating from.
+
+## What you do
+
+1. Read each candidate domain blueprint above.
+2. For each rule whose \`type\` is \`threat\`, \`principle\`, or \`antipattern\`, evaluate whether the issue's proposed scope, motivation, or features could violate it.
+3. Skip \`design_pattern\` and \`architecture\` rules — those are prescriptive guidance, not violations.
+4. Skip rules where \`deprecated: true\`.
+
+## Output contract
+
+Emit exactly one JSON object:
+
+\`\`\`json
+{
+  "issue_number": 42,
+  "violations": [
+    {
+      "rule_id": "ARCH-T-001",
+      "rule_name": "server-code-in-browser-bundle",
+      "rule_type": "threat",
+      "domain": "arch",
+      "concern": "1–2 sentences explaining what in the issue conflicts with this rule"
+    }
+  ]
+}
+\`\`\`
+
+If no violations are found, emit \`"violations": []\`.
+
+## Rules
+
+- Cite only real rule IDs that exist in the blueprint files. Do not invent.
+- Be conservative: only flag rules where there is a clear, articulable concern.
+- Emit JSON only — no surrounding prose."
+`;
+
+exports[`prompt builders — snapshots buildDocCoveragePrompt matches snapshot 1`] = `
+"## Task: doc-coverage
+
+PR #99 just merged to \`main\`. Scan the changed source files for exported symbols (functions, classes, types, interfaces, constants) that lack a doc comment.
+
+### Files changed
+
+- packages/core/foo.ts
+- packages/cli/bar.ts
+
+## What you check
+
+For each \`.ts\` file in the list above:
+
+1. Read the file.
+2. Find every \`export\` declaration: \`export function\`, \`export class\`, \`export interface\`, \`export type\`, \`export const\`, \`export enum\`.
+3. Check whether the line immediately above each export is a JSDoc comment (\`/** ... */\`) or a single-line comment block describing the symbol.
+4. Flag any export that lacks a doc comment.
+
+Skip:
+
+- Re-exports from \`index.ts\` files (\`export { Foo } from './foo.ts'\`)
+- Symbols starting with \`_\` (intentionally internal)
+- Files in \`tests/\` directories
+
+## Output contract
+
+Emit exactly one JSON object:
+
+\`\`\`json
+{
+  "missing_docs": [
+    {
+      "file": "packages/core/agent.ts",
+      "symbol": "spawnAgent",
+      "kind": "function",
+      "line": 42
+    }
+  ]
+}
+\`\`\`
+
+If everything is documented, emit \`"missing_docs": []\`.
+
+Emit JSON only — no surrounding prose."
+`;
+
+exports[`prompt builders — snapshots buildDocCanonicalSyncPrompt matches snapshot 1`] = `
+"## Task: doc-canonical-sync
+
+PR #100 just merged to \`main\`. Determine whether it introduced a significant feature that requires updating the PRD or README, and if so, emit the patches to apply.
+
+### Merged PR
+
+Title: feat: new command
+
+Body:
+Adds frobnicate command
+
+### Files changed
+
+- packages/cli/commands/frobnicate.ts
+
+### Current PRD (\`docs/prd.md\`)
+
+# PRD
+## Commands
+
+
+### Current README
+
+# README
+
+
+## What counts as significant
+
+Update the canonical docs only if the PR:
+
+- Adds a new CLI command or subcommand
+- Adds a new public API surface (exported function, class, type) that other packages can consume
+- Changes the behavior of an existing command in a way that contradicts the PRD's current description
+- Adds or removes a Roadmap-phase deliverable
+- Adds a new loop or stage to \`start\`
+- Adds a new external dependency listed in the Libraries section
+
+Bug fixes, refactors, internal cleanups, test additions, and minor changes do NOT require canonical doc updates. If the change is not significant, emit empty patches.
+
+## Output contract
+
+Emit exactly one JSON object:
+
+\`\`\`json
+{
+  "significant": true,
+  "rationale": "1 sentence explaining why this is canonically significant",
+  "prd_patches": [
+    {
+      "section": "## Roadmap",
+      "old_text": "...",
+      "new_text": "..."
+    }
+  ],
+  "readme_patches": []
+}
+\`\`\`
+
+Patches must be exact text replacements suitable for non-fuzzy string match. \`old_text\` must appear verbatim in the current document. If the change is not significant, set \`"significant": false\` and emit empty arrays.
+
+Emit JSON only — no surrounding prose."
+`;
+
+exports[`prompt builders — snapshots buildDocConsistencyPrompt matches snapshot 1`] = `
+"## Task: doc-consistency
+
+You are checking the documentation fractal for cross-level inconsistencies. Documentation is maintained at three levels:
+
+1. **Canonical** — PRD, architecture docs, top-level README
+2. **Module** — package READMEs, public API doc comments
+3. **Inline** — function and type doc comments in source files
+
+A change at any level can create inconsistencies at the others. Your job is to detect and resolve them. Treat the code (inline level) as ground truth: if module or canonical docs contradict the inline reality, the inline description wins.
+
+### Canonical snippets
+
+**docs/prd.md**
+
+# PRD
+
+### Module snippets
+
+**packages/core/README.md**
+
+# core
+
+### Inline snippets
+
+**packages/core/foo.ts** — \`spawnAgent\`
+
+/** doc */
+
+## What you check
+
+For each canonical or module snippet, ask:
+
+- Does it describe a function/class/type that still exists?
+- Does the description still match what the inline doc says?
+- Are flags, options, return values, or behaviors still accurate?
+
+## Output contract
+
+Emit exactly one JSON object:
+
+\`\`\`json
+{
+  "inconsistencies": [
+    {
+      "level": "canonical",
+      "path": "docs/prd.md",
+      "section": "## Configuration",
+      "concern": "PRD says config lives at ~/.foo but code says ~/.superfield",
+      "ground_truth_source": "packages/core/config.ts",
+      "fix_text_old": "~/.foo",
+      "fix_text_new": "~/.superfield"
+    }
+  ]
+}
+\`\`\`
+
+If no inconsistencies are found, emit \`"inconsistencies": []\`.
+
+Emit JSON only — no surrounding prose."
+`;

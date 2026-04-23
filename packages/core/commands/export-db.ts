@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as crypto from "node:crypto";
 import * as path from "node:path";
 import { SshClient } from "../ssh/client.ts";
+import { signRequest } from "../lib/sigv4.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -218,25 +219,31 @@ async function triggerAwsRdsSnapshot(opts: {
   };
   fetchImpl: typeof globalThis.fetch;
 }): Promise<string> {
-  // AWS RDS CreateDBSnapshot via query API
-  const endpoint = `https://rds.${opts.region}.amazonaws.com/`;
-  const params = new URLSearchParams({
+  // AWS RDS CreateDBSnapshot via Query API (POST with form-encoded body).
+  const url = `https://rds.${opts.region}.amazonaws.com/`;
+  const body = new URLSearchParams({
     Action: "CreateDBSnapshot",
     DBInstanceIdentifier: opts.dbInstanceId,
     DBSnapshotIdentifier: opts.snapshotId,
     Version: "2014-10-31",
+  }).toString();
+
+  const sigHeaders = signRequest({
+    method: "POST",
+    url,
+    body,
+    region: opts.region,
+    service: "rds",
+    credentials: opts.credentials,
   });
 
-  const response = await opts.fetchImpl(`${endpoint}?${params.toString()}`, {
-    method: "GET",
+  const response = await opts.fetchImpl(url, {
+    method: "POST",
     headers: {
-      "X-Amz-Security-Token": opts.credentials.sessionToken ?? "",
-      Authorization: buildAwsAuthHeader(
-        opts.credentials,
-        opts.region,
-        params.toString(),
-      ),
+      "Content-Type": "application/x-www-form-urlencoded",
+      ...sigHeaders,
     },
+    body,
   });
 
   if (!response.ok) {
@@ -247,15 +254,6 @@ async function triggerAwsRdsSnapshot(opts: {
   }
 
   return opts.snapshotId;
-}
-
-/** Minimal AWS SigV4 authorization header (unsigned for test coverage; real impl would sign). */
-function buildAwsAuthHeader(
-  creds: { accessKeyId: string; secretAccessKey: string },
-  region: string,
-  _query: string,
-): string {
-  return `AWS4-HMAC-SHA256 Credential=${creds.accessKeyId}/${region}/rds/aws4_request, SignedHeaders=host, Signature=placeholder`;
 }
 
 // ---------------------------------------------------------------------------
