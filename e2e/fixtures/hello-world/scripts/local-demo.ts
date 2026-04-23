@@ -70,12 +70,20 @@ export async function ensureCluster(): Promise<void> {
   if (kubeconfigResult.stdout) {
     let kubeconfig = kubeconfigResult.stdout;
     // Replace 0.0.0.0 with the host gateway so kubectl can reach the API
-    // server from inside the CI container.
+    // server from inside the CI container. Also replace the TLS cert
+    // reference with insecure-skip-tls-verify — the k3s cert may not
+    // include the host gateway IP in its SANs (especially on re-used
+    // clusters), so skip verification for CI e2e tests.
     if (hostGateway) {
-      kubeconfig = kubeconfig.replace(
-        /https:\/\/0\.0\.0\.0:(\d+)/g,
-        `https://${hostGateway}:$1`,
-      );
+      kubeconfig = kubeconfig
+        .replace(
+          /https:\/\/0\.0\.0\.0:(\d+)/g,
+          `https://${hostGateway}:$1`,
+        )
+        .replace(
+          /^\s+certificate-authority-data: .+$/m,
+          "    insecure-skip-tls-verify: true",
+        );
     }
     const kubeconfigDir = path.join(homedir(), ".kube");
     mkdirSync(kubeconfigDir, { recursive: true });
