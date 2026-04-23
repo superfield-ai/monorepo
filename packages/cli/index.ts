@@ -11,6 +11,7 @@ import { syncCommand } from "./commands/sync.ts";
 import { doctorCommand } from "./commands/doctor.ts";
 import { exportDbCommand } from "./commands/export-db.ts";
 import { initCommand } from "./commands/init.ts";
+import { auditCommand } from "./commands/audit.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -33,6 +34,10 @@ Commands:
                 Begin loop(s). Defaults to all three when no --<loop> flags are provided.
   plan          Replan: group issues into phases, create scouts, write Plan
   feature "..." Evaluate a feature request and create an issue + Plan entry
+  audit --path <dir> [--repo <owner/name>] [--capabilities <id,...>]
+         [--output-dir <dir>] [--no-issues]
+                Audit an app repo against expected blueprint capabilities.
+                Saves per-capability findings to JSON; opens issues for gaps.
   deploy [--provision] [target]
                 Provision the demo target, then deploy it. Use --provision to run setup only.
   deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
@@ -133,6 +138,11 @@ export async function runCLI(
 
   if (cmd === "feature") {
     await featureCommand(sub, third);
+    return;
+  }
+
+  if (cmd === "audit") {
+    await auditCommand(args.slice(1));
     return;
   }
 

@@ -83,6 +83,19 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 - ⬜ Wire into `superfield start` with `--no-api` and `--api-port` flags
 - ⬜ Instrument dev loop, planning loop, doc loop with `recordLoopTick`, `recordAgentStart`, `recordAgentEnd`
 
+### Phase A-12 — `audit` command 🟡
+
+- ✅ `superfield audit --path <dir>` — audit an app repo against expected blueprint capabilities
+- ✅ Initial capability set: `property-graph-db`, `authentication`, `error-tracing`, `pwa`
+- ✅ Per-capability agent call via `spawnAgent` (`jobType: "audit"`, `maxTurns: 100`)
+- ✅ Findings saved incrementally to `<output-dir>/<capability-id>.json` (resume on crash)
+- ✅ Summary written to `<output-dir>/summary.json`
+- ✅ Gap → GitHub issue in blueprint issue format (skipped when `--no-issues` or no `--repo`)
+- ✅ `"audit"` job type registered in job registry (medium dev spec)
+- ⬜ Expand capability set from blueprint YAML `checklist` rules
+- ⬜ Parallel capability runs
+- ⬜ Stale-check: skip re-running capabilities where finding mtime > repo HEAD mtime
+
 ### Cross-cutting A (remaining)
 
 - ⬜ Wire all three loops in `superfield start` (currently only planning loop runs)

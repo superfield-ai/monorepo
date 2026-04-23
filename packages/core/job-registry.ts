@@ -16,7 +16,8 @@ export type JobType =
   | "doc-coverage"
   | "doc-canonical-sync"
   | "doc-consistency"
-  | "pre-pr-self-audit";
+  | "pre-pr-self-audit"
+  | "audit";
 
 /**
  * Abstract tier names used in failover lists.
@@ -120,6 +121,7 @@ const BUILT_IN_JOB_SPECS: Record<JobType, JobSpec> = {
     preferred: { backend: "claude", tier: ModelTier.LOW },
     failovers: [{ backend: "codex", tier: ModelTier.LOW }, "thinking-low"],
   },
+  audit: MEDIUM_DEV_SPEC,
 };
 
 // ---------------------------------------------------------------------------

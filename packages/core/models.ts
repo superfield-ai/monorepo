@@ -5,7 +5,7 @@
 
 export type AgentBackend = "claude" | "codex" | "opencode";
 export type AgentMode = AgentBackend | "auto";
-export type AgentLoop = "plan" | "dev" | "doc";
+export type AgentLoop = "plan" | "dev" | "doc" | "audit";
 
 export enum ModelTier {
   HIGH = "high",
