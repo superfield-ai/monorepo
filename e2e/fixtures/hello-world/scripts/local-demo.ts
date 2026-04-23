@@ -28,7 +28,9 @@ function getHostGatewayIp(): string | null {
         return ip || null;
       }
     }
-  } catch {}
+  } catch (_e) {
+    // /proc/net/route unavailable; gateway detection skipped
+  }
   return null;
 }
 
@@ -76,10 +78,7 @@ export async function ensureCluster(): Promise<void> {
     // clusters), so skip verification for CI e2e tests.
     if (hostGateway) {
       kubeconfig = kubeconfig
-        .replace(
-          /https:\/\/0\.0\.0\.0:(\d+)/g,
-          `https://${hostGateway}:$1`,
-        )
+        .replace(/https:\/\/0\.0\.0\.0:(\d+)/g, `https://${hostGateway}:$1`)
         .replace(
           /^\s+certificate-authority-data: .+$/m,
           "    insecure-skip-tls-verify: true",
