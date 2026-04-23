@@ -1,11 +1,12 @@
 # Superfield
 
-GitOps AI orchestrator. Git and GitHub are the control plane — issues are the task queue, the Plan issue is orchestration state, PRs are change proposals.
+Superfield is a CLI that owns the full lifecycle of a k3s-based application deployment — from zero-to-running on a fresh VPS through rolling updates, rollbacks, and database exports — while running an autonomous GitOps orchestration loop that drives issues to merged PRs.
 
 ## Requirements
 
 - [Bun](https://bun.sh) v1.3+
-- A GitHub App authorization for the target user
+- A GitHub App authorization for the target user (orchestration commands)
+- SSH access to a provisioned VPS (ops commands)
 
 ## Install
 
@@ -25,33 +26,50 @@ Make sure `~/.bun/bin` is on your `PATH`:
 export PATH="$HOME/.bun/bin:$PATH"
 ```
 
-## Setup
+---
 
-Sign in, then open the GitHub App install page:
+## Ops Commands
+
+Lifecycle commands for managing a k3s deployment on a VPS. These are one-shot, idempotent, and composable — `init` runs them all in sequence.
 
 ```bash
-bun run packages/cli/bin/superfield.ts github add
+superfield init <env>          # provision host, register GitHub secrets, deploy
+superfield doctor <env>        # preflight health check — SSH, k3s, DB, secrets
+superfield deploy-env <env>    # rolling update: build → push → apply → health gate
+superfield rollback-env <env>  # roll back to the previous deployment
+superfield destroy <env>       # tear down the deployment (prod requires confirmation)
+superfield export-db <env>     # dump the database (pg_dump for local, snapshot for managed)
 ```
 
-Remove a stored GitHub user:
+Each command reads per-env secrets (`DEPLOY_HOST_<ENV>`, `DEPLOY_KEY_<ENV>`, `DATABASE_URL_<ENV>`) from the environment or from the repository's GitHub Actions secrets.
+
+### Supported cloud providers
+
+| Provider      | VM  | Managed DB    |
+| ------------- | --- | ------------- |
+| GCP           | ✅  | AlloyDB       |
+| DigitalOcean  | ✅  | Managed PG    |
+| AWS           | ✅  | RDS (partial) |
+| Vultr         | ✅  | —             |
+
+---
+
+## Orchestration Commands
+
+GitOps autonomous development loop. Issues are the task queue; the Plan issue is orchestration state; PRs are change proposals.
 
 ```bash
-bun run packages/cli/bin/superfield.ts github forget <handle>
+superfield github add           # authenticate, install GitHub App, register repo
+superfield github forget        # remove credentials and print the app uninstall link
+
+superfield start [slotCount]    # begin the continuous development loop (foreground)
+superfield plan                 # sync all open issues into the Plan tracking issue
+superfield feature "<desc>"     # ticket a new feature issue and update the Plan
 ```
 
 Config is saved to `~/.superfield/config.yaml`.
 
-## Run
-
-Start the continuous loop — polls every 5 seconds, creates CI failure issues, and keeps the Plan issue up to date:
-
-```bash
-bun run start /path/to/repo [slotCount]
-```
-
-The path is required. Superfield reads the `origin` remote from the local git checkout to resolve `owner/repo`, then uses the matching user token from config.
-
-Stop with Ctrl-C. The loop is stateless — restarting picks up where GitHub left off.
+---
 
 ## Development
 
@@ -73,13 +91,13 @@ bun run test
 
 ```
 packages/
-  cli/      Commands: github add, github forget, start, plan, feature
-  core/     Config, outer loop, CI watchdog
+  cli/      Commands: all CLI entry points
+  core/     Config, outer loop, CI watchdog, ops orchestration
   github/   Octokit wrapper (GitHub API client)
   git/      isomorphic-git wrapper (no git binary)
-tests/
-  fixtures/ Golden API response fixtures for MSW
 docs/
-  prd.md    Product requirements
-  plan.md   Implementation plan
+  product.md    Product requirements
+  architecture.md  Technical design
+  plan.md       Implementation plan and known issues
+  roadmap.md    Build order
 ```
