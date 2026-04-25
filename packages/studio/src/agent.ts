@@ -43,6 +43,7 @@ export async function runAgent(
   messages: StudioMessage[],
   branch: string,
   mode: StudioMode = 'design',
+  _readProc: (stdout: ReadableStream<Uint8Array>) => Promise<string> = readProcStdout,
 ): Promise<string> {
   const changesPath = join(REPO_ROOT, `docs/studio-sessions/${branch}/changes.md`);
   const changesContent = existsSync(changesPath) ? readFileSync(changesPath, 'utf8') : undefined;
@@ -64,7 +65,7 @@ export async function runAgent(
     stderr: 'pipe',
   });
 
-  const output = await readProcStdout(proc.stdout);
+  const output = await _readProc(proc.stdout);
   await proc.exited;
 
   return output.trim();

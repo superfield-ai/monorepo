@@ -20,20 +20,12 @@ const BunGlobal = (globalThis as any).Bun;
 
 // ── I/O boundary mock ────────────────────────────────────────────────────────
 //
-// Mock readProcStdout so Bun.spawn's stdout stream is never actually read.
-// We also mock fs to prevent real filesystem access for the changes.md check.
-// Store a stable reference so tests can change the resolved value without
-// re-importing the module.
+// readProcStdout is passed as the _readProc DI parameter rather than mocked
+// at the module level, so the real Bun.spawn stdout stream is never read.
+// We mock fs to prevent real filesystem access for the changes.md check.
 
-const mockReadProcStdout = vi.fn().mockResolvedValue('mocked agent reply');
-
-vi.mock('../../lib/response', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../lib/response')>();
-  return {
-    ...original,
-    readProcStdout: mockReadProcStdout,
-  };
-});
+const mockReadProcStdout = vi.fn<[ReadableStream<Uint8Array>], Promise<string>>()
+  .mockResolvedValue('mocked agent reply');
 
 vi.mock('fs', async (importOriginal) => {
   const original = await importOriginal<typeof import('fs')>();
@@ -137,13 +129,29 @@ describe('runAgent — Bun.spawn invocation via boundary mock', () => {
   let spawnSpy: ReturnType<typeof vi.fn>;
 
   beforeEach(() => {
-    spawnSpy = vi.fn(BunGlobal.spawn);
+    spawnSpy = vi.fn(() => ({
+      stdout: new ReadableStream({ start(c) { c.close(); } }),
+      stderr: new ReadableStream({ start(c) { c.close(); } }),
+      exited: Promise.resolve(0),
+      pid: 12345,
+      exitCode: null,
+      signalCode: null,
+      killed: false,
+      kill: () => {},
+      ref: () => {},
+      unref: () => {},
+      stdin: null,
+    }));
     BunGlobal.spawn = spawnSpy;
+  });
+
+  afterEach(() => {
+    mockReadProcStdout.mockResolvedValue('mocked agent reply');
   });
 
   it('calls Bun.spawn with claude, -p, prompt, --dangerously-skip-permissions, and --allowedTools', async () => {
     const { runAgent } = await import('../../src/agent');
-    await runAgent([{ role: 'user', content: 'hello' }], 'feat/test-branch');
+    await runAgent([{ role: 'user', content: 'hello' }], 'feat/test-branch', 'design', mockReadProcStdout);
 
     expect(spawnSpy).toHaveBeenCalledOnce();
     const [args] = spawnSpy.mock.calls[0];
@@ -162,7 +170,7 @@ describe('runAgent — Bun.spawn invocation via boundary mock', () => {
     mockReadProcStdout.mockResolvedValue('  agent output  \n');
 
     const { runAgent } = await import('../../src/agent');
-    const result = await runAgent([{ role: 'user', content: 'hello' }], 'main');
+    const result = await runAgent([{ role: 'user', content: 'hello' }], 'main', 'design', mockReadProcStdout);
     expect(result).toBe('agent output');
   });
 });
@@ -196,20 +204,15 @@ describe('REPO_ROOT', () => {
 describe('runAgent — negative paths', () => {
 
   it('returns empty string when subprocess produces no output', async () => {
-    mockReadProcStdout.mockResolvedValue('');
-
     const { runAgent } = await import('../../src/agent');
-    const result = await runAgent([{ role: 'user', content: 'test' }], 'main');
+    const result = await runAgent([{ role: 'user', content: 'test' }], 'main', 'design', async () => '');
     expect(result).toBe('');
   });
 
   it('handles non-zero exit code from subprocess gracefully', async () => {
-    // Bun.spawn stub always resolves exited to 0, but readProcStdout still
-    // returns partial output. runAgent returns whatever stdout produced.
-    mockReadProcStdout.mockResolvedValue('partial output');
-
+    // _readProc returns partial output regardless of exit code.
     const { runAgent } = await import('../../src/agent');
-    const result = await runAgent([{ role: 'user', content: 'test' }], 'main');
+    const result = await runAgent([{ role: 'user', content: 'test' }], 'main', 'design', async () => 'partial output');
     expect(typeof result).toBe('string');
     expect(result).toBe('partial output');
   });
