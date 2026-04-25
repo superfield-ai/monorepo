@@ -510,3 +510,62 @@ image has no claude dependency.
 
 11. **Retire the `control/` directory and its CI workflows** — after all
     prior steps are green on main.
+
+---
+
+## Implementation notes (cli-migration branch, 2026-04-25)
+
+### Phase 1 (completed)
+- `packages/studio/` was already partially migrated on main; remaining work
+  was fixing unit tests and adding the `_readProc` DI parameter to `runAgent`.
+- `packages/studio-core/` and `packages/db/` copied from control and already
+  tracked on main.
+
+### Phase 2 (completed)
+- `packages/cli/commands/control.ts` parses `--port`, `--repo`, `--api-url`,
+  pings dev-loop health on startup (warns if unreachable), then delegates
+  to `startStudio()`.
+- `packages/studio/src/index.ts` refactored to export `startStudio(opts?)`
+  instead of side-effect startup. Server only starts when called explicitly.
+- `SUPERFIELD_API_URL` (default `http://127.0.0.1:7837`) added to `StudioConfig`.
+
+### Phase 3 (completed)
+- `POST /studio/run` SSE endpoint added to `packages/core/api-server.ts`.
+  Spawns claude, streams stdout as SSE, emits `event: session/done/error`.
+- `runAgent()` in studio now calls `POST /studio/run`, collects SSE body.
+  Uses `_fetch` DI parameter for testability.
+- `streamTurn()` in studio fetches `POST /studio/run`, pipes SSE to browser.
+  Uses `_fetch` DI parameter for testability.
+- Integration fixture `tests/integration/helpers/superfield-server.ts` starts
+  API server in-process with claude stub on PATH.
+- Claude stub at `tests/fixtures/claude`.
+
+### Phase 4 (completed)
+- `packages/studio/src/studio-ws.ts` — Bun native WebSocket handler.
+- `GET /studio/ws` upgrade path and `POST /studio/steer` REST fallback in router.
+- `WsChatController` added to `ChatController.ts` alongside existing SSE controller.
+- `route()` signature updated to accept optional Bun server reference.
+
+### Phase 5 (completed)
+- `packages/studio/src/dev-loop-process.ts` — manages `superfield start` lifecycle.
+- `packages/studio/src/orchestrator.ts` — GET/POST /orchestrator/* endpoints.
+- `OrchestratorController.ts` + `OrchestratorView.tsx` added to browser UI.
+- Orchestrator tab added to StudioPanel nav.
+
+### Phase 6 (completed)
+- `template/apps/kitchen-sink/` — standalone Vite app (port 5174) with design
+  token section and component catalogue shell. Excluded from Docker + CI build.
+- `packages/studio/apps/src/components/WikiRender.tsx` and `CitationHoverPopover.tsx`
+  ported from teamster kitchen sink (self-contained, no external API deps).
+- `ComponentPreviewPanel.tsx` added for `/studio/preview` route.
+- Preview tab added to StudioPanel.
+
+### Phase 7 (completed)
+- `.github/workflows/ci-studio.yml` added: build/typecheck + unit tests +
+  integration tests with in-process superfield fixture (no k3d).
+
+### Phase 8 (completed)
+- Deprecation banner added to `control/README.md`.
+- All control GitHub Actions workflows renamed to `.yml.disabled`.
+- `control/` repo `cli-migration` branch pushed to origin for archival.
+
