@@ -7,3 +7,6 @@ Partner sent a test message to verify the session is live. No UI or code changes
 
 ### Turn 2 — Connection confirmed
 Partner sent another test message. Session confirmed active. No changes made.
+
+### Turn 3 — Session ping
+Partner sent a test message. Session is live and ready for changes.
