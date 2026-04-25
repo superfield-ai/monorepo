@@ -67,6 +67,7 @@ import { handleAuthRequest } from './auth';
 import { handleStudioRequest } from './api';
 import { clusterStatusSseResponse } from './cluster-status-sse';
 import { studioWsHandler, type WsData } from './studio-ws';
+import { handleOrchestratorRequest } from './orchestrator';
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -300,6 +301,10 @@ export async function route(
   if (req.method === 'GET' && pathname === '/studio/cluster/events') {
     return clusterStatusSseResponse(config.clusterContext);
   }
+
+  // Orchestrator endpoints — manage the dev loop child process.
+  const orchResponse = await handleOrchestratorRequest(req, url, config.superfieldApiUrl);
+  if (orchResponse) return orchResponse;
 
   // Auth endpoints — handled locally, not proxied upstream.
   const authResponse = await handleAuthRequest(req, url);

@@ -23,6 +23,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ChatPanel } from './ChatPanel';
 import { IframePanel } from './IframePanel';
+import { OrchestratorView } from './OrchestratorView';
 import type { ClusterStatus } from './ClusterStatusIndicator';
 import { ClusterStatusController } from '../controllers/ClusterStatusController';
 
@@ -85,24 +86,51 @@ export function StudioPanel({
     }
   }, [initialClusterStatus]);
 
+  const [activeTab, setActiveTab] = useState<'studio' | 'orchestrator'>('studio');
+
   return (
-    <div className="flex h-screen w-full overflow-hidden bg-zinc-900" data-testid="studio-panel">
-      {/* Left panel — Claude chat sidebar (fixed width) */}
-      <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
-        <ChatPanel
-          clusterStatus={clusterStatus}
-          chatEndpoint={chatEndpoint}
-          // Pass the events URL so ClusterStatusIndicator can independently
-          // subscribe — it is rendered inside ChatPanel and receives the parent's
-          // derived status via statusOverride to avoid duplicate SSE connections.
-          clusterEventsUrl={clusterEventsUrl}
-        />
+    <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-900" data-testid="studio-panel">
+      {/* Tab bar */}
+      <div className="flex shrink-0 border-b border-zinc-700 bg-zinc-800">
+        <button
+          className={`px-4 py-2 text-sm font-medium ${activeTab === 'studio' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+          onClick={() => setActiveTab('studio')}
+        >
+          Studio
+        </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium ${activeTab === 'orchestrator' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+          onClick={() => setActiveTab('orchestrator')}
+        >
+          Orchestrator
+        </button>
       </div>
 
-      {/* Right panel — Calypso app iframe (fills remaining space) */}
-      <div className="flex-1 flex flex-col">
-        <IframePanel src={appSrc} clusterStatus={clusterStatus} />
-      </div>
+      {/* Studio tab */}
+      {activeTab === 'studio' && (
+        <div className="flex flex-1 overflow-hidden">
+          {/* Left panel — Claude chat sidebar (fixed width) */}
+          <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
+            <ChatPanel
+              clusterStatus={clusterStatus}
+              chatEndpoint={chatEndpoint}
+              clusterEventsUrl={clusterEventsUrl}
+            />
+          </div>
+
+          {/* Right panel — Calypso app iframe (fills remaining space) */}
+          <div className="flex-1 flex flex-col">
+            <IframePanel src={appSrc} clusterStatus={clusterStatus} />
+          </div>
+        </div>
+      )}
+
+      {/* Orchestrator tab */}
+      {activeTab === 'orchestrator' && (
+        <div className="flex-1 overflow-hidden bg-gray-50">
+          <OrchestratorView />
+        </div>
+      )}
     </div>
   );
 }
