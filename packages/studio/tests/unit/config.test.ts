@@ -49,6 +49,7 @@ describe('loadConfig — defaults when no env vars are set', () => {
     STUDIO_ASSETS_DIR: undefined,
     STUDIO_VERBOSE: undefined,
     CALYPSO_REPO_ROOT: undefined,
+    SUPERFIELD_API_URL: undefined,
   };
 
   it('defaults port to 7000', () => {
@@ -104,6 +105,13 @@ describe('loadConfig — defaults when no env vars are set', () => {
     withEnv(allVars, () => {
       const config = loadConfig();
       expect(config.verbose).toBe(false);
+    });
+  });
+
+  it('defaults superfieldApiUrl to http://127.0.0.1:7837', () => {
+    withEnv(allVars, () => {
+      const config = loadConfig();
+      expect(config.superfieldApiUrl).toBe('http://127.0.0.1:7837');
     });
   });
 });

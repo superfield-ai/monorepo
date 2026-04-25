@@ -21,6 +21,7 @@
  * | STUDIO_API_SERVICE_PORT  | 31415            | ClusterIP port for the api service     |
  * | STUDIO_ASSETS_DIR        | (unset)          | Directory of pre-built browser UI      |
  * | STUDIO_VERBOSE           | (unset)          | Set to 1 for verbose startup logging   |
+ * | SUPERFIELD_API_URL       | http://127.0.0.1:7837 | Dev loop API base URL             |
  */
 
 import { join } from 'path';
@@ -43,6 +44,8 @@ export interface StudioConfig {
   assetsDir: string | undefined;
   /** When true, emit detailed diagnostic logs during startup and routing. */
   verbose: boolean;
+  /** Base URL of the superfield dev-loop API server (for agent turns and steering). */
+  superfieldApiUrl: string;
 }
 
 export function loadConfig(): StudioConfig {
@@ -81,6 +84,7 @@ export function loadConfig(): StudioConfig {
 
   const assetsDir = process.env.STUDIO_ASSETS_DIR;
   const verbose = process.env.STUDIO_VERBOSE === '1';
+  const superfieldApiUrl = process.env.SUPERFIELD_API_URL ?? 'http://127.0.0.1:7837';
 
   return {
     port,
@@ -91,6 +95,7 @@ export function loadConfig(): StudioConfig {
     apiServiceUrl,
     assetsDir,
     verbose,
+    superfieldApiUrl,
   };
 }
 

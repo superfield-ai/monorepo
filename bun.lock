@@ -25,6 +25,7 @@
         "@superfield/core": "workspace:*",
         "@superfield/git": "workspace:*",
         "@superfield/github": "workspace:*",
+        "@superfield/studio": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^20.0.0",
@@ -48,6 +49,12 @@
         "yaml": "^2.8.3",
       },
     },
+    "packages/db": {
+      "name": "@superfield/db",
+      "devDependencies": {
+        "typescript": "^5.0.0",
+      },
+    },
     "packages/git": {
       "name": "@superfield/git",
       "dependencies": {
@@ -66,6 +73,21 @@
       "devDependencies": {
         "@types/node": "^20.0.0",
         "msw": "^2.0.0",
+      },
+    },
+    "packages/studio": {
+      "name": "@superfield/studio",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/studio-core": {
+      "name": "@superfield/studio-core",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.0.0",
       },
     },
   },
@@ -398,9 +420,17 @@
 
     "@superfield/core": ["@superfield/core@workspace:packages/core"],
 
+    "@superfield/db": ["@superfield/db@workspace:packages/db"],
+
     "@superfield/git": ["@superfield/git@workspace:packages/git"],
 
     "@superfield/github": ["@superfield/github@workspace:packages/github"],
+
+    "@superfield/studio": ["@superfield/studio@workspace:packages/studio"],
+
+    "@superfield/studio-core": ["@superfield/studio-core@workspace:packages/studio-core"],
+
+    "@types/bun": ["@types/bun@1.3.13", "", { "dependencies": { "bun-types": "1.3.13" } }, "sha512-9fqXWk5YIHGGnUau9TEi+qdlTYDAnOj+xLCmSTwXfAIqXr2x4tytJb43E9uCvt09zJURKXwAtkoH4nLQfzeTXw=="],
 
     "@types/estree": ["@types/estree@1.0.8", "", {}, "sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w=="],
 
@@ -477,6 +507,8 @@
     "brace-expansion": ["brace-expansion@1.1.13", "", { "dependencies": { "balanced-match": "^1.0.0", "concat-map": "0.0.1" } }, "sha512-9ZLprWS6EENmhEOpjCYW2c8VkmOvckIJZfkr7rBW6dObmfgJ/L1GpSYW5Hpo9lDz4D1+n0Ckz8rU7FwHDQiG/w=="],
 
     "buffer": ["buffer@6.0.3", "", { "dependencies": { "base64-js": "^1.3.1", "ieee754": "^1.2.1" } }, "sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA=="],
+
+    "bun-types": ["bun-types@1.3.13", "", { "dependencies": { "@types/node": "*" } }, "sha512-QXKeHLlOLqQX9LgYaHJfzdBaV21T63HhFJnvuRCcjZiaUDpbs5ED1MgxbMra71CsryN/1dAoXuJJJwIv/2drVA=="],
 
     "cac": ["cac@6.7.14", "", {}, "sha512-b6Ilus+c3RrdDk+JhLKUAQfzzgLEPy6wcXqS7f/xe1EETvsDP6GORG7SFuOs6cID5YkqchW/LXZbX5bc8j7ZcQ=="],
 

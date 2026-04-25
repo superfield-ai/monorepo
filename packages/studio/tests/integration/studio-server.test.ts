@@ -28,6 +28,7 @@ function makeConfig(overrides: Partial<StudioConfig> = {}): StudioConfig {
     webServiceUrl: 'http://127.0.0.1:0', // overridden per test
     apiServiceUrl: 'http://127.0.0.1:0',
     assetsDir: undefined,
+    superfieldApiUrl: 'http://127.0.0.1:7837',
     ...overrides,
   };
 }

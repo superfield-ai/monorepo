@@ -18,7 +18,8 @@
   "dependencies": {
     "@superfield/core": "workspace:*",
     "@superfield/github": "workspace:*",
-    "@superfield/git": "workspace:*"
+    "@superfield/git": "workspace:*",
+    "@superfield/studio": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"
