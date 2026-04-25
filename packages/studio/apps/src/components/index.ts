@@ -16,3 +16,7 @@ export { IframePanel } from './IframePanel';
 export { ClusterStatusIndicator } from './ClusterStatusIndicator';
 export type { ClusterStatus } from './ClusterStatusIndicator';
 export type { ChatMessage } from '../controllers/ChatController';
+export { WikiRender } from './WikiRender';
+export { CitationHoverPopover } from './CitationHoverPopover';
+export { ComponentPreviewPanel } from './ComponentPreviewPanel';
+export { OrchestratorView } from './OrchestratorView';

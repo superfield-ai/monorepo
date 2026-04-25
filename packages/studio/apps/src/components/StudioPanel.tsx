@@ -24,6 +24,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { ChatPanel } from './ChatPanel';
 import { IframePanel } from './IframePanel';
 import { OrchestratorView } from './OrchestratorView';
+import { ComponentPreviewPanel } from './ComponentPreviewPanel';
 import type { ClusterStatus } from './ClusterStatusIndicator';
 import { ClusterStatusController } from '../controllers/ClusterStatusController';
 
@@ -86,7 +87,7 @@ export function StudioPanel({
     }
   }, [initialClusterStatus]);
 
-  const [activeTab, setActiveTab] = useState<'studio' | 'orchestrator'>('studio');
+  const [activeTab, setActiveTab] = useState<'studio' | 'orchestrator' | 'preview'>('studio');
 
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-900" data-testid="studio-panel">
@@ -103,6 +104,12 @@ export function StudioPanel({
           onClick={() => setActiveTab('orchestrator')}
         >
           Orchestrator
+        </button>
+        <button
+          className={`px-4 py-2 text-sm font-medium ${activeTab === 'preview' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
+          onClick={() => setActiveTab('preview')}
+        >
+          Preview
         </button>
       </div>
 
@@ -129,6 +136,13 @@ export function StudioPanel({
       {activeTab === 'orchestrator' && (
         <div className="flex-1 overflow-hidden bg-gray-50">
           <OrchestratorView />
+        </div>
+      )}
+
+      {/* Preview tab — studio-mode component preview panel */}
+      {activeTab === 'preview' && (
+        <div className="flex-1 overflow-hidden bg-white">
+          <ComponentPreviewPanel />
         </div>
       )}
     </div>
