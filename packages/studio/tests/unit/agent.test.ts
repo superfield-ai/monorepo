@@ -1,32 +1,14 @@
 /**
- * Unit tests for studio/apps/server/src/agent.ts
+ * Unit tests for packages/studio/src/agent.ts
  *
- * Issue #23 hardening: agent.test.ts no longer patches globalThis.Bun
- * per-test. A vitest setup file (bun-shim.ts) installs a stable Bun.spawn
- * stub, and readProcStdout (the outermost I/O boundary) is mocked so the
- * real agent.ts code runs through buildStudioPrompt and Bun.spawn argument
- * assembly without spawning a real subprocess.
- *
- * Issue #11 test plan items still covered:
- *   - agent.test.ts asserts that runAgent calls Bun.spawn with the correct claude CLI arguments
- *   - agent.test.ts asserts agent lifecycle, invocation, and error handling
+ * Since Phase 3, runAgent() calls POST /studio/run on the superfield API
+ * instead of spawning claude directly. Tests stub the _fetch parameter.
  */
 
-import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { buildStudioPrompt, getStudioSystemPrompt } from '../../src/helpers';
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const BunGlobal = (globalThis as any).Bun;
-
-// ── I/O boundary mock ────────────────────────────────────────────────────────
-//
-// readProcStdout is passed as the _readProc DI parameter rather than mocked
-// at the module level, so the real Bun.spawn stdout stream is never read.
-// We mock fs to prevent real filesystem access for the changes.md check.
-
-const mockReadProcStdout = vi.fn<[ReadableStream<Uint8Array>], Promise<string>>()
-  .mockResolvedValue('mocked agent reply');
-
+// Mock fs so the changes.md existsSync check never hits disk.
 vi.mock('fs', async (importOriginal) => {
   const original = await importOriginal<typeof import('fs')>();
   return {
@@ -35,6 +17,29 @@ vi.mock('fs', async (importOriginal) => {
     readFileSync: vi.fn().mockReturnValue(''),
   };
 });
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function makeSseBody(events: string[]): ReadableStream<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream({
+    start(controller) {
+      for (const e of events) {
+        controller.enqueue(encoder.encode(e));
+      }
+      controller.close();
+    },
+  });
+}
+
+function makeFetch(sseLines: string[], status = 200): typeof fetch {
+  const body = makeSseBody(sseLines);
+  return vi.fn().mockResolvedValue({
+    ok: status >= 200 && status < 300,
+    status,
+    body,
+  } as unknown as Response);
+}
 
 // ── getStudioSystemPrompt ─────────────────────────────────────────────────────
 
@@ -103,10 +108,7 @@ describe('buildStudioPrompt', () => {
   });
 
   it('does not include changesContent section when not provided', () => {
-    const prompt = buildStudioPrompt({
-      branch: 'main',
-      messages: [],
-    });
+    const prompt = buildStudioPrompt({ branch: 'main', messages: [] });
     expect(prompt).not.toContain('Current changes.md:');
   });
 
@@ -119,58 +121,38 @@ describe('buildStudioPrompt', () => {
   });
 });
 
-// ── runAgent — subprocess invocation ────────────────────────────────────────
-//
-// runAgent uses Bun.spawn internally. We spy on the Bun global (provided by
-// bun-shim.ts setup file) to assert CLI arguments. readProcStdout (mocked
-// above) controls the subprocess output.
+// ── runAgent — fetch boundary mock ───────────────────────────────────────────
 
-describe('runAgent — Bun.spawn invocation via boundary mock', () => {
-  let spawnSpy: ReturnType<typeof vi.fn>;
-
-  beforeEach(() => {
-    spawnSpy = vi.fn(() => ({
-      stdout: new ReadableStream({ start(c) { c.close(); } }),
-      stderr: new ReadableStream({ start(c) { c.close(); } }),
-      exited: Promise.resolve(0),
-      pid: 12345,
-      exitCode: null,
-      signalCode: null,
-      killed: false,
-      kill: () => {},
-      ref: () => {},
-      unref: () => {},
-      stdin: null,
-    }));
-    BunGlobal.spawn = spawnSpy;
-  });
-
-  afterEach(() => {
-    mockReadProcStdout.mockResolvedValue('mocked agent reply');
-  });
-
-  it('calls Bun.spawn with claude, -p, prompt, --dangerously-skip-permissions, and --allowedTools', async () => {
+describe('runAgent — POST /studio/run via fetch stub', () => {
+  it('calls POST /studio/run with the built prompt and allowed tools', async () => {
+    const fetchSpy = makeFetch([
+      'event: session\ndata: {"sessionId":"abc"}\n\n',
+      'data: agent output\n\n',
+      'event: done\ndata: {"filesChanged":[]}\n\n',
+    ]);
     const { runAgent } = await import('../../src/agent');
-    await runAgent([{ role: 'user', content: 'hello' }], 'feat/test-branch', 'design', mockReadProcStdout);
+    await runAgent([{ role: 'user', content: 'hello' }], 'feat/test', 'design', fetchSpy as unknown as typeof fetch);
 
-    expect(spawnSpy).toHaveBeenCalledOnce();
-    const [args] = spawnSpy.mock.calls[0];
-    expect(args[0]).toBe('claude');
-    expect(args[1]).toBe('-p');
-    expect(typeof args[2]).toBe('string'); // the built prompt
-    expect(args[3]).toBe('--dangerously-skip-permissions');
-    expect(args[4]).toBe('--allowedTools');
-    expect(typeof args[5]).toBe('string'); // the allowed tools flag value
-    expect(args[5]).toContain('Read');
-    expect(args[5]).toContain('Edit');
-    expect(args[5]).not.toContain('Bash');
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const [url, opts] = (fetchSpy as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(url).toContain('/studio/run');
+    expect(opts.method).toBe('POST');
+    const body = JSON.parse(opts.body as string);
+    expect(typeof body.message).toBe('string');
+    expect(body.message.length).toBeGreaterThan(0);
+    expect(body.allowedTools).toContain('Read');
+    expect(body.allowedTools).toContain('Edit');
+    expect(body.allowedTools).not.toContain('Bash');
   });
 
-  it('returns the trimmed output from readProcStdout', async () => {
-    mockReadProcStdout.mockResolvedValue('  agent output  \n');
-
+  it('returns trimmed text from data: lines in the SSE stream', async () => {
+    const fetchSpy = makeFetch([
+      'event: session\ndata: {"sessionId":"abc"}\n\n',
+      'data: agent output  \n\n',
+      'event: done\ndata: {"filesChanged":[]}\n\n',
+    ]);
     const { runAgent } = await import('../../src/agent');
-    const result = await runAgent([{ role: 'user', content: 'hello' }], 'main', 'design', mockReadProcStdout);
+    const result = await runAgent([{ role: 'user', content: 'hello' }], 'main', 'design', fetchSpy as unknown as typeof fetch);
     expect(result).toBe('agent output');
   });
 });
@@ -198,22 +180,34 @@ describe('REPO_ROOT', () => {
 });
 
 // ── Negative-path tests ─────────────────────────────────────────────────────
-//
-// Issue #23: each server unit test file includes at least 2 negative-path cases.
 
 describe('runAgent — negative paths', () => {
-
-  it('returns empty string when subprocess produces no output', async () => {
+  it('returns empty string when the SSE stream has no data lines', async () => {
+    const fetchSpy = makeFetch([
+      'event: session\ndata: {"sessionId":"abc"}\n\n',
+      'event: done\ndata: {"filesChanged":[]}\n\n',
+    ]);
     const { runAgent } = await import('../../src/agent');
-    const result = await runAgent([{ role: 'user', content: 'test' }], 'main', 'design', async () => '');
+    const result = await runAgent([{ role: 'user', content: 'test' }], 'main', 'design', fetchSpy as unknown as typeof fetch);
     expect(result).toBe('');
   });
 
-  it('handles non-zero exit code from subprocess gracefully', async () => {
-    // _readProc returns partial output regardless of exit code.
+  it('throws when the SSE stream emits an error event', async () => {
+    const fetchSpy = makeFetch([
+      'event: session\ndata: {"sessionId":"abc"}\n\n',
+      'event: error\ndata: "claude exited with code 1"\n\n',
+    ]);
     const { runAgent } = await import('../../src/agent');
-    const result = await runAgent([{ role: 'user', content: 'test' }], 'main', 'design', async () => 'partial output');
-    expect(typeof result).toBe('string');
-    expect(result).toBe('partial output');
+    await expect(
+      runAgent([{ role: 'user', content: 'test' }], 'main', 'design', fetchSpy as unknown as typeof fetch),
+    ).rejects.toThrow('Agent error');
+  });
+
+  it('throws when fetch returns a non-ok status', async () => {
+    const fetchSpy = makeFetch([], 503);
+    const { runAgent } = await import('../../src/agent');
+    await expect(
+      runAgent([{ role: 'user', content: 'test' }], 'main', 'design', fetchSpy as unknown as typeof fetch),
+    ).rejects.toThrow('POST /studio/run failed');
   });
 });

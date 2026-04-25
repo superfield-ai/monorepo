@@ -292,6 +292,7 @@ export function streamTurn(
   sessionKey: string,
   logDir?: string,
   mode: StudioMode = 'design',
+  _fetch: typeof fetch = globalThis.fetch,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
@@ -304,6 +305,7 @@ export function streamTurn(
     async start(controller) {
       let response = '';
       let preRef = 'HEAD';
+      let capturedSessionId = sessionKey;
 
       try {
         preRef = await capturePreTurnRef();
@@ -312,49 +314,79 @@ export function streamTurn(
       }
 
       const repoRoot = process.env.CALYPSO_REPO_ROOT ?? REPO_ROOT;
+      const superfieldApiUrl = process.env.SUPERFIELD_API_URL ?? 'http://127.0.0.1:7837';
       const allowedToolsFlag = buildAllowedToolsFlag(mode);
-      const proc = Bun.spawn(
-        [
-          'claude',
-          '--dangerously-skip-permissions',
-          '--session-key', sessionKey,
-          '--allowedTools', allowedToolsFlag,
-          '-p', message,
-        ],
-        {
-          cwd: repoRoot,
-          stdout: 'pipe',
-          stderr: 'pipe',
-          // Pass the current process.env explicitly so test suites can inject
-          // PATH overrides (e.g. a stub claude fixture) by mutating process.env
-          // before spawning.  Bun.spawn inherits the original process env by
-          // default; explicit passing picks up dynamic mutations.
-          env: process.env,
-        },
-      );
 
-      // Stream stdout chunk by chunk.
-      if (proc.stdout && typeof proc.stdout !== 'number') {
-        const reader = proc.stdout.getReader();
-        const decoder = new TextDecoder();
-
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          response += chunk;
-          // Emit each text chunk as a plain data event.
-          controller.enqueue(sseEvent(chunk));
-        }
-      }
-
-      const exitCode = await proc.exited;
-
-      if (exitCode !== 0) {
-        controller.enqueue(sseEvent(`Claude exited with code ${exitCode}`, 'error'));
+      let apiRes: Response;
+      try {
+        apiRes = await _fetch(`${superfieldApiUrl}/studio/run`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            message,
+            repoRoot,
+            sessionKey,
+            allowedTools: allowedToolsFlag,
+            mode,
+          }),
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        controller.enqueue(sseEvent(msg, 'error'));
         controller.close();
         return;
       }
+
+      if (!apiRes.ok || !apiRes.body) {
+        controller.enqueue(sseEvent(`Superfield API unavailable: HTTP ${apiRes.status}`, 'error'));
+        controller.close();
+        return;
+      }
+
+      // Parse SSE frames from the API and forward to the browser.
+      const reader = apiRes.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let currentEvent = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            currentEvent = line.slice('event: '.length).trim();
+          } else if (line.startsWith('data: ')) {
+            const data = line.slice('data: '.length);
+            if (currentEvent === 'session') {
+              // Capture the sessionId for later use.
+              try {
+                const parsed = JSON.parse(data) as { sessionId?: string };
+                if (parsed.sessionId) capturedSessionId = parsed.sessionId;
+              } catch { /* ignore parse errors */ }
+              currentEvent = '';
+            } else if (currentEvent === 'error') {
+              controller.enqueue(sseEvent(data, 'error'));
+              controller.close();
+              return;
+            } else if (currentEvent === 'done') {
+              // Don't forward the API's done — we emit our own after post-turn hook.
+              currentEvent = '';
+            } else {
+              // Plain data chunk — forward to browser and accumulate.
+              response += data + '\n';
+              controller.enqueue(sseEvent(data));
+              currentEvent = '';
+            }
+          }
+        }
+      }
+
+      void capturedSessionId; // consumed above for session tracking
 
       // Post-turn hook: git diff, service detection, hot-swap.
       let filesChanged: string[] = [];
@@ -395,7 +427,7 @@ export function streamTurn(
 
     cancel() {
       // The browser disconnected before the turn completed.
-      // The Claude subprocess will be cleaned up by ProcessManager on shutdown.
+      // In-flight fetch request will be garbage-collected.
     },
   });
 }
