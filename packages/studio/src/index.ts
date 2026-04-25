@@ -11,6 +11,7 @@
 import { loadConfig, vlog, type StudioConfig } from './config';
 import { ProcessManager } from './process-manager';
 import { route } from './router';
+import { studioWsHandler } from './studio-ws';
 
 export interface StartStudioOpts {
   /** Override individual config values (takes precedence over env vars). */
@@ -35,20 +36,24 @@ export async function startStudio(opts: StartStudioOpts = {}): Promise<{ server:
 
   let shuttingDown = false;
 
-  const server = Bun.serve({
+  const server = Bun.serve<typeof studioWsHandler & { data: import('./studio-ws').WsData }>({
     hostname: '0.0.0.0',
     port: config.port,
 
-    async fetch(req: Request): Promise<Response> {
+    async fetch(req: Request, srv): Promise<Response> {
       if (shuttingDown) {
         return new Response('Service Unavailable — studio server is shutting down', { status: 503 });
       }
       const url = new URL(req.url);
       vlog(config, `→ ${req.method} ${url.pathname}${url.search}`);
-      const res = await route(req, config);
-      vlog(config, `← ${res.status} ${url.pathname}`);
+      const res = await route(req, config, srv);
+      if (res !== undefined) {
+        vlog(config, `← ${res.status} ${url.pathname}`);
+      }
       return res;
     },
+
+    websocket: studioWsHandler,
 
     error(err: Error): Response {
       console.error('[studio] Unhandled server error:', err.message);

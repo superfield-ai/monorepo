@@ -66,6 +66,7 @@ import { vlog } from './config';
 import { handleAuthRequest } from './auth';
 import { handleStudioRequest } from './api';
 import { clusterStatusSseResponse } from './cluster-status-sse';
+import { studioWsHandler, type WsData } from './studio-ws';
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -190,9 +191,60 @@ export async function serveStaticAsset(
  * @param req    The incoming Bun Request.
  * @param config Studio server configuration (service URLs, assets dir).
  */
-export async function route(req: Request, config: StudioConfig): Promise<Response> {
+export async function route(
+  req: Request,
+  config: StudioConfig,
+  server?: { upgrade: (req: Request, opts: { data: WsData }) => boolean },
+): Promise<Response> {
   const url = new URL(req.url);
   const { pathname } = url;
+
+  // WebSocket upgrade — browser chat via WS instead of SSE.
+  if (req.method === 'GET' && pathname === '/studio/ws') {
+    if (!server) {
+      return new Response('WebSocket not available', { status: 501 });
+    }
+    const upgraded = server.upgrade(req, {
+      data: {
+        superfieldApiUrl: config.superfieldApiUrl,
+        logDir: config.logDir,
+      } satisfies WsData,
+    });
+    if (!upgraded) {
+      return new Response('WebSocket upgrade failed', { status: 400 });
+    }
+    // Bun consumes the request after upgrade; return undefined cast to Response.
+    return undefined as unknown as Response;
+  }
+
+  // REST steer fallback (for tests, curl, and non-WS clients).
+  if (req.method === 'POST' && pathname === '/studio/steer') {
+    const body = (await req.json().catch(() => ({}))) as { context?: string };
+    if (!body.context) {
+      return new Response(JSON.stringify({ error: 'context is required' }), {
+        status: 400,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+    try {
+      const res = await fetch(`${config.superfieldApiUrl}/steer/context`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ context: body.context }),
+      });
+      const json = await res.json();
+      return new Response(JSON.stringify(json), {
+        status: res.status,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return new Response(JSON.stringify({ error: message }), {
+        status: 502,
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+  }
 
   // Rebuild endpoint — triggers rebuildAndRestart() for the cluster.
   // See: docs/cluster-definition.md — "On a code change"

@@ -168,3 +168,140 @@ export class ChatController {
     }
   }
 }
+
+/**
+ * WsChatController — WebSocket-based replacement for ChatController.
+ *
+ * Connects to GET /studio/ws (Bun WebSocket upgrade). Messages are sent as
+ * JSON frames. Chunks arrive as { type: 'chunk', text } frames. The turn
+ * completes with { type: 'done', sessionId, filesChanged }.
+ */
+export class WsChatController {
+  private messages: ChatMessage[] = [];
+  private turnState: TurnState = 'idle';
+  private listeners: Set<ChatControllerListener> = new Set();
+  private ws: WebSocket | null = null;
+  private readonly wsEndpoint: string;
+  private pendingAssistantId: string | null = null;
+
+  constructor({ wsEndpoint = '/studio/ws' }: { wsEndpoint?: string } = {}) {
+    this.wsEndpoint = wsEndpoint;
+  }
+
+  subscribe(listener: ChatControllerListener): () => void {
+    this.listeners.add(listener);
+    listener(this.getState());
+    return () => this.listeners.delete(listener);
+  }
+
+  getState(): ChatControllerState {
+    return { messages: [...this.messages], turnState: this.turnState };
+  }
+
+  connect(): void {
+    if (this.ws && this.ws.readyState !== WebSocket.CLOSED) return;
+
+    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const url = `${protocol}//${location.host}${this.wsEndpoint}`;
+    this.ws = new WebSocket(url);
+
+    this.ws.onmessage = (event: MessageEvent<string>) => {
+      let frame: { type: string; text?: string; sessionId?: string; filesChanged?: string[]; message?: string };
+      try {
+        frame = JSON.parse(event.data) as typeof frame;
+      } catch {
+        return;
+      }
+
+      if (frame.type === 'chunk' && this.pendingAssistantId) {
+        this.messages = this.messages.map((m) =>
+          m.id === this.pendingAssistantId
+            ? { ...m, content: m.content + (frame.text ?? '') }
+            : m,
+        );
+        this.notify();
+      } else if (frame.type === 'done') {
+        if (this.pendingAssistantId) {
+          this.messages = this.messages.map((m) =>
+            m.id === this.pendingAssistantId ? { ...m, streaming: false } : m,
+          );
+        }
+        this.pendingAssistantId = null;
+        this.turnState = 'idle';
+        this.notify();
+      } else if (frame.type === 'error') {
+        if (this.pendingAssistantId) {
+          this.messages = this.messages.map((m) =>
+            m.id === this.pendingAssistantId
+              ? { ...m, content: `(Error: ${frame.message ?? 'unknown'})`, streaming: false }
+              : m,
+          );
+        }
+        this.pendingAssistantId = null;
+        this.turnState = 'error';
+        this.notify();
+      }
+    };
+
+    this.ws.onerror = () => {
+      this.turnState = 'error';
+      this.notify();
+    };
+  }
+
+  disconnect(): void {
+    this.ws?.close();
+    this.ws = null;
+  }
+
+  async sendMessage(text: string): Promise<void> {
+    if (this.turnState !== 'idle' || !text.trim()) return;
+
+    this.connect();
+    if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+      // Wait for connection.
+      await new Promise<void>((resolve, reject) => {
+        const ws = this.ws!;
+        ws.onopen = () => resolve();
+        ws.onerror = () => reject(new Error('WebSocket connection failed'));
+        setTimeout(() => reject(new Error('WebSocket connection timeout')), 5000);
+      }).catch(() => {
+        this.turnState = 'error';
+        this.notify();
+        return;
+      });
+    }
+
+    const userMessage: ChatMessage = {
+      id: crypto.randomUUID(),
+      role: 'user',
+      content: text.trim(),
+    };
+    this.messages = [...this.messages, userMessage];
+    this.turnState = 'streaming';
+
+    const assistantId = crypto.randomUUID();
+    this.pendingAssistantId = assistantId;
+    this.messages = [
+      ...this.messages,
+      { id: assistantId, role: 'assistant', content: '', streaming: true },
+    ];
+    this.notify();
+
+    this.ws!.send(JSON.stringify({ type: 'turn', message: text.trim() }));
+  }
+
+  clearError(): void {
+    if (this.turnState === 'error') {
+      this.turnState = 'idle';
+      this.notify();
+    }
+  }
+
+  private notify(): void {
+    const state = this.getState();
+    for (const listener of this.listeners) {
+      listener(state);
+    }
+  }
+}
