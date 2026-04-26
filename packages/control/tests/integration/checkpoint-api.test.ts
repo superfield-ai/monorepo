@@ -1,6 +1,6 @@
-import { afterAll, beforeAll, expect, test } from "vitest";
+import { afterAll, beforeAll, describe, expect, test } from "vitest";
 import { type ChildProcess, spawn, spawnSync } from "child_process";
-import { mkdirSync, rmSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, rmSync, writeFileSync } from "fs";
 import { delimiter, join } from "path";
 import { startPostgres, type PgContainer } from "../helpers/pg-container";
 
@@ -20,6 +20,10 @@ const CLAUDE_LOG_PATH = join(
 
 const BRANCH = "studio/session-test-checkpoint-c1d2";
 const SESSION_ID = "c1d2";
+
+// This test requires apps/server/src/index.ts which only exists in the template
+// repo. Skip the suite entirely when running in the cli monorepo.
+describe.skipIf(!existsSync(SERVER_ENTRY))("checkpoint-api suite", () => {
 
 let pg: PgContainer;
 let server: ChildProcess;
@@ -247,6 +251,8 @@ test("POST /studio/rollback with a checkpoint hash removes it from GET /studio/t
   expect(afterBody.timeline).toHaveLength(1);
   expect(afterBody.timeline[0].hash).toBe(checkpointHash);
 }, 60_000);
+
+}); // end describe.skipIf
 
 async function waitForServer(
   proc: ChildProcess,
