@@ -32,8 +32,30 @@ real CLI flag drift.
 ```typescript
 import { fakeSpawn } from "./helpers/fake-spawn.ts";
 
-const spawn = fakeSpawn({ output: '{"missing_docs": []}' });
+// Issue audit: the LLM returns a batch response covering all issues in the batch
+const spawn = fakeSpawn({
+  output: JSON.stringify({
+    reports: [
+      { issue_number: 42, conformant: true, missing_sections: [],
+        forbidden_sections: [], empty_sections: [], quality_issues: [] },
+    ],
+  }),
+});
 const result = await runIssueAudit(client, "o", "r", { spawn });
+
+// Plan coverage: the plan-placement LLM returns placements for all issues
+// that had no declared phase; create_phase=true means the LLM invented a
+// new phase and must supply phase_goal
+const placementSpawn = fakeSpawn({
+  output: JSON.stringify({
+    placements: [
+      { issue_number: 10, phase: "Foundation", create_phase: true,
+        phase_goal: "Establish the initial delivery scaffolding." },
+    ],
+  }),
+});
+const coverage = await runPlanCoverage(client, "o", "r", { spawn: placementSpawn });
+// coverage.llmPlaced === [10], coverage.createdPhases === ["Foundation"]
 ```
 
 ### Layer 2 — Integration tests with recorded fixtures
@@ -114,8 +136,10 @@ tests/
   fixtures/
     github/                       # MSW fixtures for the GitHub REST API (existing)
     claude/                       # Recorded JSON responses from `claude --output-format json`
-      issue-audit-conformant.json
-      issue-audit-non-conformant.json
+      issue-audit-conformant.json          # batch response: { reports: [...] } all conformant
+      issue-audit-non-conformant.json      # batch response: { reports: [...] } with non-conformant
+      plan-placement-existing-phase.json   # LLM places issues into an existing phase
+      plan-placement-new-phase.json        # LLM creates a new phase for uncovered issues
       blueprint-conformance-arch-violation.json
       feature-evaluate-new.json
       feature-evaluate-duplicate.json
