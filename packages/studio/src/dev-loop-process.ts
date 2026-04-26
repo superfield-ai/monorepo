@@ -30,27 +30,43 @@ export interface DevLoopProcessOpts {
   onStateChange?: (state: ProcessState) => void;
   /** Emitted for each line of stdout/stderr. */
   onLog?: (line: string) => void;
+  /** Injected fetch for isApiReachable (tests). */
+  _fetch?: typeof fetch;
+  /** Injected spawn for subprocess creation (tests). */
+  _spawn?: (args: string[], opts: object) => { stdout: ReadableStream<Uint8Array> | null; stderr: ReadableStream<Uint8Array> | null; exited: Promise<number>; pid: number; kill: (signal?: string) => void };
+  /** Poll interval ms (tests may set to 0). */
+  _pollIntervalMs?: number;
+  /** Startup timeout ms (tests may shorten). */
+  _startupTimeoutMs?: number;
 }
 
 export class DevLoopProcess {
   private state: ProcessState = 'stopped';
-  private proc: Subprocess | null = null;
+  private proc: ReturnType<DevLoopProcessOpts['_spawn'] & {}> | null = null;
   private logRing: string[] = [];
   private readonly apiUrl: string;
   private readonly onStateChange?: (state: ProcessState) => void;
   private readonly onLog?: (line: string) => void;
+  private readonly _fetch: typeof fetch;
+  private readonly _spawn: NonNullable<DevLoopProcessOpts['_spawn']>;
+  private readonly _pollIntervalMs: number;
+  private readonly _startupTimeoutMs: number;
   private externallyManaged = false;
 
   constructor(opts: DevLoopProcessOpts) {
     this.apiUrl = opts.apiUrl;
     this.onStateChange = opts.onStateChange;
     this.onLog = opts.onLog;
+    this._fetch = opts._fetch ?? globalThis.fetch;
+    this._spawn = opts._spawn ?? ((args, o) => Bun.spawn(args as string[], o as Parameters<typeof Bun.spawn>[1]));
+    this._pollIntervalMs = opts._pollIntervalMs ?? STARTUP_POLL_INTERVAL_MS;
+    this._startupTimeoutMs = opts._startupTimeoutMs ?? STARTUP_TIMEOUT_MS;
   }
 
   /** Probe GET <apiUrl>/health. Returns true if HTTP 200. */
   async isApiReachable(): Promise<boolean> {
     try {
-      const res = await fetch(`${this.apiUrl}/health`, {
+      const res = await this._fetch(`${this.apiUrl}/health`, {
         signal: AbortSignal.timeout(HEALTH_CHECK_TIMEOUT_MS),
       });
       return res.ok;
@@ -93,7 +109,7 @@ export class DevLoopProcess {
     const args = ['superfield', 'start', repo];
     if (opts.slotCount) args.push(String(opts.slotCount));
 
-    this.proc = Bun.spawn(args, {
+    this.proc = this._spawn(args, {
       stdout: 'pipe',
       stderr: 'pipe',
       env: { ...process.env },
@@ -115,10 +131,10 @@ export class DevLoopProcess {
       }
     });
 
-    // Poll until API becomes reachable (up to STARTUP_TIMEOUT_MS).
-    const deadline = Date.now() + STARTUP_TIMEOUT_MS;
+    // Poll until API becomes reachable (up to _startupTimeoutMs).
+    const deadline = Date.now() + this._startupTimeoutMs;
     while (Date.now() < deadline && this.state === 'starting') {
-      await new Promise<void>((r) => setTimeout(r, STARTUP_POLL_INTERVAL_MS));
+      await new Promise<void>((r) => setTimeout(r, this._pollIntervalMs));
       if (await this.isApiReachable()) {
         this.setState('running');
         return;

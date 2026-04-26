@@ -16,7 +16,7 @@ export interface WikiRenderProps {
 }
 
 /** Minimal markdown → HTML renderer (headings, bold, italic, code, links). */
-function renderMarkdown(md: string): string {
+export function renderMarkdown(md: string): string {
   return md
     .replace(/&/g, '&amp;')
     .replace(/</g, '&lt;')

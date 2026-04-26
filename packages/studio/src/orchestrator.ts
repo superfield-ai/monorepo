@@ -11,7 +11,13 @@
  */
 
 import { DevLoopProcess } from './dev-loop-process';
-import { makeJson } from '../lib/response';
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
 
 // Module-level singleton — created lazily on first request.
 let _devLoop: DevLoopProcess | null = null;
@@ -47,7 +53,7 @@ export async function handleOrchestratorRequest(
   if (method === 'GET' && pathname === '/orchestrator/status') {
     const apiReachable = await loop.isApiReachable();
     const uptimeMs = startedAt ? Date.now() - startedAt : 0;
-    return makeJson({
+    return json({
       process: loop.status(),
       pid: loop.pid() ?? null,
       apiReachable,
@@ -62,22 +68,22 @@ export async function handleOrchestratorRequest(
       slotCount?: number;
     };
     if (!body.repo) {
-      return makeJson({ ok: false, reason: 'repo is required' }, 400);
+      return json({ ok: false, reason: 'repo is required' }, 400);
     }
     const current = loop.status();
     if (current === 'running' || current === 'starting') {
-      return makeJson({ ok: false, reason: `dev loop is already ${current}` }, 409);
+      return json({ ok: false, reason: `dev loop is already ${current}` }, 409);
     }
     startedAt = Date.now();
     void loop.spawn(body.repo, { slotCount: body.slotCount });
-    return makeJson({ ok: true, pid: loop.pid() ?? null });
+    return json({ ok: true, pid: loop.pid() ?? null });
   }
 
   // POST /orchestrator/stop
   if (method === 'POST' && pathname === '/orchestrator/stop') {
     await loop.stop();
     startedAt = null;
-    return makeJson({ ok: true });
+    return json({ ok: true });
   }
 
   // GET /orchestrator/logs — SSE stream of ring buffer + live tail
@@ -123,4 +129,9 @@ export function _resetDevLoop(): void {
   _devLoop = null;
   startedAt = null;
   logSubscribers.clear();
+}
+
+/** Inject a pre-constructed DevLoopProcess (for tests). */
+export function _setDevLoop(loop: DevLoopProcess): void {
+  _devLoop = loop;
 }

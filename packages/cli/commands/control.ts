@@ -21,6 +21,10 @@ export interface ControlCommandDeps {
   log?: (msg: string) => void;
   warn?: (msg: string) => void;
   exit?: (code: number) => never;
+  /** Injected fetch for health-check (tests). */
+  _fetch?: typeof fetch;
+  /** Injected studio starter (tests — avoids dynamic import). */
+  _startStudio?: () => Promise<void>;
 }
 
 export function parseControlArgs(args: string[]): {
@@ -88,6 +92,11 @@ export async function controlCommand(
   const log = deps.log ?? ((m: string) => console.log(m));
   const warn = deps.warn ?? ((m: string) => console.warn(m));
   const exit = deps.exit ?? ((code: number) => process.exit(code) as never);
+  const _fetch = deps._fetch ?? globalThis.fetch;
+  const _startStudio = deps._startStudio ?? (async () => {
+    const { startStudio } = await import('@superfield/studio');
+    await startStudio();
+  });
 
   const parsed = parseControlArgs(args);
 
@@ -100,6 +109,7 @@ export async function controlCommand(
     warn(`Unknown arguments: ${parsed.unknown.join(' ')}`);
     log(controlUsage());
     exit(1);
+    return;
   }
 
   // Apply CLI overrides to env vars before importing @superfield/studio so
@@ -118,7 +128,7 @@ export async function controlCommand(
 
   // Health-check the dev-loop API. Warn if unreachable but proceed regardless.
   try {
-    const res = await fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(2000) });
+    const res = await _fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(2000) });
     if (!res.ok) {
       warn(`[studio] Warning: dev-loop API at ${apiUrl}/health returned HTTP ${res.status}. Agent turns may fail.`);
     }
@@ -126,6 +136,5 @@ export async function controlCommand(
     warn(`[studio] Warning: dev-loop API unreachable at ${apiUrl}. Agent turns will fail until a dev loop is running.`);
   }
 
-  const { startStudio } = await import('@superfield/studio');
-  await startStudio();
+  await _startStudio();
 }

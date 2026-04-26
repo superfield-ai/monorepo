@@ -25,6 +25,10 @@ export interface WsData {
   logDir?: string;
   /** Abort controller for an in-flight turn; replaced on each new turn. */
   abortController?: AbortController;
+  /** Injected streamTurn for tests. */
+  _streamTurn?: typeof streamTurn;
+  /** Injected fetch for steer proxy (tests). */
+  _fetch?: typeof fetch;
 }
 
 type InboundFrame =
@@ -64,12 +68,12 @@ export const studioWsHandler = {
       const mode = frame.mode === 'question' ? 'question' as const : 'design' as const;
 
       // Create a custom fetch that respects the abort signal.
+      const baseFetch = ws.data._fetch ?? globalThis.fetch;
       const abortableFetch: typeof fetch = (input, init) =>
-        fetch(input, { ...init, signal: ac.signal });
+        baseFetch(input, { ...init, signal: ac.signal });
 
-      // streamTurn returns a ReadableStream of SSE bytes. Consume it and
-      // forward chunks to the WebSocket.
-      const stream = streamTurn(frame.message, SESSION_KEY, ws.data.logDir, mode, abortableFetch);
+      const _streamTurn = ws.data._streamTurn ?? streamTurn;
+      const stream = _streamTurn(frame.message, SESSION_KEY, ws.data.logDir, mode, abortableFetch);
       const reader = stream.getReader();
       const decoder = new TextDecoder();
       let buffer = '';
@@ -124,8 +128,9 @@ export const studioWsHandler = {
       send(ws, { type: 'done', sessionId: capturedSessionId, filesChanged });
     } else if (frame.type === 'steer') {
       // Proxy steer to the dev-loop API.
+      const steerFetch = ws.data._fetch ?? globalThis.fetch;
       try {
-        const res = await fetch(`${ws.data.superfieldApiUrl}/steer/context`, {
+        const res = await steerFetch(`${ws.data.superfieldApiUrl}/steer/context`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ context: frame.context }),

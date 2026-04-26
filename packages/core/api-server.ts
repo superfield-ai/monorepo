@@ -189,6 +189,8 @@ export function startApiServer(
           cwd: repoRoot,
           stdout: "pipe",
           stderr: "pipe",
+          // Pass process.env at spawn time so PATH mutations in tests are respected.
+          env: { ...process.env },
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
