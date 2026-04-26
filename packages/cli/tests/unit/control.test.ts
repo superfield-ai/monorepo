@@ -103,12 +103,10 @@ function makeDeps(
     log: vi.fn(),
     warn: vi.fn(),
     exit: vi.fn() as unknown as ControlCommandDeps["exit"],
-    _fetch: vi
-      .fn()
-      .mockResolvedValue({
-        ok: true,
-        status: 200,
-      } as Response) as unknown as typeof fetch,
+    _fetch: vi.fn().mockResolvedValue({
+      ok: true,
+      status: 200,
+    } as Response) as unknown as typeof fetch,
     _startControl: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -182,12 +180,10 @@ describe("controlCommand", () => {
 
   it("health check non-200 → warns with HTTP status", async () => {
     const deps = makeDeps({
-      _fetch: vi
-        .fn()
-        .mockResolvedValue({
-          ok: false,
-          status: 503,
-        } as Response) as unknown as typeof fetch,
+      _fetch: vi.fn().mockResolvedValue({
+        ok: false,
+        status: 503,
+      } as Response) as unknown as typeof fetch,
     });
     await controlCommand([], deps);
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("503"));
