@@ -15,6 +15,7 @@ import {
   CitationHoverPopover,
   type CitationData,
 } from "./CitationHoverPopover";
+import { DesignTokensPanel } from "./DesignTokensPanel";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -43,11 +44,12 @@ const CITATION_FIXTURE: CitationData = {
 
 // ── Preview views ─────────────────────────────────────────────────────────────
 
-type ViewName = "wiki" | "citations" | "empty";
+type ViewName = "wiki" | "citations" | "tokens" | "empty";
 
 const VIEWS: { name: ViewName; label: string }[] = [
   { name: "wiki", label: "WikiRender" },
   { name: "citations", label: "CitationHoverPopover" },
+  { name: "tokens", label: "Design tokens" },
   { name: "empty", label: "Empty Shell" },
 ];
 
@@ -140,6 +142,7 @@ export function ComponentPreviewPanel() {
       <div className="flex-1" data-testid="preview-content">
         {activeView === "wiki" && <WikiPreview />}
         {activeView === "citations" && <CitationsPreview />}
+        {activeView === "tokens" && <DesignTokensPanel />}
         {activeView === "empty" && <EmptyShell />}
       </div>
     </div>
