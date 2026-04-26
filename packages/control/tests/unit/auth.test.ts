@@ -7,12 +7,11 @@
  *   - auth.test.ts asserts that makeAuthCookieHeader emits the correct cookie attributes
  */
 
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import {
   getCorsHeaders,
   getAuthenticatedUser,
   handleAuthRequest,
-  registerUser,
 } from '../../src/auth';
 
 // ── getCorsHeaders ─────────────────────────────────────────────────────────

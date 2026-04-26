@@ -15,7 +15,7 @@ import { join } from 'path';
 import { tmpdir } from 'os';
 import { execSync } from 'child_process';
 import {
-  NOTES_REF,
+  NOTES_REF as _NOTES_REF,
   initMetadata,
   appendTurn,
   writeMetadata,

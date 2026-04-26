@@ -10,8 +10,7 @@
  *   fixture.stop();
  */
 
-import { createServer } from 'node:http';
-import { join, delimiter } from 'node:path';
+import { delimiter } from 'node:path';
 import { ApiState } from '@superfield/core/api-state';
 import { startApiServer } from '@superfield/core/api-server';
 

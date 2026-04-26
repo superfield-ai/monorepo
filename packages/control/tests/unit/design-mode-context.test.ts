@@ -17,12 +17,6 @@ import {
   buildDesignModePrompt,
   USER_INPUT_OPEN,
   USER_INPUT_CLOSE,
-  PLAIN_LANGUAGE_CONSTRAINT,
-  MVC_CLASSIFICATION_INSTRUCTION,
-  BLUEPRINT_REFLECTION_INSTRUCTION,
-  BLUEPRINT_RULES,
-  CONTEXT_GATE_PATTERNS,
-  type MvcCategory,
 } from '../../src/design-mode-context';
 
 // ── classifyRequest ──────────────────────────────────────────────────────────

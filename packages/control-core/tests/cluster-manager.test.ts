@@ -31,7 +31,7 @@ vi.mock('fs', async (importOriginal) => {
   };
 });
 
-import { readdirSync, readFileSync } from 'fs';
+import { readFileSync } from 'fs';
 
 describe('applyManifests', () => {
   beforeEach(() => {

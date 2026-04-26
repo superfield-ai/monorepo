@@ -6,7 +6,7 @@
  */
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { createServer } from 'node:http';
-import { join, delimiter } from 'node:path';
+import { delimiter } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { ApiState } from '../../api-state.js';
 import { startApiServer } from '../../api-server.js';

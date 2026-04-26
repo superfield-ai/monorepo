@@ -47,7 +47,7 @@ const ANTHROPIC_API_HOST = 'api.anthropic.com';
 const ANTHROPIC_API_PORT = '443';
 
 /** DNS server for restricted resolution inside the container. */
-const RESTRICTED_DNS = '127.0.0.1';
+const _RESTRICTED_DNS = '127.0.0.1';
 
 /** Mount point inside the container for build output. */
 const BUILD_OUTPUT_MOUNT = '/studio/build-output';
@@ -134,7 +134,7 @@ export function buildNetworkRules(): string {
     'set -e',
     '',
     '# Resolve Anthropic API IPs at container start time.',
-    `ANTHROPIC_IPS=$(getent hosts ${ANTHROPIC_API_HOST} | awk \'{ print $1 }\' | sort -u)`,
+    `ANTHROPIC_IPS=$(getent hosts ${ANTHROPIC_API_HOST} | awk '{ print $1 }' | sort -u)`,
     '',
     '# Flush existing rules.',
     'iptables -F OUTPUT',

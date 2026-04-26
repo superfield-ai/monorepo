@@ -66,7 +66,7 @@ import { vlog } from './config';
 import { handleAuthRequest } from './auth';
 import { handleControlRequest } from './api';
 import { clusterStatusSseResponse } from './cluster-status-sse';
-import { controlWsHandler, type WsData } from './control-ws';
+import { type WsData } from './control-ws';
 import { handleOrchestratorRequest } from './orchestrator';
 
 /** Result of the route() call — either a fully-resolved Response or a signal

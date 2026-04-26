@@ -18,10 +18,9 @@ import {
   buildQuestionModePrompt,
   getQuestionModeSystemPrompt,
   selectRelevantFiles,
-  wrapUntrustedInput,
   containsInjectionPatterns,
 } from '../../src/question-mode';
-import { buildStudioPrompt, getStudioSystemPrompt } from '../../src/helpers';
+import { buildStudioPrompt } from '../../src/helpers';
 import type { ControlMessage } from '../../src/helpers';
 import { buildAllowedToolsFlag, getAllowedToolsForMode } from '../../src/permissions';
 

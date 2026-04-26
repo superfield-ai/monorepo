@@ -19,7 +19,6 @@ import {
   sanitizeUserInput,
   USER_INPUT_OPEN,
   USER_INPUT_CLOSE,
-  PLAIN_LANGUAGE_CONSTRAINT,
 } from '../../src/design-mode-context';
 
 // ── Integration: plain-language enforcement ──────────────────────────────────

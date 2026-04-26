@@ -122,7 +122,7 @@ describe('turn frame', () => {
 
   it('second turn frame aborts the first AbortController', async () => {
     // Capture the AbortControllers created for each turn.
-    const abortControllers: AbortController[] = [];
+    const _abortControllers: AbortController[] = [];
     const secondStream = makeSseStream(
       'event: session\ndata: {"sessionId":"s2"}\n\nevent: done\ndata: {"filesChanged":[]}\n\n',
     );

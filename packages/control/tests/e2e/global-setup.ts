@@ -10,7 +10,6 @@
  *   bun run --cwd packages/control/apps build
  */
 import { spawn, type ChildProcess } from 'node:child_process';
-import { createServer } from 'node:http';
 import { join, delimiter, resolve } from 'node:path';
 import type { AddressInfo } from 'node:net';
 

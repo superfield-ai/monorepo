@@ -81,7 +81,6 @@ export function ClusterStatusIndicator({
         ctrl.dispose();
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [eventsUrl, statusOverride]);
 
   // Sync override changes after initial render

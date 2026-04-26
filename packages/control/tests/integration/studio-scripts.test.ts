@@ -13,7 +13,7 @@
  * The canonical studio entry-point is now studio/scripts/studio-start.ts.
  */
 
-import { afterEach, beforeEach, expect, test } from 'vitest';
+import { afterEach, expect, test } from 'vitest';
 import { type SpawnSyncReturns, spawnSync } from 'child_process';
 import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
 import { join } from 'path';

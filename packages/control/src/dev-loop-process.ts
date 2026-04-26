@@ -14,7 +14,7 @@
  *   stopping  — SIGTERM sent, waiting for exit
  */
 
-import type { Subprocess } from 'bun';
+import type { Subprocess as _Subprocess } from 'bun';
 
 export type ProcessState = 'stopped' | 'starting' | 'running' | 'stopping';
 

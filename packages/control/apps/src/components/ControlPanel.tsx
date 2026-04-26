@@ -77,7 +77,6 @@ export function ControlPanel({
         ctrl.dispose();
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [clusterEventsUrl, initialClusterStatus]);
 
   // Sync override changes after initial render
