@@ -19,6 +19,7 @@ import {
   type OrchestratorState,
   type ProcessState,
 } from "../controllers/OrchestratorController";
+import { TurnTimeline } from "./TurnTimeline";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -98,7 +99,10 @@ function SlotCard({ slot }: { slot: OrchestratorState["slots"][number] }) {
   const heartbeatOk = heartbeatAge < 30_000;
 
   return (
-    <div className="rounded border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm">
+    <div
+      data-testid={`slot-card-${slot.slot}`}
+      className="rounded border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+    >
       <div className="flex items-center justify-between">
         <span className="font-semibold text-gray-800">#{slot.issueNumber}</span>
         <span
@@ -114,6 +118,7 @@ function SlotCard({ slot }: { slot: OrchestratorState["slots"][number] }) {
         <span className="mr-2">{slot.model}</span>
         <span>{formatMs(slot.elapsedMs)}</span>
       </div>
+      {slot.sessionId ? <TurnTimeline sessionId={slot.sessionId} /> : null}
     </div>
   );
 }

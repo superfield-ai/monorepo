@@ -70,6 +70,7 @@ import { type WsData } from "./control-ws";
 import { handleOrchestratorRequest } from "./orchestrator";
 import { handleDeployRequest } from "./deploy";
 import { handleDemoRequest } from "./demo";
+import { handleTurnsRequest } from "./turns";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
 
@@ -342,6 +343,10 @@ export async function route(
   // Demo content endpoints — D2 / D3 / D6 fixtures from .studio/demo/*.
   const demoResponse = handleDemoRequest(req, url);
   if (demoResponse) return demoResponse;
+
+  // Turn timeline — D6 / C-9.6.
+  const turnsResponse = handleTurnsRequest(req, url);
+  if (turnsResponse) return turnsResponse;
 
   // Orchestrator endpoints — manage the dev loop child process.
   const orchResponse = await handleOrchestratorRequest(
