@@ -19,7 +19,8 @@ describe("resolveEnvCredentials — env-suffixed form takes priority", () => {
 
   it("returns the suffixed DEPLOY_KEY_<ENV> when both forms are present", () => {
     const creds = resolveEnvCredentials("staging", {
-      DEPLOY_KEY_STAGING: "-----BEGIN EC PRIVATE KEY-----\nsuffixed\n-----END EC PRIVATE KEY-----",
+      DEPLOY_KEY_STAGING:
+        "-----BEGIN EC PRIVATE KEY-----\nsuffixed\n-----END EC PRIVATE KEY-----",
       DEPLOY_KEY: "plain-key",
     });
     expect(creds.deployKey).toBe(
@@ -40,9 +41,7 @@ describe("resolveEnvCredentials — env-suffixed form takes priority", () => {
       DATABASE_URL_PROD: "postgresql://app:secret@prod-db:5432/app",
       DATABASE_URL: "postgresql://app:secret@default-db:5432/app",
     });
-    expect(creds.databaseUrl).toBe(
-      "postgresql://app:secret@prod-db:5432/app",
-    );
+    expect(creds.databaseUrl).toBe("postgresql://app:secret@prod-db:5432/app");
   });
 });
 
