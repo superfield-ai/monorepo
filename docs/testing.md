@@ -36,8 +36,14 @@ import { fakeSpawn } from "./helpers/fake-spawn.ts";
 const spawn = fakeSpawn({
   output: JSON.stringify({
     reports: [
-      { issue_number: 42, conformant: true, missing_sections: [],
-        forbidden_sections: [], empty_sections: [], quality_issues: [] },
+      {
+        issue_number: 42,
+        conformant: true,
+        missing_sections: [],
+        forbidden_sections: [],
+        empty_sections: [],
+        quality_issues: [],
+      },
     ],
   }),
 });
@@ -49,12 +55,18 @@ const result = await runIssueAudit(client, "o", "r", { spawn });
 const placementSpawn = fakeSpawn({
   output: JSON.stringify({
     placements: [
-      { issue_number: 10, phase: "Foundation", create_phase: true,
-        phase_goal: "Establish the initial delivery scaffolding." },
+      {
+        issue_number: 10,
+        phase: "Foundation",
+        create_phase: true,
+        phase_goal: "Establish the initial delivery scaffolding.",
+      },
     ],
   }),
 });
-const coverage = await runPlanCoverage(client, "o", "r", { spawn: placementSpawn });
+const coverage = await runPlanCoverage(client, "o", "r", {
+  spawn: placementSpawn,
+});
 // coverage.llmPlaced === [10], coverage.createdPhases === ["Foundation"]
 ```
 
