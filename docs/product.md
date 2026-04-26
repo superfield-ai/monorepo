@@ -101,68 +101,68 @@ The same person is often all three. The webapp is laid out so a single demo can 
 
 #### 1. Iterative development (the studio session)
 
-What the page is *for*: writing a turn, watching the agent work, seeing the result in the iframe, committing or rolling back. This is the default landing view.
+What the page is _for_: writing a turn, watching the agent work, seeing the result in the iframe, committing or rolling back. This is the default landing view.
 
 | Capability                                                  | Status |
 | ----------------------------------------------------------- | ------ |
-| Chat panel ↔ agent (`POST /studio/run` SSE → WS chunks)      | ✅     |
+| Chat panel ↔ agent (`POST /studio/run` SSE → WS chunks)     | ✅     |
 | App iframe with cluster-status-aware reload overlay         | ✅     |
-| Mid-turn steer (`POST /steer/context` via `/studio/steer`)   | ✅     |
+| Mid-turn steer (`POST /steer/context` via `/studio/steer`)  | ✅     |
 | Commit log + checkpoint timeline + rollback                 | ✅     |
 | Per-turn file diff inline in chat                           | ⬜     |
 | Per-route preview map (sidebar: app routes → click to load) | ⬜     |
-| Fixture switcher (per-route, persisted in `.studio/`)        | ⬜     |
+| Fixture switcher (per-route, persisted in `.studio/`)       | ⬜     |
 | Viewport toolbar (mobile / tablet / desktop) on iframe      | ⬜     |
-| Screenshot capture per turn (saved to `studio-sessions/`)    | ⬜     |
+| Screenshot capture per turn (saved to `studio-sessions/`)   | ⬜     |
 
 #### 2. UX design (`/studio/preview`)
 
-What the page is *for*: a designer reviewing components and mock routes against fixture data while the agent iterates. Lives at `/studio/preview` and is only mounted when studio mode is active.
+What the page is _for_: a designer reviewing components and mock routes against fixture data while the agent iterates. Lives at `/studio/preview` and is only mounted when studio mode is active.
 
-| Capability                                              | Status |
-| ------------------------------------------------------- | ------ |
-| Component preview panel (isolated render, fixtures)     | ✅     |
-| WikiRender + CitationHoverPopover                       | ✅     |
-| Mock-route gallery (full-page views with fixture data)   | ⬜     |
-| Design-tokens panel (palette, type, spacing, shadows)    | ⬜     |
-| Responsive viewport toolbar                              | ⬜     |
-| Visual diff before / after a turn (latest commit baseline) | ⬜    |
-| Deep-link to chat: "edit this component" prefilled       | ⬜     |
+| Capability                                                 | Status |
+| ---------------------------------------------------------- | ------ |
+| Component preview panel (isolated render, fixtures)        | ✅     |
+| WikiRender + CitationHoverPopover                          | ✅     |
+| Mock-route gallery (full-page views with fixture data)     | ⬜     |
+| Design-tokens panel (palette, type, spacing, shadows)      | ⬜     |
+| Responsive viewport toolbar                                | ⬜     |
+| Visual diff before / after a turn (latest commit baseline) | ⬜     |
+| Deep-link to chat: "edit this component" prefilled         | ⬜     |
 
 #### 3. Agent monitoring (`/studio/orchestrator`)
 
-What the page is *for*: an operator running the dev loop, watching all slots, intervening when a session goes off-rails. Sourced from `/analytics/*` on `:7837`.
+What the page is _for_: an operator running the dev loop, watching all slots, intervening when a session goes off-rails. Sourced from `/analytics/*` on `:7837`.
 
-| Capability                                                            | Status |
-| --------------------------------------------------------------------- | ------ |
-| Process controls (Start / Stop dev loop child process)                | ✅     |
-| Loop status bar (plan / dev / doc — last tick, duration, circuit)     | ✅     |
-| Active slots list (issue, role, backend, elapsed, heartbeat)          | ✅     |
-| Cost summary (USD total, per-backend, agent count, error count)       | ✅     |
-| Steer + Escalate buttons per slot                                     | ✅     |
-| Dev-loop log tail (SSE, ring buffer)                                   | ✅     |
-| Turn timeline per session (turn 1..N — start, end, tokens, cost)      | ⬜     |
-| Prompt/response inspector (click a turn → see prompt + tool calls)    | ⬜     |
-| Blueprint conformance feed (last N rule citations posted to issues)   | ⬜     |
-| Cost-over-time sparkline (per session and per loop)                   | ⬜     |
-| Log search + level filter (info / warn / error / agent-stdout)         | ⬜     |
-| Slot heartbeat history (sparkline, last 60 ticks)                     | ⬜     |
+| Capability                                                          | Status |
+| ------------------------------------------------------------------- | ------ |
+| Process controls (Start / Stop dev loop child process)              | ✅     |
+| Loop status bar (plan / dev / doc — last tick, duration, circuit)   | ✅     |
+| Active slots list (issue, role, backend, elapsed, heartbeat)        | ✅     |
+| Cost summary (USD total, per-backend, agent count, error count)     | ✅     |
+| Steer + Escalate buttons per slot                                   | ✅     |
+| Dev-loop log tail (SSE, ring buffer)                                | ✅     |
+| Turn timeline per session (turn 1..N — start, end, tokens, cost)    | ⬜     |
+| Prompt/response inspector (click a turn → see prompt + tool calls)  | ⬜     |
+| Blueprint conformance feed (last N rule citations posted to issues) | ⬜     |
+| Cost-over-time sparkline (per session and per loop)                 | ⬜     |
+| Log search + level filter (info / warn / error / agent-stdout)      | ⬜     |
+| Slot heartbeat history (sparkline, last 60 ticks)                   | ⬜     |
 
 #### 4. Deployment health (`/studio/deploy`)
 
-What the page is *for*: an operator deploying or triaging dev / staging / prod. Backed by `superfield doctor`, `deploy-env`, `rollback-env` over a thin HTTP wrapper. **New panel — not yet built.**
+What the page is _for_: an operator deploying or triaging dev / staging / prod. Backed by `superfield doctor`, `deploy-env`, `rollback-env` over a thin HTTP wrapper. **New panel — not yet built.**
 
-| Capability                                                              | Status |
-| ----------------------------------------------------------------------- | ------ |
-| Cluster status indicator (current env)                                  | ✅     |
-| Rebuild + rollout restart trigger                                       | ✅     |
-| Per-env doctor matrix (SSH / k3s / DB / secrets — green/red per env)    | ⬜     |
-| Rolling-deploy progress strip (build → push → apply → health gate)      | ⬜     |
-| Rollback button surfaced (calls `rollback-env` with confirmation)       | ⬜     |
-| k3s pod / Job status table (control-plane, postgres, migration Job)     | ⬜     |
-| Latest-PR / CI-on-`main` strip (green/red, click → forge)               | ⬜     |
-| Secrets-presence audit (`DEPLOY_HOST_<ENV>`, `DEPLOY_KEY_<ENV>`, `DATABASE_URL_<ENV>`) | ⬜ |
-| Last DB-migration Job log tail                                          | ⬜     |
+| Capability                                                                             | Status |
+| -------------------------------------------------------------------------------------- | ------ |
+| Cluster status indicator (current env)                                                 | ✅     |
+| Rebuild + rollout restart trigger                                                      | ✅     |
+| Per-env doctor matrix (SSH / k3s / DB / secrets — green/red per env)                   | ⬜     |
+| Rolling-deploy progress strip (build → push → apply → health gate)                     | ⬜     |
+| Rollback button surfaced (calls `rollback-env` with confirmation)                      | ⬜     |
+| k3s pod / Job status table (control-plane, postgres, migration Job)                    | ⬜     |
+| Latest-PR / CI-on-`main` strip (green/red, click → forge)                              | ⬜     |
+| Secrets-presence audit (`DEPLOY_HOST_<ENV>`, `DEPLOY_KEY_<ENV>`, `DATABASE_URL_<ENV>`) | ⬜     |
+| Last DB-migration Job log tail                                                         | ⬜     |
 
 ### Non-goals
 

@@ -225,16 +225,16 @@ Spec: [`product.md` § Control Webapp](./product.md#control-webapp). Implementat
 
 Scoped for the 2026-04-28 client demo. Cut lines and per-task spec are in `TASKS.md` (P0/P1/P2). Source spec: `architecture.md § Control Webapp` (Phase 9 routes).
 
-| Item                                                       | Pillar                  | Status |
-| ---------------------------------------------------------- | ----------------------- | ------ |
-| C-9.1 Per-route preview map                                | Iterative dev           | ⬜     |
-| C-9.2 Design-tokens panel                                  | UX design               | ⬜     |
-| C-9.3 Mock-route gallery                                   | UX design               | ⬜     |
-| C-9.4 Viewport toolbar                                     | Iterative dev / UX      | ⬜     |
-| C-9.5 Deployment health view (`/studio/deploy`)            | Deployment health       | ⬜     |
-| C-9.6 Turn timeline + prompt inspector                     | Agent monitoring        | ⬜     |
-| C-9.7 Blueprint conformance feed                           | Agent monitoring        | ⬜     |
-| C-9.8 `scripts/seed-demo.ts`                               | Demo                    | ⬜     |
+| Item                                            | Pillar             | Status |
+| ----------------------------------------------- | ------------------ | ------ |
+| C-9.1 Per-route preview map                     | Iterative dev      | ⬜     |
+| C-9.2 Design-tokens panel                       | UX design          | ⬜     |
+| C-9.3 Mock-route gallery                        | UX design          | ⬜     |
+| C-9.4 Viewport toolbar                          | Iterative dev / UX | ⬜     |
+| C-9.5 Deployment health view (`/studio/deploy`) | Deployment health  | ⬜     |
+| C-9.6 Turn timeline + prompt inspector          | Agent monitoring   | ⬜     |
+| C-9.7 Blueprint conformance feed                | Agent monitoring   | ⬜     |
+| C-9.8 `scripts/seed-demo.ts`                    | Demo               | ⬜     |
 
 ### Cross-cutting C (post-demo)
 

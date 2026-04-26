@@ -528,51 +528,51 @@ If the dev loop is not running, control queues steers locally and retries when t
 
 ### HTTP routes (control server, :7000)
 
-| Method | Path                          | Purpose                                                                    |
-| ------ | ----------------------------- | -------------------------------------------------------------------------- |
-| GET    | `/studio/ws`                  | WebSocket upgrade for chat turns + steer frames                            |
-| POST   | `/studio/steer`               | REST fallback — proxies to `POST <api-url>/steer/context`                  |
-| POST   | `/studio/rebuild`             | Rebuild + rollout restart                                                  |
-| GET    | `/studio/chat/stream`         | SSE legacy chat stream (kept for tests; WS is canonical)                   |
-| GET    | `/studio/cluster/events`      | SSE — aggregate cluster health                                             |
-| GET    | `/studio/status`              | Studio mode + auth                                                         |
-| GET    | `/studio/commits`             | Session commit log                                                         |
-| GET    | `/studio/timeline`            | Checkpoint timeline                                                        |
-| POST   | `/studio/rollback`            | Reset HEAD to prior commit                                                 |
-| POST   | `/studio/reset`               | Clear in-memory session messages                                           |
-| POST   | `/studio/chat`                | Send message, run agent, return reply                                      |
-| GET    | `/orchestrator/status`        | `{ process, pid, apiReachable, uptimeMs }`                                 |
-| POST   | `/orchestrator/start`         | Spawn `superfield start <repo>` — body `{ repo, slotCount }`                |
-| POST   | `/orchestrator/stop`          | SIGTERM the managed process; SIGKILL after 5 s                             |
-| GET    | `/orchestrator/logs`          | SSE — combined stdout/stderr ring buffer + live tail                       |
-| GET    | `/studio/turns/:sessionId`    | Per-session turn timeline (Phase 9 — reads `<CONTROL_LOG_DIR>/*.jsonl`)     |
-| GET    | `/studio/blueprint/recent`    | Last 50 issues with `<!-- superfield-blueprint -->` comments (Phase 9)      |
-| GET    | `/studio/deploy/envs`         | Envs known from forge variables (Phase 9)                                  |
-| GET    | `/studio/deploy/doctor/:env`  | Calls `runDoctor(env)`; returns checks array (Phase 9)                     |
-| GET    | `/studio/deploy/secrets/:env` | Presence-only audit of three required secrets (Phase 9)                    |
-| GET    | `/studio/deploy/ci`           | Latest workflow run on `main` + deploy run (Phase 9)                       |
-| POST   | `/studio/deploy/rollback/:env`| Calls `rollbackEnv(env)` with `{ confirm: true }`; SSE log (Phase 9)       |
-| GET    | `/app/*`                      | Reverse-proxy to web ClusterIP service (strips `/app`)                     |
-| GET    | `/api/*`                      | Reverse-proxy to api ClusterIP service                                     |
+| Method | Path                           | Purpose                                                                 |
+| ------ | ------------------------------ | ----------------------------------------------------------------------- |
+| GET    | `/studio/ws`                   | WebSocket upgrade for chat turns + steer frames                         |
+| POST   | `/studio/steer`                | REST fallback — proxies to `POST <api-url>/steer/context`               |
+| POST   | `/studio/rebuild`              | Rebuild + rollout restart                                               |
+| GET    | `/studio/chat/stream`          | SSE legacy chat stream (kept for tests; WS is canonical)                |
+| GET    | `/studio/cluster/events`       | SSE — aggregate cluster health                                          |
+| GET    | `/studio/status`               | Studio mode + auth                                                      |
+| GET    | `/studio/commits`              | Session commit log                                                      |
+| GET    | `/studio/timeline`             | Checkpoint timeline                                                     |
+| POST   | `/studio/rollback`             | Reset HEAD to prior commit                                              |
+| POST   | `/studio/reset`                | Clear in-memory session messages                                        |
+| POST   | `/studio/chat`                 | Send message, run agent, return reply                                   |
+| GET    | `/orchestrator/status`         | `{ process, pid, apiReachable, uptimeMs }`                              |
+| POST   | `/orchestrator/start`          | Spawn `superfield start <repo>` — body `{ repo, slotCount }`            |
+| POST   | `/orchestrator/stop`           | SIGTERM the managed process; SIGKILL after 5 s                          |
+| GET    | `/orchestrator/logs`           | SSE — combined stdout/stderr ring buffer + live tail                    |
+| GET    | `/studio/turns/:sessionId`     | Per-session turn timeline (Phase 9 — reads `<CONTROL_LOG_DIR>/*.jsonl`) |
+| GET    | `/studio/blueprint/recent`     | Last 50 issues with `<!-- superfield-blueprint -->` comments (Phase 9)  |
+| GET    | `/studio/deploy/envs`          | Envs known from forge variables (Phase 9)                               |
+| GET    | `/studio/deploy/doctor/:env`   | Calls `runDoctor(env)`; returns checks array (Phase 9)                  |
+| GET    | `/studio/deploy/secrets/:env`  | Presence-only audit of three required secrets (Phase 9)                 |
+| GET    | `/studio/deploy/ci`            | Latest workflow run on `main` + deploy run (Phase 9)                    |
+| POST   | `/studio/deploy/rollback/:env` | Calls `rollbackEnv(env)` with `{ confirm: true }`; SSE log (Phase 9)    |
+| GET    | `/app/*`                       | Reverse-proxy to web ClusterIP service (strips `/app`)                  |
+| GET    | `/api/*`                       | Reverse-proxy to api ClusterIP service                                  |
 
 Routes under `/studio/*` (except `/studio/chat/stream`, `/studio/cluster/events`) and `/api/auth/*` skip the auth check; everything else requires the studio JWT cookie.
 
 ### Modules
 
-| File                                            | Role                                                          |
-| ----------------------------------------------- | ------------------------------------------------------------- |
-| `packages/control/src/index.ts`                 | `startControl(opts?)` — server entry                          |
-| `packages/control/src/router.ts`                | HTTP route dispatch                                           |
-| `packages/control/src/control-ws.ts`            | Bun WebSocket handler (chat turns, steers)                    |
-| `packages/control/src/agent.ts`                 | `runAgent()` — calls `POST <api-url>/studio/run`              |
-| `packages/control/src/claude-session.ts`        | `streamTurn()` — pipes SSE from `/studio/run` to the browser  |
-| `packages/control/src/orchestrator.ts`          | `/orchestrator/*` endpoints                                   |
-| `packages/control/src/dev-loop-process.ts`      | Child process lifecycle for `superfield start`                |
-| `packages/control/src/cluster-status-sse.ts`    | `/studio/cluster/events` aggregator                           |
-| `packages/control/src/hot-swap.ts`              | Component hot-reload                                          |
-| `packages/control/src/design-mode-context.ts`   | Studio-mode feature flag                                      |
-| `packages/control/apps/src/components/`         | React UI (ControlPanel, OrchestratorView, ComponentPreviewPanel, …) |
-| `packages/control/apps/src/controllers/`        | Browser-side controllers (Chat, ClusterStatus, Orchestrator, …) |
+| File                                          | Role                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------- |
+| `packages/control/src/index.ts`               | `startControl(opts?)` — server entry                                |
+| `packages/control/src/router.ts`              | HTTP route dispatch                                                 |
+| `packages/control/src/control-ws.ts`          | Bun WebSocket handler (chat turns, steers)                          |
+| `packages/control/src/agent.ts`               | `runAgent()` — calls `POST <api-url>/studio/run`                    |
+| `packages/control/src/claude-session.ts`      | `streamTurn()` — pipes SSE from `/studio/run` to the browser        |
+| `packages/control/src/orchestrator.ts`        | `/orchestrator/*` endpoints                                         |
+| `packages/control/src/dev-loop-process.ts`    | Child process lifecycle for `superfield start`                      |
+| `packages/control/src/cluster-status-sse.ts`  | `/studio/cluster/events` aggregator                                 |
+| `packages/control/src/hot-swap.ts`            | Component hot-reload                                                |
+| `packages/control/src/design-mode-context.ts` | Studio-mode feature flag                                            |
+| `packages/control/apps/src/components/`       | React UI (ControlPanel, OrchestratorView, ComponentPreviewPanel, …) |
+| `packages/control/apps/src/controllers/`      | Browser-side controllers (Chat, ClusterStatus, Orchestrator, …)     |
 
 ### Superfield core extension
 
@@ -617,11 +617,11 @@ Control runs without the dev loop — agent turns return `503 Superfield API una
 
 ### Testing
 
-| Layer       | Location                                            | Strategy                                                   |
-| ----------- | --------------------------------------------------- | ---------------------------------------------------------- |
-| Unit        | `cli/packages/control/tests/unit/`                  | `agent.ts`, `claude-session.ts` stub `fetch` (not spawn)   |
-| Integration | `cli/packages/control/tests/integration/`           | `superfield-server.ts` fixture starts API in-process       |
-| E2E         | `cli/packages/control/tests/e2e/` (Playwright)      | Two k3d images: `superfield-studio` + `superfield-agent`   |
+| Layer       | Location                                       | Strategy                                                 |
+| ----------- | ---------------------------------------------- | -------------------------------------------------------- |
+| Unit        | `cli/packages/control/tests/unit/`             | `agent.ts`, `claude-session.ts` stub `fetch` (not spawn) |
+| Integration | `cli/packages/control/tests/integration/`      | `superfield-server.ts` fixture starts API in-process     |
+| E2E         | `cli/packages/control/tests/e2e/` (Playwright) | Two k3d images: `superfield-studio` + `superfield-agent` |
 
 The claude stub at `tests/fixtures/claude` lives on the agent image only; the studio image has no claude dependency.
 
