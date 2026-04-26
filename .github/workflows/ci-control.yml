@@ -7,16 +7,12 @@ on:
       - "packages/control/**"
       - "packages/control-core/**"
       - "packages/db/**"
-    paths-ignore:
-      - "**/*.md"
   pull_request:
     branches: [main]
     paths:
       - "packages/control/**"
       - "packages/control-core/**"
       - "packages/db/**"
-    paths-ignore:
-      - "**/*.md"
   workflow_call:
 
 concurrency:
