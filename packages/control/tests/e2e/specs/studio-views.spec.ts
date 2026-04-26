@@ -10,7 +10,7 @@
  * Run:
  *   npx playwright test --config packages/control/tests/e2e/playwright.config.ts
  */
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures";
 
 // ---------------------------------------------------------------------------
 // Navigation helper
