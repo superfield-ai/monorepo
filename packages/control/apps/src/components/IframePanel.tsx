@@ -24,6 +24,11 @@ interface IframePanelProps {
   src?: string;
   /** Current cluster status forwarded from the parent SSE consumer. */
   clusterStatus: ClusterStatus;
+  /**
+   * Optional CSS width applied to the iframe (D4 viewport toolbar). When
+   * undefined, the iframe stretches to fill its container.
+   */
+  iframeWidth?: number | string;
 }
 
 /**
@@ -33,6 +38,7 @@ interface IframePanelProps {
 export function IframePanel({
   src = "/app/",
   clusterStatus,
+  iframeWidth,
 }: IframePanelProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
@@ -54,16 +60,30 @@ export function IframePanel({
     }
   }, [clusterStatus, src]);
 
+  const iframeStyle: React.CSSProperties =
+    iframeWidth !== undefined
+      ? {
+          width:
+            typeof iframeWidth === "number" ? `${iframeWidth}px` : iframeWidth,
+          maxWidth: "100%",
+        }
+      : {};
+
   return (
     <div
-      className="relative flex-1 h-full bg-zinc-950"
+      className="relative flex-1 h-full bg-zinc-950 flex justify-center"
       data-testid="iframe-panel"
     >
       <iframe
         ref={iframeRef}
         src={src}
         title="Superfield app"
-        className="w-full h-full border-0"
+        className={
+          iframeWidth !== undefined
+            ? "h-full border-0"
+            : "w-full h-full border-0"
+        }
+        style={iframeStyle}
         data-testid="app-iframe"
       />
 

@@ -28,3 +28,4 @@ export { DebugView } from "./DebugView";
 export { DebugBadge } from "./DebugBadge";
 export { ConnectionBanner } from "./ConnectionBanner";
 export { DeployView } from "./DeployView";
+export { ViewportToolbar } from "./ViewportToolbar";
