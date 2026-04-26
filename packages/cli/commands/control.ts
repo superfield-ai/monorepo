@@ -42,25 +42,25 @@ export function parseControlArgs(args: string[]): {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
-    if (arg === '--help' || arg === '-h') {
+    if (arg === "--help" || arg === "-h") {
       help = true;
-    } else if (arg === '--port') {
+    } else if (arg === "--port") {
       const val = args[++i];
-      const parsed = parseInt(val ?? '', 10);
+      const parsed = parseInt(val ?? "", 10);
       if (Number.isNaN(parsed)) unknown.push(arg);
       else port = parsed;
-    } else if (arg.startsWith('--port=')) {
-      const parsed = parseInt(arg.slice('--port='.length), 10);
+    } else if (arg.startsWith("--port=")) {
+      const parsed = parseInt(arg.slice("--port=".length), 10);
       if (Number.isNaN(parsed)) unknown.push(arg);
       else port = parsed;
-    } else if (arg === '--repo') {
+    } else if (arg === "--repo") {
       repo = args[++i];
-    } else if (arg.startsWith('--repo=')) {
-      repo = arg.slice('--repo='.length);
-    } else if (arg === '--api-url') {
+    } else if (arg.startsWith("--repo=")) {
+      repo = arg.slice("--repo=".length);
+    } else if (arg === "--api-url") {
       apiUrl = args[++i];
-    } else if (arg.startsWith('--api-url=')) {
-      apiUrl = arg.slice('--api-url='.length);
+    } else if (arg.startsWith("--api-url=")) {
+      apiUrl = arg.slice("--api-url=".length);
     } else {
       unknown.push(arg);
     }
@@ -93,10 +93,12 @@ export async function controlCommand(
   const warn = deps.warn ?? ((m: string) => console.warn(m));
   const exit = deps.exit ?? ((code: number) => process.exit(code) as never);
   const _fetch = deps._fetch ?? globalThis.fetch;
-  const _startControl = deps._startControl ?? (async () => {
-    const { startControl } = await import('@superfield/control');
-    await startControl();
-  });
+  const _startControl =
+    deps._startControl ??
+    (async () => {
+      const { startControl } = await import("@superfield/control");
+      await startControl();
+    });
 
   const parsed = parseControlArgs(args);
 
@@ -106,7 +108,7 @@ export async function controlCommand(
   }
 
   if (parsed.unknown.length > 0) {
-    warn(`Unknown arguments: ${parsed.unknown.join(' ')}`);
+    warn(`Unknown arguments: ${parsed.unknown.join(" ")}`);
     log(controlUsage());
     exit(1);
     return;
@@ -124,16 +126,23 @@ export async function controlCommand(
     process.env.SUPERFIELD_API_URL = parsed.apiUrl;
   }
 
-  const apiUrl = parsed.apiUrl ?? process.env.SUPERFIELD_API_URL ?? 'http://127.0.0.1:7837';
+  const apiUrl =
+    parsed.apiUrl ?? process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
 
   // Health-check the dev-loop API. Warn if unreachable but proceed regardless.
   try {
-    const res = await _fetch(`${apiUrl}/health`, { signal: AbortSignal.timeout(2000) });
+    const res = await _fetch(`${apiUrl}/health`, {
+      signal: AbortSignal.timeout(2000),
+    });
     if (!res.ok) {
-      warn(`[studio] Warning: dev-loop API at ${apiUrl}/health returned HTTP ${res.status}. Agent turns may fail.`);
+      warn(
+        `[studio] Warning: dev-loop API at ${apiUrl}/health returned HTTP ${res.status}. Agent turns may fail.`,
+      );
     }
   } catch {
-    warn(`[studio] Warning: dev-loop API unreachable at ${apiUrl}. Agent turns will fail until a dev loop is running.`);
+    warn(
+      `[studio] Warning: dev-loop API unreachable at ${apiUrl}. Agent turns will fail until a dev loop is running.`,
+    );
   }
 
   await _startControl();

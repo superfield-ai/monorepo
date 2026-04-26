@@ -46,7 +46,7 @@
  * See: docs/studio-e2e-infrastructure.md — "How the Cluster Status Becomes healthy"
  */
 
-type ClusterStatus = 'healthy' | 'unknown';
+type ClusterStatus = "healthy" | "unknown";
 
 const POLL_INTERVAL_MS = 5_000;
 
@@ -58,11 +58,11 @@ function makeSseEvent(status: ClusterStatus): Uint8Array {
 
 async function checkClusterStatus(context: string): Promise<ClusterStatus> {
   const proc = Bun.spawn(
-    ['kubectl', '--context', context, 'cluster-info', '--request-timeout=3s'],
-    { stdout: 'ignore', stderr: 'ignore' },
+    ["kubectl", "--context", context, "cluster-info", "--request-timeout=3s"],
+    { stdout: "ignore", stderr: "ignore" },
   );
   const exitCode = await proc.exited;
-  return exitCode === 0 ? 'healthy' : 'unknown';
+  return exitCode === 0 ? "healthy" : "unknown";
 }
 
 /**
@@ -76,7 +76,7 @@ export function clusterStatusSseResponse(context: string): Response {
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
       // Initial heartbeat comment so the browser recognises the connection.
-      controller.enqueue(new TextEncoder().encode(': connected\n\n'));
+      controller.enqueue(new TextEncoder().encode(": connected\n\n"));
 
       const emit = async () => {
         const status = await checkClusterStatus(context);
@@ -107,10 +107,10 @@ export function clusterStatusSseResponse(context: string): Response {
   return new Response(body, {
     status: 200,
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'X-Accel-Buffering': 'no',
-      Connection: 'keep-alive',
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "X-Accel-Buffering": "no",
+      Connection: "keep-alive",
     },
   });
 }

@@ -4,8 +4,8 @@
  * WebSocket is stubbed with a controllable fake so no real network connection
  * is made.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { WsChatController } from '../../src/controllers/ChatController';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { WsChatController } from "../../src/controllers/ChatController";
 
 // ── Fake WebSocket ────────────────────────────────────────────────────────────
 
@@ -28,8 +28,12 @@ class FakeWebSocket {
     FakeWebSocket.last = this;
   }
 
-  send(msg: string) { this.sent.push(msg); }
-  close() { this.readyState = FakeWebSocket.CLOSED; }
+  send(msg: string) {
+    this.sent.push(msg);
+  }
+  close() {
+    this.readyState = FakeWebSocket.CLOSED;
+  }
 
   /** Test helper — simulate server open. */
   open() {
@@ -50,9 +54,11 @@ class FakeWebSocket {
 
 beforeEach(() => {
   FakeWebSocket.last = null;
-  vi.stubGlobal('WebSocket', FakeWebSocket);
-  vi.stubGlobal('location', { protocol: 'http:', host: 'localhost:7000' });
-  vi.stubGlobal('crypto', { randomUUID: () => `uuid-${Math.random().toString(36).slice(2)}` });
+  vi.stubGlobal("WebSocket", FakeWebSocket);
+  vi.stubGlobal("location", { protocol: "http:", host: "localhost:7000" });
+  vi.stubGlobal("crypto", {
+    randomUUID: () => `uuid-${Math.random().toString(36).slice(2)}`,
+  });
 });
 
 afterEach(() => {
@@ -61,25 +67,25 @@ afterEach(() => {
 
 // ── Initial state ─────────────────────────────────────────────────────────────
 
-describe('initial state', () => {
-  it('turnState is idle, messages is empty', () => {
+describe("initial state", () => {
+  it("turnState is idle, messages is empty", () => {
     const ctrl = new WsChatController();
-    expect(ctrl.getState()).toEqual({ turnState: 'idle', messages: [] });
+    expect(ctrl.getState()).toEqual({ turnState: "idle", messages: [] });
   });
 });
 
 // ── subscribe ─────────────────────────────────────────────────────────────────
 
-describe('subscribe', () => {
-  it('listener called immediately with current state', () => {
+describe("subscribe", () => {
+  it("listener called immediately with current state", () => {
     const ctrl = new WsChatController();
     const calls: unknown[] = [];
     ctrl.subscribe((s) => calls.push(s));
     expect(calls).toHaveLength(1);
-    expect((calls[0] as { turnState: string }).turnState).toBe('idle');
+    expect((calls[0] as { turnState: string }).turnState).toBe("idle");
   });
 
-  it('returns unsubscribe function that stops future notifications', () => {
+  it("returns unsubscribe function that stops future notifications", () => {
     const ctrl = new WsChatController();
     let count = 0;
     const unsub = ctrl.subscribe(() => count++);
@@ -93,48 +99,52 @@ describe('subscribe', () => {
 
 // ── sendMessage guards ────────────────────────────────────────────────────────
 
-describe('sendMessage guards', () => {
-  it('empty text → no-op, state unchanged', async () => {
+describe("sendMessage guards", () => {
+  it("empty text → no-op, state unchanged", async () => {
     const ctrl = new WsChatController();
-    await ctrl.sendMessage('   ');
+    await ctrl.sendMessage("   ");
     expect(ctrl.getState().messages).toHaveLength(0);
   });
 
-  it('turnState streaming → no-op', async () => {
+  it("turnState streaming → no-op", async () => {
     const ctrl = new WsChatController();
     ctrl.connect();
     FakeWebSocket.last!.open();
 
     // Start a turn.
-    const p = ctrl.sendMessage('first');
+    const p = ctrl.sendMessage("first");
     // Immediately try to send another.
-    await ctrl.sendMessage('second');
+    await ctrl.sendMessage("second");
     // Only one user message should exist.
-    const userMsgs = ctrl.getState().messages.filter((m) => m.role === 'user');
+    const userMsgs = ctrl.getState().messages.filter((m) => m.role === "user");
     expect(userMsgs).toHaveLength(1);
 
     // Clean up — simulate done so first turn completes.
-    FakeWebSocket.last!.receive({ type: 'done' });
+    FakeWebSocket.last!.receive({ type: "done" });
     await p;
   });
 });
 
 // ── sendMessage happy path ────────────────────────────────────────────────────
 
-describe('sendMessage', () => {
-  it('adds user + assistant placeholder, turnState → streaming', async () => {
+describe("sendMessage", () => {
+  it("adds user + assistant placeholder, turnState → streaming", async () => {
     const ctrl = new WsChatController();
     ctrl.connect();
     FakeWebSocket.last!.open();
 
-    const p = ctrl.sendMessage('hello');
+    const p = ctrl.sendMessage("hello");
     const state = ctrl.getState();
 
-    expect(state.turnState).toBe('streaming');
-    expect(state.messages.find((m) => m.role === 'user')?.content).toBe('hello');
-    expect(state.messages.find((m) => m.role === 'assistant')?.streaming).toBe(true);
+    expect(state.turnState).toBe("streaming");
+    expect(state.messages.find((m) => m.role === "user")?.content).toBe(
+      "hello",
+    );
+    expect(state.messages.find((m) => m.role === "assistant")?.streaming).toBe(
+      true,
+    );
 
-    FakeWebSocket.last!.receive({ type: 'done' });
+    FakeWebSocket.last!.receive({ type: "done" });
     await p;
   });
 
@@ -143,102 +153,107 @@ describe('sendMessage', () => {
     ctrl.connect();
     FakeWebSocket.last!.open();
 
-    const p = ctrl.sendMessage('make it blue');
+    const p = ctrl.sendMessage("make it blue");
     expect(FakeWebSocket.last!.sent).toHaveLength(1);
-    const frame = JSON.parse(FakeWebSocket.last!.sent[0]) as { type: string; message: string };
-    expect(frame).toEqual({ type: 'turn', message: 'make it blue' });
+    const frame = JSON.parse(FakeWebSocket.last!.sent[0]) as {
+      type: string;
+      message: string;
+    };
+    expect(frame).toEqual({ type: "turn", message: "make it blue" });
 
-    FakeWebSocket.last!.receive({ type: 'done' });
+    FakeWebSocket.last!.receive({ type: "done" });
     await p;
   });
 });
 
 // ── onmessage frame handlers ──────────────────────────────────────────────────
 
-describe('onmessage handlers', () => {
+describe("onmessage handlers", () => {
   async function setup() {
     const ctrl = new WsChatController();
     ctrl.connect();
     const ws = FakeWebSocket.last!;
     ws.open();
-    const p = ctrl.sendMessage('test');
+    const p = ctrl.sendMessage("test");
     return { ctrl, ws, p };
   }
 
-  it('chunk frame → appends text to assistant message', async () => {
+  it("chunk frame → appends text to assistant message", async () => {
     const { ctrl, ws, p } = await setup();
-    ws.receive({ type: 'chunk', text: 'Hello ' });
-    ws.receive({ type: 'chunk', text: 'world' });
-    ws.receive({ type: 'done' });
+    ws.receive({ type: "chunk", text: "Hello " });
+    ws.receive({ type: "chunk", text: "world" });
+    ws.receive({ type: "done" });
     await p;
-    const assistant = ctrl.getState().messages.find((m) => m.role === 'assistant');
-    expect(assistant?.content).toBe('Hello world');
+    const assistant = ctrl
+      .getState()
+      .messages.find((m) => m.role === "assistant");
+    expect(assistant?.content).toBe("Hello world");
   });
 
-  it('done frame → streaming false, turnState idle', async () => {
+  it("done frame → streaming false, turnState idle", async () => {
     const { ctrl, ws, p } = await setup();
-    ws.receive({ type: 'done' });
+    ws.receive({ type: "done" });
     await p;
     const state = ctrl.getState();
-    expect(state.turnState).toBe('idle');
-    const assistant = state.messages.find((m) => m.role === 'assistant');
+    expect(state.turnState).toBe("idle");
+    const assistant = state.messages.find((m) => m.role === "assistant");
     expect(assistant?.streaming).toBe(false);
   });
 
-  it('error frame → appends error content, turnState error', async () => {
+  it("error frame → appends error content, turnState error", async () => {
     const { ctrl, ws, p } = await setup();
-    ws.receive({ type: 'error', message: 'spawn failed' });
+    ws.receive({ type: "error", message: "spawn failed" });
     await p;
     const state = ctrl.getState();
-    expect(state.turnState).toBe('error');
-    const assistant = state.messages.find((m) => m.role === 'assistant');
-    expect(assistant?.content).toContain('spawn failed');
+    expect(state.turnState).toBe("error");
+    const assistant = state.messages.find((m) => m.role === "assistant");
+    expect(assistant?.content).toContain("spawn failed");
     expect(assistant?.streaming).toBe(false);
   });
 
-  it('invalid JSON frame → silently ignored', async () => {
+  it("invalid JSON frame → silently ignored", async () => {
     const { ctrl, ws, p } = await setup();
-    ws.onmessage?.({ data: 'not-json' });
-    ws.receive({ type: 'done' });
+    ws.onmessage?.({ data: "not-json" });
+    ws.receive({ type: "done" });
     await p;
     // No crash, turn completed normally.
-    expect(ctrl.getState().turnState).toBe('idle');
+    expect(ctrl.getState().turnState).toBe("idle");
   });
 });
 
 // ── onerror ───────────────────────────────────────────────────────────────────
 
-describe('onerror', () => {
-  it('WebSocket error → turnState error', () => {
+describe("onerror", () => {
+  it("WebSocket error → turnState error", () => {
     const ctrl = new WsChatController();
     ctrl.connect();
     FakeWebSocket.last!.error();
-    expect(ctrl.getState().turnState).toBe('error');
+    expect(ctrl.getState().turnState).toBe("error");
   });
 });
 
 // ── clearError ────────────────────────────────────────────────────────────────
 
-describe('clearError', () => {
-  it('error → idle', () => {
+describe("clearError", () => {
+  it("error → idle", () => {
     const ctrl = new WsChatController();
     ctrl.connect();
     FakeWebSocket.last!.error();
     ctrl.clearError();
-    expect(ctrl.getState().turnState).toBe('idle');
+    expect(ctrl.getState().turnState).toBe("idle");
   });
 
-  it('idle → still idle (no-op)', () => {
+  it("idle → still idle (no-op)", () => {
     const ctrl = new WsChatController();
     ctrl.clearError();
-    expect(ctrl.getState().turnState).toBe('idle');
+    expect(ctrl.getState().turnState).toBe("idle");
   });
 });
 
 // ── disconnect ────────────────────────────────────────────────────────────────
 
-describe('disconnect', () => {
-  it('closes WebSocket', () => {
+describe("disconnect", () => {
+  it("closes WebSocket", () => {
     const ctrl = new WsChatController();
     ctrl.connect();
     const ws = FakeWebSocket.last!;

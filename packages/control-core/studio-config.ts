@@ -23,15 +23,15 @@
  * file is needed.
  */
 
-export const RELEASE_DOCKERFILE = 'Dockerfile.release';
+export const RELEASE_DOCKERFILE = "Dockerfile.release";
 
 /**
  * Files that studio ignores — these are for test-time or dev-time only,
  * not for isomorphic studio clusters.
  */
 export const IGNORED_FILES = [
-  'docker-compose.yml',
-  'docker-compose.yaml',
-  'Dockerfile.dev',
-  'Dockerfile.worker.dev',
+  "docker-compose.yml",
+  "docker-compose.yaml",
+  "Dockerfile.dev",
+  "Dockerfile.worker.dev",
 ];

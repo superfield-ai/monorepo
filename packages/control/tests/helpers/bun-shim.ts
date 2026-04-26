@@ -9,12 +9,20 @@
  * This replaces per-test globalThis.Bun patching (Issue #23).
  */
 
-if (typeof globalThis.Bun === 'undefined') {
+if (typeof globalThis.Bun === "undefined") {
   const noop = () => {};
   (globalThis as Record<string, unknown>).Bun = {
     spawn: (..._args: unknown[]) => ({
-      stdout: new ReadableStream({ start(c) { c.close(); } }),
-      stderr: new ReadableStream({ start(c) { c.close(); } }),
+      stdout: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
+      stderr: new ReadableStream({
+        start(c) {
+          c.close();
+        },
+      }),
       exited: Promise.resolve(0),
       pid: 0,
       exitCode: null,

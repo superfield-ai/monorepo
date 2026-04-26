@@ -14,10 +14,18 @@
  *   - api.test.ts asserts that CORS preflight OPTIONS requests receive 204 with correct headers
  */
 
-import { describe, it, expect, vi, beforeAll, afterAll, afterEach } from 'vitest';
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeAll,
+  afterAll,
+  afterEach,
+} from "vitest";
+import { mkdtempSync, writeFileSync, rmSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 // ── Temp directory for real filesystem calls ────────────────────────────────
 //
@@ -29,7 +37,7 @@ let tempDir: string;
 let originalRepoRoot: string | undefined;
 
 beforeAll(() => {
-  tempDir = mkdtempSync(join(tmpdir(), 'api-test-'));
+  tempDir = mkdtempSync(join(tmpdir(), "api-test-"));
   originalRepoRoot = process.env.SUPERFIELD_REPO_ROOT;
   process.env.SUPERFIELD_REPO_ROOT = tempDir;
 });
@@ -49,11 +57,11 @@ afterAll(() => {
 // subprocess output (Bun.spawn in agent.ts and git.ts) without mocking the
 // modules themselves.
 
-vi.mock('../../lib/response', async (importOriginal) => {
-  const original = await importOriginal<typeof import('../../lib/response')>();
+vi.mock("../../lib/response", async (importOriginal) => {
+  const original = await importOriginal<typeof import("../../lib/response")>();
   return {
     ...original,
-    readProcStdout: vi.fn().mockResolvedValue(''),
+    readProcStdout: vi.fn().mockResolvedValue(""),
   };
 });
 
@@ -63,7 +71,11 @@ function makeReq(path: string, options: RequestInit = {}): Request {
   return new Request(`http://localhost:7000${path}`, options);
 }
 
-function makeAuthedReq(path: string, cookie: string, options: RequestInit = {}): Request {
+function makeAuthedReq(
+  path: string,
+  cookie: string,
+  options: RequestInit = {},
+): Request {
   return new Request(`http://localhost:7000${path}`, {
     ...options,
     headers: {
@@ -75,88 +87,91 @@ function makeAuthedReq(path: string, cookie: string, options: RequestInit = {}):
 
 /** Register a user and return the JWT token string. */
 async function getAuthToken(): Promise<string> {
-  const { handleAuthRequest } = await import('../../src/auth');
+  const { handleAuthRequest } = await import("../../src/auth");
   const username = `api_test_${Date.now()}_${Math.random().toString(36).slice(2)}`;
-  const regReq = new Request('http://localhost:7000/api/auth/register', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password: 'pass' }),
+  const regReq = new Request("http://localhost:7000/api/auth/register", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password: "pass" }),
   });
   const regRes = await handleAuthRequest(regReq, new URL(regReq.url));
-  const cookie = regRes!.headers.get('Set-Cookie')!;
-  return cookie.split(';')[0].replace('superfield_auth=', '');
+  const cookie = regRes!.headers.get("Set-Cookie")!;
+  return cookie.split(";")[0].replace("superfield_auth=", "");
 }
 
 /** Create a .studio file in the temp directory. */
-function createStudioFile(content: { sessionId: string; branch: string }): void {
-  writeFileSync(join(tempDir, '.studio'), JSON.stringify(content));
+function createStudioFile(content: {
+  sessionId: string;
+  branch: string;
+}): void {
+  writeFileSync(join(tempDir, ".studio"), JSON.stringify(content));
 }
 
 /** Remove the .studio file from the temp directory. */
 function removeStudioFile(): void {
-  rmSync(join(tempDir, '.studio'), { force: true });
+  rmSync(join(tempDir, ".studio"), { force: true });
 }
 
 // ── handleControlRequest — unauthenticated ─────────────────────────────────────
 
-describe('handleControlRequest — unauthenticated requests', () => {
+describe("handleControlRequest — unauthenticated requests", () => {
   afterEach(() => {
     vi.clearAllMocks();
     removeStudioFile();
   });
 
-  it('returns 401 for GET /studio/status without auth cookie', async () => {
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeReq('/studio/status');
+  it("returns 401 for GET /studio/status without auth cookie", async () => {
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeReq("/studio/status");
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res).not.toBeNull();
     expect(res!.status).toBe(401);
   });
 
-  it('returns 401 for POST /studio/chat without auth cookie', async () => {
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeReq('/studio/chat', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'hello' }),
+  it("returns 401 for POST /studio/chat without auth cookie", async () => {
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeReq("/studio/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "hello" }),
     });
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res!.status).toBe(401);
   });
 
-  it('returns 401 for POST /studio/rollback without auth cookie', async () => {
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeReq('/studio/rollback', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ hash: 'abc1234' }),
+  it("returns 401 for POST /studio/rollback without auth cookie", async () => {
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeReq("/studio/rollback", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ hash: "abc1234" }),
     });
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res!.status).toBe(401);
   });
 
-  it('returns 401 for GET /studio/commits without auth cookie', async () => {
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeReq('/studio/commits');
+  it("returns 401 for GET /studio/commits without auth cookie", async () => {
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeReq("/studio/commits");
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res!.status).toBe(401);
   });
 
-  it('returns 401 for POST /studio/reset without auth cookie', async () => {
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeReq('/studio/reset', { method: 'POST' });
+  it("returns 401 for POST /studio/reset without auth cookie", async () => {
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeReq("/studio/reset", { method: "POST" });
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res!.status).toBe(401);
   });
 
-  it('returns null for non-/studio paths', async () => {
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeReq('/api/auth/login', { method: 'POST' });
+  it("returns null for non-/studio paths", async () => {
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeReq("/api/auth/login", { method: "POST" });
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res).toBeNull();
@@ -165,12 +180,12 @@ describe('handleControlRequest — unauthenticated requests', () => {
 
 // ── handleControlRequest — CORS preflight ──────────────────────────────────────
 
-describe('handleAuthRequest — CORS preflight via auth module', () => {
-  it('returns 204 for OPTIONS to /api/auth/login', async () => {
-    const { handleAuthRequest } = await import('../../src/auth');
-    const req = new Request('http://localhost:7000/api/auth/login', {
-      method: 'OPTIONS',
-      headers: { Origin: 'http://localhost:5174' },
+describe("handleAuthRequest — CORS preflight via auth module", () => {
+  it("returns 204 for OPTIONS to /api/auth/login", async () => {
+    const { handleAuthRequest } = await import("../../src/auth");
+    const req = new Request("http://localhost:7000/api/auth/login", {
+      method: "OPTIONS",
+      headers: { Origin: "http://localhost:5174" },
     });
     const url = new URL(req.url);
     const res = await handleAuthRequest(req, url);
@@ -178,42 +193,44 @@ describe('handleAuthRequest — CORS preflight via auth module', () => {
     expect(res!.status).toBe(204);
   });
 
-  it('OPTIONS response includes Access-Control-Allow-Methods', async () => {
-    const { handleAuthRequest } = await import('../../src/auth');
-    const req = new Request('http://localhost:7000/api/auth/register', {
-      method: 'OPTIONS',
+  it("OPTIONS response includes Access-Control-Allow-Methods", async () => {
+    const { handleAuthRequest } = await import("../../src/auth");
+    const req = new Request("http://localhost:7000/api/auth/register", {
+      method: "OPTIONS",
     });
     const url = new URL(req.url);
     const res = await handleAuthRequest(req, url);
-    expect(res!.headers.get('Access-Control-Allow-Methods')).toBeTruthy();
+    expect(res!.headers.get("Access-Control-Allow-Methods")).toBeTruthy();
   });
 
-  it('OPTIONS response includes Access-Control-Allow-Origin', async () => {
-    const { handleAuthRequest } = await import('../../src/auth');
-    const req = new Request('http://localhost:7000/api/auth/register', {
-      method: 'OPTIONS',
-      headers: { Origin: 'http://custom-origin.com' },
+  it("OPTIONS response includes Access-Control-Allow-Origin", async () => {
+    const { handleAuthRequest } = await import("../../src/auth");
+    const req = new Request("http://localhost:7000/api/auth/register", {
+      method: "OPTIONS",
+      headers: { Origin: "http://custom-origin.com" },
     });
     const url = new URL(req.url);
     const res = await handleAuthRequest(req, url);
-    expect(res!.headers.get('Access-Control-Allow-Origin')).toBe('http://custom-origin.com');
+    expect(res!.headers.get("Access-Control-Allow-Origin")).toBe(
+      "http://custom-origin.com",
+    );
   });
 });
 
 // ── handleControlRequest — authenticated /studio/status ───────────────────────
 
-describe('handleControlRequest — authenticated requests', () => {
+describe("handleControlRequest — authenticated requests", () => {
   afterEach(() => {
     vi.clearAllMocks();
     removeStudioFile();
   });
 
-  it('GET /studio/status returns active:false when .studio file is absent', async () => {
+  it("GET /studio/status returns active:false when .studio file is absent", async () => {
     removeStudioFile(); // ensure no .studio file
 
     const token = await getAuthToken();
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeAuthedReq('/studio/status', token);
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeAuthedReq("/studio/status", token);
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res).not.toBeNull();
@@ -227,21 +244,21 @@ describe('handleControlRequest — authenticated requests', () => {
 //
 // Issue #23: each server unit test file includes at least 2 negative-path cases.
 
-describe('handleControlRequest — negative paths', () => {
+describe("handleControlRequest — negative paths", () => {
   afterEach(() => {
     vi.clearAllMocks();
     removeStudioFile();
   });
 
-  it('returns 400 for POST /studio/chat with malformed JSON body', async () => {
+  it("returns 400 for POST /studio/chat with malformed JSON body", async () => {
     const token = await getAuthToken();
-    createStudioFile({ sessionId: 'sess_1', branch: 'feat/test' });
+    createStudioFile({ sessionId: "sess_1", branch: "feat/test" });
 
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeAuthedReq('/studio/chat', token, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: '<<<not json>>>',
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeAuthedReq("/studio/chat", token, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "<<<not json>>>",
     });
     const url = new URL(req.url);
     // api.ts calls req.json() which throws on invalid JSON — the handler
@@ -258,14 +275,14 @@ describe('handleControlRequest — negative paths', () => {
     }
   });
 
-  it('returns 400 for POST /studio/rollback with missing hash field', async () => {
+  it("returns 400 for POST /studio/rollback with missing hash field", async () => {
     const token = await getAuthToken();
-    createStudioFile({ sessionId: 'sess_1', branch: 'feat/test' });
+    createStudioFile({ sessionId: "sess_1", branch: "feat/test" });
 
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeAuthedReq('/studio/rollback', token, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeAuthedReq("/studio/rollback", token, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}), // missing hash field
     });
     const url = new URL(req.url);
@@ -273,33 +290,33 @@ describe('handleControlRequest — negative paths', () => {
     expect(res).not.toBeNull();
     expect(res!.status).toBe(400);
     const body = (await res!.json()) as { error: string };
-    expect(body.error).toContain('hash');
+    expect(body.error).toContain("hash");
   });
 
-  it('returns 400 for POST /studio/chat with empty message string', async () => {
+  it("returns 400 for POST /studio/chat with empty message string", async () => {
     const token = await getAuthToken();
-    createStudioFile({ sessionId: 'sess_1', branch: 'feat/test' });
+    createStudioFile({ sessionId: "sess_1", branch: "feat/test" });
 
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeAuthedReq('/studio/chat', token, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: '' }),
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeAuthedReq("/studio/chat", token, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "" }),
     });
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res).not.toBeNull();
     expect(res!.status).toBe(400);
     const body = (await res!.json()) as { error: string };
-    expect(body.error).toContain('message');
+    expect(body.error).toContain("message");
   });
 
-  it('returns 403 when studio mode is not active for authenticated GET /studio/commits', async () => {
+  it("returns 403 when studio mode is not active for authenticated GET /studio/commits", async () => {
     const token = await getAuthToken();
     removeStudioFile(); // ensure no .studio file
 
-    const { handleControlRequest } = await import('../../src/api');
-    const req = makeAuthedReq('/studio/commits', token);
+    const { handleControlRequest } = await import("../../src/api");
+    const req = makeAuthedReq("/studio/commits", token);
     const url = new URL(req.url);
     const res = await handleControlRequest(req, url);
     expect(res).not.toBeNull();

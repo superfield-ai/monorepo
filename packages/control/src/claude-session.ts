@@ -54,21 +54,21 @@
  *     is currently a no-op stub.
  */
 
-import { appendFileSync, mkdirSync } from 'fs';
-import { join, resolve } from 'path';
-import { buildAllowedToolsFlag } from './permissions';
-import type { ControlMode } from './helpers';
+import { appendFileSync, mkdirSync } from "fs";
+import { join, resolve } from "path";
+import { buildAllowedToolsFlag } from "./permissions";
+import type { ControlMode } from "./helpers";
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
-import { REPO_ROOT } from './agent';
+import { REPO_ROOT } from "./agent";
 
 /**
  * Resolve the log directory from CONTROL_LOG_DIR (defaults to ../studio-logs
  * relative to REPO_ROOT).
  */
 function resolveLogDir(): string {
-  const raw = process.env.CONTROL_LOG_DIR ?? '../studio-logs';
+  const raw = process.env.CONTROL_LOG_DIR ?? "../studio-logs";
   // If it is an absolute path, use it directly. Otherwise resolve relative to
   // REPO_ROOT so the default of "../studio-logs" lands outside the git tree.
   return resolve(REPO_ROOT, raw);
@@ -90,11 +90,11 @@ function resolveLogDir(): string {
  * @returns A session key string suitable for the --session-key Claude CLI flag.
  */
 export function generateSessionKey(): string {
-  const nowHex = Date.now().toString(16).padStart(12, '0');
+  const nowHex = Date.now().toString(16).padStart(12, "0");
   const randBytes = crypto.getRandomValues(new Uint8Array(8));
   const randHex = Array.from(randBytes)
-    .map((b) => b.toString(16).padStart(2, '0'))
-    .join('');
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
   return `${nowHex}-${randHex}`;
 }
 
@@ -130,8 +130,8 @@ export function appendTurnLog(entry: TurnLogEntry, logDir?: string): void {
 
   const date = entry.timestamp.slice(0, 10); // YYYY-MM-DD from entry timestamp
   const filePath = join(dir, `${date}.jsonl`);
-  const line = JSON.stringify(entry) + '\n';
-  appendFileSync(filePath, line, 'utf8');
+  const line = JSON.stringify(entry) + "\n";
+  appendFileSync(filePath, line, "utf8");
 }
 
 // ── Post-turn hook ────────────────────────────────────────────────────────────
@@ -146,21 +146,15 @@ export function appendTurnLog(entry: TurnLogEntry, logDir?: string): void {
  */
 export async function getChangedFiles(baseRef: string): Promise<string[]> {
   const repoRoot = process.env.SUPERFIELD_REPO_ROOT ?? REPO_ROOT;
-  const proc = Bun.spawn(
-    ['git', 'diff', '--name-only', baseRef],
-    {
-      cwd: repoRoot,
-      stdout: 'pipe',
-      stderr: 'pipe',
-      env: process.env,
-    },
-  );
+  const proc = Bun.spawn(["git", "diff", "--name-only", baseRef], {
+    cwd: repoRoot,
+    stdout: "pipe",
+    stderr: "pipe",
+    env: process.env,
+  });
   const text = await new Response(proc.stdout).text();
   await proc.exited;
-  return text
-    .trim()
-    .split('\n')
-    .filter(Boolean);
+  return text.trim().split("\n").filter(Boolean);
 }
 
 /**
@@ -178,12 +172,12 @@ export async function getChangedFiles(baseRef: string): Promise<string[]> {
 export function detectAffectedServices(files: string[]): string[] {
   const services = new Set<string>();
   for (const file of files) {
-    if (file.startsWith('apps/server/')) services.add('api');
-    if (file.startsWith('apps/worker/')) services.add('agents');
-    if (file.startsWith('apps/web/')) services.add('web');
-    if (file.startsWith('packages/')) {
-      services.add('api');
-      services.add('agents');
+    if (file.startsWith("apps/server/")) services.add("api");
+    if (file.startsWith("apps/worker/")) services.add("agents");
+    if (file.startsWith("apps/web/")) services.add("web");
+    if (file.startsWith("packages/")) {
+      services.add("api");
+      services.add("agents");
     }
   }
   return Array.from(services);
@@ -203,7 +197,9 @@ export function detectAffectedServices(files: string[]): string[] {
 export async function triggerHotSwap(services: string[]): Promise<number> {
   if (services.length === 0) return 0;
   // Stub: real hot-swap is implemented in hot-swap.ts and wired by a separate issue.
-  console.log(`[studio] hot-swap stub: would restart services: ${services.join(', ')}`);
+  console.log(
+    `[studio] hot-swap stub: would restart services: ${services.join(", ")}`,
+  );
   return 0;
 }
 
@@ -249,16 +245,16 @@ export async function postTurnHook(preRef: string): Promise<{
  */
 export async function capturePreTurnRef(): Promise<string> {
   const repoRoot = REPO_ROOT;
-  const proc = Bun.spawn(['git', 'rev-parse', 'HEAD'], {
+  const proc = Bun.spawn(["git", "rev-parse", "HEAD"], {
     cwd: repoRoot,
-    stdout: 'pipe',
-    stderr: 'pipe',
+    stdout: "pipe",
+    stderr: "pipe",
     env: process.env,
   });
   const text = await new Response(proc.stdout).text();
   await proc.exited;
   const hash = text.trim();
-  return hash || 'HEAD';
+  return hash || "HEAD";
 }
 
 // ── SSE streaming ─────────────────────────────────────────────────────────────
@@ -291,20 +287,20 @@ export function streamTurn(
   message: string,
   sessionKey: string,
   logDir?: string,
-  mode: ControlMode = 'design',
+  mode: ControlMode = "design",
   _fetch: typeof fetch = globalThis.fetch,
 ): ReadableStream<Uint8Array> {
   const encoder = new TextEncoder();
 
   function sseEvent(data: string, eventName?: string): Uint8Array {
-    const eventLine = eventName ? `event: ${eventName}\n` : '';
+    const eventLine = eventName ? `event: ${eventName}\n` : "";
     return encoder.encode(`${eventLine}data: ${data}\n\n`);
   }
 
   return new ReadableStream<Uint8Array>({
     async start(controller) {
-      let response = '';
-      let preRef = 'HEAD';
+      let response = "";
+      let preRef = "HEAD";
       let capturedSessionId = sessionKey;
 
       try {
@@ -314,14 +310,15 @@ export function streamTurn(
       }
 
       const repoRoot = process.env.SUPERFIELD_REPO_ROOT ?? REPO_ROOT;
-      const superfieldApiUrl = process.env.SUPERFIELD_API_URL ?? 'http://127.0.0.1:7837';
+      const superfieldApiUrl =
+        process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
       const allowedToolsFlag = buildAllowedToolsFlag(mode);
 
       let apiRes: Response;
       try {
         apiRes = await _fetch(`${superfieldApiUrl}/studio/run`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             message,
             repoRoot,
@@ -332,13 +329,18 @@ export function streamTurn(
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        controller.enqueue(sseEvent(msg, 'error'));
+        controller.enqueue(sseEvent(msg, "error"));
         controller.close();
         return;
       }
 
       if (!apiRes.ok || !apiRes.body) {
-        controller.enqueue(sseEvent(`Superfield API unavailable: HTTP ${apiRes.status}`, 'error'));
+        controller.enqueue(
+          sseEvent(
+            `Superfield API unavailable: HTTP ${apiRes.status}`,
+            "error",
+          ),
+        );
         controller.close();
         return;
       }
@@ -346,41 +348,43 @@ export function streamTurn(
       // Parse SSE frames from the API and forward to the browser.
       const reader = apiRes.body.getReader();
       const decoder = new TextDecoder();
-      let buffer = '';
-      let currentEvent = '';
+      let buffer = "";
+      let currentEvent = "";
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
 
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
+        const lines = buffer.split("\n");
+        buffer = lines.pop() ?? "";
 
         for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            currentEvent = line.slice('event: '.length).trim();
-          } else if (line.startsWith('data: ')) {
-            const data = line.slice('data: '.length);
-            if (currentEvent === 'session') {
+          if (line.startsWith("event: ")) {
+            currentEvent = line.slice("event: ".length).trim();
+          } else if (line.startsWith("data: ")) {
+            const data = line.slice("data: ".length);
+            if (currentEvent === "session") {
               // Capture the sessionId for later use.
               try {
                 const parsed = JSON.parse(data) as { sessionId?: string };
                 if (parsed.sessionId) capturedSessionId = parsed.sessionId;
-              } catch { /* ignore parse errors */ }
-              currentEvent = '';
-            } else if (currentEvent === 'error') {
-              controller.enqueue(sseEvent(data, 'error'));
+              } catch {
+                /* ignore parse errors */
+              }
+              currentEvent = "";
+            } else if (currentEvent === "error") {
+              controller.enqueue(sseEvent(data, "error"));
               controller.close();
               return;
-            } else if (currentEvent === 'done') {
+            } else if (currentEvent === "done") {
               // Don't forward the API's done — we emit our own after post-turn hook.
-              currentEvent = '';
+              currentEvent = "";
             } else {
               // Plain data chunk — forward to browser and accumulate.
-              response += data + '\n';
+              response += data + "\n";
               controller.enqueue(sseEvent(data));
-              currentEvent = '';
+              currentEvent = "";
             }
           }
         }
@@ -400,7 +404,7 @@ export function streamTurn(
         restartDurationMs = hookResult.restartDurationMs;
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
-        console.error('[studio] post-turn hook error:', msg);
+        console.error("[studio] post-turn hook error:", msg);
       }
 
       // Append JSONL log entry.
@@ -417,11 +421,11 @@ export function streamTurn(
           logDir,
         );
       } catch (err) {
-        console.error('[studio] JSONL log error:', err);
+        console.error("[studio] JSONL log error:", err);
       }
 
       // Signal turn completion.
-      controller.enqueue(sseEvent('', 'done'));
+      controller.enqueue(sseEvent("", "done"));
       controller.close();
     },
 

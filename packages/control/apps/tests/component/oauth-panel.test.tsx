@@ -16,11 +16,14 @@
  * Canonical docs: test-plan.md §Layer 2 / OAuthPanel.
  */
 
-import React from 'react';
-import { render } from 'vitest-browser-react';
-import { afterEach, expect, test, vi } from 'vitest';
-import { OAuthPanel } from '../../src/components/OAuthPanel';
-import type { OAuthController, OAuthControllerState } from '../../src/controllers/OAuthController';
+import React from "react";
+import { render } from "vitest-browser-react";
+import { afterEach, expect, test, vi } from "vitest";
+import { OAuthPanel } from "../../src/components/OAuthPanel";
+import type {
+  OAuthController,
+  OAuthControllerState,
+} from "../../src/controllers/OAuthController";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -37,7 +40,7 @@ function makeOAuthControllerMock(
   setState: (partial: Partial<OAuthControllerState>) => void;
 } {
   const defaultState: OAuthControllerState = {
-    status: 'disconnected',
+    status: "disconnected",
     oauthUrl: null,
     error: null,
     loading: false,
@@ -77,30 +80,32 @@ function makeOAuthControllerMock(
 // OAuthPanel tests
 // ---------------------------------------------------------------------------
 
-test('shows disconnected state with Connect button', async () => {
-  const { controller } = makeOAuthControllerMock({ status: 'disconnected' });
+test("shows disconnected state with Connect button", async () => {
+  const { controller } = makeOAuthControllerMock({ status: "disconnected" });
 
   const screen = render(<OAuthPanel controller={controller} />);
 
   // Panel is visible with "Connect Claude Code" label and Connect button
   await expect.element(screen.getByText(/Connect Claude Code/)).toBeVisible();
-  await expect.element(screen.getByRole('button', { name: /Connect/ })).toBeVisible();
+  await expect
+    .element(screen.getByRole("button", { name: /Connect/ }))
+    .toBeVisible();
 });
 
-test('Initiate button calls controller.initiateOAuth()', async () => {
-  const { controller } = makeOAuthControllerMock({ status: 'disconnected' });
+test("Initiate button calls controller.initiateOAuth()", async () => {
+  const { controller } = makeOAuthControllerMock({ status: "disconnected" });
 
   const screen = render(<OAuthPanel controller={controller} />);
 
-  await screen.getByRole('button', { name: /Connect/ }).click();
+  await screen.getByRole("button", { name: /Connect/ }).click();
 
   expect(controller.initiateOAuth).toHaveBeenCalledTimes(1);
 });
 
-test('displays authorization URL from pending state', async () => {
-  const authUrl = 'https://claude.ai/oauth/authorize?state=test123';
+test("displays authorization URL from pending state", async () => {
+  const authUrl = "https://claude.ai/oauth/authorize?state=test123";
   const { controller } = makeOAuthControllerMock({
-    status: 'pending',
+    status: "pending",
     oauthUrl: authUrl,
     error: null,
   });
@@ -110,38 +115,38 @@ test('displays authorization URL from pending state', async () => {
   await expect.element(screen.getByText(authUrl)).toBeVisible();
 });
 
-test('code input calls controller.completeOAuth with entered code', async () => {
-  const authUrl = 'https://claude.ai/oauth/authorize?state=test456';
+test("code input calls controller.completeOAuth with entered code", async () => {
+  const authUrl = "https://claude.ai/oauth/authorize?state=test456";
   const { controller } = makeOAuthControllerMock({
-    status: 'pending',
+    status: "pending",
     oauthUrl: authUrl,
   });
 
   const screen = render(<OAuthPanel controller={controller} />);
 
-  await screen.getByPlaceholder('Confirmation code').fill('MY-CODE-123');
-  await screen.getByRole('button', { name: /Submit/ }).click();
+  await screen.getByPlaceholder("Confirmation code").fill("MY-CODE-123");
+  await screen.getByRole("button", { name: /Submit/ }).click();
 
-  expect(controller.completeOAuth).toHaveBeenCalledWith('MY-CODE-123');
+  expect(controller.completeOAuth).toHaveBeenCalledWith("MY-CODE-123");
 });
 
-test('shows connected state when status is connected', async () => {
-  const { controller } = makeOAuthControllerMock({ status: 'connected' });
+test("shows connected state when status is connected", async () => {
+  const { controller } = makeOAuthControllerMock({ status: "connected" });
 
   const screen = render(<OAuthPanel controller={controller} />);
 
   await expect.element(screen.getByText(/Claude Code Connected/)).toBeVisible();
 });
 
-test('shows error message from error state', async () => {
+test("shows error message from error state", async () => {
   const { controller } = makeOAuthControllerMock({
-    status: 'error',
-    error: 'Authentication failed — please try again',
+    status: "error",
+    error: "Authentication failed — please try again",
   });
 
   const screen = render(<OAuthPanel controller={controller} />);
 
-  await expect.element(
-    screen.getByText('Authentication failed — please try again'),
-  ).toBeVisible();
+  await expect
+    .element(screen.getByText("Authentication failed — please try again"))
+    .toBeVisible();
 });

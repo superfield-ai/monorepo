@@ -20,7 +20,7 @@
  *
  * Canonical docs: test-plan.md §Layer 1b (unit) / §Layer 2 (component).
  */
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   // Root Vite configuration for apps/web. Project definitions (unit and

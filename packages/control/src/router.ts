@@ -59,15 +59,15 @@
  * See also: docs/studio-e2e-infrastructure.md for the full E2E test setup.
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
-import type { ControlConfig } from './config';
-import { vlog } from './config';
-import { handleAuthRequest } from './auth';
-import { handleControlRequest } from './api';
-import { clusterStatusSseResponse } from './cluster-status-sse';
-import { type WsData } from './control-ws';
-import { handleOrchestratorRequest } from './orchestrator';
+import { existsSync } from "fs";
+import { join } from "path";
+import type { ControlConfig } from "./config";
+import { vlog } from "./config";
+import { handleAuthRequest } from "./auth";
+import { handleControlRequest } from "./api";
+import { clusterStatusSseResponse } from "./cluster-status-sse";
+import { type WsData } from "./control-ws";
+import { handleOrchestratorRequest } from "./orchestrator";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -90,18 +90,19 @@ export async function proxyRequest(
   upstreamBase: string,
   stripPrefix: string,
 ): Promise<Response> {
-  const tail = url.pathname.slice(stripPrefix.length) || '/';
+  const tail = url.pathname.slice(stripPrefix.length) || "/";
   const upstreamUrl = `${upstreamBase}${tail}${url.search}`;
 
   const proxyHeaders = new Headers(req.headers);
   // Prevent forwarding the original Host header — the upstream will set its own.
-  proxyHeaders.delete('host');
+  proxyHeaders.delete("host");
 
   try {
     const upstreamRes = await fetch(upstreamUrl, {
       method: req.method,
       headers: proxyHeaders,
-      body: req.method !== 'GET' && req.method !== 'HEAD' ? req.body : undefined,
+      body:
+        req.method !== "GET" && req.method !== "HEAD" ? req.body : undefined,
     });
 
     // Clone the upstream response so we can add our own headers if needed.
@@ -115,10 +116,13 @@ export async function proxyRequest(
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     console.error(`[studio] proxy error → ${upstreamUrl}: ${message}`);
-    return new Response(JSON.stringify({ error: 'Bad Gateway', upstream: upstreamUrl }), {
-      status: 502,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: "Bad Gateway", upstream: upstreamUrl }),
+      {
+        status: 502,
+        headers: { "Content-Type": "application/json" },
+      },
+    );
   }
 }
 
@@ -138,12 +142,13 @@ export async function serveStaticAsset(
 ): Promise<Response> {
   if (!assetsDir) {
     return new Response(
-      '<!doctype html><html><body><h1>Studio Server</h1><p>Browser UI assets not configured (CONTROL_ASSETS_DIR is unset).</p></body></html>',
-      { status: 200, headers: { 'Content-Type': 'text/html' } },
+      "<!doctype html><html><body><h1>Studio Server</h1><p>Browser UI assets not configured (CONTROL_ASSETS_DIR is unset).</p></body></html>",
+      { status: 200, headers: { "Content-Type": "text/html" } },
     );
   }
 
-  const relativePath = pathname === '/' ? 'index.html' : pathname.replace(/^\//, '');
+  const relativePath =
+    pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
   const filePath = join(assetsDir, relativePath);
 
   if (existsSync(filePath)) {
@@ -152,12 +157,12 @@ export async function serveStaticAsset(
   }
 
   // Fallback to index.html for client-side routing.
-  const indexPath = join(assetsDir, 'index.html');
+  const indexPath = join(assetsDir, "index.html");
   if (existsSync(indexPath)) {
     return new Response(Bun.file(indexPath));
   }
 
-  return new Response('Not Found', { status: 404 });
+  return new Response("Not Found", { status: 404 });
 }
 
 /**
@@ -201,9 +206,9 @@ export async function route(
   const { pathname } = url;
 
   // WebSocket upgrade — browser chat via WS instead of SSE.
-  if (req.method === 'GET' && pathname === '/studio/ws') {
+  if (req.method === "GET" && pathname === "/studio/ws") {
     if (!server) {
-      return new Response('WebSocket not available', { status: 501 });
+      return new Response("WebSocket not available", { status: 501 });
     }
     const upgraded = server.upgrade(req, {
       data: {
@@ -212,98 +217,106 @@ export async function route(
       } satisfies WsData,
     });
     if (!upgraded) {
-      return new Response('WebSocket upgrade failed', { status: 400 });
+      return new Response("WebSocket upgrade failed", { status: 400 });
     }
     // Bun consumes the request after upgrade; return undefined cast to Response.
     return undefined as unknown as Response;
   }
 
   // REST steer fallback (for tests, curl, and non-WS clients).
-  if (req.method === 'POST' && pathname === '/studio/steer') {
+  if (req.method === "POST" && pathname === "/studio/steer") {
     const body = (await req.json().catch(() => ({}))) as { context?: string };
     if (!body.context) {
-      return new Response(JSON.stringify({ error: 'context is required' }), {
+      return new Response(JSON.stringify({ error: "context is required" }), {
         status: 400,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     }
     try {
       const res = await fetch(`${config.superfieldApiUrl}/steer/context`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ context: body.context }),
       });
       const json = await res.json();
       return new Response(JSON.stringify(json), {
         status: res.status,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       return new Response(JSON.stringify({ error: message }), {
         status: 502,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     }
   }
 
   // Rebuild endpoint — triggers rebuildAndRestart() for the cluster.
   // See: docs/cluster-definition.md — "On a code change"
-  if (req.method === 'POST' && pathname === '/studio/rebuild') {
+  if (req.method === "POST" && pathname === "/studio/rebuild") {
     try {
-      const { rebuildAndRestart } = await import('../../control-core/image-builder');
+      const { rebuildAndRestart } =
+        await import("../../control-core/image-builder");
       const sourceDir = process.env.CONTROL_SOURCE_DIR ?? process.cwd();
       const namespace = config.clusterContext;
 
       rebuildAndRestart({
         sourceDir,
-        k8sDir: 'k8s',
+        k8sDir: "k8s",
         namespace,
-        verbose: config.verbose,
+        verbose: config.verbose ?? false,
       });
 
       return new Response(
-        JSON.stringify({ ok: true, message: 'Rebuild and restart completed' }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
+        JSON.stringify({ ok: true, message: "Rebuild and restart completed" }),
+        { status: 200, headers: { "Content-Type": "application/json" } },
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return new Response(
-        JSON.stringify({ ok: false, message }),
-        { status: 500, headers: { 'Content-Type': 'application/json' } },
-      );
+      return new Response(JSON.stringify({ ok: false, message }), {
+        status: 500,
+        headers: { "Content-Type": "application/json" },
+      });
     }
   }
 
   // SSE stream endpoint for Claude CLI turns.
   // Canonical spec: docs/studio-mode.md — "Claude CLI Integration"
-  if (req.method === 'GET' && pathname === '/studio/chat/stream') {
-    const { streamTurn, SESSION_KEY } = await import('./claude-session');
-    const message = url.searchParams.get('message') ?? '';
+  if (req.method === "GET" && pathname === "/studio/chat/stream") {
+    const { streamTurn, SESSION_KEY } = await import("./claude-session");
+    const message = url.searchParams.get("message") ?? "";
     if (!message.trim()) {
-      return new Response('message query parameter is required', { status: 400 });
+      return new Response("message query parameter is required", {
+        status: 400,
+      });
     }
-    const modeParam = url.searchParams.get('mode');
-    const mode = modeParam === 'question' ? 'question' as const : 'design' as const;
+    const modeParam = url.searchParams.get("mode");
+    const mode =
+      modeParam === "question" ? ("question" as const) : ("design" as const);
     const stream = streamTurn(message, SESSION_KEY, config.logDir, mode);
     return new Response(stream, {
       status: 200,
       headers: {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
       },
     });
   }
 
   // SSE stream for aggregate cluster health status.
   // Canonical: apps/server/src/cluster-status-sse.ts
-  if (req.method === 'GET' && pathname === '/studio/cluster/events') {
+  if (req.method === "GET" && pathname === "/studio/cluster/events") {
     return clusterStatusSseResponse(config.clusterContext);
   }
 
   // Orchestrator endpoints — manage the dev loop child process.
-  const orchResponse = await handleOrchestratorRequest(req, url, config.superfieldApiUrl);
+  const orchResponse = await handleOrchestratorRequest(
+    req,
+    url,
+    config.superfieldApiUrl ?? "http://127.0.0.1:7837",
+  );
   if (orchResponse) return orchResponse;
 
   // Auth endpoints — handled locally, not proxied upstream.
@@ -314,16 +327,19 @@ export async function route(
   const studioResponse = await handleControlRequest(req, url);
   if (studioResponse) return studioResponse;
 
-  if (pathname.startsWith('/app/') || pathname === '/app') {
+  if (pathname.startsWith("/app/") || pathname === "/app") {
     vlog(config, `Proxying ${pathname} → ${config.webServiceUrl} (strip /app)`);
-    return proxyRequest(req, url, config.webServiceUrl, '/app');
+    return proxyRequest(req, url, config.webServiceUrl, "/app");
   }
 
-  if (pathname.startsWith('/api/') || pathname === '/api') {
+  if (pathname.startsWith("/api/") || pathname === "/api") {
     vlog(config, `Proxying ${pathname} → ${config.apiServiceUrl} (strip none)`);
-    return proxyRequest(req, url, config.apiServiceUrl, '');
+    return proxyRequest(req, url, config.apiServiceUrl, "");
   }
 
-  vlog(config, `Serving static asset: ${pathname} from ${config.assetsDir ?? '(unset)'}`);
+  vlog(
+    config,
+    `Serving static asset: ${pathname} from ${config.assetsDir ?? "(unset)"}`,
+  );
   return serveStaticAsset(pathname, config.assetsDir);
 }

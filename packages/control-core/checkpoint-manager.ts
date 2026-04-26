@@ -24,7 +24,7 @@
  * @see docs/studio-sessions.md
  */
 
-import { spawn } from './spawn';
+import { spawn } from "./spawn";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -74,7 +74,7 @@ export interface RollbackOptions {
  * An empty output means no changes.
  */
 export function hasChanges(worktreePath: string): boolean {
-  const result = spawn('git', ['status', '--porcelain'], { cwd: worktreePath });
+  const result = spawn("git", ["status", "--porcelain"], { cwd: worktreePath });
   if (result.status !== 0) {
     throw new Error(`git status failed: ${result.stderr.trim()}`);
   }
@@ -93,21 +93,23 @@ export function hasChanges(worktreePath: string): boolean {
  * @returns Result indicating whether a checkpoint was created.
  * @throws If git add or git commit fails.
  */
-export function createCheckpoint(opts: CreateCheckpointOptions): CreateCheckpointResult {
+export function createCheckpoint(
+  opts: CreateCheckpointOptions,
+): CreateCheckpointResult {
   if (!hasChanges(opts.worktreePath)) {
     return { created: false };
   }
 
   // Stage all changes.
-  const addResult = spawn('git', ['add', '-A'], { cwd: opts.worktreePath });
+  const addResult = spawn("git", ["add", "-A"], { cwd: opts.worktreePath });
   if (addResult.status !== 0) {
     throw new Error(`git add failed: ${addResult.stderr.trim()}`);
   }
 
   // Commit with the plain-language summary.
   const commitResult = spawn(
-    'git',
-    ['commit', '--no-verify', '-m', opts.summary],
+    "git",
+    ["commit", "--no-verify", "-m", opts.summary],
     { cwd: opts.worktreePath },
   );
   if (commitResult.status !== 0) {
@@ -115,7 +117,9 @@ export function createCheckpoint(opts: CreateCheckpointOptions): CreateCheckpoin
   }
 
   // Get the new commit hash.
-  const hashResult = spawn('git', ['rev-parse', '--short', 'HEAD'], { cwd: opts.worktreePath });
+  const hashResult = spawn("git", ["rev-parse", "--short", "HEAD"], {
+    cwd: opts.worktreePath,
+  });
   if (hashResult.status !== 0) {
     throw new Error(`git rev-parse failed: ${hashResult.stderr.trim()}`);
   }
@@ -138,13 +142,8 @@ export function createCheckpoint(opts: CreateCheckpointOptions): CreateCheckpoin
  */
 export function getTimeline(opts: TimelineOptions): CheckpointEntry[] {
   const result = spawn(
-    'git',
-    [
-      'log',
-      `${opts.baseRef}..HEAD`,
-      '--format=%h|%aI|%s',
-      '--reverse',
-    ],
+    "git",
+    ["log", `${opts.baseRef}..HEAD`, "--format=%h|%aI|%s", "--reverse"],
     { cwd: opts.worktreePath },
   );
 
@@ -166,11 +165,11 @@ export function getTimeline(opts: TimelineOptions): CheckpointEntry[] {
 export function parseTimelineOutput(output: string): CheckpointEntry[] {
   return output
     .trim()
-    .split('\n')
+    .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const firstPipe = line.indexOf('|');
-      const secondPipe = line.indexOf('|', firstPipe + 1);
+      const firstPipe = line.indexOf("|");
+      const secondPipe = line.indexOf("|", firstPipe + 1);
       if (firstPipe === -1 || secondPipe === -1) {
         return null;
       }
@@ -194,11 +193,9 @@ export function parseTimelineOutput(output: string): CheckpointEntry[] {
  * @throws If the reset fails.
  */
 export function rollbackToCheckpoint(opts: RollbackOptions): void {
-  const result = spawn(
-    'git',
-    ['reset', '--hard', opts.targetHash],
-    { cwd: opts.worktreePath },
-  );
+  const result = spawn("git", ["reset", "--hard", opts.targetHash], {
+    cwd: opts.worktreePath,
+  });
   if (result.status !== 0) {
     throw new Error(`git reset failed: ${result.stderr.trim()}`);
   }

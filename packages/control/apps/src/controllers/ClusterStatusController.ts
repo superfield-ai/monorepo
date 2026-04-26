@@ -17,15 +17,15 @@
  * No React imports.
  */
 
-export type ClusterStatus = 'healthy' | 'restarting' | 'degraded' | 'unknown';
+export type ClusterStatus = "healthy" | "restarting" | "degraded" | "unknown";
 
 export type ClusterStatusListener = (status: ClusterStatus) => void;
 
 const VALID_STATUSES: ReadonlySet<ClusterStatus> = new Set([
-  'healthy',
-  'restarting',
-  'degraded',
-  'unknown',
+  "healthy",
+  "restarting",
+  "degraded",
+  "unknown",
 ]);
 
 /**
@@ -40,12 +40,14 @@ const VALID_STATUSES: ReadonlySet<ClusterStatus> = new Set([
  *   ctrl.dispose();
  */
 export class ClusterStatusController {
-  private status: ClusterStatus = 'unknown';
+  private status: ClusterStatus = "unknown";
   private listeners: Set<ClusterStatusListener> = new Set();
   private source: EventSource | null = null;
   private readonly eventsUrl: string;
 
-  constructor({ eventsUrl = '/studio/cluster/events' }: { eventsUrl?: string } = {}) {
+  constructor({
+    eventsUrl = "/studio/cluster/events",
+  }: { eventsUrl?: string } = {}) {
     this.eventsUrl = eventsUrl;
   }
 
@@ -58,9 +60,11 @@ export class ClusterStatusController {
 
     this.source = new EventSource(this.eventsUrl);
 
-    this.source.addEventListener('cluster-status', (ev: MessageEvent) => {
+    this.source.addEventListener("cluster-status", (ev: MessageEvent) => {
       try {
-        const data = JSON.parse(ev.data as string) as { status?: ClusterStatus };
+        const data = JSON.parse(ev.data as string) as {
+          status?: ClusterStatus;
+        };
         if (data.status && VALID_STATUSES.has(data.status)) {
           this.setStatus(data.status);
         }
@@ -70,7 +74,7 @@ export class ClusterStatusController {
     });
 
     this.source.onerror = () => {
-      this.setStatus('unknown');
+      this.setStatus("unknown");
       // EventSource will automatically retry — no manual reconnect needed
     };
   }

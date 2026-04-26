@@ -24,8 +24,8 @@
  * | SUPERFIELD_API_URL       | http://127.0.0.1:7837 | Dev loop API base URL             |
  */
 
-import { join } from 'path';
-import { discoverServicePort } from '../../control-core/manifest-parser';
+import { join } from "path";
+import { discoverServicePort } from "../../control-core/manifest-parser";
 
 export interface ControlConfig {
   /** Port the studio server binds on (0.0.0.0:CONTROL_PORT). */
@@ -43,18 +43,18 @@ export interface ControlConfig {
   /** Absolute path to the compiled browser UI static assets. */
   assetsDir: string | undefined;
   /** When true, emit detailed diagnostic logs during startup and routing. */
-  verbose: boolean;
+  verbose?: boolean;
   /** Base URL of the superfield dev-loop API server (for agent turns and steering). */
-  superfieldApiUrl: string;
+  superfieldApiUrl?: string;
 }
 
 export function loadConfig(): ControlConfig {
-  const port = parseInt(process.env.CONTROL_PORT ?? '7000', 10);
-  const logDir = process.env.CONTROL_LOG_DIR ?? '../studio-logs';
-  const clusterContext = process.env.CONTROL_CLUSTER_CONTEXT ?? 'default';
-  const openBrowser = process.env.CONTROL_OPEN_BROWSER === '1';
+  const port = parseInt(process.env.CONTROL_PORT ?? "7000", 10);
+  const logDir = process.env.CONTROL_LOG_DIR ?? "../studio-logs";
+  const clusterContext = process.env.CONTROL_CLUSTER_CONTEXT ?? "default";
+  const openBrowser = process.env.CONTROL_OPEN_BROWSER === "1";
 
-  const webHost = process.env.CONTROL_WEB_SERVICE_HOST ?? '127.0.0.1';
+  const webHost = process.env.CONTROL_WEB_SERVICE_HOST ?? "127.0.0.1";
 
   // Derive the web service port from the app's k8s manifests when possible.
   // When SUPERFIELD_REPO_ROOT is set, read the "web" Service port directly from
@@ -68,7 +68,7 @@ export function loadConfig(): ControlConfig {
     let discovered: number | null = null;
     if (appRoot) {
       try {
-        discovered = discoverServicePort(join(appRoot, 'k8s'), 'web');
+        discovered = discoverServicePort(join(appRoot, "k8s"), "web");
       } catch {
         // Discovery is best-effort — fall through to default.
       }
@@ -78,13 +78,14 @@ export function loadConfig(): ControlConfig {
 
   const webServiceUrl = `http://${webHost}:${webPort}`;
 
-  const apiHost = process.env.CONTROL_API_SERVICE_HOST ?? '127.0.0.1';
-  const apiPort = parseInt(process.env.CONTROL_API_SERVICE_PORT ?? '31415', 10);
+  const apiHost = process.env.CONTROL_API_SERVICE_HOST ?? "127.0.0.1";
+  const apiPort = parseInt(process.env.CONTROL_API_SERVICE_PORT ?? "31415", 10);
   const apiServiceUrl = `http://${apiHost}:${apiPort}`;
 
   const assetsDir = process.env.CONTROL_ASSETS_DIR;
-  const verbose = process.env.CONTROL_VERBOSE === '1';
-  const superfieldApiUrl = process.env.SUPERFIELD_API_URL ?? 'http://127.0.0.1:7837';
+  const verbose = process.env.CONTROL_VERBOSE === "1";
+  const superfieldApiUrl =
+    process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
 
   return {
     port,
@@ -103,7 +104,10 @@ export function loadConfig(): ControlConfig {
  * Verbose logger — prints timestamped diagnostic messages when verbose mode
  * is enabled. No-ops silently otherwise.
  */
-export function vlog(config: Pick<ControlConfig, 'verbose'>, ...args: unknown[]): void {
+export function vlog(
+  config: Pick<ControlConfig, "verbose">,
+  ...args: unknown[]
+): void {
   if (!config.verbose) return;
   const ts = new Date().toISOString();
   console.log(`[studio:verbose ${ts}]`, ...args);

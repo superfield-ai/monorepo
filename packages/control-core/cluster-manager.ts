@@ -10,15 +10,11 @@
  *   - Poll workload health and render a per-service status dashboard.
  */
 
-import { readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { spawn } from './spawn';
-import type {
-  StudioClusterConfig,
-  K8sResource,
-  ServiceHealth,
-} from './types';
-import type { ImageMap } from './image-builder';
+import { readdirSync, readFileSync } from "fs";
+import { join } from "path";
+import { spawn } from "./spawn";
+import type { StudioClusterConfig, K8sResource, ServiceHealth } from "./types";
+import type { ImageMap } from "./image-builder";
 
 // ── Cluster cleanup ──────────────────────────────────────────────────────────
 
@@ -30,20 +26,29 @@ export function cleanupCluster(
   resources: K8sResource[],
 ): void {
   for (const r of resources) {
-    spawn('kubectl', [
-      'delete', r.kind.toLowerCase(), r.name,
-      `--namespace=${config.namespace}`, '--ignore-not-found',
+    spawn("kubectl", [
+      "delete",
+      r.kind.toLowerCase(),
+      r.name,
+      `--namespace=${config.namespace}`,
+      "--ignore-not-found",
     ]);
   }
 
-  spawn('kubectl', [
-    'delete', 'pvc', '--all',
-    `--namespace=${config.namespace}`, '--ignore-not-found',
+  spawn("kubectl", [
+    "delete",
+    "pvc",
+    "--all",
+    `--namespace=${config.namespace}`,
+    "--ignore-not-found",
   ]);
 
-  spawn('kubectl', [
-    'delete', 'pods', '--all',
-    `--namespace=${config.namespace}`, '--grace-period=0',
+  spawn("kubectl", [
+    "delete",
+    "pods",
+    "--all",
+    `--namespace=${config.namespace}`,
+    "--grace-period=0",
   ]);
 }
 
@@ -63,13 +68,13 @@ export function applyManifests(
   // Apply all .yaml files except example/template files that aren't
   // real resources (e.g. secrets.example.yaml).
   const files = readdirSync(k8sDir)
-    .filter((f) => f.endsWith('.yaml') && !f.includes('example'))
+    .filter((f) => f.endsWith(".yaml") && !f.includes("example"))
     .sort();
 
-  let allYaml = '';
+  let allYaml = "";
 
   for (const file of files) {
-    let content = readFileSync(join(k8sDir, file), 'utf-8');
+    let content = readFileSync(join(k8sDir, file), "utf-8");
 
     // Rewrite image tags to local studio builds.
     // Handles angle-bracket placeholders like <owner> that appear in some
@@ -79,15 +84,15 @@ export function applyManifests(
     for (const [original, studioTag] of Object.entries(imageMap)) {
       // Strip tag from original for the pattern (match any tag suffix).
       const base = original
-        .replace(/:.*$/, '')
-        .replace(/[.*+?^${}()|[\]\\<>]/g, '\\$&');
+        .replace(/:.*$/, "")
+        .replace(/[.*+?^${}()|[\]\\<>]/g, "\\$&");
       content = content.replace(
-        new RegExp(`(image:\\s*)${base}(:\\S+)?`, 'g'),
+        new RegExp(`(image:\\s*)${base}(:\\S+)?`, "g"),
         `$1${studioTag}`,
       );
     }
 
-    allYaml += content + '\n---\n';
+    allYaml += content + "\n---\n";
   }
 
   if (config.verbose) {
@@ -99,13 +104,13 @@ export function applyManifests(
   // and a direct Bun.spawnSync call). Now consolidated into a single path.
   // See: docs/cluster-definition.md — "Startup sequence" step 8.
   const result = spawn(
-    'kubectl',
-    ['apply', '-f', '-', `--namespace=${config.namespace}`],
+    "kubectl",
+    ["apply", "-f", "-", `--namespace=${config.namespace}`],
     { cwd: config.sourceDir, input: allYaml },
   );
 
   if (result.status !== 0) {
-    console.error('\n❌ kubectl apply failed');
+    console.error("\n❌ kubectl apply failed");
     if (result.stderr) console.error(result.stderr.trim());
     if (result.stdout) console.error(result.stdout.trim());
     process.exit(result.status ?? 1);
@@ -113,7 +118,7 @@ export function applyManifests(
 
   if (config.verbose) {
     const stdout = result.stdout.trim();
-    console.log(`    ${stdout.replace(/\n/g, '\n    ')}`);
+    console.log(`    ${stdout.replace(/\n/g, "\n    ")}`);
   }
 }
 
@@ -126,11 +131,14 @@ export function removeNetworkPolicies(
   config: StudioClusterConfig,
   resources: K8sResource[],
 ): void {
-  const policies = resources.filter((r) => r.kind === 'NetworkPolicy');
+  const policies = resources.filter((r) => r.kind === "NetworkPolicy");
   for (const np of policies) {
-    spawn('kubectl', [
-      'delete', 'networkpolicy', np.name,
-      `--namespace=${config.namespace}`, '--ignore-not-found',
+    spawn("kubectl", [
+      "delete",
+      "networkpolicy",
+      np.name,
+      `--namespace=${config.namespace}`,
+      "--ignore-not-found",
     ]);
   }
 }
@@ -144,21 +152,27 @@ const HEALTH_TIMEOUT_MS = 120_000;
  * Get a human-readable pod status for pods matching a label selector.
  */
 function getPodDetail(label: string, config: StudioClusterConfig): string {
-  const result = spawn('kubectl', [
-    'get', 'pods', '-l', label,
+  const result = spawn("kubectl", [
+    "get",
+    "pods",
+    "-l",
+    label,
     `--namespace=${config.namespace}`,
-    '-o', 'jsonpath={.items[0].status.phase}|{.items[0].status.containerStatuses[0].state.waiting.reason}|{.items[0].status.containerStatuses[0].state.terminated.reason}|{.items[0].status.containerStatuses[0].restartCount}',
+    "-o",
+    "jsonpath={.items[0].status.phase}|{.items[0].status.containerStatuses[0].state.waiting.reason}|{.items[0].status.containerStatuses[0].state.terminated.reason}|{.items[0].status.containerStatuses[0].restartCount}",
   ]);
 
-  if (result.status !== 0 || !result.stdout.trim()) return 'no pod';
+  if (result.status !== 0 || !result.stdout.trim()) return "no pod";
 
-  const [phase, waitingReason, terminatedReason, restarts] = result.stdout.split('|');
+  const [phase, waitingReason, terminatedReason, restarts] =
+    result.stdout.split("|");
   const parts: string[] = [];
   if (phase) parts.push(phase.toLowerCase());
   if (waitingReason) parts.push(waitingReason);
   else if (terminatedReason) parts.push(terminatedReason);
-  if (restarts && parseInt(restarts, 10) > 0) parts.push(`restarts=${restarts}`);
-  return parts.join(', ') || 'unknown';
+  if (restarts && parseInt(restarts, 10) > 0)
+    parts.push(`restarts=${restarts}`);
+  return parts.join(", ") || "unknown";
 }
 
 /**
@@ -171,51 +185,69 @@ export function checkHealth(
   const ns = `--namespace=${config.namespace}`;
   const base = { kind: resource.kind, name: resource.name };
 
-  if (resource.kind === 'Deployment') {
-    const result = spawn('kubectl', [
-      'get', 'deployment', resource.name, ns,
-      '-o', 'jsonpath={.status.availableReplicas}/{.spec.replicas}',
+  if (resource.kind === "Deployment") {
+    const result = spawn("kubectl", [
+      "get",
+      "deployment",
+      resource.name,
+      ns,
+      "-o",
+      "jsonpath={.status.availableReplicas}/{.spec.replicas}",
     ]);
-    const [availStr, desiredStr] = (result.stdout || '/').split('/');
-    const available = parseInt(availStr || '0', 10);
-    const desired = parseInt(desiredStr || '0', 10);
+    const [availStr, desiredStr] = (result.stdout || "/").split("/");
+    const available = parseInt(availStr || "0", 10);
+    const desired = parseInt(desiredStr || "0", 10);
     const ready = available >= desired && desired > 0;
     return {
-      ...base, ready,
-      detail: ready ? 'ready' : `${available}/${desired} available — ${getPodDetail(`app=${resource.name}`, config)}`,
+      ...base,
+      ready,
+      detail: ready
+        ? "ready"
+        : `${available}/${desired} available — ${getPodDetail(`app=${resource.name}`, config)}`,
     };
   }
 
-  if (resource.kind === 'StatefulSet') {
-    const result = spawn('kubectl', [
-      'get', 'statefulset', resource.name, ns,
-      '-o', 'jsonpath={.status.readyReplicas}/{.spec.replicas}',
+  if (resource.kind === "StatefulSet") {
+    const result = spawn("kubectl", [
+      "get",
+      "statefulset",
+      resource.name,
+      ns,
+      "-o",
+      "jsonpath={.status.readyReplicas}/{.spec.replicas}",
     ]);
-    const [readyStr, desiredStr] = (result.stdout || '/').split('/');
-    const readyCount = parseInt(readyStr || '0', 10);
-    const desired = parseInt(desiredStr || '0', 10);
+    const [readyStr, desiredStr] = (result.stdout || "/").split("/");
+    const readyCount = parseInt(readyStr || "0", 10);
+    const desired = parseInt(desiredStr || "0", 10);
     const ready = readyCount >= desired && desired > 0;
     return {
-      ...base, ready,
-      detail: ready ? 'ready' : `${readyCount}/${desired} ready — ${getPodDetail(`app=${resource.name}`, config)}`,
+      ...base,
+      ready,
+      detail: ready
+        ? "ready"
+        : `${readyCount}/${desired} ready — ${getPodDetail(`app=${resource.name}`, config)}`,
     };
   }
 
-  if (resource.kind === 'Job') {
-    const result = spawn('kubectl', [
-      'get', 'job', resource.name, ns,
-      '-o', 'jsonpath={.status.conditions[?(@.type=="Complete")].status}|{.status.conditions[?(@.type=="Failed")].status}',
+  if (resource.kind === "Job") {
+    const result = spawn("kubectl", [
+      "get",
+      "job",
+      resource.name,
+      ns,
+      "-o",
+      'jsonpath={.status.conditions[?(@.type=="Complete")].status}|{.status.conditions[?(@.type=="Failed")].status}',
     ]);
-    const [complete, failed] = (result.stdout || '|').split('|');
-    const isComplete = complete?.trim() === 'True';
-    const isFailed = failed?.trim() === 'True';
+    const [complete, failed] = (result.stdout || "|").split("|");
+    const isComplete = complete?.trim() === "True";
+    const isFailed = failed?.trim() === "True";
     let detail = getPodDetail(`app=${resource.name}`, config);
-    if (isComplete) detail = 'completed';
-    else if (isFailed) detail = 'failed';
+    if (isComplete) detail = "completed";
+    else if (isFailed) detail = "failed";
     return { ...base, ready: isComplete, detail };
   }
 
-  return { ...base, ready: false, detail: 'unknown kind' };
+  return { ...base, ready: false, detail: "unknown kind" };
 }
 
 /**
@@ -237,10 +269,10 @@ export async function waitForHealthy(
     const allReady = statuses.every((s) => s.ready);
     const elapsed = Math.round((Date.now() - startTime) / 1000);
 
-    if (tick > 0) console.log('');
+    if (tick > 0) console.log("");
     console.log(`\n  Cluster status (${elapsed}s):`);
     for (const s of statuses) {
-      const icon = s.ready ? '✓' : '…';
+      const icon = s.ready ? "✓" : "…";
       console.log(`    ${icon} ${s.kind}/${s.name}: ${s.detail}`);
     }
 
@@ -250,10 +282,10 @@ export async function waitForHealthy(
     await Bun.sleep(POLL_INTERVAL_MS);
   }
 
-  console.error('\n❌ Timed out waiting for cluster services.');
+  console.error("\n❌ Timed out waiting for cluster services.");
   const statuses = workloads.map((w) => checkHealth(config, w));
   for (const s of statuses) {
-    const icon = s.ready ? '✓' : '✗';
+    const icon = s.ready ? "✓" : "✗";
     console.log(`    ${icon} ${s.kind}/${s.name}: ${s.detail}`);
   }
   process.exit(1);

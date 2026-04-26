@@ -8,7 +8,7 @@
  * No React imports — pure TypeScript controller.
  */
 
-export type ProcessState = 'stopped' | 'starting' | 'running' | 'stopping';
+export type ProcessState = "stopped" | "starting" | "running" | "stopping";
 
 export interface LoopHealth {
   lastTickAt?: number;
@@ -21,7 +21,7 @@ export interface LoopHealth {
 export interface SlotInfo {
   slot: number;
   issueNumber: number;
-  role: 'primary' | 'speculative';
+  role: "primary" | "speculative";
   sessionId: string;
   backend: string;
   model: string;
@@ -35,7 +35,7 @@ export interface OrchestratorState {
   pid: number | null;
   apiReachable: boolean;
   uptimeMs: number;
-  loops: Record<'plan' | 'dev' | 'doc', LoopHealth>;
+  loops: Record<"plan" | "dev" | "doc", LoopHealth>;
   slots: SlotInfo[];
   logs: string[];
   error: string | null;
@@ -46,11 +46,14 @@ export type OrchestratorListener = (state: OrchestratorState) => void;
 const POLL_INTERVAL_MS = 5_000;
 const MAX_LOGS = 200;
 
-const DEFAULT_LOOP_HEALTH: LoopHealth = { circuitTripped: false, consecutiveFailures: 0 };
+const DEFAULT_LOOP_HEALTH: LoopHealth = {
+  circuitTripped: false,
+  consecutiveFailures: 0,
+};
 
 export class OrchestratorController {
   private state: OrchestratorState = {
-    processState: 'stopped',
+    processState: "stopped",
     pid: null,
     apiReachable: false,
     uptimeMs: 0,
@@ -74,12 +77,12 @@ export class OrchestratorController {
   private readonly stopUrl: string;
 
   constructor({
-    statusUrl = '/orchestrator/status',
-    loopsUrl = '/analytics/loops',
-    slotsUrl = '/analytics/slots',
-    logsUrl = '/orchestrator/logs',
-    startUrl = '/orchestrator/start',
-    stopUrl = '/orchestrator/stop',
+    statusUrl = "/orchestrator/status",
+    loopsUrl = "/analytics/loops",
+    slotsUrl = "/analytics/slots",
+    logsUrl = "/orchestrator/logs",
+    startUrl = "/orchestrator/start",
+    stopUrl = "/orchestrator/stop",
   } = {}) {
     this.statusUrl = statusUrl;
     this.loopsUrl = loopsUrl;
@@ -96,7 +99,11 @@ export class OrchestratorController {
   }
 
   getState(): OrchestratorState {
-    return { ...this.state, logs: [...this.state.logs], slots: [...this.state.slots] };
+    return {
+      ...this.state,
+      logs: [...this.state.logs],
+      slots: [...this.state.slots],
+    };
   }
 
   start(): void {
@@ -117,13 +124,13 @@ export class OrchestratorController {
   async startDevLoop(repo: string, slotCount?: number): Promise<void> {
     try {
       const res = await fetch(this.startUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ repo, slotCount }),
       });
       const body = (await res.json()) as { ok: boolean; reason?: string };
       if (!body.ok) {
-        this.setError(body.reason ?? 'Failed to start dev loop');
+        this.setError(body.reason ?? "Failed to start dev loop");
       }
     } catch (err) {
       this.setError(err instanceof Error ? err.message : String(err));
@@ -133,7 +140,7 @@ export class OrchestratorController {
 
   async stopDevLoop(): Promise<void> {
     try {
-      await fetch(this.stopUrl, { method: 'POST' });
+      await fetch(this.stopUrl, { method: "POST" });
     } catch (err) {
       this.setError(err instanceof Error ? err.message : String(err));
     }
@@ -154,19 +161,21 @@ export class OrchestratorController {
         apiReachable?: boolean;
         uptimeMs?: number;
       };
-      const loopsBody = (await loopsRes.json()) as { loops?: Record<string, LoopHealth> };
+      const loopsBody = (await loopsRes.json()) as {
+        loops?: Record<string, LoopHealth>;
+      };
       const slotsBody = (await slotsRes.json()) as { slots?: SlotInfo[] };
 
       this.state = {
         ...this.state,
-        processState: status.process ?? 'stopped',
+        processState: status.process ?? "stopped",
         pid: status.pid ?? null,
         apiReachable: status.apiReachable ?? false,
         uptimeMs: status.uptimeMs ?? 0,
         loops: {
-          plan: loopsBody.loops?.['plan'] ?? { ...DEFAULT_LOOP_HEALTH },
-          dev: loopsBody.loops?.['dev'] ?? { ...DEFAULT_LOOP_HEALTH },
-          doc: loopsBody.loops?.['doc'] ?? { ...DEFAULT_LOOP_HEALTH },
+          plan: loopsBody.loops?.["plan"] ?? { ...DEFAULT_LOOP_HEALTH },
+          dev: loopsBody.loops?.["dev"] ?? { ...DEFAULT_LOOP_HEALTH },
+          doc: loopsBody.loops?.["doc"] ?? { ...DEFAULT_LOOP_HEALTH },
         },
         slots: slotsBody.slots ?? [],
         error: null,

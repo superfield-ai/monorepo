@@ -63,11 +63,11 @@
  * See: docs/studio-permissions.md — "Tool allow-list"
  */
 export const ALLOWED_TOOLS: readonly string[] = [
-  'Read',
-  'Edit',
-  'Write',
-  'Glob',
-  'Grep',
+  "Read",
+  "Edit",
+  "Write",
+  "Glob",
+  "Grep",
 ] as const;
 
 /**
@@ -77,18 +77,18 @@ export const ALLOWED_TOOLS: readonly string[] = [
  * invoke via Bash. Any command not matching this allow-list is denied.
  */
 export const ALLOWED_BASH_COMMANDS: readonly string[] = [
-  'cat',
-  'ls',
-  'head',
-  'tail',
-  'wc',
-  'find',
-  'echo',
-  'pwd',
-  'tsc',
-  'bun run build',
-  'bun run check',
-  'bun run lint',
+  "cat",
+  "ls",
+  "head",
+  "tail",
+  "wc",
+  "find",
+  "echo",
+  "pwd",
+  "tsc",
+  "bun run build",
+  "bun run check",
+  "bun run lint",
 ] as const;
 
 /**
@@ -102,50 +102,50 @@ export const ALLOWED_BASH_COMMANDS: readonly string[] = [
  */
 export const DENIED_BASH_PATTERNS: readonly (string | RegExp)[] = [
   // Version control
-  'git',
-  'gh',
+  "git",
+  "gh",
   // File deletion
-  'rm',
-  'rmdir',
-  'unlink',
-  'shred',
+  "rm",
+  "rmdir",
+  "unlink",
+  "shred",
   // Package managers
-  'npm',
-  'yarn',
-  'pnpm',
+  "npm",
+  "yarn",
+  "pnpm",
   // Network / outbound HTTP
-  'curl',
-  'wget',
-  'fetch',
-  'nc',
-  'ncat',
-  'netcat',
-  'telnet',
-  'ssh',
-  'scp',
-  'rsync',
+  "curl",
+  "wget",
+  "fetch",
+  "nc",
+  "ncat",
+  "netcat",
+  "telnet",
+  "ssh",
+  "scp",
+  "rsync",
   // System utilities
-  'sudo',
-  'su',
-  'chmod',
-  'chown',
-  'chgrp',
-  'mount',
-  'umount',
-  'kill',
-  'killall',
-  'pkill',
-  'reboot',
-  'shutdown',
-  'systemctl',
-  'docker',
-  'kubectl',
-  'apt',
-  'apt-get',
-  'yum',
-  'dnf',
-  'pip',
-  'pip3',
+  "sudo",
+  "su",
+  "chmod",
+  "chown",
+  "chgrp",
+  "mount",
+  "umount",
+  "kill",
+  "killall",
+  "pkill",
+  "reboot",
+  "shutdown",
+  "systemctl",
+  "docker",
+  "kubectl",
+  "apt",
+  "apt-get",
+  "yum",
+  "dnf",
+  "pip",
+  "pip3",
   // Bun-specific dangerous subcommands
   /^bun\s+(install|add|remove|update|link|unlink|pm)\b/,
 ] as const;
@@ -226,7 +226,7 @@ export function extractCommandBinaries(command: string): string[] {
     if (!trimmed) continue;
 
     // Strip leading env variable assignments (KEY=value ...)
-    const withoutEnv = trimmed.replace(/^(?:[A-Z_][A-Z0-9_]*=[^\s]*\s+)+/, '');
+    const withoutEnv = trimmed.replace(/^(?:[A-Z_][A-Z0-9_]*=[^\s]*\s+)+/, "");
 
     // Extract the first word (the binary name)
     const match = withoutEnv.match(/^([^\s]+)/);
@@ -267,7 +267,7 @@ export function extractCommandBinaries(command: string): string[] {
 export function validateBashCommand(command: string): BashValidationResult {
   const trimmed = command.trim();
   if (!trimmed) {
-    return { allowed: true, reason: '' };
+    return { allowed: true, reason: "" };
   }
 
   const binaries = extractCommandBinaries(trimmed);
@@ -275,14 +275,15 @@ export function validateBashCommand(command: string): BashValidationResult {
   // Check each binary against the deny-list
   for (const binary of binaries) {
     // Strip path prefixes (e.g. /usr/bin/git → git)
-    const baseName = binary.split('/').pop() ?? binary;
+    const baseName = binary.split("/").pop() ?? binary;
 
     for (const pattern of DENIED_BASH_PATTERNS) {
-      if (typeof pattern === 'string') {
+      if (typeof pattern === "string") {
         if (baseName === pattern) {
           return {
             allowed: false,
-            reason: `Command '${baseName}' is not permitted in studio mode. ` +
+            reason:
+              `Command '${baseName}' is not permitted in studio mode. ` +
               `Studio restricts Claude to file reading and editing operations only.`,
           };
         }
@@ -295,14 +296,15 @@ export function validateBashCommand(command: string): BashValidationResult {
     if (pattern instanceof RegExp && pattern.test(trimmed)) {
       return {
         allowed: false,
-        reason: `Command '${trimmed.slice(0, 60)}${trimmed.length > 60 ? '...' : ''}' ` +
+        reason:
+          `Command '${trimmed.slice(0, 60)}${trimmed.length > 60 ? "..." : ""}' ` +
           `matches a denied pattern in studio mode. ` +
           `Studio restricts Claude to file reading and editing operations only.`,
       };
     }
   }
 
-  return { allowed: true, reason: '' };
+  return { allowed: true, reason: "" };
 }
 
 // ── Denial messages ──────────────────────────────────────────────────────────
@@ -317,12 +319,16 @@ export function validateBashCommand(command: string): BashValidationResult {
  * @param detail    Optional additional context about the denial.
  * @returns         A formatted denial message string.
  */
-export function buildPermissionDeniedMessage(toolName: string, detail?: string): string {
+export function buildPermissionDeniedMessage(
+  toolName: string,
+  detail?: string,
+): string {
   const base = `[Studio Permission Denied] The tool '${toolName}' is not available in studio mode.`;
-  const explanation = 'Studio mode restricts Claude to file reading, editing, and ' +
-    'studio-exposed build commands. Git operations, file deletion, package managers, ' +
-    'network requests, and system utilities are blocked at the harness level.';
-  const detailLine = detail ? ` Reason: ${detail}` : '';
+  const explanation =
+    "Studio mode restricts Claude to file reading, editing, and " +
+    "studio-exposed build commands. Git operations, file deletion, package managers, " +
+    "network requests, and system utilities are blocked at the harness level.";
+  const detailLine = detail ? ` Reason: ${detail}` : "";
   return `${base}${detailLine}\n\n${explanation}`;
 }
 
@@ -338,10 +344,14 @@ export function buildPermissionDeniedMessage(toolName: string, detail?: string):
  *              compatibility.
  * @returns     Array of tool name strings for the given mode.
  */
-export function getAllowedToolsForMode(mode: 'design' | 'question' = 'design'): string[] {
-  if (mode === 'question') {
+export function getAllowedToolsForMode(
+  mode: "design" | "question" = "design",
+): string[] {
+  if (mode === "question") {
     // Question mode: read-only — strip Edit and Write
-    return ALLOWED_TOOLS.filter((tool) => tool !== 'Edit' && tool !== 'Write') as string[];
+    return ALLOWED_TOOLS.filter(
+      (tool) => tool !== "Edit" && tool !== "Write",
+    ) as string[];
   }
   return [...ALLOWED_TOOLS];
 }
@@ -355,7 +365,7 @@ export function getAllowedToolsForMode(mode: 'design' | 'question' = 'design'): 
  */
 export function isToolAllowedForMode(
   toolName: string,
-  mode: 'design' | 'question' = 'design',
+  mode: "design" | "question" = "design",
 ): boolean {
   return getAllowedToolsForMode(mode).includes(toolName);
 }
@@ -372,8 +382,10 @@ export function isToolAllowedForMode(
  * @param mode  The studio agent mode. Defaults to 'design'.
  * @returns Comma-separated tool names string.
  */
-export function buildAllowedToolsFlag(mode: 'design' | 'question' = 'design'): string {
-  return getAllowedToolsForMode(mode).join(',');
+export function buildAllowedToolsFlag(
+  mode: "design" | "question" = "design",
+): string {
+  return getAllowedToolsForMode(mode).join(",");
 }
 
 // ── Studio system prompt addendum ────────────────────────────────────────────

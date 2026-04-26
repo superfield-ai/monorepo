@@ -164,11 +164,15 @@ export function startApiServer(
 
       const sessionId = randomUUID();
       const repoRoot = body.repoRoot ?? process.cwd();
-      const allowedTools = body.allowedTools ?? "Read,Edit,Write,Bash,Glob,Grep";
+      const allowedTools =
+        body.allowedTools ?? "Read,Edit,Write,Bash,Glob,Grep";
       const args = [
-        "claude", "-p", body.message,
+        "claude",
+        "-p",
+        body.message,
         "--dangerously-skip-permissions",
-        "--allowedTools", allowedTools,
+        "--allowedTools",
+        allowedTools,
       ];
       if (body.sessionKey) {
         args.push("--session-key", body.sessionKey);
@@ -177,7 +181,7 @@ export function startApiServer(
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
         "Cache-Control": "no-cache",
-        "Connection": "keep-alive",
+        Connection: "keep-alive",
       });
 
       // Emit session ID before any content chunks.
@@ -200,7 +204,7 @@ export function startApiServer(
       }
 
       // Stream stdout chunks as SSE data events.
-      const reader = proc.stdout.getReader();
+      const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
       const decoder = new TextDecoder();
       try {
         while (true) {
@@ -222,9 +226,13 @@ export function startApiServer(
 
       const exitCode = await proc.exited;
       if (exitCode !== 0) {
-        res.write(`event: error\ndata: ${JSON.stringify(`claude exited with code ${exitCode}`)}\n\n`);
+        res.write(
+          `event: error\ndata: ${JSON.stringify(`claude exited with code ${exitCode}`)}\n\n`,
+        );
       } else {
-        res.write(`event: done\ndata: ${JSON.stringify({ filesChanged: [] })}\n\n`);
+        res.write(
+          `event: done\ndata: ${JSON.stringify({ filesChanged: [] })}\n\n`,
+        );
       }
       res.end();
       return;

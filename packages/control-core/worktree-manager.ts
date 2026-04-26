@@ -14,10 +14,10 @@
  * @see docs/studio-sessions.md
  */
 
-import { existsSync } from 'fs';
-import { join, resolve } from 'path';
-import { spawn } from './spawn';
-import { buildStudioBranchName, generateSessionId } from './studio-session';
+import { existsSync } from "fs";
+import { join, resolve } from "path";
+import { spawn } from "./spawn";
+import { buildStudioBranchName, generateSessionId } from "./studio-session";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -62,16 +62,19 @@ export interface WorktreeDeleteOptions {
 /**
  * Resolve the base directory where worktrees are stored.
  */
-export function resolveWorktreeBaseDir(sourceDir: string, override?: string): string {
+export function resolveWorktreeBaseDir(
+  sourceDir: string,
+  override?: string,
+): string {
   if (override) return resolve(override);
-  return resolve(sourceDir, '..', 'studio-worktrees');
+  return resolve(sourceDir, "..", "studio-worktrees");
 }
 
 /**
  * Get the current main branch HEAD hash.
  */
 export function getMainHash(sourceDir: string): string {
-  const result = spawn('git', ['rev-parse', 'HEAD'], { cwd: sourceDir });
+  const result = spawn("git", ["rev-parse", "HEAD"], { cwd: sourceDir });
   if (result.status !== 0) {
     throw new Error(`Failed to get main HEAD: ${result.stderr.trim()}`);
   }
@@ -92,19 +95,21 @@ export function getMainHash(sourceDir: string): string {
  * @returns The session ID, branch name, and worktree path.
  * @throws If git worktree add fails.
  */
-export function createWorktree(opts: WorktreeCreateOptions): WorktreeCreateResult {
+export function createWorktree(
+  opts: WorktreeCreateOptions,
+): WorktreeCreateResult {
   const sessionId = opts.sessionId ?? generateSessionId();
   const branch = buildStudioBranchName(opts.mainHash, sessionId);
   const baseDir = resolveWorktreeBaseDir(opts.sourceDir, opts.worktreeBaseDir);
 
   // Use branch name with slashes replaced as directory name.
-  const safeDirName = branch.replace(/\//g, '-');
+  const safeDirName = branch.replace(/\//g, "-");
   const worktreePath = join(baseDir, safeDirName);
 
   // Create worktree with a new branch from the given commit.
   const result = spawn(
-    'git',
-    ['worktree', 'add', '-b', branch, worktreePath, opts.mainHash],
+    "git",
+    ["worktree", "add", "-b", branch, worktreePath, opts.mainHash],
     { cwd: opts.sourceDir },
   );
 
@@ -132,8 +137,8 @@ export function createWorktree(opts: WorktreeCreateOptions): WorktreeCreateResul
 export function deleteWorktree(opts: WorktreeDeleteOptions): void {
   // Remove the worktree (--force handles uncommitted changes).
   const removeResult = spawn(
-    'git',
-    ['worktree', 'remove', '--force', opts.worktreePath],
+    "git",
+    ["worktree", "remove", "--force", opts.worktreePath],
     { cwd: opts.sourceDir },
   );
 
@@ -144,11 +149,9 @@ export function deleteWorktree(opts: WorktreeDeleteOptions): void {
   }
 
   // Delete the branch.
-  const branchResult = spawn(
-    'git',
-    ['branch', '-D', opts.branch],
-    { cwd: opts.sourceDir },
-  );
+  const branchResult = spawn("git", ["branch", "-D", opts.branch], {
+    cwd: opts.sourceDir,
+  });
 
   if (branchResult.status !== 0) {
     // Non-fatal: the worktree is gone, branch cleanup is best-effort.
@@ -168,24 +171,24 @@ export function deleteWorktree(opts: WorktreeDeleteOptions): void {
 export function listWorktrees(
   sourceDir: string,
 ): Array<{ path: string; branch: string }> {
-  const result = spawn('git', ['worktree', 'list', '--porcelain'], {
+  const result = spawn("git", ["worktree", "list", "--porcelain"], {
     cwd: sourceDir,
   });
 
   if (result.status !== 0) return [];
 
   const entries: Array<{ path: string; branch: string }> = [];
-  let currentPath = '';
+  let currentPath = "";
 
-  for (const line of result.stdout.split('\n')) {
-    if (line.startsWith('worktree ')) {
-      currentPath = line.slice('worktree '.length);
-    } else if (line.startsWith('branch refs/heads/') && currentPath) {
+  for (const line of result.stdout.split("\n")) {
+    if (line.startsWith("worktree ")) {
+      currentPath = line.slice("worktree ".length);
+    } else if (line.startsWith("branch refs/heads/") && currentPath) {
       entries.push({
         path: currentPath,
-        branch: line.slice('branch refs/heads/'.length),
+        branch: line.slice("branch refs/heads/".length),
       });
-      currentPath = '';
+      currentPath = "";
     }
   }
 

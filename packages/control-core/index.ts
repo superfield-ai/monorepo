@@ -9,29 +9,42 @@ export type {
   ServiceHealth,
   VerifyCheck,
   VerifyResult,
-} from './types';
+} from "./types";
 
-export { spawn } from './spawn';
-export { RELEASE_DOCKERFILE, IGNORED_FILES } from './studio-config';
-export { discoverResources, discoverSecretRefs, discoverImages, discoverServicePort } from './manifest-parser';
-export { buildImages, rebuildAndRestart } from './image-builder';
-export type { ImageMap } from './image-builder';
-export { generateSecrets, applySecrets, seedApplicationData } from './secret-generator';
+export { spawn } from "./spawn";
+export { RELEASE_DOCKERFILE, IGNORED_FILES } from "./studio-config";
+export {
+  discoverResources,
+  discoverSecretRefs,
+  discoverImages,
+  discoverServicePort,
+} from "./manifest-parser";
+export { buildImages, rebuildAndRestart } from "./image-builder";
+export type { ImageMap } from "./image-builder";
+export {
+  generateSecrets,
+  applySecrets,
+  seedApplicationData,
+} from "./secret-generator";
 export {
   cleanupCluster,
   applyManifests,
   removeNetworkPolicies,
   checkHealth,
   waitForHealthy,
-} from './cluster-manager';
-export { checkPrerequisites, verifyStudioCluster, verifyAtStartup } from './verify-cluster';
+} from "./cluster-manager";
+export {
+  checkPrerequisites,
+  verifyStudioCluster,
+  verifyAtStartup,
+} from "./verify-cluster";
 export {
   buildStudioBranchName,
   parseStudioBranchName,
   isValidSessionId,
   generateSessionId,
   resolveStudioSession,
-} from './studio-session';
+} from "./studio-session";
 export {
   createWorktree,
   deleteWorktree,
@@ -39,19 +52,19 @@ export {
   worktreeExists,
   getMainHash,
   resolveWorktreeBaseDir,
-} from './worktree-manager';
+} from "./worktree-manager";
 export type {
   WorktreeCreateOptions,
   WorktreeCreateResult,
   WorktreeDeleteOptions,
-} from './worktree-manager';
+} from "./worktree-manager";
 export {
   startSession,
   restartSession,
   teardownSession,
   isSessionCleanedUp,
-} from './session-lifecycle';
-export type { SessionState, SessionStartOptions } from './session-lifecycle';
+} from "./session-lifecycle";
+export type { SessionState, SessionStartOptions } from "./session-lifecycle";
 export {
   sandboxContainerName,
   buildNetworkRules,
@@ -62,26 +75,26 @@ export {
   cleanupOrphanedSandboxes,
   buildAndExportImage,
   isSandboxRunning,
-} from './container-sandbox';
+} from "./container-sandbox";
 export type {
   SandboxConfig,
   SandboxState,
   SandboxInfo,
-} from './container-sandbox';
+} from "./container-sandbox";
 export {
   hasChanges,
   createCheckpoint,
   getTimeline,
   parseTimelineOutput,
   rollbackToCheckpoint,
-} from './checkpoint-manager';
+} from "./checkpoint-manager";
 export type {
   CheckpointEntry,
   CreateCheckpointOptions,
   CreateCheckpointResult,
   TimelineOptions,
   RollbackOptions,
-} from './checkpoint-manager';
+} from "./checkpoint-manager";
 export {
   NOTES_REF,
   SCHEMA_VERSION,
@@ -91,10 +104,10 @@ export {
   readMetadata,
   pushNotes,
   fetchNotes,
-} from './chat-metadata';
+} from "./chat-metadata";
 export type {
   ChatSessionMeta,
   ChatTurnMeta,
   ChatMetadata,
   AppendTurnOptions,
-} from './chat-metadata';
+} from "./chat-metadata";

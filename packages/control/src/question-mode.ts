@@ -36,7 +36,7 @@
  * - 'design': Full read/write access. Claude makes code changes.
  * - 'question': Read-only. Claude answers questions in plain language.
  */
-export type ControlMode = 'design' | 'question';
+export type ControlMode = "design" | "question";
 
 // ── Question mode system prompt ──────────────────────────────────────────────
 
@@ -95,36 +95,75 @@ export function getQuestionModeSystemPrompt(branch: string): string {
  * files pertinent to the user's question rather than the full codebase.
  */
 export const CONTEXT_TOPIC_MAP: Record<string, string[]> = {
-  auth: ['packages/control/src/auth.ts', 'packages/control/apps/web/src/controllers/OAuthController.ts'],
-  login: ['packages/control/src/auth.ts', 'packages/control/apps/web/src/controllers/OAuthController.ts'],
-  oauth: ['packages/control/src/auth.ts', 'packages/control/apps/web/src/controllers/OAuthController.ts'],
-  chat: ['packages/control/apps/web/src/controllers/ChatController.ts', 'packages/control/src/claude-session.ts'],
-  message: ['packages/control/apps/web/src/controllers/ChatController.ts', 'packages/control/src/claude-session.ts'],
-  conversation: ['packages/control/apps/web/src/controllers/ChatController.ts', 'packages/control/src/claude-session.ts'],
-  cluster: [
-    'packages/control-core/cluster-manager.ts',
-    'packages/control/apps/web/src/controllers/ClusterStatusController.ts',
-    'packages/control/src/cluster-events.ts',
+  auth: [
+    "packages/control/src/auth.ts",
+    "packages/control/apps/web/src/controllers/OAuthController.ts",
   ],
-  deploy: ['packages/control-core/cluster-manager.ts', 'packages/control-core/image-builder.ts'],
-  build: ['packages/control-core/image-builder.ts', 'packages/control-core/manifest-parser.ts'],
-  commit: ['packages/control/apps/web/src/controllers/CommitController.ts', 'packages/control/src/git.ts'],
-  rollback: ['packages/control/src/git.ts'],
-  config: ['packages/control-core/studio-config.ts', 'packages/control/src/config.ts'],
-  settings: ['packages/control-core/studio-config.ts', 'packages/control/src/config.ts'],
-  database: ['packages/db/index.ts'],
-  db: ['packages/db/index.ts'],
-  session: ['packages/control-core/studio-session.ts', 'packages/control/src/claude-session.ts'],
-  permission: ['packages/control/src/permissions.ts'],
-  security: ['packages/control/src/permissions.ts', 'packages/control/src/auth.ts'],
-  api: ['packages/control/src/api.ts', 'packages/control/src/router.ts'],
-  route: ['packages/control/src/router.ts'],
-  ui: ['packages/control/apps/web/src/components/index.ts'],
-  interface: ['packages/control/apps/web/src/components/index.ts'],
-  hot: ['packages/control/src/hot-swap.ts'],
-  swap: ['packages/control/src/hot-swap.ts'],
-  reload: ['packages/control/src/hot-swap.ts'],
-  process: ['packages/control/src/process-manager.ts'],
+  login: [
+    "packages/control/src/auth.ts",
+    "packages/control/apps/web/src/controllers/OAuthController.ts",
+  ],
+  oauth: [
+    "packages/control/src/auth.ts",
+    "packages/control/apps/web/src/controllers/OAuthController.ts",
+  ],
+  chat: [
+    "packages/control/apps/web/src/controllers/ChatController.ts",
+    "packages/control/src/claude-session.ts",
+  ],
+  message: [
+    "packages/control/apps/web/src/controllers/ChatController.ts",
+    "packages/control/src/claude-session.ts",
+  ],
+  conversation: [
+    "packages/control/apps/web/src/controllers/ChatController.ts",
+    "packages/control/src/claude-session.ts",
+  ],
+  cluster: [
+    "packages/control-core/cluster-manager.ts",
+    "packages/control/apps/web/src/controllers/ClusterStatusController.ts",
+    "packages/control/src/cluster-events.ts",
+  ],
+  deploy: [
+    "packages/control-core/cluster-manager.ts",
+    "packages/control-core/image-builder.ts",
+  ],
+  build: [
+    "packages/control-core/image-builder.ts",
+    "packages/control-core/manifest-parser.ts",
+  ],
+  commit: [
+    "packages/control/apps/web/src/controllers/CommitController.ts",
+    "packages/control/src/git.ts",
+  ],
+  rollback: ["packages/control/src/git.ts"],
+  config: [
+    "packages/control-core/studio-config.ts",
+    "packages/control/src/config.ts",
+  ],
+  settings: [
+    "packages/control-core/studio-config.ts",
+    "packages/control/src/config.ts",
+  ],
+  database: ["packages/db/index.ts"],
+  db: ["packages/db/index.ts"],
+  session: [
+    "packages/control-core/studio-session.ts",
+    "packages/control/src/claude-session.ts",
+  ],
+  permission: ["packages/control/src/permissions.ts"],
+  security: [
+    "packages/control/src/permissions.ts",
+    "packages/control/src/auth.ts",
+  ],
+  api: ["packages/control/src/api.ts", "packages/control/src/router.ts"],
+  route: ["packages/control/src/router.ts"],
+  ui: ["packages/control/apps/web/src/components/index.ts"],
+  interface: ["packages/control/apps/web/src/components/index.ts"],
+  hot: ["packages/control/src/hot-swap.ts"],
+  swap: ["packages/control/src/hot-swap.ts"],
+  reload: ["packages/control/src/hot-swap.ts"],
+  process: ["packages/control/src/process-manager.ts"],
 };
 
 /**
@@ -152,9 +191,9 @@ export function selectRelevantFiles(question: string): string[] {
   // Default context when no keywords match — provide general product overview files
   if (matched.size === 0) {
     return [
-      'packages/control/src/config.ts',
-      'packages/control/src/router.ts',
-      'packages/control-core/studio-config.ts',
+      "packages/control/src/config.ts",
+      "packages/control/src/router.ts",
+      "packages/control-core/studio-config.ts",
     ];
   }
 
@@ -178,7 +217,7 @@ export function selectRelevantFiles(question: string): string[] {
  * @returns          The input wrapped in untrusted delimiters.
  */
 export function wrapUntrustedInput(userInput: string): string {
-  const delimiter = '═══UNTRUSTED_USER_INPUT═══';
+  const delimiter = "═══UNTRUSTED_USER_INPUT═══";
   return `${delimiter}\n${userInput}\n${delimiter}`;
 }
 
@@ -196,21 +235,21 @@ export function containsInjectionPatterns(userInput: string): boolean {
   const normalised = userInput.toLowerCase();
 
   const patterns = [
-    'ignore previous instructions',
-    'ignore all previous',
-    'disregard your instructions',
-    'you are now',
-    'new instructions:',
-    'system prompt:',
-    'override:',
-    'forget your rules',
-    'act as',
-    'pretend you are',
-    'jailbreak',
-    'do anything now',
-    'developer mode',
-    'ignore the above',
-    'disregard the above',
+    "ignore previous instructions",
+    "ignore all previous",
+    "disregard your instructions",
+    "you are now",
+    "new instructions:",
+    "system prompt:",
+    "override:",
+    "forget your rules",
+    "act as",
+    "pretend you are",
+    "jailbreak",
+    "do anything now",
+    "developer mode",
+    "ignore the above",
+    "disregard the above",
   ];
 
   return patterns.some((pattern) => normalised.includes(pattern));
@@ -225,9 +264,9 @@ export function containsInjectionPatterns(userInput: string): boolean {
  * leaving only read and search tools.
  */
 export const QUESTION_MODE_ALLOWED_TOOLS: readonly string[] = [
-  'Read',
-  'Glob',
-  'Grep',
+  "Read",
+  "Glob",
+  "Grep",
 ] as const;
 
 /**
@@ -245,7 +284,7 @@ export function getQuestionModeAllowedTools(): string[] {
  * @returns Comma-separated read-only tool names string.
  */
 export function buildQuestionModeAllowedToolsFlag(): string {
-  return QUESTION_MODE_ALLOWED_TOOLS.join(',');
+  return QUESTION_MODE_ALLOWED_TOOLS.join(",");
 }
 
 // ── Question mode prompt builder ─────────────────────────────────────────────
@@ -263,7 +302,7 @@ export function buildQuestionModeAllowedToolsFlag(): string {
 export function buildQuestionModePrompt(opts: {
   branch: string;
   question: string;
-  conversationHistory?: Array<{ role: 'user' | 'assistant'; content: string }>;
+  conversationHistory?: Array<{ role: "user" | "assistant"; content: string }>;
   fileContents?: Map<string, string>;
 }): string {
   const { branch, question, conversationHistory = [], fileContents } = opts;
@@ -271,22 +310,22 @@ export function buildQuestionModePrompt(opts: {
   const systemPrompt = getQuestionModeSystemPrompt(branch);
 
   // Build file context section
-  let fileContextSection = '';
+  let fileContextSection = "";
   if (fileContents && fileContents.size > 0) {
     const fileEntries: string[] = [];
     for (const [path, content] of fileContents) {
       fileEntries.push(`### ${path}\n\`\`\`\n${content}\n\`\`\``);
     }
-    fileContextSection = `\n\n## Product Context\n\nThe following files are relevant to the question:\n\n${fileEntries.join('\n\n')}`;
+    fileContextSection = `\n\n## Product Context\n\nThe following files are relevant to the question:\n\n${fileEntries.join("\n\n")}`;
   }
 
   // Build conversation history section
-  let historySection = '';
+  let historySection = "";
   if (conversationHistory.length > 0) {
     const lines = conversationHistory.map(
-      (msg) => `${msg.role === 'user' ? 'Partner' : 'Agent'}: ${msg.content}`,
+      (msg) => `${msg.role === "user" ? "Partner" : "Agent"}: ${msg.content}`,
     );
-    historySection = `\n\n## Prior Conversation\n\n${lines.join('\n\n')}`;
+    historySection = `\n\n## Prior Conversation\n\n${lines.join("\n\n")}`;
   }
 
   // Wrap the current question in untrusted delimiters

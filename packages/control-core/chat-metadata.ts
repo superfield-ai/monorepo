@@ -28,12 +28,12 @@
  * @see docs/studio-chat-metadata.md
  */
 
-import { spawn } from './spawn';
+import { spawn } from "./spawn";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** The git notes ref used for studio chat metadata. */
-export const NOTES_REF = 'studio-chat';
+export const NOTES_REF = "studio-chat";
 
 /** Current schema version for forward compatibility. */
 export const SCHEMA_VERSION = 1;
@@ -55,7 +55,7 @@ export interface ChatTurnMeta {
   /** Zero-based turn index. */
   index: number;
   /** Studio mode for this turn. */
-  mode: 'design' | 'question';
+  mode: "design" | "question";
   /** The user's message (sanitized — no credentials or internal data). */
   userMessage: string;
   /** Claude's response (sanitized — no tool calls or reasoning). */
@@ -105,7 +105,7 @@ export function initMetadata(
 
 export interface AppendTurnOptions {
   /** Studio mode for this turn. */
-  mode: 'design' | 'question';
+  mode: "design" | "question";
   /** The user's message (sanitized). */
   userMessage: string;
   /** Claude's response (sanitized). */
@@ -157,12 +157,12 @@ export function appendTurn(
 export function writeMetadata(
   worktreePath: string,
   metadata: ChatMetadata,
-  commitRef: string = 'HEAD',
+  commitRef: string = "HEAD",
 ): void {
   const json = JSON.stringify(metadata, null, 2);
   const result = spawn(
-    'git',
-    ['notes', '--ref', NOTES_REF, 'add', '--force', '-m', json, commitRef],
+    "git",
+    ["notes", "--ref", NOTES_REF, "add", "--force", "-m", json, commitRef],
     { cwd: worktreePath },
   );
   if (result.status !== 0) {
@@ -179,11 +179,11 @@ export function writeMetadata(
  */
 export function readMetadata(
   worktreePath: string,
-  commitRef: string = 'HEAD',
+  commitRef: string = "HEAD",
 ): ChatMetadata | null {
   const result = spawn(
-    'git',
-    ['notes', '--ref', NOTES_REF, 'show', commitRef],
+    "git",
+    ["notes", "--ref", NOTES_REF, "show", commitRef],
     { cwd: worktreePath },
   );
   if (result.status !== 0) {
@@ -209,13 +209,11 @@ export function readMetadata(
  */
 export function pushNotes(
   worktreePath: string,
-  remote: string = 'origin',
+  remote: string = "origin",
 ): void {
-  const result = spawn(
-    'git',
-    ['push', remote, `refs/notes/${NOTES_REF}`],
-    { cwd: worktreePath },
-  );
+  const result = spawn("git", ["push", remote, `refs/notes/${NOTES_REF}`], {
+    cwd: worktreePath,
+  });
   if (result.status !== 0) {
     throw new Error(`git push notes failed: ${result.stderr.trim()}`);
   }
@@ -230,11 +228,11 @@ export function pushNotes(
  */
 export function fetchNotes(
   worktreePath: string,
-  remote: string = 'origin',
+  remote: string = "origin",
 ): void {
   const result = spawn(
-    'git',
-    ['fetch', remote, `refs/notes/${NOTES_REF}:refs/notes/${NOTES_REF}`],
+    "git",
+    ["fetch", remote, `refs/notes/${NOTES_REF}:refs/notes/${NOTES_REF}`],
     { cwd: worktreePath },
   );
   if (result.status !== 0) {

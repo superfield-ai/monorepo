@@ -15,8 +15,8 @@
  *  5. Non-200 response sets error state
  *  6. send() while streaming is a no-op
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ChatController } from '../../src/controllers/ChatController';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ChatController } from "../../src/controllers/ChatController";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -39,7 +39,7 @@ function makeSseResponse(chunks: string[]): Response {
 
   return new Response(stream, {
     status: 200,
-    headers: { 'Content-Type': 'text/event-stream' },
+    headers: { "Content-Type": "text/event-stream" },
   });
 }
 
@@ -47,7 +47,7 @@ function makeSseResponse(chunks: string[]): Response {
 function makeJsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { "Content-Type": "application/json" },
   });
 }
 
@@ -55,25 +55,25 @@ function makeJsonResponse(body: unknown, status = 200): Response {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('ChatController', () => {
+describe("ChatController", () => {
   let ctrl: ChatController;
 
   beforeEach(() => {
-    ctrl = new ChatController({ chatEndpoint: '/studio/chat' });
+    ctrl = new ChatController({ chatEndpoint: "/studio/chat" });
   });
 
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
-  it('starts in idle state with empty messages', () => {
+  it("starts in idle state with empty messages", () => {
     // Scenario 1: Initial idle state
     const state = ctrl.getState();
-    expect(state.turnState).toBe('idle');
+    expect(state.turnState).toBe("idle");
     expect(state.messages).toHaveLength(0);
   });
 
-  it('sets turnState to streaming immediately after send()', async () => {
+  it("sets turnState to streaming immediately after send()", async () => {
     // Scenario 2: send() sets streaming
     const states: string[] = [];
     ctrl.subscribe((s) => states.push(s.turnState));
@@ -83,54 +83,53 @@ describe('ChatController', () => {
     const fetchPromise = new Promise<Response>((res) => {
       resolveFetch = res;
     });
-    vi.stubGlobal('fetch', () => fetchPromise);
+    vi.stubGlobal("fetch", () => fetchPromise);
 
-    const sendPromise = ctrl.sendMessage('Hello');
+    const sendPromise = ctrl.sendMessage("Hello");
 
     // Give the microtask queue a tick so the fetch call is made
     await Promise.resolve();
 
-    expect(states).toContain('streaming');
+    expect(states).toContain("streaming");
 
     // Clean up
-    resolveFetch(makeJsonResponse({ reply: 'ok' }));
+    resolveFetch(makeJsonResponse({ reply: "ok" }));
     await sendPromise;
   });
 
-  it('accumulates SSE chunks in order into the assistant message', async () => {
+  it("accumulates SSE chunks in order into the assistant message", async () => {
     // Scenario 3: SSE chunks accumulate in order
-    const sseChunks = [
-      'data: Hello\n\n',
-      'data: , world\n\n',
-      'data: !\n\n',
-    ];
-    vi.stubGlobal('fetch', () => Promise.resolve(makeSseResponse(sseChunks)));
+    const sseChunks = ["data: Hello\n\n", "data: , world\n\n", "data: !\n\n"];
+    vi.stubGlobal("fetch", () => Promise.resolve(makeSseResponse(sseChunks)));
 
-    await ctrl.sendMessage('Hi');
+    await ctrl.sendMessage("Hi");
 
     const { messages } = ctrl.getState();
-    const assistant = messages.find((m) => m.role === 'assistant');
+    const assistant = messages.find((m) => m.role === "assistant");
     expect(assistant).toBeDefined();
-    expect(assistant!.content).toBe('Hello, world!');
+    expect(assistant!.content).toBe("Hello, world!");
   });
 
-  it('returns to idle after the SSE stream closes (event:done)', async () => {
+  it("returns to idle after the SSE stream closes (event:done)", async () => {
     // Scenario 4: stream close returns to idle
-    vi.stubGlobal(
-      'fetch',
-      () => Promise.resolve(makeSseResponse(['data: chunk\n\n'])),
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(makeSseResponse(["data: chunk\n\n"])),
     );
 
-    await ctrl.sendMessage('Test');
+    await ctrl.sendMessage("Test");
 
-    expect(ctrl.getState().turnState).toBe('idle');
-    const assistant = ctrl.getState().messages.find((m) => m.role === 'assistant');
+    expect(ctrl.getState().turnState).toBe("idle");
+    const assistant = ctrl
+      .getState()
+      .messages.find((m) => m.role === "assistant");
     expect(assistant?.streaming).toBe(false);
   });
 
-  it('sets turnState to error on a non-200 response', async () => {
+  it("sets turnState to error on a non-200 response", async () => {
     // Scenario 5: non-200 sets error
-    vi.stubGlobal('fetch', () => Promise.resolve(makeJsonResponse({ error: 'bad' }, 500)));
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(makeJsonResponse({ error: "bad" }, 500)),
+    );
 
     // ChatController throws on non-ok (fetch resolves but body parsing may fail
     // or the controller catches and sets error). The controller catches the thrown
@@ -144,35 +143,35 @@ describe('ChatController', () => {
     //
     // To reliably trigger 'error' we cause fetch itself to reject.
     vi.restoreAllMocks();
-    vi.stubGlobal('fetch', () => Promise.reject(new Error('network failure')));
+    vi.stubGlobal("fetch", () => Promise.reject(new Error("network failure")));
 
-    await ctrl.sendMessage('Fail');
+    await ctrl.sendMessage("Fail");
 
-    expect(ctrl.getState().turnState).toBe('error');
+    expect(ctrl.getState().turnState).toBe("error");
   });
 
-  it('ignores send() while a turn is already in progress (no-op)', async () => {
+  it("ignores send() while a turn is already in progress (no-op)", async () => {
     // Scenario 6: send() while streaming is a no-op
     let resolveFetch!: (r: Response) => void;
     const fetchPromise = new Promise<Response>((res) => {
       resolveFetch = res;
     });
     const fetchSpy = vi.fn(() => fetchPromise);
-    vi.stubGlobal('fetch', fetchSpy);
+    vi.stubGlobal("fetch", fetchSpy);
 
     // Start the first send — do not await yet
-    const first = ctrl.sendMessage('First');
+    const first = ctrl.sendMessage("First");
     // Give microtasks a tick so turnState transitions to 'streaming'
     await Promise.resolve();
 
     // Attempt a second send while streaming
-    await ctrl.sendMessage('Second while streaming');
+    await ctrl.sendMessage("Second while streaming");
 
     // fetch should only have been called once
     expect(fetchSpy).toHaveBeenCalledTimes(1);
 
     // Clean up
-    resolveFetch(makeJsonResponse({ reply: 'done' }));
+    resolveFetch(makeJsonResponse({ reply: "done" }));
     await first;
   });
 });

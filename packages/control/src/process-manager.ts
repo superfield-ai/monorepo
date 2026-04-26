@@ -78,24 +78,30 @@ export class ProcessManager {
   async shutdown(): Promise<void> {
     if (this.children.length === 0) return;
 
-    console.log(`[studio] Sending SIGTERM to ${this.children.length} child process(es)…`);
+    console.log(
+      `[studio] Sending SIGTERM to ${this.children.length} child process(es)…`,
+    );
 
     const killPromises = this.children.map(async ({ proc, label }) => {
       try {
         // exitCode is set once the process has already exited.
         if (proc.exitCode !== null) return;
 
-        proc.kill('SIGTERM');
+        proc.kill("SIGTERM");
 
         const timedOut = await Promise.race([
           proc.exited.then(() => false),
-          new Promise<true>((resolve) => setTimeout(() => resolve(true), SIGKILL_TIMEOUT_MS)),
+          new Promise<true>((resolve) =>
+            setTimeout(() => resolve(true), SIGKILL_TIMEOUT_MS),
+          ),
         ]);
 
         if (timedOut) {
-          console.warn(`[studio] ${label} did not exit within ${SIGKILL_TIMEOUT_MS}ms — SIGKILL`);
+          console.warn(
+            `[studio] ${label} did not exit within ${SIGKILL_TIMEOUT_MS}ms — SIGKILL`,
+          );
           try {
-            proc.kill('SIGKILL');
+            proc.kill("SIGKILL");
           } catch {
             // Process may have exited between the race and the kill call.
           }
@@ -103,13 +109,16 @@ export class ProcessManager {
         }
       } catch (err) {
         // Best-effort — log and move on.
-        console.error(`[studio] Error shutting down child process "${label}":`, err);
+        console.error(
+          `[studio] Error shutting down child process "${label}":`,
+          err,
+        );
       }
     });
 
     await Promise.all(killPromises);
     this.children.length = 0;
-    console.log('[studio] All child processes stopped.');
+    console.log("[studio] All child processes stopped.");
   }
 
   /** Number of currently tracked child processes. */

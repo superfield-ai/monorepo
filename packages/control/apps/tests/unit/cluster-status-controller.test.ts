@@ -18,8 +18,8 @@
  * the parsed JSON payload, not from raw pod text. Tests reflect the actual
  * contract of the controller.
  */
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { ClusterStatusController } from '../../src/controllers/ClusterStatusController';
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { ClusterStatusController } from "../../src/controllers/ClusterStatusController";
 
 // ---------------------------------------------------------------------------
 // Minimal EventSource stub
@@ -73,12 +73,12 @@ function createEventSourceStub(url: string): StubEventSource {
 // Tests
 // ---------------------------------------------------------------------------
 
-describe('ClusterStatusController', () => {
+describe("ClusterStatusController", () => {
   beforeEach(() => {
     lastStub = null;
     // Replace the global EventSource with our stub constructor
     vi.stubGlobal(
-      'EventSource',
+      "EventSource",
       vi.fn((url: string) => createEventSourceStub(url)),
     );
   });
@@ -88,65 +88,77 @@ describe('ClusterStatusController', () => {
     vi.useRealTimers();
   });
 
-  it('opens an EventSource connection when connect() is called', () => {
+  it("opens an EventSource connection when connect() is called", () => {
     // Scenario 1: SSE connect on construction
-    const ctrl = new ClusterStatusController({ eventsUrl: '/studio/cluster/events' });
+    const ctrl = new ClusterStatusController({
+      eventsUrl: "/studio/cluster/events",
+    });
     ctrl.connect();
 
     expect(vi.mocked(EventSource)).toHaveBeenCalledOnce();
-    expect(vi.mocked(EventSource)).toHaveBeenCalledWith('/studio/cluster/events');
+    expect(vi.mocked(EventSource)).toHaveBeenCalledWith(
+      "/studio/cluster/events",
+    );
 
     ctrl.dispose();
   });
 
   it('transitions to "healthy" when status=healthy is received', () => {
     // Scenario 2: READY=1/1 STATUS=Running → healthy
-    const ctrl = new ClusterStatusController({ eventsUrl: '/studio/cluster/events' });
+    const ctrl = new ClusterStatusController({
+      eventsUrl: "/studio/cluster/events",
+    });
     const statuses: string[] = [];
     ctrl.subscribe((s) => statuses.push(s));
     ctrl.connect();
 
-    lastStub!.emit('cluster-status', { status: 'healthy' });
+    lastStub!.emit("cluster-status", { status: "healthy" });
 
-    expect(ctrl.getStatus()).toBe('healthy');
+    expect(ctrl.getStatus()).toBe("healthy");
     ctrl.dispose();
   });
 
   it('transitions to "restarting" when status=restarting is received', () => {
     // Scenario 3: STATUS=Terminating → restarting
-    const ctrl = new ClusterStatusController({ eventsUrl: '/studio/cluster/events' });
+    const ctrl = new ClusterStatusController({
+      eventsUrl: "/studio/cluster/events",
+    });
     ctrl.connect();
 
-    lastStub!.emit('cluster-status', { status: 'restarting' });
+    lastStub!.emit("cluster-status", { status: "restarting" });
 
-    expect(ctrl.getStatus()).toBe('restarting');
+    expect(ctrl.getStatus()).toBe("restarting");
     ctrl.dispose();
   });
 
   it('transitions to "degraded" when status=degraded is received', () => {
     // Scenario 4: CrashLoopBackOff → degraded
-    const ctrl = new ClusterStatusController({ eventsUrl: '/studio/cluster/events' });
+    const ctrl = new ClusterStatusController({
+      eventsUrl: "/studio/cluster/events",
+    });
     ctrl.connect();
 
-    lastStub!.emit('cluster-status', { status: 'degraded' });
+    lastStub!.emit("cluster-status", { status: "degraded" });
 
-    expect(ctrl.getStatus()).toBe('degraded');
+    expect(ctrl.getStatus()).toBe("degraded");
     ctrl.dispose();
   });
 
   it('sets status to "unknown" on stream error', () => {
     // Scenario 5: stream close triggers unknown status
-    const ctrl = new ClusterStatusController({ eventsUrl: '/studio/cluster/events' });
+    const ctrl = new ClusterStatusController({
+      eventsUrl: "/studio/cluster/events",
+    });
     ctrl.connect();
 
     // First drive it to healthy so there's a state change to detect
-    lastStub!.emit('cluster-status', { status: 'healthy' });
-    expect(ctrl.getStatus()).toBe('healthy');
+    lastStub!.emit("cluster-status", { status: "healthy" });
+    expect(ctrl.getStatus()).toBe("healthy");
 
     // Now trigger an error
     lastStub!.triggerError();
 
-    expect(ctrl.getStatus()).toBe('unknown');
+    expect(ctrl.getStatus()).toBe("unknown");
     ctrl.dispose();
   });
 });

@@ -13,12 +13,12 @@
  * that match the existing studio UI palette.
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
   OrchestratorController,
   type OrchestratorState,
   type ProcessState,
-} from '../controllers/OrchestratorController';
+} from "../controllers/OrchestratorController";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -29,7 +29,7 @@ function formatMs(ms: number): string {
 }
 
 function relativeTime(ts?: number): string {
-  if (!ts) return '—';
+  if (!ts) return "—";
   const diff = Date.now() - ts;
   return `${formatMs(diff)} ago`;
 }
@@ -38,10 +38,10 @@ function relativeTime(ts?: number): string {
 
 function StateBadge({ state }: { state: ProcessState }) {
   const colours: Record<ProcessState, string> = {
-    stopped: 'bg-gray-200 text-gray-600',
-    starting: 'bg-yellow-100 text-yellow-700',
-    running: 'bg-green-100 text-green-700',
-    stopping: 'bg-orange-100 text-orange-700',
+    stopped: "bg-gray-200 text-gray-600",
+    starting: "bg-yellow-100 text-yellow-700",
+    running: "bg-green-100 text-green-700",
+    stopping: "bg-orange-100 text-orange-700",
   };
   return (
     <span
@@ -58,31 +58,43 @@ function LoopRow({
   health,
 }: {
   name: string;
-  health: OrchestratorState['loops']['plan'];
+  health: OrchestratorState["loops"]["plan"];
 }) {
   return (
     <tr className="border-t border-gray-100 text-sm">
       <td className="py-1 pr-4 font-mono text-gray-500">{name}</td>
-      <td className="py-1 pr-4 text-gray-700">{relativeTime(health.lastTickAt)}</td>
-      <td className="py-1 pr-4 text-gray-500">
-        {health.lastTickDurationMs != null ? formatMs(health.lastTickDurationMs) : '—'}
+      <td className="py-1 pr-4 text-gray-700">
+        {relativeTime(health.lastTickAt)}
       </td>
-      <td className="py-1 pr-4 text-gray-400 italic text-xs">{health.idleReason ?? ''}</td>
+      <td className="py-1 pr-4 text-gray-500">
+        {health.lastTickDurationMs != null
+          ? formatMs(health.lastTickDurationMs)
+          : "—"}
+      </td>
+      <td className="py-1 pr-4 text-gray-400 italic text-xs">
+        {health.idleReason ?? ""}
+      </td>
       <td className="py-1">
         <span
           className={`rounded px-1 py-0.5 text-xs font-semibold ${
-            health.circuitTripped ? 'bg-red-100 text-red-600' : 'bg-green-50 text-green-600'
+            health.circuitTripped
+              ? "bg-red-100 text-red-600"
+              : "bg-green-50 text-green-600"
           }`}
         >
-          {health.circuitTripped ? `tripped (${health.consecutiveFailures})` : 'closed'}
+          {health.circuitTripped
+            ? `tripped (${health.consecutiveFailures})`
+            : "closed"}
         </span>
       </td>
     </tr>
   );
 }
 
-function SlotCard({ slot }: { slot: OrchestratorState['slots'][number] }) {
-  const heartbeatAge = slot.heartbeatAt ? Date.now() - slot.heartbeatAt : Infinity;
+function SlotCard({ slot }: { slot: OrchestratorState["slots"][number] }) {
+  const heartbeatAge = slot.heartbeatAt
+    ? Date.now() - slot.heartbeatAt
+    : Infinity;
   const heartbeatOk = heartbeatAge < 30_000;
 
   return (
@@ -91,9 +103,9 @@ function SlotCard({ slot }: { slot: OrchestratorState['slots'][number] }) {
         <span className="font-semibold text-gray-800">#{slot.issueNumber}</span>
         <span
           className={`ml-2 h-2 w-2 rounded-full ${
-            heartbeatOk ? 'bg-green-400' : 'bg-gray-300'
+            heartbeatOk ? "bg-green-400" : "bg-gray-300"
           }`}
-          title={heartbeatOk ? 'heartbeat ok' : 'no recent heartbeat'}
+          title={heartbeatOk ? "heartbeat ok" : "no recent heartbeat"}
         />
       </div>
       <div className="mt-1 text-xs text-gray-500">
@@ -113,11 +125,16 @@ interface OrchestratorViewProps {
   repo?: string;
 }
 
-export function OrchestratorView({ controller: controllerProp, repo = '' }: OrchestratorViewProps) {
+export function OrchestratorView({
+  controller: controllerProp,
+  repo = "",
+}: OrchestratorViewProps) {
   const controllerRef = useRef<OrchestratorController>(
     controllerProp ?? new OrchestratorController(),
   );
-  const [state, setState] = useState<OrchestratorState>(controllerRef.current.getState());
+  const [state, setState] = useState<OrchestratorState>(
+    controllerRef.current.getState(),
+  );
   const logEndRef = useRef<HTMLDivElement>(null);
   const [repoInput, setRepoInput] = useState(repo);
 
@@ -133,11 +150,12 @@ export function OrchestratorView({ controller: controllerProp, repo = '' }: Orch
 
   // Auto-scroll log pane.
   useEffect(() => {
-    logEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [state.logs]);
 
-  const canStart = state.processState === 'stopped';
-  const canStop = state.processState === 'running' || state.processState === 'starting';
+  const canStart = state.processState === "stopped";
+  const canStop =
+    state.processState === "running" || state.processState === "starting";
 
   return (
     <div className="flex h-full flex-col gap-4 overflow-auto p-4 font-sans">
@@ -148,12 +166,14 @@ export function OrchestratorView({ controller: controllerProp, repo = '' }: Orch
           <span className="text-xs text-gray-400">pid {state.pid}</span>
         )}
         {state.uptimeMs > 0 && (
-          <span className="text-xs text-gray-400">up {formatMs(state.uptimeMs)}</span>
+          <span className="text-xs text-gray-400">
+            up {formatMs(state.uptimeMs)}
+          </span>
         )}
         <span
-          className={`ml-auto text-xs ${state.apiReachable ? 'text-green-600' : 'text-gray-400'}`}
+          className={`ml-auto text-xs ${state.apiReachable ? "text-green-600" : "text-gray-400"}`}
         >
-          API {state.apiReachable ? 'reachable' : 'unreachable'}
+          API {state.apiReachable ? "reachable" : "unreachable"}
         </span>
         <input
           data-testid="repo-input"
@@ -221,7 +241,10 @@ export function OrchestratorView({ controller: controllerProp, repo = '' }: Orch
       )}
 
       {/* Log tail */}
-      <section data-testid="log-pane" className="flex flex-1 flex-col rounded border border-gray-200 bg-gray-950 px-3 py-2 shadow-sm">
+      <section
+        data-testid="log-pane"
+        className="flex flex-1 flex-col rounded border border-gray-200 bg-gray-950 px-3 py-2 shadow-sm"
+      >
         <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
           Dev loop logs
         </h2>

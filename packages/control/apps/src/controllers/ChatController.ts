@@ -17,11 +17,11 @@
  * No React imports.
  */
 
-export type TurnState = 'idle' | 'streaming' | 'error';
+export type TurnState = "idle" | "streaming" | "error";
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
   /** True while content is still streaming in */
   streaming?: boolean;
@@ -44,11 +44,13 @@ export type ChatControllerListener = (state: ChatControllerState) => void;
  */
 export class ChatController {
   private messages: ChatMessage[] = [];
-  private turnState: TurnState = 'idle';
+  private turnState: TurnState = "idle";
   private listeners: Set<ChatControllerListener> = new Set();
   private readonly chatEndpoint: string;
 
-  constructor({ chatEndpoint = '/studio/chat' }: { chatEndpoint?: string } = {}) {
+  constructor({
+    chatEndpoint = "/studio/chat",
+  }: { chatEndpoint?: string } = {}) {
     this.chatEndpoint = chatEndpoint;
   }
 
@@ -72,34 +74,34 @@ export class ChatController {
    * calling it while a turn is already in progress is a no-op.
    */
   async sendMessage(text: string): Promise<void> {
-    if (this.turnState !== 'idle' || !text.trim()) return;
+    if (this.turnState !== "idle" || !text.trim()) return;
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
-      role: 'user',
+      role: "user",
       content: text.trim(),
     };
 
     this.messages = [...this.messages, userMessage];
-    this.turnState = 'streaming';
+    this.turnState = "streaming";
     this.notify();
 
     const assistantId = crypto.randomUUID();
 
     try {
       const res = await fetch(this.chatEndpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ message: text.trim() }),
       });
 
-      const contentType = res.headers.get('Content-Type') ?? '';
+      const contentType = res.headers.get("Content-Type") ?? "";
 
-      if (contentType.includes('text/event-stream')) {
+      if (contentType.includes("text/event-stream")) {
         // Streaming SSE response — append chunks as they arrive.
         this.messages = [
           ...this.messages,
-          { id: assistantId, role: 'assistant', content: '', streaming: true },
+          { id: assistantId, role: "assistant", content: "", streaming: true },
         ];
         this.notify();
 
@@ -112,12 +114,14 @@ export class ChatController {
             if (done) break;
             const chunk = decoder.decode(value, { stream: true });
             // Parse SSE lines: "data: <text>\n\n"
-            for (const line of chunk.split('\n')) {
-              if (line.startsWith('data: ')) {
+            for (const line of chunk.split("\n")) {
+              if (line.startsWith("data: ")) {
                 const data = line.slice(6);
-                if (data === '[DONE]') break;
+                if (data === "[DONE]") break;
                 this.messages = this.messages.map((m) =>
-                  m.id === assistantId ? { ...m, content: m.content + data } : m,
+                  m.id === assistantId
+                    ? { ...m, content: m.content + data }
+                    : m,
                 );
                 this.notify();
               }
@@ -130,24 +134,24 @@ export class ChatController {
       } else {
         // JSON response (fixture server / non-streaming fallback)
         const body = (await res.json()) as { reply?: string };
-        const reply = body.reply ?? '';
+        const reply = body.reply ?? "";
         this.messages = [
           ...this.messages,
-          { id: assistantId, role: 'assistant', content: reply },
+          { id: assistantId, role: "assistant", content: reply },
         ];
       }
 
-      this.turnState = 'idle';
+      this.turnState = "idle";
     } catch {
       this.messages = [
         ...this.messages,
         {
           id: assistantId,
-          role: 'assistant',
-          content: '(Error: could not reach studio server)',
+          role: "assistant",
+          content: "(Error: could not reach studio server)",
         },
       ];
-      this.turnState = 'error';
+      this.turnState = "error";
     }
 
     this.notify();
@@ -155,8 +159,8 @@ export class ChatController {
 
   /** Reset error state back to idle so the user can retry. */
   clearError(): void {
-    if (this.turnState === 'error') {
-      this.turnState = 'idle';
+    if (this.turnState === "error") {
+      this.turnState = "idle";
       this.notify();
     }
   }
@@ -178,13 +182,13 @@ export class ChatController {
  */
 export class WsChatController {
   private messages: ChatMessage[] = [];
-  private turnState: TurnState = 'idle';
+  private turnState: TurnState = "idle";
   private listeners: Set<ChatControllerListener> = new Set();
   private ws: WebSocket | null = null;
   private readonly wsEndpoint: string;
   private pendingAssistantId: string | null = null;
 
-  constructor({ wsEndpoint = '/studio/ws' }: { wsEndpoint?: string } = {}) {
+  constructor({ wsEndpoint = "/studio/ws" }: { wsEndpoint?: string } = {}) {
     this.wsEndpoint = wsEndpoint;
   }
 
@@ -201,50 +205,60 @@ export class WsChatController {
   connect(): void {
     if (this.ws && this.ws.readyState !== WebSocket.CLOSED) return;
 
-    const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const protocol = location.protocol === "https:" ? "wss:" : "ws:";
     const url = `${protocol}//${location.host}${this.wsEndpoint}`;
     this.ws = new WebSocket(url);
 
     this.ws.onmessage = (event: MessageEvent<string>) => {
-      let frame: { type: string; text?: string; sessionId?: string; filesChanged?: string[]; message?: string };
+      let frame: {
+        type: string;
+        text?: string;
+        sessionId?: string;
+        filesChanged?: string[];
+        message?: string;
+      };
       try {
         frame = JSON.parse(event.data) as typeof frame;
       } catch {
         return;
       }
 
-      if (frame.type === 'chunk' && this.pendingAssistantId) {
+      if (frame.type === "chunk" && this.pendingAssistantId) {
         this.messages = this.messages.map((m) =>
           m.id === this.pendingAssistantId
-            ? { ...m, content: m.content + (frame.text ?? '') }
+            ? { ...m, content: m.content + (frame.text ?? "") }
             : m,
         );
         this.notify();
-      } else if (frame.type === 'done') {
+      } else if (frame.type === "done") {
         if (this.pendingAssistantId) {
           this.messages = this.messages.map((m) =>
             m.id === this.pendingAssistantId ? { ...m, streaming: false } : m,
           );
         }
         this.pendingAssistantId = null;
-        this.turnState = 'idle';
+        this.turnState = "idle";
         this.notify();
-      } else if (frame.type === 'error') {
+      } else if (frame.type === "error") {
         if (this.pendingAssistantId) {
           this.messages = this.messages.map((m) =>
             m.id === this.pendingAssistantId
-              ? { ...m, content: `(Error: ${frame.message ?? 'unknown'})`, streaming: false }
+              ? {
+                  ...m,
+                  content: `(Error: ${frame.message ?? "unknown"})`,
+                  streaming: false,
+                }
               : m,
           );
         }
         this.pendingAssistantId = null;
-        this.turnState = 'error';
+        this.turnState = "error";
         this.notify();
       }
     };
 
     this.ws.onerror = () => {
-      this.turnState = 'error';
+      this.turnState = "error";
       this.notify();
     };
   }
@@ -255,7 +269,7 @@ export class WsChatController {
   }
 
   async sendMessage(text: string): Promise<void> {
-    if (this.turnState !== 'idle' || !text.trim()) return;
+    if (this.turnState !== "idle" || !text.trim()) return;
 
     this.connect();
     if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
@@ -263,10 +277,13 @@ export class WsChatController {
       await new Promise<void>((resolve, reject) => {
         const ws = this.ws!;
         ws.onopen = () => resolve();
-        ws.onerror = () => reject(new Error('WebSocket connection failed'));
-        setTimeout(() => reject(new Error('WebSocket connection timeout')), 5000);
+        ws.onerror = () => reject(new Error("WebSocket connection failed"));
+        setTimeout(
+          () => reject(new Error("WebSocket connection timeout")),
+          5000,
+        );
       }).catch(() => {
-        this.turnState = 'error';
+        this.turnState = "error";
         this.notify();
         return;
       });
@@ -274,26 +291,26 @@ export class WsChatController {
 
     const userMessage: ChatMessage = {
       id: crypto.randomUUID(),
-      role: 'user',
+      role: "user",
       content: text.trim(),
     };
     this.messages = [...this.messages, userMessage];
-    this.turnState = 'streaming';
+    this.turnState = "streaming";
 
     const assistantId = crypto.randomUUID();
     this.pendingAssistantId = assistantId;
     this.messages = [
       ...this.messages,
-      { id: assistantId, role: 'assistant', content: '', streaming: true },
+      { id: assistantId, role: "assistant", content: "", streaming: true },
     ];
     this.notify();
 
-    this.ws!.send(JSON.stringify({ type: 'turn', message: text.trim() }));
+    this.ws!.send(JSON.stringify({ type: "turn", message: text.trim() }));
   }
 
   clearError(): void {
-    if (this.turnState === 'error') {
-      this.turnState = 'idle';
+    if (this.turnState === "error") {
+      this.turnState = "idle";
       this.notify();
     }
   }

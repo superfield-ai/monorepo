@@ -23,24 +23,24 @@
  * by the studio start script and deleted on teardown.
  */
 
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
-import { runAgent, REPO_ROOT } from './agent';
+import { existsSync, readFileSync } from "fs";
+import { join } from "path";
+import { runAgent, REPO_ROOT } from "./agent";
 import {
   getCurrentBranch,
   getSessionCommits,
   getTimelineCommits,
   rollbackTo,
   createCheckpointCommit,
-} from './git';
+} from "./git";
 import {
   parseControlInfo,
   validateRollbackHash,
   validateControlMessage,
   type ControlMessage,
-} from './helpers';
-import { getCorsHeaders, getAuthenticatedUser } from './auth';
-import { makeJson } from '../lib/response';
+} from "./helpers";
+import { getCorsHeaders, getAuthenticatedUser } from "./auth";
+import { makeJson } from "../lib/response";
 
 // In-memory session context per studio session
 const sessionMessages: ControlMessage[] = [];
@@ -52,7 +52,10 @@ const sessionMessages: ControlMessage[] = [];
  * commit message. Falls back to a trimmed version of the user's request
  * if the reply is unusable.
  */
-function extractCheckpointSummary(agentReply: string, userMessage: string): string {
+function extractCheckpointSummary(
+  agentReply: string,
+  userMessage: string,
+): string {
   // Use the first sentence of the agent reply as the summary.
   const firstSentence = agentReply.split(/[.\n]/)[0]?.trim();
   if (firstSentence && firstSentence.length > 5 && firstSentence.length <= 72) {
@@ -60,7 +63,7 @@ function extractCheckpointSummary(agentReply: string, userMessage: string): stri
   }
   // If the first sentence is too long, truncate it.
   if (firstSentence && firstSentence.length > 72) {
-    return firstSentence.slice(0, 69) + '...';
+    return firstSentence.slice(0, 69) + "...";
   }
   // Fallback: use a summary of the user's request.
   const userSummary = userMessage.slice(0, 60).trim();
@@ -68,17 +71,20 @@ function extractCheckpointSummary(agentReply: string, userMessage: string): stri
 }
 
 function isControlMode(): boolean {
-  return existsSync(join(REPO_ROOT, '.studio'));
+  return existsSync(join(REPO_ROOT, ".studio"));
 }
 
 function getControlInfo(): { sessionId: string; branch: string } | null {
-  const studioFile = join(REPO_ROOT, '.studio');
+  const studioFile = join(REPO_ROOT, ".studio");
   if (!existsSync(studioFile)) return null;
-  return parseControlInfo(readFileSync(studioFile, 'utf8'));
+  return parseControlInfo(readFileSync(studioFile, "utf8"));
 }
 
-export async function handleControlRequest(req: Request, url: URL): Promise<Response | null> {
-  if (!url.pathname.startsWith('/studio')) return null;
+export async function handleControlRequest(
+  req: Request,
+  url: URL,
+): Promise<Response | null> {
+  if (!url.pathname.startsWith("/studio")) return null;
 
   const corsHeaders = getCorsHeaders(req);
   const json = makeJson(corsHeaders);
@@ -86,10 +92,10 @@ export async function handleControlRequest(req: Request, url: URL): Promise<Resp
   // Authentication guard — applied at route registration level so all current
   // and future studio routes are protected without per-handler checks.
   const user = await getAuthenticatedUser(req);
-  if (!user) return json({ error: 'Unauthorized' }, 401);
+  if (!user) return json({ error: "Unauthorized" }, 401);
 
   // GET /studio/status — is studio mode active?
-  if (req.method === 'GET' && url.pathname === '/studio/status') {
+  if (req.method === "GET" && url.pathname === "/studio/status") {
     const info = getControlInfo();
     if (!info) return json({ active: false });
     const branch = await getCurrentBranch();
@@ -99,28 +105,28 @@ export async function handleControlRequest(req: Request, url: URL): Promise<Resp
   }
 
   if (!isControlMode()) {
-    return json({ error: 'Studio mode is not active' }, 403);
+    return json({ error: "Studio mode is not active" }, 403);
   }
 
   const info = getControlInfo()!;
 
   // GET /studio/commits — session commit log
-  if (req.method === 'GET' && url.pathname === '/studio/commits') {
+  if (req.method === "GET" && url.pathname === "/studio/commits") {
     const commits = await getSessionCommits();
     return json({ commits });
   }
 
   // GET /studio/timeline — checkpoint timeline with timestamps
-  if (req.method === 'GET' && url.pathname === '/studio/timeline') {
+  if (req.method === "GET" && url.pathname === "/studio/timeline") {
     const timeline = await getTimelineCommits();
     return json({ timeline });
   }
 
   // POST /studio/rollback — rollback to a prior commit, discarding later commits
-  if (req.method === 'POST' && url.pathname === '/studio/rollback') {
+  if (req.method === "POST" && url.pathname === "/studio/rollback") {
     const { hash } = await req.json();
     const validatedHash = validateRollbackHash(hash);
-    if (!validatedHash) return json({ error: 'hash required' }, 400);
+    if (!validatedHash) return json({ error: "hash required" }, 400);
     await rollbackTo(validatedHash);
     const commits = await getSessionCommits();
     const timeline = await getTimelineCommits();
@@ -128,22 +134,22 @@ export async function handleControlRequest(req: Request, url: URL): Promise<Resp
   }
 
   // POST /studio/reset — clear session context
-  if (req.method === 'POST' && url.pathname === '/studio/reset') {
+  if (req.method === "POST" && url.pathname === "/studio/reset") {
     sessionMessages.length = 0;
     return json({ ok: true });
   }
 
   // POST /studio/chat — main agent interaction
-  if (req.method === 'POST' && url.pathname === '/studio/chat') {
+  if (req.method === "POST" && url.pathname === "/studio/chat") {
     const { message } = await req.json();
     const validatedMessage = validateControlMessage(message);
-    if (!validatedMessage) return json({ error: 'message required' }, 400);
+    if (!validatedMessage) return json({ error: "message required" }, 400);
 
-    sessionMessages.push({ role: 'user', content: validatedMessage });
+    sessionMessages.push({ role: "user", content: validatedMessage });
 
     const reply = await runAgent(sessionMessages, info.branch);
 
-    sessionMessages.push({ role: 'assistant', content: reply });
+    sessionMessages.push({ role: "assistant", content: reply });
 
     // After a Design mode turn, create a checkpoint commit if there are changes.
     // The agent may have already committed (per system prompt), but if not,

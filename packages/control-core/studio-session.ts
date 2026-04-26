@@ -21,7 +21,7 @@
 
 const SESSION_ID_LENGTH = 4;
 const SESSION_ID_PATTERN = /^[a-z0-9]{4}$/;
-const SESSION_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
+const SESSION_ID_ALPHABET = "abcdefghijklmnopqrstuvwxyz0123456789";
 
 /**
  * Construct the canonical studio session branch name.
@@ -30,7 +30,10 @@ const SESSION_ID_ALPHABET = 'abcdefghijklmnopqrstuvwxyz0123456789';
  * @param sessionId  4-character alphanumeric session identifier.
  * @returns          Branch name string: `studio/session-<mainHash>-<sessionId>`
  */
-export function buildStudioBranchName(mainHash: string, sessionId: string): string {
+export function buildStudioBranchName(
+  mainHash: string,
+  sessionId: string,
+): string {
   return `studio/session-${mainHash}-${sessionId}`;
 }
 
@@ -67,8 +70,9 @@ export function isValidSessionId(sessionId: string): boolean {
  * @param randomBytes  Optional pre-generated random bytes (for testing).
  */
 export function generateSessionId(randomBytes?: Uint8Array): string {
-  const bytes = randomBytes ?? crypto.getRandomValues(new Uint8Array(SESSION_ID_LENGTH));
-  let sessionId = '';
+  const bytes =
+    randomBytes ?? crypto.getRandomValues(new Uint8Array(SESSION_ID_LENGTH));
+  let sessionId = "";
   for (let i = 0; i < SESSION_ID_LENGTH; i += 1) {
     sessionId += SESSION_ID_ALPHABET[bytes[i] % SESSION_ID_ALPHABET.length];
   }
@@ -100,7 +104,9 @@ export function resolveStudioSession({
 }: ResolveStudioSessionOptions): ResolveStudioSessionResult {
   const parsed = parseStudioBranchName(currentBranch, mainHash);
   if (!parsed) {
-    throw new Error(`Studio requires a branch named studio/session-${mainHash}-<session-id>.`);
+    throw new Error(
+      `Studio requires a branch named studio/session-${mainHash}-<session-id>.`,
+    );
   }
 
   return {

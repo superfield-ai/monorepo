@@ -5,11 +5,11 @@
  * Renders ControlPanel into #root.
  */
 
-import React from 'react';
-import { createRoot } from 'react-dom/client';
-import { ControlPanel } from './components';
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { ControlPanel } from "./components";
 
-const rootEl = document.getElementById('root');
-if (!rootEl) throw new Error('Missing #root element');
+const rootEl = document.getElementById("root");
+if (!rootEl) throw new Error("Missing #root element");
 
 createRoot(rootEl).render(<ControlPanel />);

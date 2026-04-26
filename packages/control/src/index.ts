@@ -8,58 +8,82 @@
  * with an explicit function call so the server only starts when requested.
  */
 
-import { loadConfig, vlog, type ControlConfig } from './config';
-import { ProcessManager } from './process-manager';
-import { route } from './router';
-import { controlWsHandler } from './control-ws';
+import { loadConfig, vlog, type ControlConfig } from "./config";
+import { ProcessManager } from "./process-manager";
+import { route } from "./router";
+import { controlWsHandler, type WsData } from "./control-ws";
 
 export interface StartControlOpts {
   /** Override individual config values (takes precedence over env vars). */
   config?: Partial<ControlConfig>;
 }
 
-export async function startControl(opts: StartControlOpts = {}): Promise<{ server: ReturnType<typeof Bun.serve>; pm: ProcessManager; config: ControlConfig }> {
+export async function startControl(opts: StartControlOpts = {}): Promise<{
+  server: ReturnType<typeof Bun.serve>;
+  pm: ProcessManager;
+  config: ControlConfig;
+}> {
   const baseConfig = loadConfig();
   const config: ControlConfig = { ...baseConfig, ...opts.config };
   const pm = new ProcessManager();
 
-  vlog(config, 'Configuration loaded:', JSON.stringify({
-    port: config.port,
-    logDir: config.logDir,
-    clusterContext: config.clusterContext,
-    webServiceUrl: config.webServiceUrl,
-    apiServiceUrl: config.apiServiceUrl,
-    superfieldApiUrl: config.superfieldApiUrl,
-    assetsDir: config.assetsDir ?? '(unset)',
-    verbose: config.verbose,
-  }, null, 2));
+  vlog(
+    config,
+    "Configuration loaded:",
+    JSON.stringify(
+      {
+        port: config.port,
+        logDir: config.logDir,
+        clusterContext: config.clusterContext,
+        webServiceUrl: config.webServiceUrl,
+        apiServiceUrl: config.apiServiceUrl,
+        superfieldApiUrl: config.superfieldApiUrl,
+        assetsDir: config.assetsDir ?? "(unset)",
+        verbose: config.verbose,
+      },
+      null,
+      2,
+    ),
+  );
 
   let shuttingDown = false;
 
-  const server = Bun.serve<typeof controlWsHandler & { data: import('./control-ws').WsData }>({
-    hostname: '0.0.0.0',
+  const server = Bun.serve<
+    typeof controlWsHandler & { data: import("./control-ws").WsData }
+  >({
+    hostname: "0.0.0.0",
     port: config.port,
 
     async fetch(req: Request, srv): Promise<Response> {
       if (shuttingDown) {
-        return new Response('Service Unavailable — studio server is shutting down', { status: 503 });
+        return new Response(
+          "Service Unavailable — studio server is shutting down",
+          { status: 503 },
+        );
       }
       const url = new URL(req.url);
       vlog(config, `→ ${req.method} ${url.pathname}${url.search}`);
-      const res = await route(req, config, srv);
+      const res = await route(
+        req,
+        config,
+        srv as unknown as {
+          upgrade: (req: Request, opts: { data: WsData }) => boolean;
+        },
+      );
       if (res !== undefined) {
         vlog(config, `← ${res.status} ${url.pathname}`);
       }
       return res;
     },
 
-    websocket: controlWsHandler,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    websocket: controlWsHandler as any,
 
     error(err: Error): Response {
-      console.error('[studio] Unhandled server error:', err.message);
-      return new Response(JSON.stringify({ error: 'Internal Server Error' }), {
+      console.error("[studio] Unhandled server error:", err.message);
+      return new Response(JSON.stringify({ error: "Internal Server Error" }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' },
+        headers: { "Content-Type": "application/json" },
       });
     },
   });
@@ -80,20 +104,20 @@ export async function startControl(opts: StartControlOpts = {}): Promise<{ serve
     console.log(`\n[studio] Received ${signal}. Shutting down…`);
     server.stop();
     await pm.shutdown();
-    console.log('[studio] Goodbye.');
+    console.log("[studio] Goodbye.");
     process.exit(0);
   }
 
-  process.on('SIGINT', () => {
-    gracefulShutdown('SIGINT').catch((err) => {
-      console.error('[studio] Error during shutdown:', err);
+  process.on("SIGINT", () => {
+    gracefulShutdown("SIGINT").catch((err) => {
+      console.error("[studio] Error during shutdown:", err);
       process.exit(1);
     });
   });
 
-  process.on('SIGTERM', () => {
-    gracefulShutdown('SIGTERM').catch((err) => {
-      console.error('[studio] Error during shutdown:', err);
+  process.on("SIGTERM", () => {
+    gracefulShutdown("SIGTERM").catch((err) => {
+      console.error("[studio] Error during shutdown:", err);
       process.exit(1);
     });
   });

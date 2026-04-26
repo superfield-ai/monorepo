@@ -72,16 +72,24 @@ export class CommitController {
   }
 
   getState(): CommitControllerState {
-    return { ...this.state, commits: [...this.state.commits], timeline: [...this.state.timeline] };
+    return {
+      ...this.state,
+      commits: [...this.state.commits],
+      timeline: [...this.state.timeline],
+    };
   }
 
   /** Fetch studio status and extract commit list. */
-  async fetchStatus(): Promise<{ active: boolean; sessionId?: string; branch?: string }> {
+  async fetchStatus(): Promise<{
+    active: boolean;
+    sessionId?: string;
+    branch?: string;
+  }> {
     this.setState({ loading: true, error: null });
     try {
-      const url = this.withFixtureId('/studio/status');
+      const url = this.withFixtureId("/studio/status");
       const res = await fetch(url);
-      if (!res.ok) throw new Error('status request failed');
+      if (!res.ok) throw new Error("status request failed");
       const data = (await res.json()) as {
         active: boolean;
         sessionId?: string;
@@ -89,10 +97,18 @@ export class CommitController {
         commits?: Commit[];
         timeline?: TimelineEntry[];
       };
-      this.setState({ commits: data.commits ?? [], timeline: data.timeline ?? [], loading: false });
-      return { active: data.active, sessionId: data.sessionId, branch: data.branch };
+      this.setState({
+        commits: data.commits ?? [],
+        timeline: data.timeline ?? [],
+        loading: false,
+      });
+      return {
+        active: data.active,
+        sessionId: data.sessionId,
+        branch: data.branch,
+      };
     } catch {
-      this.setState({ loading: false, error: 'Failed to fetch studio status' });
+      this.setState({ loading: false, error: "Failed to fetch studio status" });
       return { active: false };
     }
   }
@@ -104,25 +120,34 @@ export class CommitController {
   async rollback(hash: string): Promise<Commit[] | null> {
     this.setState({ error: null });
     try {
-      const url = this.withFixtureId('/studio/rollback');
+      const url = this.withFixtureId("/studio/rollback");
       const res = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ hash }),
       });
       if (!res.ok) {
-        this.setState({ error: 'Studio could not roll back that change. Try again.' });
+        this.setState({
+          error: "Studio could not roll back that change. Try again.",
+        });
         return null;
       }
-      const data = (await res.json()) as { commits?: Commit[]; timeline?: TimelineEntry[] };
+      const data = (await res.json()) as {
+        commits?: Commit[];
+        timeline?: TimelineEntry[];
+      };
       if (!Array.isArray(data.commits)) {
-        this.setState({ error: 'Studio could not roll back that change. Try again.' });
+        this.setState({
+          error: "Studio could not roll back that change. Try again.",
+        });
         return null;
       }
       this.setState({ commits: data.commits, timeline: data.timeline ?? [] });
       return data.commits;
     } catch {
-      this.setState({ error: 'Studio could not roll back that change. Try again.' });
+      this.setState({
+        error: "Studio could not roll back that change. Try again.",
+      });
       return null;
     }
   }
@@ -145,7 +170,7 @@ export class CommitController {
 
   private withFixtureId(path: string): string {
     if (!this.fixtureId) return path;
-    const separator = path.includes('?') ? '&' : '?';
+    const separator = path.includes("?") ? "&" : "?";
     return `${path}${separator}fixtureId=${encodeURIComponent(this.fixtureId)}`;
   }
 

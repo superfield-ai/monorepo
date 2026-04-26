@@ -5,7 +5,7 @@
  * Self-contained — no external API calls.
  */
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef } from "react";
 
 export interface CitationData {
   id: string;
@@ -19,20 +19,29 @@ export interface CitationHoverPopoverProps {
   onClose: () => void;
 }
 
-export function CitationHoverPopover({ citation, anchorRect, onClose }: CitationHoverPopoverProps) {
+export function CitationHoverPopover({
+  citation,
+  anchorRect,
+  onClose,
+}: CitationHoverPopoverProps) {
   const ref = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!citation) return;
-    const handler = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
   }, [citation, onClose]);
 
   if (!citation || !anchorRect) return null;
 
   const top = anchorRect.bottom + window.scrollY + 4;
-  const left = Math.min(anchorRect.left + window.scrollX, window.innerWidth - 280);
+  const left = Math.min(
+    anchorRect.left + window.scrollX,
+    window.innerWidth - 280,
+  );
 
   return (
     <div
@@ -42,7 +51,9 @@ export function CitationHoverPopover({ citation, anchorRect, onClose }: Citation
       onMouseLeave={onClose}
     >
       {citation.source && (
-        <p className="mb-1 text-xs font-semibold text-gray-500">{citation.source}</p>
+        <p className="mb-1 text-xs font-semibold text-gray-500">
+          {citation.source}
+        </p>
       )}
       <p className="text-gray-700 leading-snug">{citation.excerpt}</p>
     </div>

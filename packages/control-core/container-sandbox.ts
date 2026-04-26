@@ -36,30 +36,30 @@
  * @see packages/core/session-lifecycle.ts
  */
 
-import { spawn } from './spawn';
+import { spawn } from "./spawn";
 
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** Anthropic API endpoint that the sandbox is allowed to reach. */
-const ANTHROPIC_API_HOST = 'api.anthropic.com';
+const ANTHROPIC_API_HOST = "api.anthropic.com";
 
 /** Port for Anthropic API HTTPS traffic. */
-const ANTHROPIC_API_PORT = '443';
+const ANTHROPIC_API_PORT = "443";
 
 /** DNS server for restricted resolution inside the container. */
-const _RESTRICTED_DNS = '127.0.0.1';
+const _RESTRICTED_DNS = "127.0.0.1";
 
 /** Mount point inside the container for build output. */
-const BUILD_OUTPUT_MOUNT = '/studio/build-output';
+const BUILD_OUTPUT_MOUNT = "/studio/build-output";
 
 /** Mount point inside the container for source code. */
-const SOURCE_MOUNT = '/studio/src';
+const SOURCE_MOUNT = "/studio/src";
 
 /** Label applied to all sandbox containers for identification. */
-const SANDBOX_LABEL = 'superfield-studio-sandbox';
+const SANDBOX_LABEL = "superfield-studio-sandbox";
 
 /** Docker image used for the sandbox container. */
-const SANDBOX_IMAGE = 'superfield-release:studio';
+const SANDBOX_IMAGE = "superfield-release:studio";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -130,38 +130,38 @@ export function sandboxContainerName(sessionId: string): string {
  */
 export function buildNetworkRules(): string {
   return [
-    '#!/bin/sh',
-    'set -e',
-    '',
-    '# Resolve Anthropic API IPs at container start time.',
+    "#!/bin/sh",
+    "set -e",
+    "",
+    "# Resolve Anthropic API IPs at container start time.",
     `ANTHROPIC_IPS=$(getent hosts ${ANTHROPIC_API_HOST} | awk '{ print $1 }' | sort -u)`,
-    '',
-    '# Flush existing rules.',
-    'iptables -F OUTPUT',
-    '',
-    '# Default policy: drop all outbound.',
-    'iptables -P OUTPUT DROP',
-    '',
-    '# Allow loopback.',
-    'iptables -A OUTPUT -o lo -j ACCEPT',
-    '',
-    '# Allow established/related (for return traffic).',
-    'iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT',
-    '',
-    '# Allow DNS to localhost only (restricted resolver).',
+    "",
+    "# Flush existing rules.",
+    "iptables -F OUTPUT",
+    "",
+    "# Default policy: drop all outbound.",
+    "iptables -P OUTPUT DROP",
+    "",
+    "# Allow loopback.",
+    "iptables -A OUTPUT -o lo -j ACCEPT",
+    "",
+    "# Allow established/related (for return traffic).",
+    "iptables -A OUTPUT -m state --state ESTABLISHED,RELATED -j ACCEPT",
+    "",
+    "# Allow DNS to localhost only (restricted resolver).",
     `iptables -A OUTPUT -p udp --dport 53 -d 127.0.0.1 -j ACCEPT`,
     `iptables -A OUTPUT -p tcp --dport 53 -d 127.0.0.1 -j ACCEPT`,
-    '',
-    '# Allow HTTPS to Anthropic API IPs.',
-    'for ip in $ANTHROPIC_IPS; do',
+    "",
+    "# Allow HTTPS to Anthropic API IPs.",
+    "for ip in $ANTHROPIC_IPS; do",
     `  iptables -A OUTPUT -p tcp --dport ${ANTHROPIC_API_PORT} -d "$ip" -j ACCEPT`,
-    'done',
-    '',
-    '# Log and drop everything else (logging is optional, aids debugging).',
-    'iptables -A OUTPUT -j DROP',
-    '',
+    "done",
+    "",
+    "# Log and drop everything else (logging is optional, aids debugging).",
+    "iptables -A OUTPUT -j DROP",
+    "",
     'echo "Network rules applied. Allowed IPs: $ANTHROPIC_IPS"',
-  ].join('\n');
+  ].join("\n");
 }
 
 /**
@@ -176,12 +176,12 @@ export function buildNetworkRules(): string {
  */
 export function buildDnsConfig(): string {
   return [
-    '# Restricted DNS — only Anthropic API resolves.',
-    'no-resolv',
-    'no-hosts',
+    "# Restricted DNS — only Anthropic API resolves.",
+    "no-resolv",
+    "no-hosts",
     `server=/${ANTHROPIC_API_HOST}/8.8.8.8`,
-    'address=/#/',
-  ].join('\n');
+    "address=/#/",
+  ].join("\n");
 }
 
 // ── Sandbox lifecycle ────────────────────────────────────────────────────────
@@ -207,38 +207,54 @@ export function startSandbox(config: SandboxConfig): SandboxState {
   const containerName = sandboxContainerName(config.sessionId);
 
   // Remove any stale container with the same name.
-  spawn('docker', ['rm', '-f', containerName]);
+  spawn("docker", ["rm", "-f", containerName]);
 
   // Write network rules and DNS config to temp files for injection.
   const rulesScript = buildNetworkRules();
   const dnsConfig = buildDnsConfig();
 
   // Create the container.
-  const createResult = spawn('docker', [
-    'create',
-    '--name', containerName,
-    '--label', `app=${SANDBOX_LABEL}`,
-    '--label', `session=${config.sessionId}`,
+  const createResult = spawn("docker", [
+    "create",
+    "--name",
+    containerName,
+    "--label",
+    `app=${SANDBOX_LABEL}`,
+    "--label",
+    `session=${config.sessionId}`,
     // Network: start with host networking disabled.
-    '--network', 'none',
+    "--network",
+    "none",
     // Capabilities: NET_ADMIN for iptables, drop everything else.
-    '--cap-add', 'NET_ADMIN',
-    '--cap-drop', 'ALL',
-    '--cap-add', 'CHOWN',
-    '--cap-add', 'DAC_OVERRIDE',
-    '--cap-add', 'FOWNER',
-    '--cap-add', 'SETGID',
-    '--cap-add', 'SETUID',
+    "--cap-add",
+    "NET_ADMIN",
+    "--cap-drop",
+    "ALL",
+    "--cap-add",
+    "CHOWN",
+    "--cap-add",
+    "DAC_OVERRIDE",
+    "--cap-add",
+    "FOWNER",
+    "--cap-add",
+    "SETGID",
+    "--cap-add",
+    "SETUID",
     // Security: no new privileges.
-    '--security-opt', 'no-new-privileges',
+    "--security-opt",
+    "no-new-privileges",
     // Volumes: source code (rw) and build output (rw).
-    '-v', `${config.worktreePath}:${SOURCE_MOUNT}:rw`,
-    '-v', `${config.buildOutputDir}:${BUILD_OUTPUT_MOUNT}:rw`,
+    "-v",
+    `${config.worktreePath}:${SOURCE_MOUNT}:rw`,
+    "-v",
+    `${config.buildOutputDir}:${BUILD_OUTPUT_MOUNT}:rw`,
     // Working directory.
-    '-w', SOURCE_MOUNT,
+    "-w",
+    SOURCE_MOUNT,
     // Image and entrypoint: long-lived sleep.
     SANDBOX_IMAGE,
-    'sleep', 'infinity',
+    "sleep",
+    "infinity",
   ]);
 
   if (createResult.status !== 0) {
@@ -250,18 +266,20 @@ export function startSandbox(config: SandboxConfig): SandboxState {
   const containerId = createResult.stdout.trim();
 
   // Start the container.
-  const startResult = spawn('docker', ['start', containerName]);
+  const startResult = spawn("docker", ["start", containerName]);
   if (startResult.status !== 0) {
     // Cleanup on failure.
-    spawn('docker', ['rm', '-f', containerName]);
-    throw new Error(
-      `Failed to start sandbox container: ${startResult.stderr}`,
-    );
+    spawn("docker", ["rm", "-f", containerName]);
+    throw new Error(`Failed to start sandbox container: ${startResult.stderr}`);
   }
 
   // Inject and apply network rules.
-  const injectRules = spawn('docker', [
-    'exec', containerName, 'sh', '-c', rulesScript,
+  const injectRules = spawn("docker", [
+    "exec",
+    containerName,
+    "sh",
+    "-c",
+    rulesScript,
   ]);
 
   if (injectRules.status !== 0 && config.verbose) {
@@ -271,8 +289,11 @@ export function startSandbox(config: SandboxConfig): SandboxState {
   }
 
   // Inject DNS config.
-  const injectDns = spawn('docker', [
-    'exec', containerName, 'sh', '-c',
+  const injectDns = spawn("docker", [
+    "exec",
+    containerName,
+    "sh",
+    "-c",
     `mkdir -p /etc/dnsmasq.d && cat > /etc/dnsmasq.d/studio.conf << 'DNSEOF'\n${dnsConfig}\nDNSEOF`,
   ]);
 
@@ -283,7 +304,9 @@ export function startSandbox(config: SandboxConfig): SandboxState {
   }
 
   if (config.verbose) {
-    console.log(`  Sandbox container started: ${containerName} (${containerId.slice(0, 12)})`);
+    console.log(
+      `  Sandbox container started: ${containerName} (${containerId.slice(0, 12)})`,
+    );
   }
 
   return {
@@ -304,10 +327,10 @@ export function startSandbox(config: SandboxConfig): SandboxState {
  */
 export function stopSandbox(sandbox: SandboxState): void {
   // Graceful stop with a short timeout.
-  spawn('docker', ['stop', '--time', '5', sandbox.containerName]);
+  spawn("docker", ["stop", "--time", "5", sandbox.containerName]);
 
   // Force remove (catches edge cases where stop didn't clean up).
-  spawn('docker', ['rm', '-f', sandbox.containerName]);
+  spawn("docker", ["rm", "-f", sandbox.containerName]);
 }
 
 /**
@@ -318,10 +341,13 @@ export function stopSandbox(sandbox: SandboxState): void {
  * @returns Array of sandbox info objects.
  */
 export function listSandboxes(): SandboxInfo[] {
-  const result = spawn('docker', [
-    'ps', '-a',
-    '--filter', `label=app=${SANDBOX_LABEL}`,
-    '--format', '{{.ID}}|{{.Names}}|{{.Status}}',
+  const result = spawn("docker", [
+    "ps",
+    "-a",
+    "--filter",
+    `label=app=${SANDBOX_LABEL}`,
+    "--format",
+    "{{.ID}}|{{.Names}}|{{.Status}}",
   ]);
 
   if (result.status !== 0 || !result.stdout.trim()) {
@@ -330,10 +356,10 @@ export function listSandboxes(): SandboxInfo[] {
 
   return result.stdout
     .trim()
-    .split('\n')
+    .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const [containerId, containerName, status] = line.split('|');
+      const [containerId, containerName, status] = line.split("|");
       return { containerId, containerName, status };
     });
 }
@@ -349,8 +375,8 @@ export function listSandboxes(): SandboxInfo[] {
 export function cleanupOrphanedSandboxes(): number {
   const sandboxes = listSandboxes();
   for (const sb of sandboxes) {
-    spawn('docker', ['stop', '--time', '2', sb.containerName]);
-    spawn('docker', ['rm', '-f', sb.containerName]);
+    spawn("docker", ["stop", "--time", "2", sb.containerName]);
+    spawn("docker", ["rm", "-f", sb.containerName]);
   }
   return sandboxes.length;
 }
@@ -372,11 +398,15 @@ export function buildAndExportImage(
   imageName: string,
 ): boolean {
   // Build using the existing Dockerfile.release inside the sandbox.
-  const buildResult = spawn('docker', [
-    'exec', sandbox.containerName,
-    'docker', 'build',
-    '-f', `${SOURCE_MOUNT}/Dockerfile.release`,
-    '-t', imageName,
+  const buildResult = spawn("docker", [
+    "exec",
+    sandbox.containerName,
+    "docker",
+    "build",
+    "-f",
+    `${SOURCE_MOUNT}/Dockerfile.release`,
+    "-t",
+    imageName,
     SOURCE_MOUNT,
   ]);
 
@@ -385,10 +415,13 @@ export function buildAndExportImage(
   }
 
   // Export image as tarball to the shared volume (not a network push).
-  const exportResult = spawn('docker', [
-    'exec', sandbox.containerName,
-    'docker', 'save',
-    '-o', `${BUILD_OUTPUT_MOUNT}/${imageName.replace(/[/:]/g, '-')}.tar`,
+  const exportResult = spawn("docker", [
+    "exec",
+    sandbox.containerName,
+    "docker",
+    "save",
+    "-o",
+    `${BUILD_OUTPUT_MOUNT}/${imageName.replace(/[/:]/g, "-")}.tar`,
     imageName,
   ]);
 
@@ -403,8 +436,11 @@ export function buildAndExportImage(
  */
 export function isSandboxRunning(sessionId: string): boolean {
   const containerName = sandboxContainerName(sessionId);
-  const result = spawn('docker', [
-    'inspect', '--format', '{{.State.Running}}', containerName,
+  const result = spawn("docker", [
+    "inspect",
+    "--format",
+    "{{.State.Running}}",
+    containerName,
   ]);
-  return result.status === 0 && result.stdout.trim() === 'true';
+  return result.status === 0 && result.stdout.trim() === "true";
 }

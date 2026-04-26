@@ -18,22 +18,22 @@
  * - Migration failure skips pod cycling; error is streamed.
  */
 
-export type Service = 'api' | 'web' | 'agents';
+export type Service = "api" | "web" | "agents";
 
-export const ALL_SERVICES: Service[] = ['api', 'web', 'agents'];
+export const ALL_SERVICES: Service[] = ["api", "web", "agents"];
 
 /** Maps a set of changed file paths to the affected cluster services. */
 export function mapFilesToServices(changedFiles: string[]): Service[] {
   const affected = new Set<Service>();
 
   for (const file of changedFiles) {
-    if (file.startsWith('apps/server/') || file.startsWith('apps/worker/')) {
-      affected.add('api');
+    if (file.startsWith("apps/server/") || file.startsWith("apps/worker/")) {
+      affected.add("api");
     }
-    if (file.startsWith('apps/web/')) {
-      affected.add('web');
+    if (file.startsWith("apps/web/")) {
+      affected.add("web");
     }
-    if (file.startsWith('packages/')) {
+    if (file.startsWith("packages/")) {
       // packages affect all services
       return [...ALL_SERVICES];
     }
@@ -44,7 +44,7 @@ export function mapFilesToServices(changedFiles: string[]): Service[] {
 
 /** Returns true if any changed file is a drizzle migration file. */
 export function hasMigrationChanges(changedFiles: string[]): boolean {
-  return changedFiles.some((f) => f.includes('packages/core/drizzle/'));
+  return changedFiles.some((f) => f.includes("packages/core/drizzle/"));
 }
 
 export interface StreamWriter {
@@ -70,16 +70,25 @@ export type SpawnResult = {
   stderr: string;
 };
 
-export type SpawnFn = (cmd: string[], opts?: { cwd?: string }) => Promise<SpawnResult>;
-export type DeletePodFn = (service: Service, context: string) => Promise<SpawnResult>;
+export type SpawnFn = (
+  cmd: string[],
+  opts?: { cwd?: string },
+) => Promise<SpawnResult>;
+export type DeletePodFn = (
+  service: Service,
+  context: string,
+) => Promise<SpawnResult>;
 
 const DEFAULT_POD_RESTART_TIMEOUT_MS = 60_000;
 
-async function defaultSpawn(cmd: string[], opts?: { cwd?: string }): Promise<SpawnResult> {
+async function defaultSpawn(
+  cmd: string[],
+  opts?: { cwd?: string },
+): Promise<SpawnResult> {
   const proc = Bun.spawn(cmd, {
     cwd: opts?.cwd,
-    stdout: 'pipe',
-    stderr: 'pipe',
+    stdout: "pipe",
+    stderr: "pipe",
   });
   const [stdout, stderr, exitCode] = await Promise.all([
     new Response(proc.stdout).text(),
@@ -89,16 +98,19 @@ async function defaultSpawn(cmd: string[], opts?: { cwd?: string }): Promise<Spa
   return { exitCode, stdout, stderr };
 }
 
-async function defaultDeletePod(service: Service, context: string): Promise<SpawnResult> {
+async function defaultDeletePod(
+  service: Service,
+  context: string,
+): Promise<SpawnResult> {
   return defaultSpawn([
-    'kubectl',
-    '--context',
+    "kubectl",
+    "--context",
     context,
-    'delete',
-    'pod',
-    '-l',
+    "delete",
+    "pod",
+    "-l",
     `app=${service}`,
-    '--grace-period=0',
+    "--grace-period=0",
   ]);
 }
 
@@ -120,7 +132,7 @@ export async function hotSwap(opts: HotSwapOptions): Promise<HotSwapResult> {
   const {
     changedFiles,
     writer,
-    kubectlContext = 'default',
+    kubectlContext = "default",
     podRestartTimeoutMs = DEFAULT_POD_RESTART_TIMEOUT_MS,
     spawnFn = defaultSpawn,
     deletePodFn = defaultDeletePod,
@@ -129,16 +141,18 @@ export async function hotSwap(opts: HotSwapOptions): Promise<HotSwapResult> {
   const affected = mapFilesToServices(changedFiles);
 
   if (affected.length === 0) {
-    writer.write('[hot-swap] No affected services — nothing to restart.\n');
+    writer.write("[hot-swap] No affected services — nothing to restart.\n");
     return { ok: true, servicesRestarted: [] };
   }
 
-  writer.write(`[hot-swap] Affected services: ${affected.join(', ')}\n`);
+  writer.write(`[hot-swap] Affected services: ${affected.join(", ")}\n`);
 
   // Step 2: migrations
   if (hasMigrationChanges(changedFiles)) {
-    writer.write('[hot-swap] Migration files changed — running bun run db:migrate...\n');
-    const migResult = await spawnFn(['bun', 'run', 'db:migrate']);
+    writer.write(
+      "[hot-swap] Migration files changed — running bun run db:migrate...\n",
+    );
+    const migResult = await spawnFn(["bun", "run", "db:migrate"]);
     writer.write(migResult.stdout);
     if (migResult.stderr) writer.write(migResult.stderr);
     if (migResult.exitCode !== 0) {
@@ -146,13 +160,13 @@ export async function hotSwap(opts: HotSwapOptions): Promise<HotSwapResult> {
       writer.write(msg);
       return { ok: false, error: msg };
     }
-    writer.write('[hot-swap] Migration complete.\n');
+    writer.write("[hot-swap] Migration complete.\n");
   }
 
   // Step 3: build affected services
   for (const service of affected) {
     writer.write(`[hot-swap] Building service: ${service}...\n`);
-    const buildResult = await spawnFn(['bun', 'run', 'build'], {
+    const buildResult = await spawnFn(["bun", "run", "build"], {
       cwd: `apps/${serviceToApp(service)}`,
     });
     writer.write(buildResult.stdout);
@@ -172,7 +186,9 @@ export async function hotSwap(opts: HotSwapOptions): Promise<HotSwapResult> {
     writer.write(deleteResult.stdout);
     if (deleteResult.stderr) writer.write(deleteResult.stderr);
     if (deleteResult.exitCode !== 0) {
-      writer.write(`[hot-swap] Warning: pod delete returned non-zero for ${service}.\n`);
+      writer.write(
+        `[hot-swap] Warning: pod delete returned non-zero for ${service}.\n`,
+      );
     }
   }
 
@@ -180,22 +196,28 @@ export async function hotSwap(opts: HotSwapOptions): Promise<HotSwapResult> {
   const timeoutWarningMs = podRestartTimeoutMs;
   await Promise.all(
     affected.map((service) =>
-      waitForPodsReady({ service, kubectlContext, timeoutMs: timeoutWarningMs, writer, spawnFn }),
+      waitForPodsReady({
+        service,
+        kubectlContext,
+        timeoutMs: timeoutWarningMs,
+        writer,
+        spawnFn,
+      }),
     ),
   );
 
-  writer.write(`[hot-swap] Hot-swap complete for: ${affected.join(', ')}\n`);
+  writer.write(`[hot-swap] Hot-swap complete for: ${affected.join(", ")}\n`);
   return { ok: true, servicesRestarted: affected };
 }
 
 function serviceToApp(service: Service): string {
   switch (service) {
-    case 'api':
-      return 'server';
-    case 'web':
-      return 'web';
-    case 'agents':
-      return 'worker';
+    case "api":
+      return "server";
+    case "web":
+      return "web";
+    case "agents":
+      return "worker";
   }
 }
 
@@ -211,29 +233,31 @@ async function waitForPodsReady(opts: {
 
   while (Date.now() < deadline) {
     const result = await spawnFn([
-      'kubectl',
-      '--context',
+      "kubectl",
+      "--context",
       kubectlContext,
-      'get',
-      'pods',
-      '-l',
+      "get",
+      "pods",
+      "-l",
       `app=${service}`,
-      '--no-headers',
+      "--no-headers",
     ]);
 
-    const lines = result.stdout.trim().split('\n').filter(Boolean);
+    const lines = result.stdout.trim().split("\n").filter(Boolean);
     const allReady = lines.every((line) => {
       // Typical output: NAME READY STATUS RESTARTS AGE
       // STATUS should be "Running" and READY should show n/n
       const parts = line.split(/\s+/);
-      const readyCol = parts[1] ?? '';
-      const statusCol = parts[2] ?? '';
-      if (statusCol === 'CrashLoopBackOff' || statusCol === 'Error') {
-        writer.write(`[hot-swap] Pod in ${statusCol} for ${service}: ${line}\n`);
+      const readyCol = parts[1] ?? "";
+      const statusCol = parts[2] ?? "";
+      if (statusCol === "CrashLoopBackOff" || statusCol === "Error") {
+        writer.write(
+          `[hot-swap] Pod in ${statusCol} for ${service}: ${line}\n`,
+        );
         return false;
       }
-      const [current, total] = readyCol.split('/').map(Number);
-      return statusCol === 'Running' && current > 0 && current === total;
+      const [current, total] = readyCol.split("/").map(Number);
+      return statusCol === "Running" && current > 0 && current === total;
     });
 
     if (allReady && lines.length > 0) {

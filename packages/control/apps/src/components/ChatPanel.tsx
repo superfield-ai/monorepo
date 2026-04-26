@@ -12,11 +12,17 @@
  * Canonical docs: docs/studio-mode.md — "Browser Interface", "Claude CLI Integration"
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { Send } from 'lucide-react';
-import { ClusterStatusIndicator, type ClusterStatus } from './ClusterStatusIndicator';
-import { OAuthPanel } from './OAuthPanel';
-import { ChatController, type ChatControllerState } from '../controllers/ChatController';
+import React, { useEffect, useRef, useState } from "react";
+import { Send } from "lucide-react";
+import {
+  ClusterStatusIndicator,
+  type ClusterStatus,
+} from "./ClusterStatusIndicator";
+import { OAuthPanel } from "./OAuthPanel";
+import {
+  ChatController,
+  type ChatControllerState,
+} from "../controllers/ChatController";
 
 interface ChatPanelProps {
   /** Current cluster status forwarded from parent SSE consumer */
@@ -40,7 +46,7 @@ interface ChatPanelProps {
 export function ChatPanel({
   clusterStatus,
   clusterEventsUrl,
-  chatEndpoint = '/studio/chat',
+  chatEndpoint = "/studio/chat",
   controller: controllerProp,
 }: ChatPanelProps) {
   const controllerRef = useRef<ChatController>(
@@ -50,7 +56,7 @@ export function ChatPanel({
   const [chatState, setChatState] = useState<ChatControllerState>(
     controllerRef.current.getState(),
   );
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
@@ -62,35 +68,41 @@ export function ChatPanel({
 
   // Auto-scroll to bottom when messages change.
   useEffect(() => {
-    bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatState.messages]);
 
-  const submitting = chatState.turnState !== 'idle';
+  const submitting = chatState.turnState !== "idle";
   const { messages } = chatState;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
     if (!text || submitting) return;
-    setInput('');
+    setInput("");
     await controllerRef.current.sendMessage(text);
     textareaRef.current?.focus();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     // Submit on Enter without Shift; allow Shift+Enter for newlines.
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSubmit(e as unknown as React.FormEvent);
     }
   }
 
   return (
-    <div className="flex flex-col h-full bg-zinc-900 text-zinc-100" data-testid="chat-panel">
+    <div
+      className="flex flex-col h-full bg-zinc-900 text-zinc-100"
+      data-testid="chat-panel"
+    >
       {/* Header */}
       <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700 shrink-0">
         <span className="text-sm font-semibold text-zinc-100">Claude Chat</span>
-        <ClusterStatusIndicator statusOverride={clusterStatus} eventsUrl={clusterEventsUrl} />
+        <ClusterStatusIndicator
+          statusOverride={clusterStatus}
+          eventsUrl={clusterEventsUrl}
+        />
       </div>
 
       {/* OAuth Connection Panel */}
@@ -111,16 +123,18 @@ export function ChatPanel({
         {messages.map((msg) => (
           <div
             key={msg.id}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
             data-testid={`message-${msg.role}`}
           >
             <div
               className={`max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap break-words ${
-                msg.role === 'user'
-                  ? 'bg-indigo-600 text-white rounded-br-sm'
-                  : 'bg-zinc-800 text-zinc-100 rounded-bl-sm'
+                msg.role === "user"
+                  ? "bg-indigo-600 text-white rounded-br-sm"
+                  : "bg-zinc-800 text-zinc-100 rounded-bl-sm"
               }`}
-              aria-label={msg.role === 'user' ? 'Your message' : 'Claude response'}
+              aria-label={
+                msg.role === "user" ? "Your message" : "Claude response"
+              }
             >
               {msg.content}
               {msg.streaming && (

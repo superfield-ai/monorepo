@@ -17,7 +17,7 @@
  * No React imports.
  */
 
-export type OAuthStatus = 'disconnected' | 'pending' | 'connected' | 'error';
+export type OAuthStatus = "disconnected" | "pending" | "connected" | "error";
 
 export interface OAuthControllerState {
   status: OAuthStatus;
@@ -31,7 +31,7 @@ export interface OAuthControllerState {
 
 export type OAuthControllerListener = (state: OAuthControllerState) => void;
 
-const STORAGE_KEY = 'oauth_connected';
+const STORAGE_KEY = "oauth_connected";
 
 /**
  * OAuthController manages the Claude OAuth authentication flow.
@@ -46,7 +46,7 @@ const STORAGE_KEY = 'oauth_connected';
  */
 export class OAuthController {
   private state: OAuthControllerState = {
-    status: 'disconnected',
+    status: "disconnected",
     oauthUrl: null,
     error: null,
     loading: true,
@@ -54,7 +54,7 @@ export class OAuthController {
   private listeners: Set<OAuthControllerListener> = new Set();
   private readonly baseUrl: string;
 
-  constructor({ baseUrl = '' }: { baseUrl?: string } = {}) {
+  constructor({ baseUrl = "" }: { baseUrl?: string } = {}) {
     this.baseUrl = baseUrl;
   }
 
@@ -77,25 +77,28 @@ export class OAuthController {
     this.setState({ loading: true, error: null });
     try {
       const res = await fetch(`${this.baseUrl}/api/auth/oauth/status`, {
-        credentials: 'include',
+        credentials: "include",
       });
       if (res.ok) {
         const data = (await res.json()) as { connected: boolean };
         const connected = data.connected;
         if (connected) {
-          localStorage.setItem(STORAGE_KEY, 'true');
+          localStorage.setItem(STORAGE_KEY, "true");
         } else {
           localStorage.removeItem(STORAGE_KEY);
         }
-        this.setState({ status: connected ? 'connected' : 'disconnected', loading: false });
+        this.setState({
+          status: connected ? "connected" : "disconnected",
+          loading: false,
+        });
       } else {
-        this.setState({ status: 'disconnected', loading: false });
+        this.setState({ status: "disconnected", loading: false });
       }
     } catch {
       // Seed from localStorage on network error
-      const persisted = localStorage.getItem(STORAGE_KEY) === 'true';
+      const persisted = localStorage.getItem(STORAGE_KEY) === "true";
       this.setState({
-        status: persisted ? 'connected' : 'disconnected',
+        status: persisted ? "connected" : "disconnected",
         loading: false,
       });
     }
@@ -109,18 +112,24 @@ export class OAuthController {
     this.setState({ error: null, oauthUrl: null });
     try {
       const res = await fetch(`${this.baseUrl}/api/auth/oauth/init`, {
-        method: 'GET',
-        credentials: 'include',
+        method: "GET",
+        credentials: "include",
       });
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
-        this.setState({ error: data.error ?? 'Failed to initiate OAuth', status: 'error' });
+        this.setState({
+          error: data.error ?? "Failed to initiate OAuth",
+          status: "error",
+        });
         return;
       }
       const data = (await res.json()) as { url: string };
-      this.setState({ oauthUrl: data.url, status: 'pending' });
+      this.setState({ oauthUrl: data.url, status: "pending" });
     } catch {
-      this.setState({ error: 'Failed to connect. Please try again.', status: 'error' });
+      this.setState({
+        error: "Failed to connect. Please try again.",
+        status: "error",
+      });
     }
   }
 
@@ -130,7 +139,10 @@ export class OAuthController {
    */
   async completeOAuth(confirmationCode: string): Promise<void> {
     if (!confirmationCode.trim()) {
-      this.setState({ error: 'Please enter the confirmation code', status: 'error' });
+      this.setState({
+        error: "Please enter the confirmation code",
+        status: "error",
+      });
       return;
     }
 
@@ -138,33 +150,33 @@ export class OAuthController {
 
     try {
       const res = await fetch(`${this.baseUrl}/api/auth/oauth/complete`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
         body: JSON.stringify({ code: confirmationCode.trim() }),
       });
 
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
         this.setState({
-          error: data.error ?? 'Failed to complete authentication',
-          status: 'error',
+          error: data.error ?? "Failed to complete authentication",
+          status: "error",
           loading: false,
         });
         return;
       }
 
-      localStorage.setItem(STORAGE_KEY, 'true');
+      localStorage.setItem(STORAGE_KEY, "true");
       this.setState({
-        status: 'connected',
+        status: "connected",
         oauthUrl: null,
         loading: false,
         error: null,
       });
     } catch {
       this.setState({
-        error: 'Failed to complete authentication. Please try again.',
-        status: 'error',
+        error: "Failed to complete authentication. Please try again.",
+        status: "error",
         loading: false,
       });
     }
@@ -172,7 +184,7 @@ export class OAuthController {
 
   /** Clear OAuth URL — called when user cancels the pending flow. */
   cancelPending(): void {
-    this.setState({ oauthUrl: null, status: 'disconnected', error: null });
+    this.setState({ oauthUrl: null, status: "disconnected", error: null });
   }
 
   private setState(partial: Partial<OAuthControllerState>): void {

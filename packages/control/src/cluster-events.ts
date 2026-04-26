@@ -23,7 +23,7 @@ export function parsePodLine(line: string): PodEvent | null {
   const parts = line.trim().split(/\s+/);
   if (parts.length < 5) return null;
   // Skip header lines
-  if (parts[0] === 'NAME') return null;
+  if (parts[0] === "NAME") return null;
   return {
     name: parts[0],
     ready: parts[1],
@@ -46,7 +46,7 @@ export class ClusterEventStream {
   private running = false;
   private kubectlContext: string;
 
-  constructor(kubectlContext = 'default') {
+  constructor(kubectlContext = "default") {
     this.kubectlContext = kubectlContext;
   }
 
@@ -94,25 +94,33 @@ export class ClusterEventStream {
 
   private async runWatch(): Promise<void> {
     this.proc = Bun.spawn(
-      ['kubectl', '--context', this.kubectlContext, 'get', 'pods', '--watch', '--all-namespaces'],
+      [
+        "kubectl",
+        "--context",
+        this.kubectlContext,
+        "get",
+        "pods",
+        "--watch",
+        "--all-namespaces",
+      ],
       {
-        stdout: 'pipe',
-        stderr: 'pipe',
+        stdout: "pipe",
+        stderr: "pipe",
       },
     );
 
     const stdout = this.proc.stdout as ReadableStream<Uint8Array>;
     const reader = stdout.getReader();
     const decoder = new TextDecoder();
-    let buf = '';
+    let buf = "";
 
     try {
       while (this.running) {
         const { done, value } = await reader.read();
         if (done) break;
         buf += decoder.decode(value, { stream: true });
-        const lines = buf.split('\n');
-        buf = lines.pop() ?? '';
+        const lines = buf.split("\n");
+        buf = lines.pop() ?? "";
         for (const line of lines) {
           if (!line.trim()) continue;
           const event = parsePodLine(line);
@@ -143,7 +151,7 @@ export function clusterEventsResponse(stream: ClusterEventStream): Response {
     start(controller) {
       // Send an initial heartbeat comment so the browser considers the
       // connection open immediately.
-      controller.enqueue(new TextEncoder().encode(': connected\n\n'));
+      controller.enqueue(new TextEncoder().encode(": connected\n\n"));
 
       unsubscribe = stream.subscribe((chunk) => {
         try {
@@ -163,10 +171,10 @@ export function clusterEventsResponse(stream: ClusterEventStream): Response {
 
   return new Response(body, {
     headers: {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'X-Accel-Buffering': 'no',
-      Connection: 'keep-alive',
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "X-Accel-Buffering": "no",
+      Connection: "keep-alive",
     },
   });
 }

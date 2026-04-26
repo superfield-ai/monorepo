@@ -10,11 +10,11 @@
  *   fixture.stop();
  */
 
-import { delimiter } from 'node:path';
-import { ApiState } from '@superfield/core/api-state';
-import { startApiServer } from '@superfield/core/api-server';
+import { delimiter } from "node:path";
+import { ApiState } from "@superfield/core/api-state";
+import { startApiServer } from "@superfield/core/api-server";
 
-const FIXTURES_DIR = new URL('../../fixtures', import.meta.url).pathname;
+const FIXTURES_DIR = new URL("../../fixtures", import.meta.url).pathname;
 
 export interface SuperfieldFixture {
   apiUrl: string;
@@ -24,12 +24,14 @@ export interface SuperfieldFixture {
 export async function startSuperfieldFixture(): Promise<SuperfieldFixture> {
   // Inject the claude stub into PATH so Bun.spawn('claude', ...) in the API
   // server resolves to our stub script.
-  const origPath = process.env.PATH ?? '';
+  const origPath = process.env.PATH ?? "";
   process.env.PATH = `${FIXTURES_DIR}${delimiter}${origPath}`;
-  process.env.CLAUDE_E2E_LOG_PATH = process.env.CLAUDE_E2E_LOG_PATH ?? '/tmp/claude-studio-fixture.log';
+  process.env.CLAUDE_E2E_LOG_PATH =
+    process.env.CLAUDE_E2E_LOG_PATH ?? "/tmp/claude-studio-fixture.log";
 
   const state = new ApiState();
   const logger = {
+    currentLevel: "info" as const,
     emit: (_level: string, _msg: string) => {
       // Silent in tests.
     },
@@ -39,11 +41,11 @@ export async function startSuperfieldFixture(): Promise<SuperfieldFixture> {
   const server = startApiServer({ port: 0, state, logger });
 
   await new Promise<void>((resolve) => {
-    server.once('listening', resolve);
+    server.once("listening", resolve);
   });
 
   const addr = server.address();
-  const port = typeof addr === 'object' && addr ? addr.port : 0;
+  const port = typeof addr === "object" && addr ? addr.port : 0;
   const apiUrl = `http://127.0.0.1:${port}`;
 
   const stop = (): Promise<void> => {

@@ -20,13 +20,13 @@
  * Canonical docs: docs/studio-mode.md
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import { ChatPanel } from './ChatPanel';
-import { IframePanel } from './IframePanel';
-import { OrchestratorView } from './OrchestratorView';
-import { ComponentPreviewPanel } from './ComponentPreviewPanel';
-import type { ClusterStatus } from './ClusterStatusIndicator';
-import { ClusterStatusController } from '../controllers/ClusterStatusController';
+import React, { useEffect, useRef, useState } from "react";
+import { ChatPanel } from "./ChatPanel";
+import { IframePanel } from "./IframePanel";
+import { OrchestratorView } from "./OrchestratorView";
+import { ComponentPreviewPanel } from "./ComponentPreviewPanel";
+import type { ClusterStatus } from "./ClusterStatusIndicator";
+import { ClusterStatusController } from "../controllers/ClusterStatusController";
 
 interface ControlPanelProps {
   /** URL loaded in the app iframe; defaults to /app/ */
@@ -50,14 +50,14 @@ interface ControlPanelProps {
  * opening independent SSE connections.
  */
 export function ControlPanel({
-  appSrc = '/app/',
-  clusterEventsUrl = '/studio/cluster/events',
-  chatEndpoint = '/studio/chat',
+  appSrc = "/app/",
+  clusterEventsUrl = "/studio/cluster/events",
+  chatEndpoint = "/studio/chat",
   initialClusterStatus,
   clusterStatusController: controllerProp,
 }: ControlPanelProps) {
   const [clusterStatus, setClusterStatus] = useState<ClusterStatus>(
-    initialClusterStatus ?? 'unknown',
+    initialClusterStatus ?? "unknown",
   );
 
   const controllerRef = useRef<ClusterStatusController | null>(null);
@@ -66,7 +66,9 @@ export function ControlPanel({
     // Skip SSE when an initial status is injected (test / Storybook mode).
     if (initialClusterStatus !== undefined) return;
 
-    const ctrl = controllerProp ?? new ClusterStatusController({ eventsUrl: clusterEventsUrl });
+    const ctrl =
+      controllerProp ??
+      new ClusterStatusController({ eventsUrl: clusterEventsUrl });
     controllerRef.current = ctrl;
     const unsub = ctrl.subscribe(setClusterStatus);
     ctrl.connect();
@@ -86,37 +88,45 @@ export function ControlPanel({
     }
   }, [initialClusterStatus]);
 
-  const [activeTab, setActiveTab] = useState<'studio' | 'orchestrator' | 'preview'>('studio');
+  const [activeTab, setActiveTab] = useState<
+    "studio" | "orchestrator" | "preview"
+  >("studio");
 
   return (
-    <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-900" data-testid="studio-panel">
+    <div
+      className="flex h-screen w-full flex-col overflow-hidden bg-zinc-900"
+      data-testid="studio-panel"
+    >
       {/* Tab bar */}
-      <div className="flex shrink-0 border-b border-zinc-700 bg-zinc-800" data-testid="tab-bar">
+      <div
+        className="flex shrink-0 border-b border-zinc-700 bg-zinc-800"
+        data-testid="tab-bar"
+      >
         <button
           data-testid="tab-studio"
-          className={`px-4 py-2 text-sm font-medium ${activeTab === 'studio' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
-          onClick={() => setActiveTab('studio')}
+          className={`px-4 py-2 text-sm font-medium ${activeTab === "studio" ? "border-b-2 border-blue-400 text-blue-300" : "text-zinc-400 hover:text-zinc-200"}`}
+          onClick={() => setActiveTab("studio")}
         >
           Studio
         </button>
         <button
           data-testid="tab-orchestrator"
-          className={`px-4 py-2 text-sm font-medium ${activeTab === 'orchestrator' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
-          onClick={() => setActiveTab('orchestrator')}
+          className={`px-4 py-2 text-sm font-medium ${activeTab === "orchestrator" ? "border-b-2 border-blue-400 text-blue-300" : "text-zinc-400 hover:text-zinc-200"}`}
+          onClick={() => setActiveTab("orchestrator")}
         >
           Orchestrator
         </button>
         <button
           data-testid="tab-preview"
-          className={`px-4 py-2 text-sm font-medium ${activeTab === 'preview' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
-          onClick={() => setActiveTab('preview')}
+          className={`px-4 py-2 text-sm font-medium ${activeTab === "preview" ? "border-b-2 border-blue-400 text-blue-300" : "text-zinc-400 hover:text-zinc-200"}`}
+          onClick={() => setActiveTab("preview")}
         >
           Preview
         </button>
       </div>
 
       {/* Studio tab */}
-      {activeTab === 'studio' && (
+      {activeTab === "studio" && (
         <div className="flex flex-1 overflow-hidden">
           {/* Left panel — Claude chat sidebar (fixed width) */}
           <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
@@ -135,14 +145,14 @@ export function ControlPanel({
       )}
 
       {/* Orchestrator tab */}
-      {activeTab === 'orchestrator' && (
+      {activeTab === "orchestrator" && (
         <div className="flex-1 overflow-hidden bg-gray-50">
           <OrchestratorView />
         </div>
       )}
 
       {/* Preview tab — studio-mode component preview panel */}
-      {activeTab === 'preview' && (
+      {activeTab === "preview" && (
         <div className="flex-1 overflow-hidden bg-white">
           <ComponentPreviewPanel />
         </div>

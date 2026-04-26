@@ -30,14 +30,14 @@
  *     system context so Claude is aware of harness-level restrictions.
  */
 
-import { STUDIO_PERMISSION_PROMPT_ADDENDUM } from './permissions';
+import { STUDIO_PERMISSION_PROMPT_ADDENDUM } from "./permissions";
 
 // ── MVC classification ──────────────────────────────────────────────────────
 
 /**
  * The three MVC categories that a user request can fall into.
  */
-export type MvcCategory = 'model' | 'view' | 'controller';
+export type MvcCategory = "model" | "view" | "controller";
 
 /**
  * Keywords and phrases that signal each MVC category.
@@ -48,25 +48,109 @@ export type MvcCategory = 'model' | 'view' | 'controller';
  */
 const MVC_KEYWORDS: Record<MvcCategory, readonly string[]> = {
   model: [
-    'data', 'field', 'column', 'schema', 'database', 'table', 'record',
-    'attribute', 'property', 'type', 'entity', 'relation', 'foreign key',
-    'primary key', 'index', 'migration', 'seed', 'store', 'state',
+    "data",
+    "field",
+    "column",
+    "schema",
+    "database",
+    "table",
+    "record",
+    "attribute",
+    "property",
+    "type",
+    "entity",
+    "relation",
+    "foreign key",
+    "primary key",
+    "index",
+    "migration",
+    "seed",
+    "store",
+    "state",
   ],
   view: [
-    'button', 'page', 'screen', 'layout', 'color', 'font', 'size', 'text',
-    'image', 'icon', 'header', 'footer', 'sidebar', 'menu', 'navigation',
-    'modal', 'dialog', 'form', 'input', 'label', 'style', 'ui', 'display',
-    'visible', 'hidden', 'show', 'hide', 'position', 'align', 'spacing',
-    'margin', 'padding', 'border', 'background', 'theme', 'dark mode',
-    'light mode', 'responsive', 'mobile', 'desktop', 'animation',
+    "button",
+    "page",
+    "screen",
+    "layout",
+    "color",
+    "font",
+    "size",
+    "text",
+    "image",
+    "icon",
+    "header",
+    "footer",
+    "sidebar",
+    "menu",
+    "navigation",
+    "modal",
+    "dialog",
+    "form",
+    "input",
+    "label",
+    "style",
+    "ui",
+    "display",
+    "visible",
+    "hidden",
+    "show",
+    "hide",
+    "position",
+    "align",
+    "spacing",
+    "margin",
+    "padding",
+    "border",
+    "background",
+    "theme",
+    "dark mode",
+    "light mode",
+    "responsive",
+    "mobile",
+    "desktop",
+    "animation",
   ],
   controller: [
-    'validation', 'rule', 'logic', 'workflow', 'process', 'calculate',
-    'check', 'verify', 'approve', 'reject', 'submit', 'send', 'trigger',
-    'notify', 'email', 'permission', 'access', 'role', 'auth', 'login',
-    'logout', 'session', 'redirect', 'route', 'api', 'endpoint', 'handler',
-    'middleware', 'filter', 'sort', 'search', 'pagination', 'limit',
-    'condition', 'if', 'when', 'unless', 'require', 'enforce',
+    "validation",
+    "rule",
+    "logic",
+    "workflow",
+    "process",
+    "calculate",
+    "check",
+    "verify",
+    "approve",
+    "reject",
+    "submit",
+    "send",
+    "trigger",
+    "notify",
+    "email",
+    "permission",
+    "access",
+    "role",
+    "auth",
+    "login",
+    "logout",
+    "session",
+    "redirect",
+    "route",
+    "api",
+    "endpoint",
+    "handler",
+    "middleware",
+    "filter",
+    "sort",
+    "search",
+    "pagination",
+    "limit",
+    "condition",
+    "if",
+    "when",
+    "unless",
+    "require",
+    "enforce",
   ],
 };
 
@@ -85,7 +169,10 @@ export function classifyRequest(request: string): MvcCategory[] {
 
   const scores: { category: MvcCategory; score: number }[] = [];
 
-  for (const [category, keywords] of Object.entries(MVC_KEYWORDS) as [MvcCategory, readonly string[]][]) {
+  for (const [category, keywords] of Object.entries(MVC_KEYWORDS) as [
+    MvcCategory,
+    readonly string[],
+  ][]) {
     let score = 0;
     for (const keyword of keywords) {
       if (lower.includes(keyword)) {
@@ -98,7 +185,7 @@ export function classifyRequest(request: string): MvcCategory[] {
   }
 
   if (scores.length === 0) {
-    return ['view'];
+    return ["view"];
   }
 
   scores.sort((a, b) => b.score - a.score);
@@ -115,13 +202,13 @@ export function classifyRequest(request: string): MvcCategory[] {
  * For now, they encode the core Superfield architectural rules.
  */
 export const BLUEPRINT_RULES: readonly string[] = [
-  'Model changes must not break existing API contracts — add new fields as optional with defaults.',
-  'View changes must preserve existing accessibility attributes (aria-labels, roles, tab order).',
-  'Controller changes must not bypass the permission sandbox — all actions route through the studio harness.',
-  'Schema migrations must be backward-compatible — no column drops, no type narrowing.',
-  'UI components must work on both desktop and mobile viewports.',
-  'Validation rules must produce user-friendly error messages, not technical stack traces.',
-  'State changes must be reversible — every edit should support undo via the rollback mechanism.',
+  "Model changes must not break existing API contracts — add new fields as optional with defaults.",
+  "View changes must preserve existing accessibility attributes (aria-labels, roles, tab order).",
+  "Controller changes must not bypass the permission sandbox — all actions route through the studio harness.",
+  "Schema migrations must be backward-compatible — no column drops, no type narrowing.",
+  "UI components must work on both desktop and mobile viewports.",
+  "Validation rules must produce user-friendly error messages, not technical stack traces.",
+  "State changes must be reversible — every edit should support undo via the rollback mechanism.",
 ] as const;
 
 /**
@@ -135,37 +222,40 @@ export function getRelevantBlueprint(categories: MvcCategory[]): string[] {
 
   for (const category of categories) {
     switch (category) {
-      case 'model':
+      case "model":
         rules.push(
-          ...BLUEPRINT_RULES.filter((r) =>
-            r.toLowerCase().includes('model') ||
-            r.toLowerCase().includes('schema') ||
-            r.toLowerCase().includes('migration') ||
-            r.toLowerCase().includes('state') ||
-            r.toLowerCase().includes('api contract'),
+          ...BLUEPRINT_RULES.filter(
+            (r) =>
+              r.toLowerCase().includes("model") ||
+              r.toLowerCase().includes("schema") ||
+              r.toLowerCase().includes("migration") ||
+              r.toLowerCase().includes("state") ||
+              r.toLowerCase().includes("api contract"),
           ),
         );
         break;
-      case 'view':
+      case "view":
         rules.push(
-          ...BLUEPRINT_RULES.filter((r) =>
-            r.toLowerCase().includes('view') ||
-            r.toLowerCase().includes('ui') ||
-            r.toLowerCase().includes('accessibility') ||
-            r.toLowerCase().includes('viewport') ||
-            r.toLowerCase().includes('desktop') ||
-            r.toLowerCase().includes('mobile'),
+          ...BLUEPRINT_RULES.filter(
+            (r) =>
+              r.toLowerCase().includes("view") ||
+              r.toLowerCase().includes("ui") ||
+              r.toLowerCase().includes("accessibility") ||
+              r.toLowerCase().includes("viewport") ||
+              r.toLowerCase().includes("desktop") ||
+              r.toLowerCase().includes("mobile"),
           ),
         );
         break;
-      case 'controller':
+      case "controller":
         rules.push(
-          ...BLUEPRINT_RULES.filter((r) =>
-            r.toLowerCase().includes('controller') ||
-            r.toLowerCase().includes('validation') ||
-            r.toLowerCase().includes('permission') ||
-            r.toLowerCase().includes('route') ||
-            r.toLowerCase().includes('handler'),
+          ...BLUEPRINT_RULES.filter(
+            (r) =>
+              r.toLowerCase().includes("controller") ||
+              r.toLowerCase().includes("validation") ||
+              r.toLowerCase().includes("permission") ||
+              r.toLowerCase().includes("route") ||
+              r.toLowerCase().includes("handler"),
           ),
         );
         break;
@@ -173,7 +263,9 @@ export function getRelevantBlueprint(categories: MvcCategory[]): string[] {
   }
 
   // Always include the reversibility rule
-  const reversibilityRule = BLUEPRINT_RULES.find((r) => r.includes('reversible'));
+  const reversibilityRule = BLUEPRINT_RULES.find((r) =>
+    r.includes("reversible"),
+  );
   if (reversibilityRule && !rules.includes(reversibilityRule)) {
     rules.push(reversibilityRule);
   }
@@ -193,27 +285,27 @@ export function getRelevantBlueprint(categories: MvcCategory[]): string[] {
  */
 export const CONTEXT_GATE_PATTERNS: Record<MvcCategory, readonly string[]> = {
   model: [
-    'packages/db/**',
-    'apps/server/src/config.ts',
-    'apps/server/src/helpers.ts',
-    '**/types.ts',
-    '**/schema*',
-    '**/migration*',
-    '**/seed*',
+    "packages/db/**",
+    "apps/server/src/config.ts",
+    "apps/server/src/helpers.ts",
+    "**/types.ts",
+    "**/schema*",
+    "**/migration*",
+    "**/seed*",
   ],
   view: [
-    'apps/web/src/components/**',
-    'apps/web/src/styles/**',
-    'apps/web/src/**/*.tsx',
-    'apps/web/src/**/*.css',
+    "apps/web/src/components/**",
+    "apps/web/src/styles/**",
+    "apps/web/src/**/*.tsx",
+    "apps/web/src/**/*.css",
   ],
   controller: [
-    'apps/server/src/router.ts',
-    'apps/server/src/api.ts',
-    'apps/server/src/auth.ts',
-    'apps/server/src/permissions.ts',
-    'apps/server/src/agent.ts',
-    'apps/server/src/**/*.ts',
+    "apps/server/src/router.ts",
+    "apps/server/src/api.ts",
+    "apps/server/src/auth.ts",
+    "apps/server/src/permissions.ts",
+    "apps/server/src/agent.ts",
+    "apps/server/src/**/*.ts",
   ],
 };
 
@@ -243,8 +335,8 @@ export function getContextGatePatterns(categories: MvcCategory[]): string[] {
  * distinguish studio-injected system instructions from user-provided text.
  * Any instruction-like content within the markers is treated as literal text.
  */
-export const USER_INPUT_OPEN = '<<<USER_INPUT_BEGIN>>>';
-export const USER_INPUT_CLOSE = '<<<USER_INPUT_END>>>';
+export const USER_INPUT_OPEN = "<<<USER_INPUT_BEGIN>>>";
+export const USER_INPUT_CLOSE = "<<<USER_INPUT_END>>>";
 
 /**
  * Sanitize user input for safe embedding in the system context.
@@ -267,11 +359,11 @@ export function sanitizeUserInput(userInput: string): string {
   let sanitized = userInput;
 
   // Strip sentinel markers to prevent spoofing
-  sanitized = sanitized.replace(/<<<USER_INPUT_BEGIN>>>/g, '');
-  sanitized = sanitized.replace(/<<<USER_INPUT_END>>>/g, '');
+  sanitized = sanitized.replace(/<<<USER_INPUT_BEGIN>>>/g, "");
+  sanitized = sanitized.replace(/<<<USER_INPUT_END>>>/g, "");
 
   // Strip attempts to inject system-level prefixes
-  sanitized = sanitized.replace(/^(system\s*:?\s*(prompt\s*:?\s*)?)/gi, '');
+  sanitized = sanitized.replace(/^(system\s*:?\s*(prompt\s*:?\s*)?)/gi, "");
 
   return `${USER_INPUT_OPEN}\n${sanitized}\n${USER_INPUT_CLOSE}`;
 }
@@ -390,26 +482,26 @@ export function buildDesignModeSystemContext(params: {
   blueprintRules?: string[];
   contextPatterns?: string[];
 }): string {
-  const {
-    branch,
-    userMessage,
-  } = params;
+  const { branch, userMessage } = params;
 
   // Classify the request if not pre-classified
   const categories = params.categories ?? classifyRequest(userMessage);
-  const blueprintRules = params.blueprintRules ?? getRelevantBlueprint(categories);
-  const contextPatterns = params.contextPatterns ?? getContextGatePatterns(categories);
+  const blueprintRules =
+    params.blueprintRules ?? getRelevantBlueprint(categories);
+  const contextPatterns =
+    params.contextPatterns ?? getContextGatePatterns(categories);
 
   // Sanitize user input against injection
   const sanitizedInput = sanitizeUserInput(userMessage);
 
   // Format blueprint rules
-  const blueprintBlock = blueprintRules.length > 0
-    ? `\nApplicable rules:\n${blueprintRules.map((r, i) => `  ${i + 1}. ${r}`).join('\n')}`
-    : '\nNo specific blueprint rules apply to this request category.';
+  const blueprintBlock =
+    blueprintRules.length > 0
+      ? `\nApplicable rules:\n${blueprintRules.map((r, i) => `  ${i + 1}. ${r}`).join("\n")}`
+      : "\nNo specific blueprint rules apply to this request category.";
 
   // Format context gating
-  const gatingBlock = `\nRelevant file areas (load ONLY these):\n${contextPatterns.map((p) => `  - ${p}`).join('\n')}`;
+  const gatingBlock = `\nRelevant file areas (load ONLY these):\n${contextPatterns.map((p) => `  - ${p}`).join("\n")}`;
 
   return `You are a Design mode assistant for Superfield Studio. You help non-technical business partners make changes to the application through plain-language conversation.
 
@@ -449,15 +541,14 @@ ${sanitizedInput}`;
  */
 export function buildDesignModePrompt(params: {
   branch: string;
-  messages: { role: 'user' | 'assistant'; content: string }[];
+  messages: { role: "user" | "assistant"; content: string }[];
   changesContent?: string;
 }): string {
   const { branch, messages, changesContent } = params;
 
   // The latest user message drives classification
-  const latestUserMessage = [...messages]
-    .reverse()
-    .find((m) => m.role === 'user')?.content ?? '';
+  const latestUserMessage =
+    [...messages].reverse().find((m) => m.role === "user")?.content ?? "";
 
   // Build the system context based on the latest request
   const systemContext = buildDesignModeSystemContext({
@@ -468,19 +559,22 @@ export function buildDesignModePrompt(params: {
   // Format prior conversation (excluding the latest user message which is
   // already embedded in the system context)
   const priorMessages = messages.slice(0, -1);
-  const conversationText = priorMessages.length > 0
-    ? priorMessages
-        .map((m) => `${m.role === 'user' ? 'Partner' : 'Agent'}: ${m.content}`)
-        .join('\n\n')
-    : '';
+  const conversationText =
+    priorMessages.length > 0
+      ? priorMessages
+          .map(
+            (m) => `${m.role === "user" ? "Partner" : "Agent"}: ${m.content}`,
+          )
+          .join("\n\n")
+      : "";
 
   const changesContext = changesContent
     ? `\n\nPrevious changes in this session:\n${changesContent}`
-    : '';
+    : "";
 
   const conversationBlock = conversationText
     ? `\n\n## Prior Conversation\n\n${conversationText}`
-    : '';
+    : "";
 
   return `${systemContext}${changesContext}${conversationBlock}\n\nAgent:`;
 }

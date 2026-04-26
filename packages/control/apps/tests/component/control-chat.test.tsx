@@ -12,17 +12,20 @@
  * Canonical docs: test-plan.md §Layer 2 / ControlChat.
  */
 
-import React from 'react';
-import { render } from 'vitest-browser-react';
-import { afterEach, expect, test, vi } from 'vitest';
-import { ControlChat } from '../../src/components/ControlChat';
-import type { ChatController, ChatControllerState } from '../../src/controllers/ChatController';
+import React from "react";
+import { render } from "vitest-browser-react";
+import { afterEach, expect, test, vi } from "vitest";
+import { ControlChat } from "../../src/components/ControlChat";
+import type {
+  ChatController,
+  ChatControllerState,
+} from "../../src/controllers/ChatController";
 import type {
   CommitController,
   CommitControllerState,
   Commit,
   TimelineEntry,
-} from '../../src/controllers/CommitController';
+} from "../../src/controllers/CommitController";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -40,7 +43,7 @@ function makeChatControllerMock(
 } {
   const defaultState: ChatControllerState = {
     messages: [],
-    turnState: 'idle',
+    turnState: "idle",
     ...initialState,
   };
 
@@ -63,7 +66,10 @@ function makeChatControllerMock(
       listener({ ...currentState, messages: [...currentState.messages] });
       return () => listeners.delete(listener);
     }),
-    getState: vi.fn(() => ({ ...currentState, messages: [...currentState.messages] })),
+    getState: vi.fn(() => ({
+      ...currentState,
+      messages: [...currentState.messages],
+    })),
     sendMessage: vi.fn(async (_text: string) => {}),
   } as unknown as ChatController;
 
@@ -104,14 +110,22 @@ function makeCommitControllerMock(
   const controller = {
     subscribe: vi.fn((listener: (state: CommitControllerState) => void) => {
       listeners.add(listener);
-      listener({ ...currentState, commits: [...currentState.commits], timeline: [...currentState.timeline] });
+      listener({
+        ...currentState,
+        commits: [...currentState.commits],
+        timeline: [...currentState.timeline],
+      });
       return () => listeners.delete(listener);
     }),
-    getState: vi.fn(() => ({ ...currentState, commits: [...currentState.commits], timeline: [...currentState.timeline] })),
+    getState: vi.fn(() => ({
+      ...currentState,
+      commits: [...currentState.commits],
+      timeline: [...currentState.timeline],
+    })),
     fetchStatus: vi.fn(async () => ({
       active: true,
-      sessionId: 'test-session',
-      branch: 'main',
+      sessionId: "test-session",
+      branch: "main",
     })),
     rollback: vi.fn(async (_hash: string): Promise<Commit[] | null> => null),
     setCommits: vi.fn((_commits: Commit[]) => {}),
@@ -124,12 +138,12 @@ function makeCommitControllerMock(
 // ControlChat tests
 // ---------------------------------------------------------------------------
 
-test('renders commit list from CommitController with two commits', async () => {
+test("renders commit list from CommitController with two commits", async () => {
   const { controller: chatController } = makeChatControllerMock();
   const { controller: commitController } = makeCommitControllerMock({
     commits: [
-      { hash: 'abc1234', message: 'studio: initial commit' },
-      { hash: 'def5678', message: 'studio: update header' },
+      { hash: "abc1234", message: "studio: initial commit" },
+      { hash: "def5678", message: "studio: update header" },
     ],
   });
 
@@ -140,16 +154,18 @@ test('renders commit list from CommitController with two commits', async () => {
     />,
   );
 
-  await expect.element(screen.getByText('studio: initial commit')).toBeVisible();
-  await expect.element(screen.getByText('studio: update header')).toBeVisible();
+  await expect
+    .element(screen.getByText("studio: initial commit"))
+    .toBeVisible();
+  await expect.element(screen.getByText("studio: update header")).toBeVisible();
 });
 
-test('rollback button calls commitController.rollback(sha) with the correct sha', async () => {
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+test("rollback button calls commitController.rollback(sha) with the correct sha", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
 
   const { controller: chatController } = makeChatControllerMock();
   const { controller: commitController } = makeCommitControllerMock({
-    commits: [{ hash: 'abc1234', message: 'studio: update header' }],
+    commits: [{ hash: "abc1234", message: "studio: update header" }],
   });
 
   const screen = render(
@@ -159,19 +175,21 @@ test('rollback button calls commitController.rollback(sha) with the correct sha'
     />,
   );
 
-  const rollbackButton = screen.getByRole('button', { name: 'Rollback commit' });
+  const rollbackButton = screen.getByRole("button", {
+    name: "Rollback commit",
+  });
   await expect.element(rollbackButton).toBeVisible();
   await rollbackButton.click();
 
-  expect(commitController.rollback).toHaveBeenCalledWith('abc1234');
+  expect(commitController.rollback).toHaveBeenCalledWith("abc1234");
 });
 
-test('commit list does not roll back when user cancels confirmation', async () => {
-  vi.spyOn(window, 'confirm').mockReturnValue(false);
+test("commit list does not roll back when user cancels confirmation", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(false);
 
   const { controller: chatController } = makeChatControllerMock();
   const { controller: commitController } = makeCommitControllerMock({
-    commits: [{ hash: 'def5678', message: 'studio: change styles' }],
+    commits: [{ hash: "def5678", message: "studio: change styles" }],
   });
 
   const screen = render(
@@ -181,18 +199,21 @@ test('commit list does not roll back when user cancels confirmation', async () =
     />,
   );
 
-  const rollbackButton = screen.getByRole('button', { name: 'Rollback commit' });
+  const rollbackButton = screen.getByRole("button", {
+    name: "Rollback commit",
+  });
   await rollbackButton.click();
 
   expect(commitController.rollback).not.toHaveBeenCalled();
   // Commit still visible
-  await expect.element(screen.getByText('studio: change styles')).toBeVisible();
+  await expect.element(screen.getByText("studio: change styles")).toBeVisible();
 });
 
-test('fetchStatus is called to refresh commit list after chat turn completes', async () => {
-  const { controller: chatController, setState: setChatState } = makeChatControllerMock({
-    turnState: 'idle',
-  });
+test("fetchStatus is called to refresh commit list after chat turn completes", async () => {
+  const { controller: chatController, setState: setChatState } =
+    makeChatControllerMock({
+      turnState: "idle",
+    });
   const { controller: commitController } = makeCommitControllerMock();
 
   render(
@@ -207,9 +228,9 @@ test('fetchStatus is called to refresh commit list after chat turn completes', a
   // useEffect dependency on chatState.turnState fires between the two transitions.
   // Without the microtask flush React 18 batches the two synchronous setState
   // calls and the streaming → idle transition is never observed by the effect.
-  setChatState({ turnState: 'streaming' });
+  setChatState({ turnState: "streaming" });
   await new Promise((r) => setTimeout(r, 0));
-  setChatState({ turnState: 'idle' });
+  setChatState({ turnState: "idle" });
   await new Promise((r) => setTimeout(r, 0));
 
   // fetchStatus should have been called: once on mount + once after turn
@@ -220,10 +241,14 @@ test('fetchStatus is called to refresh commit list after chat turn completes', a
 // Timeline view tests
 // ---------------------------------------------------------------------------
 
-test('renders timeline-view when timeline array is non-empty', async () => {
+test("renders timeline-view when timeline array is non-empty", async () => {
   const { controller: chatController } = makeChatControllerMock();
   const timelineEntries: TimelineEntry[] = [
-    { hash: 'abc1234', message: 'Design: add button', timestamp: '2026-03-25T10:00:00.000Z' },
+    {
+      hash: "abc1234",
+      message: "Design: add button",
+      timestamp: "2026-03-25T10:00:00.000Z",
+    },
   ];
   const { controller: commitController } = makeCommitControllerMock({
     timeline: timelineEntries,
@@ -236,14 +261,22 @@ test('renders timeline-view when timeline array is non-empty', async () => {
     />,
   );
 
-  await expect.element(screen.getByTestId('timeline-view')).toBeVisible();
+  await expect.element(screen.getByTestId("timeline-view")).toBeVisible();
 });
 
-test('each timeline entry displays correct summary text and a non-empty timestamp', async () => {
+test("each timeline entry displays correct summary text and a non-empty timestamp", async () => {
   const { controller: chatController } = makeChatControllerMock();
   const timelineEntries: TimelineEntry[] = [
-    { hash: 'abc1234', message: 'Design: add button', timestamp: '2026-03-25T10:00:00.000Z' },
-    { hash: 'def5678', message: 'Design: update header', timestamp: '2026-03-25T11:00:00.000Z' },
+    {
+      hash: "abc1234",
+      message: "Design: add button",
+      timestamp: "2026-03-25T10:00:00.000Z",
+    },
+    {
+      hash: "def5678",
+      message: "Design: update header",
+      timestamp: "2026-03-25T11:00:00.000Z",
+    },
   ];
   const { controller: commitController } = makeCommitControllerMock({
     timeline: timelineEntries,
@@ -256,11 +289,11 @@ test('each timeline entry displays correct summary text and a non-empty timestam
     />,
   );
 
-  await expect.element(screen.getByText('Design: add button')).toBeVisible();
-  await expect.element(screen.getByText('Design: update header')).toBeVisible();
+  await expect.element(screen.getByText("Design: add button")).toBeVisible();
+  await expect.element(screen.getByText("Design: update header")).toBeVisible();
 
   // Both timestamp elements should be present and non-empty
-  const timestamps = screen.getByTestId('timeline-timestamp').all();
+  const timestamps = screen.getByTestId("timeline-timestamp").all();
   await expect.element(timestamps[0]).toBeVisible();
   await expect.element(timestamps[1]).toBeVisible();
 
@@ -271,12 +304,16 @@ test('each timeline entry displays correct summary text and a non-empty timestam
   expect(secondTimestampText).toBeTruthy();
 });
 
-test('clicking rollback button in a timeline entry calls commitController.rollback with entry hash', async () => {
-  vi.spyOn(window, 'confirm').mockReturnValue(true);
+test("clicking rollback button in a timeline entry calls commitController.rollback with entry hash", async () => {
+  vi.spyOn(window, "confirm").mockReturnValue(true);
 
   const { controller: chatController } = makeChatControllerMock();
   const timelineEntries: TimelineEntry[] = [
-    { hash: 'abc1234', message: 'Design: add button', timestamp: '2026-03-25T10:00:00.000Z' },
+    {
+      hash: "abc1234",
+      message: "Design: add button",
+      timestamp: "2026-03-25T10:00:00.000Z",
+    },
   ];
   const { controller: commitController } = makeCommitControllerMock({
     timeline: timelineEntries,
@@ -289,20 +326,26 @@ test('clicking rollback button in a timeline entry calls commitController.rollba
     />,
   );
 
-  const rollbackButton = screen.getByRole('button', { name: 'Rollback commit' });
+  const rollbackButton = screen.getByRole("button", {
+    name: "Rollback commit",
+  });
   await expect.element(rollbackButton).toBeVisible();
   await rollbackButton.click();
 
-  expect(commitController.rollback).toHaveBeenCalledWith('abc1234');
+  expect(commitController.rollback).toHaveBeenCalledWith("abc1234");
 });
 
-test('when both timeline and commits are non-empty, timeline entries are rendered', async () => {
+test("when both timeline and commits are non-empty, timeline entries are rendered", async () => {
   const { controller: chatController } = makeChatControllerMock();
   const timelineEntries: TimelineEntry[] = [
-    { hash: 'abc1234', message: 'Timeline: checkpoint one', timestamp: '2026-03-25T10:00:00.000Z' },
+    {
+      hash: "abc1234",
+      message: "Timeline: checkpoint one",
+      timestamp: "2026-03-25T10:00:00.000Z",
+    },
   ];
   const commits: Commit[] = [
-    { hash: 'def5678', message: 'Commits: legacy entry' },
+    { hash: "def5678", message: "Commits: legacy entry" },
   ];
   const { controller: commitController } = makeCommitControllerMock({
     timeline: timelineEntries,
@@ -317,7 +360,11 @@ test('when both timeline and commits are non-empty, timeline entries are rendere
   );
 
   // Timeline entry should be visible
-  await expect.element(screen.getByText('Timeline: checkpoint one')).toBeVisible();
+  await expect
+    .element(screen.getByText("Timeline: checkpoint one"))
+    .toBeVisible();
   // Commits-only entry should not be rendered when timeline is non-empty
-  await expect.element(screen.getByText('Commits: legacy entry')).not.toBeInTheDocument();
+  await expect
+    .element(screen.getByText("Commits: legacy entry"))
+    .not.toBeInTheDocument();
 });

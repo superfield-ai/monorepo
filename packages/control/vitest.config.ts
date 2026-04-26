@@ -1,15 +1,15 @@
-import { defineConfig } from 'vitest/config';
-import { resolve } from 'path';
+import { defineConfig } from "vitest/config";
+import { resolve } from "path";
 
 const pkgRoot = resolve(import.meta.dirname);
 
 export default defineConfig({
   test: {
-    environment: 'node',
+    environment: "node",
     root: pkgRoot,
     include: [`${pkgRoot}/tests/**/*.test.ts`],
     setupFiles: [`${pkgRoot}/tests/helpers/bun-shim.ts`],
-    pool: 'forks',
+    pool: "forks",
     poolOptions: {
       forks: {
         singleFork: true,

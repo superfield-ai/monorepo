@@ -9,12 +9,12 @@
  *   3. SECRETS_DECLARED — secretKeyRef entries are found for generation.
  */
 
-import { existsSync } from 'fs';
-import { join, resolve } from 'path';
-import { spawnSync } from 'child_process';
-import type { VerifyResult, VerifyCheck, StudioClusterConfig } from './types';
-import { discoverResources, discoverSecretRefs } from './manifest-parser';
-import { RELEASE_DOCKERFILE } from './studio-config';
+import { existsSync } from "fs";
+import { join, resolve } from "path";
+import { spawnSync } from "child_process";
+import type { VerifyResult, VerifyCheck, StudioClusterConfig } from "./types";
+import { discoverResources, discoverSecretRefs } from "./manifest-parser";
+import { RELEASE_DOCKERFILE } from "./studio-config";
 
 // ── Prerequisites ─────────────────────────────────────────────────────────────
 
@@ -24,7 +24,7 @@ import { RELEASE_DOCKERFILE } from './studio-config';
  * k3d replaces k3s: it runs k3s inside Docker and exposes cluster operations
  * through the Docker socket — no elevated privileges needed.
  */
-const REQUIRED_TOOLS = ['docker', 'kubectl', 'k3d'] as const;
+const REQUIRED_TOOLS = ["docker", "kubectl", "k3d"] as const;
 
 /**
  * Check that all required CLI tools are present on PATH.
@@ -39,20 +39,20 @@ export function checkPrerequisites(): void {
   const missing: string[] = [];
 
   for (const tool of REQUIRED_TOOLS) {
-    const result = spawnSync('which', [tool], { stdio: 'pipe' });
+    const result = spawnSync("which", [tool], { stdio: "pipe" });
     if (result.status !== 0) {
       missing.push(tool);
     }
   }
 
   if (missing.length > 0) {
-    console.error(`\n❌ Missing required tools: ${missing.join(', ')}`);
+    console.error(`\n❌ Missing required tools: ${missing.join(", ")}`);
     for (const tool of missing) {
-      if (tool === 'k3d') {
+      if (tool === "k3d") {
         console.error(`   k3d: https://k3d.io/#installation`);
-      } else if (tool === 'docker') {
+      } else if (tool === "docker") {
         console.error(`   docker: https://docs.docker.com/get-docker/`);
-      } else if (tool === 'kubectl') {
+      } else if (tool === "kubectl") {
         console.error(`   kubectl: https://kubernetes.io/docs/tasks/tools/`);
       }
     }
@@ -80,13 +80,13 @@ export async function verifyStudioCluster(
   try {
     resources = discoverResources(k8sDir);
     checks.push({
-      name: 'manifests-parse',
+      name: "manifests-parse",
       ok: resources.length > 0,
       message: `${resources.length} resource(s) discovered`,
     });
   } catch (err) {
     checks.push({
-      name: 'manifests-parse',
+      name: "manifests-parse",
       ok: false,
       message: err instanceof Error ? err.message : String(err),
     });
@@ -97,7 +97,7 @@ export async function verifyStudioCluster(
   const dockerfilePath = join(sourceDir, RELEASE_DOCKERFILE);
   const dockerfileExists = existsSync(dockerfilePath);
   checks.push({
-    name: 'release-dockerfile',
+    name: "release-dockerfile",
     ok: dockerfileExists,
     message: dockerfileExists
       ? RELEASE_DOCKERFILE
@@ -106,9 +106,12 @@ export async function verifyStudioCluster(
 
   // Check 3: secrets are referenced.
   const secrets = discoverSecretRefs(k8sDir);
-  const keyCount = secrets.reduce((n, s) => n + Object.keys(s.literals).length, 0);
+  const keyCount = secrets.reduce(
+    (n, s) => n + Object.keys(s.literals).length,
+    0,
+  );
   checks.push({
-    name: 'secrets-declared',
+    name: "secrets-declared",
     ok: true,
     message: `${secrets.length} secret(s) with ${keyCount} key(s)`,
   });
@@ -131,12 +134,12 @@ export async function verifyAtStartup(
   });
 
   for (const check of result.checks) {
-    const icon = check.ok ? '✓' : '✗';
+    const icon = check.ok ? "✓" : "✗";
     console.log(`    ${icon} ${check.name}: ${check.message}`);
   }
 
   if (!result.ok) {
-    console.error('\n❌ Studio cluster verification failed.');
+    console.error("\n❌ Studio cluster verification failed.");
     process.exit(1);
   }
 }

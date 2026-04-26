@@ -19,7 +19,7 @@
  * @see docs/cluster-definition.md — "Startup sequence" step 8
  */
 
-import { spawnSync } from 'child_process';
+import { spawnSync } from "child_process";
 
 export interface SpawnResult {
   status: number | null;
@@ -50,23 +50,23 @@ export function spawn(
   if (opts?.stream) {
     const result = spawnSync(cmd, args, {
       cwd: opts.cwd,
-      stdio: 'inherit',
+      stdio: "inherit",
     });
     return {
       status: result.status,
-      stdout: '',
-      stderr: '',
+      stdout: "",
+      stderr: "",
     };
   }
 
   const result = spawnSync(cmd, args, {
     ...opts,
     input: opts?.input,
-    stdio: opts?.input ? ['pipe', 'pipe', 'pipe'] : 'pipe',
+    stdio: opts?.input ? ["pipe", "pipe", "pipe"] : "pipe",
   });
   return {
     status: result.status,
-    stdout: result.stdout?.toString() ?? '',
-    stderr: result.stderr?.toString() ?? '',
+    stdout: result.stdout?.toString() ?? "",
+    stderr: result.stderr?.toString() ?? "",
   };
 }

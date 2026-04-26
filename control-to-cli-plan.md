@@ -153,12 +153,13 @@ runtime state.
 **Loop status bar** — sourced from `GET /analytics/loops` polled every 5 s:
 
 | Loop | Last tick | Duration | Idle reason | Circuit |
-|------|-----------|----------|-------------|---------|
+| ---- | --------- | -------- | ----------- | ------- |
 | plan | 12 s ago  | 340 ms   | —           | closed  |
 | dev  | 4 s ago   | 1.2 s    | —           | closed  |
 | doc  | 58 s ago  | 210 ms   | no changes  | closed  |
 
 **Active slots** — sourced from `GET /analytics/slots` SSE-streamed or polled:
+
 - One card per active issue: issue number, title, slot role (primary /
   speculative), backend, model, elapsed time, live heartbeat indicator.
 - Steer button on each card: opens an inline textarea → sends
@@ -166,14 +167,17 @@ runtime state.
 - Escalate button: sends `POST /steer/escalate` with `issueNumber`.
 
 **Cost summary** — sourced from `GET /analytics/costs`:
+
 - Total USD spent this session, per-backend breakdown, agent count, error
   count.
 
 **Circuit breaker** — sourced from `GET /analytics/circuit`:
+
 - Tripped / closed indicator. Consecutive failures count. Auto-resets when
   the dev loop recovers.
 
 **Process controls:**
+
 - **Start** button — disabled if dev loop is already running. Spawns
   `superfield start <repo>` as a child process. Button becomes **Stop**.
 - **Stop** button — sends SIGTERM to the child process. Waits for clean
@@ -185,6 +189,7 @@ runtime state.
 ### New backend endpoints in `packages/control/src/`
 
 **`GET /orchestrator/status`** — returns dev loop process state:
+
 ```json
 { "process": "running" | "stopped" | "starting" | "stopping",
   "pid": 12345,
@@ -193,9 +198,11 @@ runtime state.
 ```
 
 **`POST /orchestrator/start`** — spawns `superfield start <repo>`. Body:
+
 ```json
 { "repo": "/absolute/path", "slotCount": 3 }
 ```
+
 Returns `{ ok: true, pid }` or `{ ok: false, reason }` if already running.
 
 **`POST /orchestrator/stop`** — sends SIGTERM to the managed process.
@@ -356,10 +363,10 @@ the SSE response body directly into the `ReadableStream` controller. Parses
 Bun's native WebSocket API (`server.upgrade()`). One socket per studio
 session.
 
-| Frame in | Action |
-|---|---|
-| `{ type: 'turn', message }` | calls `streamTurn()`, forwards chunks as `{ type: 'chunk', text }`, sends `{ type: 'done', sessionId, filesChanged }` on completion |
-| `{ type: 'steer', context }` | calls `POST <SUPERFIELD_API_URL>/steer/context` with the active `sessionId`, replies `{ type: 'steer-ack', requestId }` |
+| Frame in                     | Action                                                                                                                              |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `{ type: 'turn', message }`  | calls `streamTurn()`, forwards chunks as `{ type: 'chunk', text }`, sends `{ type: 'done', sessionId, filesChanged }` on completion |
+| `{ type: 'steer', context }` | calls `POST <SUPERFIELD_API_URL>/steer/context` with the active `sessionId`, replies `{ type: 'steer-ack', requestId }`             |
 
 On disconnect: cancels the in-flight SSE fetch.
 
@@ -398,15 +405,16 @@ bun packages/cli/bin/superfield.ts control \
 
 `SUPERFIELD_DEV=1` is set only on the dev loop process. Effects:
 
-| Path | Dev loop (`SUPERFIELD_DEV=1`) | Control |
-|---|---|---|
-| `~/.superfield/config.yaml` | read (GitHub tokens needed for loops) | not read |
-| `~/.superfield/logs/` | NOT written — uses `mkdtemp` tmpdir | not written |
-| `/tmp/superfield-worktrees/` | used for issue clones | not used |
-| `<repo>/.studio` | read by studio to get sessionId/branch | read |
-| `<repo>/docs/studio-sessions/` | not touched | written |
+| Path                           | Dev loop (`SUPERFIELD_DEV=1`)          | Control     |
+| ------------------------------ | -------------------------------------- | ----------- |
+| `~/.superfield/config.yaml`    | read (GitHub tokens needed for loops)  | not read    |
+| `~/.superfield/logs/`          | NOT written — uses `mkdtemp` tmpdir    | not written |
+| `/tmp/superfield-worktrees/`   | used for issue clones                  | not used    |
+| `<repo>/.studio`               | read by studio to get sessionId/branch | read        |
+| `<repo>/docs/studio-sessions/` | not touched                            | written     |
 
 The studio server's only filesystem writes are:
+
 - `<CONTROL_LOG_DIR>/YYYY-MM-DD.jsonl` — turn logs (defaults to tmpdir or
   `../studio-logs` relative to repo root)
 
@@ -454,6 +462,7 @@ only need the superfield HTTP server and Postgres.
 ### E2E tests (k3d + Playwright)
 
 Two containers in the k8s test cluster:
+
 - `superfield-studio` — `cli/packages/control/` compiled + entrypoint, runs
   `superfield control`
 - `superfield-agent` — CLI image, runs `superfield start` (no loops, API
@@ -464,12 +473,12 @@ image has no claude dependency.
 
 ### CI matrix
 
-| Workflow | Runner | Services | Notes |
-|---|---|---|---|
-| `ci.yml` | ubuntu-latest | none | build + typecheck + unit |
+| Workflow             | Runner        | Services | Notes                                 |
+| -------------------- | ------------- | -------- | ------------------------------------- |
+| `ci.yml`             | ubuntu-latest | none     | build + typecheck + unit              |
 | `ci-integration.yml` | ubuntu-latest | postgres | superfield fixture in-process, no k3d |
-| `ci-e2e.yml` | ubuntu-latest | k3d | two images, both with stub |
-| `ci-browser.yml` | ubuntu-latest | none | component tests, unchanged |
+| `ci-e2e.yml`         | ubuntu-latest | k3d      | two images, both with stub            |
+| `ci-browser.yml`     | ubuntu-latest | none     | component tests, unchanged            |
 
 ---
 
@@ -516,12 +525,14 @@ image has no claude dependency.
 ## Implementation notes (cli-migration branch, 2026-04-25)
 
 ### Phase 1 (completed)
+
 - `packages/control/` was already partially migrated on main; remaining work
   was fixing unit tests and adding the `_readProc` DI parameter to `runAgent`.
 - `packages/control-core/` and `packages/db/` copied from control and already
   tracked on main.
 
 ### Phase 2 (completed)
+
 - `packages/cli/commands/control.ts` parses `--port`, `--repo`, `--api-url`,
   pings dev-loop health on startup (warns if unreachable), then delegates
   to `startControl()`.
@@ -530,6 +541,7 @@ image has no claude dependency.
 - `SUPERFIELD_API_URL` (default `http://127.0.0.1:7837`) added to `ControlConfig`.
 
 ### Phase 3 (completed)
+
 - `POST /studio/run` SSE endpoint added to `packages/core/api-server.ts`.
   Spawns claude, streams stdout as SSE, emits `event: session/done/error`.
 - `runAgent()` in studio now calls `POST /studio/run`, collects SSE body.
@@ -541,18 +553,21 @@ image has no claude dependency.
 - Claude stub at `tests/fixtures/claude`.
 
 ### Phase 4 (completed)
+
 - `packages/control/src/studio-ws.ts` — Bun native WebSocket handler.
 - `GET /studio/ws` upgrade path and `POST /studio/steer` REST fallback in router.
 - `WsChatController` added to `ChatController.ts` alongside existing SSE controller.
 - `route()` signature updated to accept optional Bun server reference.
 
 ### Phase 5 (completed)
+
 - `packages/control/src/dev-loop-process.ts` — manages `superfield start` lifecycle.
-- `packages/control/src/orchestrator.ts` — GET/POST /orchestrator/* endpoints.
+- `packages/control/src/orchestrator.ts` — GET/POST /orchestrator/\* endpoints.
 - `OrchestratorController.ts` + `OrchestratorView.tsx` added to browser UI.
 - Orchestrator tab added to ControlPanel nav.
 
 ### Phase 6 (completed)
+
 - `template/apps/kitchen-sink/` — standalone Vite app (port 5174) with design
   token section and component catalogue shell. Excluded from Docker + CI build.
 - `packages/control/apps/src/components/WikiRender.tsx` and `CitationHoverPopover.tsx`
@@ -561,11 +576,12 @@ image has no claude dependency.
 - Preview tab added to ControlPanel.
 
 ### Phase 7 (completed)
+
 - `.github/workflows/ci-control.yml` added: build/typecheck + unit tests +
   integration tests with in-process superfield fixture (no k3d).
 
 ### Phase 8 (completed)
+
 - Deprecation banner added to `control/README.md`.
 - All control GitHub Actions workflows renamed to `.yml.disabled`.
 - `control/` repo `cli-migration` branch pushed to origin for archival.
-

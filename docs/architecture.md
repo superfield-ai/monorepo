@@ -22,13 +22,13 @@ Superfield is stateless at the process level. Any instance can resume from the f
 Superfield is a direct replacement for the superfield-agents + shell script stack:
 
 | superfield-agents concept                 | Superfield equivalent                                                                   |
-| -------------------------------------- | --------------------------------------------------------------------------------------- |
-| Markdown skill (`SKILL.md`)            | TypeScript skill module with typed I/O                                                  |
-| Shell script (`.agents/scripts/`)      | TypeScript function; agent vendor CLIs (e.g. `claude`, `codex`) spawned as subprocesses |
+| ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| Markdown skill (`SKILL.md`)               | TypeScript skill module with typed I/O                                                  |
+| Shell script (`.agents/scripts/`)         | TypeScript function; agent vendor CLIs (e.g. `claude`, `codex`) spawned as subprocesses |
 | `superfield-auto` orchestrator loop       | `superfield start`                                                                      |
 | `superfield-feature` + `feature-evaluate` | `superfield feature`                                                                    |
-| Plan rebuild / replan                  | `superfield plan`                                                                       |
-| Plan issue (GitHub)                    | Plan issue (GitHub, same format)                                                        |
+| Plan rebuild / replan                     | `superfield plan`                                                                       |
+| Plan issue (GitHub)                       | Plan issue (GitHub, same format)                                                        |
 
 ## Libraries
 

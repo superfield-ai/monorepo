@@ -13,27 +13,34 @@
  * @see docs/cluster-definition.md — "Container image convention"
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Capture spawn calls to verify stdin piping.
-const spawnMock = vi.fn(() => ({ status: 0, stdout: '', stderr: '' }));
+const spawnMock = vi.fn<
+  (
+    cmd: string,
+    args: string[],
+    opts?: object,
+  ) => { status: number; stdout: string; stderr: string }
+>(() => ({ status: 0, stdout: "", stderr: "" }));
 
-vi.mock('../spawn', () => ({
-  spawn: (...args: unknown[]) => spawnMock(...args),
+vi.mock("../spawn", () => ({
+  spawn: (cmd: string, args: string[], opts?: object) =>
+    spawnMock(cmd, args, opts),
 }));
 
-vi.mock('fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('fs')>();
+vi.mock("fs", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("fs")>();
   return {
     ...actual,
-    readdirSync: vi.fn(() => ['app.yaml']),
-    readFileSync: vi.fn(() => ''),
+    readdirSync: vi.fn(() => ["app.yaml"]),
+    readFileSync: vi.fn(() => ""),
   };
 });
 
-import { readFileSync } from 'fs';
+import { readFileSync } from "fs";
 
-describe('applyManifests', () => {
+describe("applyManifests", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
@@ -43,83 +50,88 @@ describe('applyManifests', () => {
   });
 
   const config = {
-    sourceDir: '/product',
-    k8sDir: 'k8s',
-    namespace: 'default',
+    sourceDir: "/product",
+    k8sDir: "k8s",
+    namespace: "default",
     verbose: false,
   };
 
-  it('pipes YAML content via stdin to kubectl apply', async () => {
+  it("pipes YAML content via stdin to kubectl apply", async () => {
     vi.mocked(readFileSync).mockReturnValue(
-      'apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  template:\n    spec:\n      containers:\n        - image: postgres:16-alpine\n',
+      "apiVersion: apps/v1\nkind: Deployment\nmetadata:\n  name: app\nspec:\n  template:\n    spec:\n      containers:\n        - image: postgres:16-alpine\n",
     );
 
-    const { applyManifests } = await import('../cluster-manager');
+    const { applyManifests } = await import("../cluster-manager");
 
-    applyManifests(config, '/product/k8s', {});
+    applyManifests(config, "/product/k8s", {});
 
     // The spawn call for kubectl apply should include input option.
     const kubectlCall = spawnMock.mock.calls.find(
-      (call) => call[0] === 'kubectl' && (call[1] as string[]).includes('apply'),
-    );
+      (call) =>
+        call[0] === "kubectl" && (call[1] as string[]).includes("apply"),
+    ) as [string, string[], { input?: string }] | undefined;
     expect(kubectlCall).toBeDefined();
-    expect(kubectlCall![2]).toHaveProperty('input');
-    expect(typeof kubectlCall![2].input).toBe('string');
+    expect(kubectlCall![2]).toHaveProperty("input");
+    expect(typeof kubectlCall![2].input).toBe("string");
   });
 
-  it('rewrites ghcr.io image tags to studio tag', async () => {
+  it("rewrites ghcr.io image tags to studio tag", async () => {
     vi.mocked(readFileSync).mockReturnValue(
-      'spec:\n  template:\n    spec:\n      containers:\n        - image: ghcr.io/myorg/superfield-starter-ts:latest\n',
+      "spec:\n  template:\n    spec:\n      containers:\n        - image: ghcr.io/myorg/superfield-starter-ts:latest\n",
     );
 
-    const { applyManifests } = await import('../cluster-manager');
+    const { applyManifests } = await import("../cluster-manager");
 
-    applyManifests(config, '/product/k8s', {
-      'ghcr.io/myorg/superfield-starter-ts:latest': 'superfield-release:studio',
+    applyManifests(config, "/product/k8s", {
+      "ghcr.io/myorg/superfield-starter-ts:latest": "superfield-release:studio",
     });
 
     const kubectlCall = spawnMock.mock.calls.find(
-      (call) => call[0] === 'kubectl' && (call[1] as string[]).includes('apply'),
-    );
+      (call) =>
+        call[0] === "kubectl" && (call[1] as string[]).includes("apply"),
+    ) as [string, string[], { input?: string }] | undefined;
     const piped = kubectlCall![2].input as string;
-    expect(piped).toContain('superfield-release:studio');
-    expect(piped).not.toContain('ghcr.io/myorg/superfield-starter-ts');
+    expect(piped).toContain("superfield-release:studio");
+    expect(piped).not.toContain("ghcr.io/myorg/superfield-starter-ts");
   });
 
-  it('rewrites <owner> angle-bracket placeholder image tags', async () => {
+  it("rewrites <owner> angle-bracket placeholder image tags", async () => {
     vi.mocked(readFileSync).mockReturnValue(
-      'spec:\n  template:\n    spec:\n      containers:\n        - image: ghcr.io/<owner>/superfield-starter-ts:latest\n',
+      "spec:\n  template:\n    spec:\n      containers:\n        - image: ghcr.io/<owner>/superfield-starter-ts:latest\n",
     );
 
-    const { applyManifests } = await import('../cluster-manager');
+    const { applyManifests } = await import("../cluster-manager");
 
-    applyManifests(config, '/product/k8s', {
-      'ghcr.io/<owner>/superfield-starter-ts:latest': 'superfield-release:studio',
+    applyManifests(config, "/product/k8s", {
+      "ghcr.io/<owner>/superfield-starter-ts:latest":
+        "superfield-release:studio",
     });
 
     const kubectlCall = spawnMock.mock.calls.find(
-      (call) => call[0] === 'kubectl' && (call[1] as string[]).includes('apply'),
-    );
+      (call) =>
+        call[0] === "kubectl" && (call[1] as string[]).includes("apply"),
+    ) as [string, string[], { input?: string }] | undefined;
     const piped = kubectlCall![2].input as string;
-    expect(piped).toContain('superfield-release:studio');
-    expect(piped).not.toContain('<owner>');
+    expect(piped).toContain("superfield-release:studio");
+    expect(piped).not.toContain("<owner>");
   });
 
-  it('does not rewrite third-party images', async () => {
+  it("does not rewrite third-party images", async () => {
     vi.mocked(readFileSync).mockReturnValue(
-      'spec:\n  template:\n    spec:\n      containers:\n        - image: postgres:16-alpine\n',
+      "spec:\n  template:\n    spec:\n      containers:\n        - image: postgres:16-alpine\n",
     );
 
-    const { applyManifests } = await import('../cluster-manager');
+    const { applyManifests } = await import("../cluster-manager");
 
-    applyManifests(config, '/product/k8s', {
-      'ghcr.io/myorg/superfield-starter-ts:latest': 'superfield-release:studio',
+    applyManifests(config, "/product/k8s", {
+      "ghcr.io/myorg/superfield-starter-ts:latest": "superfield-release:studio",
     });
 
     const kubectlCall = spawnMock.mock.calls.find(
-      (call) => call[0] === 'kubectl' && (call[1] as string[]).includes('apply'),
-    );
+      (call) =>
+        call[0] === "kubectl" && (call[1] as string[]).includes("apply"),
+    ) as [string, string[], { input?: string }] | undefined;
     const piped = kubectlCall![2].input as string;
-    expect(piped).toContain('postgres:16-alpine');
+    expect(piped).toContain("postgres:16-alpine");
   });
 });

@@ -11,9 +11,9 @@
  * `kind:` and `metadata:` → `name:` fields.
  */
 
-import { readdirSync, readFileSync } from 'fs';
-import { join } from 'path';
-import type { K8sResource, SecretSpec } from './types';
+import { readdirSync, readFileSync } from "fs";
+import { join } from "path";
+import type { K8sResource, SecretSpec } from "./types";
 
 /**
  * Read all YAML files from a directory.
@@ -22,13 +22,15 @@ import type { K8sResource, SecretSpec } from './types';
  * No filtering is applied here — callers that need to skip certain files
  * (e.g. example files) filter the result themselves.
  */
-function readYamlFiles(k8sDir: string): { filename: string; content: string }[] {
+function readYamlFiles(
+  k8sDir: string,
+): { filename: string; content: string }[] {
   const files = readdirSync(k8sDir)
-    .filter((f) => f.endsWith('.yaml'))
+    .filter((f) => f.endsWith(".yaml"))
     .sort();
   return files.map((filename) => ({
     filename,
-    content: readFileSync(join(k8sDir, filename), 'utf-8'),
+    content: readFileSync(join(k8sDir, filename), "utf-8"),
   }));
 }
 
@@ -56,7 +58,7 @@ export function discoverResources(k8sDir: string): K8sResource[] {
       let name: string | null = null;
       let inMetadata = false;
 
-      for (const line of doc.split('\n')) {
+      for (const line of doc.split("\n")) {
         // Top-level kind field (no leading whitespace).
         const kindMatch = line.match(/^kind:\s*(.+)/);
         if (kindMatch) {
@@ -65,7 +67,7 @@ export function discoverResources(k8sDir: string): K8sResource[] {
         }
 
         // Top-level metadata block.
-        if (line === 'metadata:' || line === 'metadata: ') {
+        if (line === "metadata:" || line === "metadata: ") {
           inMetadata = true;
           continue;
         }
@@ -79,7 +81,11 @@ export function discoverResources(k8sDir: string): K8sResource[] {
             continue;
           }
           // Non-indented line ends the metadata block.
-          if (line.length > 0 && !line.startsWith(' ') && !line.startsWith('#')) {
+          if (
+            line.length > 0 &&
+            !line.startsWith(" ") &&
+            !line.startsWith("#")
+          ) {
             inMetadata = false;
           }
         }
@@ -107,7 +113,7 @@ export function discoverSecretRefs(k8sDir: string): SecretSpec[] {
   const secretMap = new Map<string, Set<string>>();
 
   for (const { content } of readYamlFiles(k8sDir)) {
-    const lines = content.split('\n');
+    const lines = content.split("\n");
 
     for (let i = 0; i < lines.length; i++) {
       if (!/secretKeyRef:/.test(lines[i])) continue;
@@ -132,7 +138,7 @@ export function discoverSecretRefs(k8sDir: string): SecretSpec[] {
 
   return Array.from(secretMap.entries()).map(([name, keys]) => ({
     name,
-    literals: Object.fromEntries([...keys].map((k) => [k, ''])),
+    literals: Object.fromEntries([...keys].map((k) => [k, ""])),
   }));
 }
 
@@ -146,7 +152,10 @@ export function discoverSecretRefs(k8sDir: string): SecretSpec[] {
  * @param serviceName  The Service name to look up (e.g. "web").
  * @returns            The service port number, or null if not found.
  */
-export function discoverServicePort(k8sDir: string, serviceName: string): number | null {
+export function discoverServicePort(
+  k8sDir: string,
+  serviceName: string,
+): number | null {
   for (const { content } of readYamlFiles(k8sDir)) {
     for (const doc of splitDocuments(content)) {
       let kind: string | null = null;
@@ -155,27 +164,35 @@ export function discoverServicePort(k8sDir: string, serviceName: string): number
       let inSpec = false;
       let inPorts = false;
 
-      for (const line of doc.split('\n')) {
+      for (const line of doc.split("\n")) {
         // Top-level kind field.
         const kindMatch = line.match(/^kind:\s*(.+)/);
         if (kindMatch) {
           kind = kindMatch[1].trim();
-          inMetadata = false; inSpec = false; inPorts = false;
+          inMetadata = false;
+          inSpec = false;
+          inPorts = false;
           continue;
         }
         // Top-level metadata block.
         if (/^metadata:\s*$/.test(line)) {
-          inMetadata = true; inSpec = false; inPorts = false;
+          inMetadata = true;
+          inSpec = false;
+          inPorts = false;
           continue;
         }
         // Top-level spec block.
         if (/^spec:\s*$/.test(line)) {
-          inSpec = true; inMetadata = false; inPorts = false;
+          inSpec = true;
+          inMetadata = false;
+          inPorts = false;
           continue;
         }
         // Any other non-indented key ends the current block.
-        if (/^\w/.test(line) && line.includes(':')) {
-          inMetadata = false; inSpec = false; inPorts = false;
+        if (/^\w/.test(line) && line.includes(":")) {
+          inMetadata = false;
+          inSpec = false;
+          inPorts = false;
         }
 
         if (inMetadata) {
@@ -183,8 +200,11 @@ export function discoverServicePort(k8sDir: string, serviceName: string): number
           if (nameMatch) name = nameMatch[1].trim();
         }
 
-        if (inSpec && kind === 'Service' && name === serviceName) {
-          if (/^\s{2}ports:\s*$/.test(line)) { inPorts = true; continue; }
+        if (inSpec && kind === "Service" && name === serviceName) {
+          if (/^\s{2}ports:\s*$/.test(line)) {
+            inPorts = true;
+            continue;
+          }
           if (inPorts) {
             const portMatch = line.match(/^\s+port:\s*(\d+)/);
             if (portMatch) return parseInt(portMatch[1], 10);
@@ -210,9 +230,9 @@ export function discoverImages(k8sDir: string): string[] {
   const images = new Set<string>();
 
   for (const { content } of readYamlFiles(k8sDir)) {
-    for (const line of content.split('\n')) {
+    for (const line of content.split("\n")) {
       // Skip comments.
-      if (line.trimStart().startsWith('#')) continue;
+      if (line.trimStart().startsWith("#")) continue;
       // Match `image: <ref>` with any leading whitespace (container spec).
       const match = line.match(/^\s+image:\s*(\S+)/);
       if (match) images.add(match[1]);

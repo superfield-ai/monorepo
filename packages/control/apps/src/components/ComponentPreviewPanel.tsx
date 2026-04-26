@@ -9,9 +9,12 @@
  * Mock views are accessible at /studio/preview/<view-name>.
  */
 
-import React, { useState } from 'react';
-import { WikiRender } from './WikiRender';
-import { CitationHoverPopover, type CitationData } from './CitationHoverPopover';
+import React, { useState } from "react";
+import { WikiRender } from "./WikiRender";
+import {
+  CitationHoverPopover,
+  type CitationData,
+} from "./CitationHoverPopover";
 
 // ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -33,19 +36,19 @@ Visit [the docs](/app/docs) for more information.
 `;
 
 const CITATION_FIXTURE: CitationData = {
-  id: 'cite-1',
-  excerpt: 'This is a sample citation excerpt from the source document.',
-  source: 'Source Document v1.2',
+  id: "cite-1",
+  excerpt: "This is a sample citation excerpt from the source document.",
+  source: "Source Document v1.2",
 };
 
 // ── Preview views ─────────────────────────────────────────────────────────────
 
-type ViewName = 'wiki' | 'citations' | 'empty';
+type ViewName = "wiki" | "citations" | "empty";
 
 const VIEWS: { name: ViewName; label: string }[] = [
-  { name: 'wiki', label: 'WikiRender' },
-  { name: 'citations', label: 'CitationHoverPopover' },
-  { name: 'empty', label: 'Empty Shell' },
+  { name: "wiki", label: "WikiRender" },
+  { name: "citations", label: "CitationHoverPopover" },
+  { name: "empty", label: "Empty Shell" },
 ];
 
 function EmptyShell() {
@@ -54,7 +57,7 @@ function EmptyShell() {
       <div>
         <p className="text-gray-500 font-medium">Add a component here</p>
         <p className="mt-1 text-sm text-gray-400">
-          Import your component and render it with fixture data from{' '}
+          Import your component and render it with fixture data from{" "}
           <code className="font-mono text-xs">src/fixtures/</code>
         </p>
       </div>
@@ -74,7 +77,10 @@ function WikiPreview() {
 }
 
 function CitationsPreview() {
-  const [hovered, setHovered] = useState<{ citation: CitationData; rect: DOMRect } | null>(null);
+  const [hovered, setHovered] = useState<{
+    citation: CitationData;
+    rect: DOMRect;
+  } | null>(null);
 
   return (
     <div className="rounded-lg border border-gray-200 bg-white p-6">
@@ -82,10 +88,15 @@ function CitationsPreview() {
         CitationHoverPopover — hover to see popover
       </h3>
       <p className="text-sm text-gray-700">
-        Hover this citation marker:{' '}
+        Hover this citation marker:{" "}
         <sup
           className="cursor-pointer text-blue-600 underline"
-          onMouseEnter={(e) => setHovered({ citation: CITATION_FIXTURE, rect: e.currentTarget.getBoundingClientRect() })}
+          onMouseEnter={(e) =>
+            setHovered({
+              citation: CITATION_FIXTURE,
+              rect: e.currentTarget.getBoundingClientRect(),
+            })
+          }
           onMouseLeave={() => setHovered(null)}
         >
           [1]
@@ -103,7 +114,7 @@ function CitationsPreview() {
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function ComponentPreviewPanel() {
-  const [activeView, setActiveView] = useState<ViewName>('wiki');
+  const [activeView, setActiveView] = useState<ViewName>("wiki");
 
   return (
     <div className="flex h-full flex-col overflow-auto p-4">
@@ -115,8 +126,8 @@ export function ComponentPreviewPanel() {
             data-testid={`preview-view-${name}`}
             className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
               activeView === name
-                ? 'bg-blue-50 text-blue-700 border border-blue-200'
-                : 'text-gray-600 hover:bg-gray-100 border border-transparent'
+                ? "bg-blue-50 text-blue-700 border border-blue-200"
+                : "text-gray-600 hover:bg-gray-100 border border-transparent"
             }`}
             onClick={() => setActiveView(name)}
           >
@@ -127,9 +138,9 @@ export function ComponentPreviewPanel() {
 
       {/* Active view */}
       <div className="flex-1" data-testid="preview-content">
-        {activeView === 'wiki' && <WikiPreview />}
-        {activeView === 'citations' && <CitationsPreview />}
-        {activeView === 'empty' && <EmptyShell />}
+        {activeView === "wiki" && <WikiPreview />}
+        {activeView === "citations" && <CitationsPreview />}
+        {activeView === "empty" && <EmptyShell />}
       </div>
     </div>
   );

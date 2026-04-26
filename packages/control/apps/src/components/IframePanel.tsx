@@ -16,8 +16,8 @@
  * Canonical docs: docs/studio-mode.md — "Browser Interface", "Hot-Swap Flow"
  */
 
-import React, { useEffect, useRef, useState } from 'react';
-import type { ClusterStatus } from './ClusterStatusIndicator';
+import React, { useEffect, useRef, useState } from "react";
+import type { ClusterStatus } from "./ClusterStatusIndicator";
 
 interface IframePanelProps {
   /** URL loaded in the iframe. Defaults to /app/ (studio proxy target). */
@@ -30,7 +30,10 @@ interface IframePanelProps {
  * IframePanel renders the embedded Superfield app and manages the reloading
  * overlay lifecycle based on cluster status transitions.
  */
-export function IframePanel({ src = '/app/', clusterStatus }: IframePanelProps) {
+export function IframePanel({
+  src = "/app/",
+  clusterStatus,
+}: IframePanelProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
   const prevStatusRef = useRef<ClusterStatus>(clusterStatus);
@@ -39,10 +42,10 @@ export function IframePanel({ src = '/app/', clusterStatus }: IframePanelProps) 
     const prev = prevStatusRef.current;
     prevStatusRef.current = clusterStatus;
 
-    if (clusterStatus === 'restarting') {
+    if (clusterStatus === "restarting") {
       // Show overlay when cluster begins restarting.
       setOverlayVisible(true);
-    } else if (clusterStatus === 'healthy' && prev === 'restarting') {
+    } else if (clusterStatus === "healthy" && prev === "restarting") {
       // Cluster returned to healthy after a restart — hide overlay and reload.
       setOverlayVisible(false);
       if (iframeRef.current) {
@@ -52,7 +55,10 @@ export function IframePanel({ src = '/app/', clusterStatus }: IframePanelProps) 
   }, [clusterStatus, src]);
 
   return (
-    <div className="relative flex-1 h-full bg-zinc-950" data-testid="iframe-panel">
+    <div
+      className="relative flex-1 h-full bg-zinc-950"
+      data-testid="iframe-panel"
+    >
       <iframe
         ref={iframeRef}
         src={src}
@@ -90,7 +96,9 @@ export function IframePanel({ src = '/app/', clusterStatus }: IframePanelProps) 
                 d="M4 12a8 8 0 018-8v4a4 4 0 00-4 4H4z"
               />
             </svg>
-            <p className="text-sm font-medium">Reloading — cluster is restarting…</p>
+            <p className="text-sm font-medium">
+              Reloading — cluster is restarting…
+            </p>
           </div>
         </div>
       )}

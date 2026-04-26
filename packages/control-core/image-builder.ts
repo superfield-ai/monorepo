@@ -17,17 +17,17 @@
  * build + COPY steps re-run, taking 2–5 seconds.
  */
 
-import { existsSync } from 'fs';
-import { join } from 'path';
-import { spawn } from './spawn';
-import { RELEASE_DOCKERFILE } from './studio-config';
-import type { StudioClusterConfig } from './types';
+import { existsSync } from "fs";
+import { join } from "path";
+import { spawn } from "./spawn";
+import { RELEASE_DOCKERFILE } from "./studio-config";
+import type { StudioClusterConfig } from "./types";
 
 /** Map of original image reference → locally-built studio tag. */
 export type ImageMap = Record<string, string>;
 
 /** Studio tag for locally-built images. */
-const STUDIO_TAG = 'superfield-release:studio';
+const STUDIO_TAG = "superfield-release:studio";
 
 /**
  * Build the product's release image and return the image map.
@@ -50,7 +50,9 @@ export function buildImages(
   const dockerfile = join(config.sourceDir, RELEASE_DOCKERFILE);
 
   if (!existsSync(dockerfile)) {
-    console.error(`\n❌ ${RELEASE_DOCKERFILE} not found at ${config.sourceDir}`);
+    console.error(
+      `\n❌ ${RELEASE_DOCKERFILE} not found at ${config.sourceDir}`,
+    );
     process.exit(1);
   }
 
@@ -58,12 +60,11 @@ export function buildImages(
   // time — without this, the terminal appears frozen for the full build
   // duration (5–15 min cold, ~30s warm) with no progress shown.
   console.log(`  Building ${STUDIO_TAG} from ${RELEASE_DOCKERFILE}...`);
-  const result = spawn('docker', [
-    'build',
-    '-f', dockerfile,
-    '-t', STUDIO_TAG,
-    config.sourceDir,
-  ], { stream: true });
+  const result = spawn(
+    "docker",
+    ["build", "-f", dockerfile, "-t", STUDIO_TAG, config.sourceDir],
+    { stream: true },
+  );
 
   if (result.status !== 0) {
     console.error(`\n❌ Docker build failed`);
@@ -97,20 +98,25 @@ export function rebuildAndRestart(config: StudioClusterConfig): void {
   const dockerfile = join(config.sourceDir, RELEASE_DOCKERFILE);
 
   console.log(`  Rebuilding ${STUDIO_TAG}...`);
-  const result = spawn('docker', [
-    'build', '-f', dockerfile, '-t', STUDIO_TAG, config.sourceDir,
-  ], { stream: true });
+  const result = spawn(
+    "docker",
+    ["build", "-f", dockerfile, "-t", STUDIO_TAG, config.sourceDir],
+    { stream: true },
+  );
 
   if (result.status !== 0) {
-    console.error('  Rebuild failed');
+    console.error("  Rebuild failed");
     return;
   }
 
   importToK3d(STUDIO_TAG, config);
 
   // Restart all deployments so they pick up the new image.
-  spawn('kubectl', [
-    'rollout', 'restart', 'deployment', '--all',
+  spawn("kubectl", [
+    "rollout",
+    "restart",
+    "deployment",
+    "--all",
     `--namespace=${config.namespace}`,
   ]);
 }
@@ -130,14 +136,14 @@ function importToK3d(tag: string, config: StudioClusterConfig): void {
     console.log(`  Importing ${tag} into k3d cluster...`);
   }
 
-  const importResult = spawn('k3d', ['image', 'import', tag]);
+  const importResult = spawn("k3d", ["image", "import", tag]);
 
   if (importResult.status !== 0) {
     throw new Error(
       `k3d image import failed (exit ${importResult.status}).\n` +
-      `  Ensure k3d is installed and a k3d cluster is running.\n` +
-      `  Install k3d: https://k3d.io/#installation\n` +
-      `  Create a cluster: k3d cluster create studio`,
+        `  Ensure k3d is installed and a k3d cluster is running.\n` +
+        `  Install k3d: https://k3d.io/#installation\n` +
+        `  Create a cluster: k3d cluster create studio`,
     );
   }
 }
@@ -153,13 +159,13 @@ function importToK3d(tag: string, config: StudioClusterConfig): void {
  */
 function isProductImage(image: string): boolean {
   // Images with <owner> placeholders are product images.
-  if (image.includes('<owner>')) return true;
+  if (image.includes("<owner>")) return true;
   // Images with ghcr.io are product images.
-  if (image.includes('ghcr.io')) return true;
+  if (image.includes("ghcr.io")) return true;
   // Bare images without a slash are third-party (e.g. postgres:16-alpine).
-  if (!image.includes('/')) return false;
+  if (!image.includes("/")) return false;
   // docker.io official images.
-  if (image.startsWith('docker.io/')) return false;
+  if (image.startsWith("docker.io/")) return false;
   // Anything else with a registry prefix is likely product.
   return true;
 }

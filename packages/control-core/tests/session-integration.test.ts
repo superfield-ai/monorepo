@@ -25,69 +25,71 @@
  * @see packages/core/session-lifecycle.ts
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, existsSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
-import { execSync } from 'child_process';
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync, existsSync } from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
+import { execSync } from "child_process";
 import {
   createWorktree,
   deleteWorktree,
   getMainHash,
   worktreeExists,
   listWorktrees,
-} from '../worktree-manager';
+} from "../worktree-manager";
 import {
   startSession,
   restartSession,
   teardownSession,
   isSessionCleanedUp,
-} from '../session-lifecycle';
-import type { StudioClusterConfig } from '../types';
+} from "../session-lifecycle";
+import type { StudioClusterConfig } from "../types";
 
 /**
  * Create a minimal git repo with one commit in a temp directory.
  */
 function createTempRepo(): string {
-  const dir = mkdtempSync(join(tmpdir(), 'studio-test-'));
-  execSync('git init', { cwd: dir, stdio: 'pipe' });
-  execSync('git checkout -b main', { cwd: dir, stdio: 'pipe' });
-  execSync('touch README.md', { cwd: dir, stdio: 'pipe' });
-  execSync('git add README.md', { cwd: dir, stdio: 'pipe' });
-  execSync('git commit -m "initial"', { cwd: dir, stdio: 'pipe' });
+  const dir = mkdtempSync(join(tmpdir(), "studio-test-"));
+  execSync("git init", { cwd: dir, stdio: "pipe" });
+  execSync("git checkout -b main", { cwd: dir, stdio: "pipe" });
+  execSync("touch README.md", { cwd: dir, stdio: "pipe" });
+  execSync("git add README.md", { cwd: dir, stdio: "pipe" });
+  execSync('git commit -m "initial"', { cwd: dir, stdio: "pipe" });
   return dir;
 }
 
-describe('worktree-manager integration', () => {
+describe("worktree-manager integration", () => {
   let repoDir: string;
   let wtBaseDir: string;
 
   beforeEach(() => {
     repoDir = createTempRepo();
-    wtBaseDir = mkdtempSync(join(tmpdir(), 'studio-wt-'));
+    wtBaseDir = mkdtempSync(join(tmpdir(), "studio-wt-"));
   });
 
   afterEach(() => {
     // Clean up worktrees before removing dirs.
     try {
-      execSync('git worktree prune', { cwd: repoDir, stdio: 'pipe' });
-    } catch { /* ignore */ }
+      execSync("git worktree prune", { cwd: repoDir, stdio: "pipe" });
+    } catch {
+      /* ignore */
+    }
     rmSync(repoDir, { recursive: true, force: true });
     rmSync(wtBaseDir, { recursive: true, force: true });
   });
 
-  it('creates a worktree on disk with correct branch name', () => {
+  it("creates a worktree on disk with correct branch name", () => {
     const mainHash = getMainHash(repoDir);
     const result = createWorktree({
       sourceDir: repoDir,
       worktreeBaseDir: wtBaseDir,
       mainHash,
-      sessionId: 'ab12',
+      sessionId: "ab12",
     });
 
     // Verify branch name.
     expect(result.branch).toBe(`studio/session-${mainHash}-ab12`);
-    expect(result.sessionId).toBe('ab12');
+    expect(result.sessionId).toBe("ab12");
 
     // Verify worktree exists on disk.
     expect(existsSync(result.worktreePath)).toBe(true);
@@ -100,13 +102,13 @@ describe('worktree-manager integration', () => {
     expect(sessionEntry!.path).toBe(result.worktreePath);
   });
 
-  it('deletes a worktree and its branch', () => {
+  it("deletes a worktree and its branch", () => {
     const mainHash = getMainHash(repoDir);
     const created = createWorktree({
       sourceDir: repoDir,
       worktreeBaseDir: wtBaseDir,
       mainHash,
-      sessionId: 'cd34',
+      sessionId: "cd34",
     });
 
     // Verify it exists first.
@@ -122,28 +124,28 @@ describe('worktree-manager integration', () => {
     expect(existsSync(created.worktreePath)).toBe(false);
 
     // Verify branch is gone.
-    const branchCheck = execSync('git branch --list ' + created.branch, {
+    const branchCheck = execSync("git branch --list " + created.branch, {
       cwd: repoDir,
-      encoding: 'utf-8',
+      encoding: "utf-8",
     });
-    expect(branchCheck.trim()).toBe('');
+    expect(branchCheck.trim()).toBe("");
   });
 
-  it('supports two concurrent worktrees without conflict', () => {
+  it("supports two concurrent worktrees without conflict", () => {
     const mainHash = getMainHash(repoDir);
 
     const wt1 = createWorktree({
       sourceDir: repoDir,
       worktreeBaseDir: wtBaseDir,
       mainHash,
-      sessionId: 'aa11',
+      sessionId: "aa11",
     });
 
     const wt2 = createWorktree({
       sourceDir: repoDir,
       worktreeBaseDir: wtBaseDir,
       mainHash,
-      sessionId: 'bb22',
+      sessionId: "bb22",
     });
 
     // Both exist.
@@ -161,35 +163,45 @@ describe('worktree-manager integration', () => {
     expect(entries.find((e) => e.branch === wt2.branch)).toBeDefined();
 
     // Clean up.
-    deleteWorktree({ sourceDir: repoDir, worktreePath: wt1.worktreePath, branch: wt1.branch });
-    deleteWorktree({ sourceDir: repoDir, worktreePath: wt2.worktreePath, branch: wt2.branch });
+    deleteWorktree({
+      sourceDir: repoDir,
+      worktreePath: wt1.worktreePath,
+      branch: wt1.branch,
+    });
+    deleteWorktree({
+      sourceDir: repoDir,
+      worktreePath: wt2.worktreePath,
+      branch: wt2.branch,
+    });
   });
 });
 
-describe('session-lifecycle integration', () => {
+describe("session-lifecycle integration", () => {
   let repoDir: string;
   let wtBaseDir: string;
   const clusterStartCalls: string[] = [];
   const clusterTeardownCalls: string[] = [];
 
   const clusterConfig: StudioClusterConfig = {
-    sourceDir: '', // will be overridden
-    k8sDir: 'k8s',
-    namespace: 'default',
+    sourceDir: "", // will be overridden
+    k8sDir: "k8s",
+    namespace: "default",
     verbose: false,
   };
 
   beforeEach(() => {
     repoDir = createTempRepo();
-    wtBaseDir = mkdtempSync(join(tmpdir(), 'studio-wt-'));
+    wtBaseDir = mkdtempSync(join(tmpdir(), "studio-wt-"));
     clusterStartCalls.length = 0;
     clusterTeardownCalls.length = 0;
   });
 
   afterEach(() => {
     try {
-      execSync('git worktree prune', { cwd: repoDir, stdio: 'pipe' });
-    } catch { /* ignore */ }
+      execSync("git worktree prune", { cwd: repoDir, stdio: "pipe" });
+    } catch {
+      /* ignore */
+    }
     rmSync(repoDir, { recursive: true, force: true });
     rmSync(wtBaseDir, { recursive: true, force: true });
   });
@@ -208,16 +220,14 @@ describe('session-lifecycle integration', () => {
     };
   }
 
-  it('start creates worktree on disk and boots cluster', async () => {
+  it("start creates worktree on disk and boots cluster", async () => {
     const session = await startSession(makeOpts());
 
     // Worktree exists.
     expect(existsSync(session.worktreePath)).toBe(true);
 
     // Branch matches naming convention.
-    expect(session.branch).toMatch(
-      /^studio\/session-[a-f0-9]+-[a-z0-9]{4}$/,
-    );
+    expect(session.branch).toMatch(/^studio\/session-[a-f0-9]+-[a-z0-9]{4}$/);
 
     // Cluster was started with worktree path.
     expect(clusterStartCalls).toHaveLength(1);
@@ -227,7 +237,7 @@ describe('session-lifecycle integration', () => {
     await teardownSession(session, makeOpts());
   });
 
-  it('restart removes old worktree and creates new one with different ID', async () => {
+  it("restart removes old worktree and creates new one with different ID", async () => {
     const opts = makeOpts();
     const session1 = await startSession(opts);
     const oldPath = session1.worktreePath;
@@ -252,7 +262,7 @@ describe('session-lifecycle integration', () => {
     await teardownSession(session2, makeOpts());
   });
 
-  it('main branch ref is unchanged after restart', async () => {
+  it("main branch ref is unchanged after restart", async () => {
     const mainHashBefore = getMainHash(repoDir);
 
     const opts = makeOpts();
@@ -268,7 +278,7 @@ describe('session-lifecycle integration', () => {
     await teardownSession(session2, makeOpts());
   });
 
-  it('two concurrent sessions use separate worktrees', async () => {
+  it("two concurrent sessions use separate worktrees", async () => {
     const opts1 = makeOpts();
     const opts2 = makeOpts();
 
@@ -289,7 +299,7 @@ describe('session-lifecycle integration', () => {
     await teardownSession(session2, makeOpts());
   });
 
-  it('worktree is fully removed from disk after teardown', async () => {
+  it("worktree is fully removed from disk after teardown", async () => {
     const opts = makeOpts();
     const session = await startSession(opts);
 

@@ -22,7 +22,7 @@ export function makeJson(
   return (body: unknown, status = 200) =>
     new Response(JSON.stringify(body), {
       status,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 }
 
@@ -34,6 +34,6 @@ export function makeJson(
 export async function readProcStdout(
   stdout: number | ReadableStream<Uint8Array> | undefined,
 ): Promise<string> {
-  if (!stdout || typeof stdout === 'number') return '';
+  if (!stdout || typeof stdout === "number") return "";
   return new Response(stdout).text();
 }

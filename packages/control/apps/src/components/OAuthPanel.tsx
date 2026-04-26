@@ -8,9 +8,12 @@
  * Canonical docs: docs/studio-mode.md — "OAuth"
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { Link, Unlink, Copy, Check, AlertCircle } from 'lucide-react';
-import { OAuthController, type OAuthControllerState } from '../controllers/OAuthController';
+import React, { useState, useEffect, useRef } from "react";
+import { Link, Unlink, Copy, Check, AlertCircle } from "lucide-react";
+import {
+  OAuthController,
+  type OAuthControllerState,
+} from "../controllers/OAuthController";
 
 interface OAuthPanelProps {
   /** Base URL for API calls; defaults to empty string (same origin) */
@@ -19,7 +22,10 @@ interface OAuthPanelProps {
   controller?: OAuthController;
 }
 
-export function OAuthPanel({ baseUrl = '', controller: controllerProp }: OAuthPanelProps) {
+export function OAuthPanel({
+  baseUrl = "",
+  controller: controllerProp,
+}: OAuthPanelProps) {
   const controllerRef = useRef<OAuthController>(
     controllerProp ?? new OAuthController({ baseUrl }),
   );
@@ -27,7 +33,7 @@ export function OAuthPanel({ baseUrl = '', controller: controllerProp }: OAuthPa
   const [oauthState, setOauthState] = useState<OAuthControllerState>(
     controllerRef.current.getState(),
   );
-  const [confirmationCode, setConfirmationCode] = useState('');
+  const [confirmationCode, setConfirmationCode] = useState("");
   const [copied, setCopied] = useState(false);
 
   // Subscribe to controller state changes
@@ -51,7 +57,7 @@ export function OAuthPanel({ baseUrl = '', controller: controllerProp }: OAuthPa
     return null;
   }
 
-  if (status === 'connected') {
+  if (status === "connected") {
     return (
       <div className="px-4 py-3 border-b border-zinc-700 bg-zinc-800/50">
         <div className="flex items-center justify-between">
@@ -118,11 +124,13 @@ export function OAuthPanel({ baseUrl = '', controller: controllerProp }: OAuthPa
               />
               <button
                 type="button"
-                onClick={() => void controllerRef.current.completeOAuth(confirmationCode)}
-                disabled={status === 'pending' && oauthState.loading}
+                onClick={() =>
+                  void controllerRef.current.completeOAuth(confirmationCode)
+                }
+                disabled={status === "pending" && oauthState.loading}
                 className="px-3 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
-                {oauthState.loading ? 'Connecting...' : 'Submit'}
+                {oauthState.loading ? "Connecting..." : "Submit"}
               </button>
             </div>
           </div>

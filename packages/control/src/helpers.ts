@@ -14,7 +14,7 @@
  *   - getStudioSystemPrompt() — the base design-mode system context string
  */
 
-import { buildQuestionModePrompt as _buildQuestionModePrompt } from './question-mode';
+import { buildQuestionModePrompt as _buildQuestionModePrompt } from "./question-mode";
 
 export interface ControlInfo {
   sessionId: string;
@@ -22,12 +22,12 @@ export interface ControlInfo {
 }
 
 export interface ControlMessage {
-  role: 'user' | 'assistant';
+  role: "user" | "assistant";
   content: string;
 }
 
 /** Studio agent mode — 'design' for full read/write, 'question' for read-only Q&A. */
-export type ControlMode = 'design' | 'question';
+export type ControlMode = "design" | "question";
 
 /**
  * Parse the JSON content of the `.studio` session file.
@@ -37,7 +37,10 @@ export type ControlMode = 'design' | 'question';
 export function parseControlInfo(raw: string): ControlInfo | null {
   try {
     const parsed = JSON.parse(raw) as Partial<ControlInfo>;
-    if (typeof parsed.sessionId !== 'string' || typeof parsed.branch !== 'string') {
+    if (
+      typeof parsed.sessionId !== "string" ||
+      typeof parsed.branch !== "string"
+    ) {
       return null;
     }
     return {
@@ -55,14 +58,19 @@ export function parseControlInfo(raw: string): ControlInfo | null {
  * Each line is expected to be: `<hash> <message>`
  * Returns an empty array for empty input.
  */
-export function parseSessionCommits(output: string): { hash: string; message: string }[] {
+export function parseSessionCommits(
+  output: string,
+): { hash: string; message: string }[] {
   return output
     .trim()
-    .split('\n')
+    .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const spaceIdx = line.indexOf(' ');
-      return { hash: line.slice(0, spaceIdx), message: line.slice(spaceIdx + 1) };
+      const spaceIdx = line.indexOf(" ");
+      return {
+        hash: line.slice(0, spaceIdx),
+        message: line.slice(spaceIdx + 1),
+      };
     });
 }
 
@@ -77,11 +85,11 @@ export function parseTimelineCommits(
 ): { hash: string; message: string; timestamp: string }[] {
   return output
     .trim()
-    .split('\n')
+    .split("\n")
     .filter(Boolean)
     .map((line) => {
-      const firstPipe = line.indexOf('|');
-      const secondPipe = line.indexOf('|', firstPipe + 1);
+      const firstPipe = line.indexOf("|");
+      const secondPipe = line.indexOf("|", firstPipe + 1);
       if (firstPipe === -1 || secondPipe === -1) {
         return null;
       }
@@ -91,7 +99,10 @@ export function parseTimelineCommits(
         message: line.slice(secondPipe + 1),
       };
     })
-    .filter((entry): entry is { hash: string; message: string; timestamp: string } => entry !== null);
+    .filter(
+      (entry): entry is { hash: string; message: string; timestamp: string } =>
+        entry !== null,
+    );
 }
 
 /**
@@ -100,7 +111,7 @@ export function parseTimelineCommits(
  * @returns Trimmed message, or null if empty or not a string.
  */
 export function validateControlMessage(message: unknown): string | null {
-  if (typeof message !== 'string') return null;
+  if (typeof message !== "string") return null;
   const trimmed = message.trim();
   return trimmed ? trimmed : null;
 }
@@ -111,7 +122,7 @@ export function validateControlMessage(message: unknown): string | null {
  * @returns Trimmed hash, or null if empty or not a string.
  */
 export function validateRollbackHash(hash: unknown): string | null {
-  if (typeof hash !== 'string') return null;
+  if (typeof hash !== "string") return null;
   const trimmed = hash.trim();
   return trimmed ? trimmed : null;
 }
@@ -169,7 +180,7 @@ export function buildStudioPrompt({
   branch,
   messages,
   changesContent,
-  mode = 'design',
+  mode = "design",
 }: {
   branch: string;
   messages: ControlMessage[];
@@ -177,9 +188,9 @@ export function buildStudioPrompt({
   mode?: ControlMode;
 }): string {
   // In question mode, delegate to the question mode prompt builder
-  if (mode === 'question') {
+  if (mode === "question") {
     const lastMessage = messages[messages.length - 1];
-    const question = lastMessage?.role === 'user' ? lastMessage.content : '';
+    const question = lastMessage?.role === "user" ? lastMessage.content : "";
     const history = messages.length > 1 ? messages.slice(0, -1) : [];
     return _buildQuestionModePrompt({
       branch,
@@ -189,12 +200,15 @@ export function buildStudioPrompt({
   }
 
   const conversationText = messages
-    .map((message) => `${message.role === 'user' ? 'Partner' : 'Agent'}: ${message.content}`)
-    .join('\n\n');
+    .map(
+      (message) =>
+        `${message.role === "user" ? "Partner" : "Agent"}: ${message.content}`,
+    )
+    .join("\n\n");
 
   const changesContext = changesContent
     ? `\n\nCurrent changes.md:\n\`\`\`\n${changesContent}\n\`\`\``
-    : '';
+    : "";
 
   return `${getStudioSystemPrompt(branch)}${changesContext}\n\n## Conversation\n\n${conversationText}\n\nAgent:`;
 }

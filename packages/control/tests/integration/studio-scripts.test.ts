@@ -13,14 +13,21 @@
  * The canonical studio entry-point is now studio/scripts/studio-start.ts.
  */
 
-import { afterEach, expect, test } from 'vitest';
-import { type SpawnSyncReturns, spawnSync } from 'child_process';
-import { mkdirSync, mkdtempSync, readdirSync, rmSync, statSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
+import { afterEach, expect, test } from "vitest";
+import { type SpawnSyncReturns, spawnSync } from "child_process";
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "fs";
+import { join } from "path";
+import { tmpdir } from "os";
 
 // Path to the studio submodule root (four levels up from this test file).
-const STUDIO_ROOT = new URL('../../../../', import.meta.url).pathname;
+const STUDIO_ROOT = new URL("../../../../", import.meta.url).pathname;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -42,16 +49,16 @@ function writeFakeExec(
     stderr?: string;
   } = {},
 ): string {
-  const { exitCode = 0, stdout = '', stderr = '' } = opts;
+  const { exitCode = 0, stdout = "", stderr = "" } = opts;
   const path = join(dir, name);
   const script = [
-    '#!/bin/sh',
-    stderr ? `echo "${stderr}" >&2` : '',
-    stdout ? `echo "${stdout}"` : '',
+    "#!/bin/sh",
+    stderr ? `echo "${stderr}" >&2` : "",
+    stdout ? `echo "${stdout}"` : "",
     `exit ${exitCode}`,
   ]
     .filter(Boolean)
-    .join('\n');
+    .join("\n");
   writeFileSync(path, script, { mode: 0o755 });
   return path;
 }
@@ -68,16 +75,16 @@ function runScript(
   scriptArgs: string[] = [],
 ): SpawnSyncReturns<Buffer> {
   const pathWithStubs = `${stubDir}:${process.env.PATH}`;
-  return spawnSync('bun', ['run', scriptPath, ...scriptArgs], {
+  return spawnSync("bun", ["run", scriptPath, ...scriptArgs], {
     cwd: STUDIO_ROOT,
     env: {
       ...process.env,
       PATH: pathWithStubs,
-      CONTROL_PORT: '17099',
-      CONTROL_LOG_DIR: '/tmp/studio-test-logs',
+      CONTROL_PORT: "17099",
+      CONTROL_LOG_DIR: "/tmp/studio-test-logs",
       ...env,
     },
-    stdio: 'pipe',
+    stdio: "pipe",
     timeout: 30_000,
   });
 }
@@ -89,94 +96,85 @@ function runScript(
  */
 function makeSourceDirWithK8s(prefix: string): string {
   const sourceDir = makeTempDir(prefix);
-  const k8sDir = join(sourceDir, 'k8s');
+  const k8sDir = join(sourceDir, "k8s");
   mkdirSync(k8sDir, { recursive: true });
   writeFileSync(
-    join(k8sDir, 'app.yaml'),
+    join(k8sDir, "app.yaml"),
     [
-      'apiVersion: apps/v1',
-      'kind: Deployment',
-      'metadata:',
-      '  name: app',
-      'spec:',
-      '  replicas: 1',
-    ].join('\n'),
+      "apiVersion: apps/v1",
+      "kind: Deployment",
+      "metadata:",
+      "  name: app",
+      "spec:",
+      "  replicas: 1",
+    ].join("\n"),
   );
   return sourceDir;
 }
 
 // ── studio-down ───────────────────────────────────────────────────────────────
 
-test(
-  'studio:down exits 0 when kubectl delete succeeds',
-  () => {
-    const stubDir = makeTempDir('studio-down-stubs-');
-    const sourceDir = makeSourceDirWithK8s('studio-down-src-');
+test("studio:down exits 0 when kubectl delete succeeds", () => {
+  const stubDir = makeTempDir("studio-down-stubs-");
+  const sourceDir = makeSourceDirWithK8s("studio-down-src-");
 
-    // Fake kubectl that records the call and succeeds.
-    writeFakeExec(stubDir, 'kubectl', { exitCode: 0, stdout: 'resource deleted' });
+  // Fake kubectl that records the call and succeeds.
+  writeFakeExec(stubDir, "kubectl", {
+    exitCode: 0,
+    stdout: "resource deleted",
+  });
 
-    const result = runScript(
-      join(STUDIO_ROOT, 'scripts', 'studio-down.ts'),
-      stubDir,
-      {},
-      [sourceDir],
-    );
+  const result = runScript(
+    join(STUDIO_ROOT, "scripts", "studio-down.ts"),
+    stubDir,
+    {},
+    [sourceDir],
+  );
 
-    expect(result.status).toBe(0);
-    const out = new TextDecoder().decode(result.stdout);
-    expect(out).toContain('studio:down complete');
-  },
-  30_000,
-);
+  expect(result.status).toBe(0);
+  const out = new TextDecoder().decode(result.stdout);
+  expect(out).toContain("studio:down complete");
+}, 30_000);
 
-test(
-  'studio:down exits 0 even when kubectl delete fails (cleanup ignores kubectl errors)',
-  () => {
-    const stubDir = makeTempDir('studio-down-fail-stubs-');
-    const sourceDir = makeSourceDirWithK8s('studio-down-fail-src-');
+test("studio:down exits 0 even when kubectl delete fails (cleanup ignores kubectl errors)", () => {
+  const stubDir = makeTempDir("studio-down-fail-stubs-");
+  const sourceDir = makeSourceDirWithK8s("studio-down-fail-src-");
 
-    writeFakeExec(stubDir, 'kubectl', {
-      exitCode: 1,
-      stderr: 'Error: cluster unreachable',
-    });
+  writeFakeExec(stubDir, "kubectl", {
+    exitCode: 1,
+    stderr: "Error: cluster unreachable",
+  });
 
-    const result = runScript(
-      join(STUDIO_ROOT, 'scripts', 'studio-down.ts'),
-      stubDir,
-      {},
-      [sourceDir],
-    );
+  const result = runScript(
+    join(STUDIO_ROOT, "scripts", "studio-down.ts"),
+    stubDir,
+    {},
+    [sourceDir],
+  );
 
-    // cleanupCluster does not propagate kubectl exit codes, so the script exits 0.
-    expect(result.status).toBe(0);
-  },
-  30_000,
-);
+  // cleanupCluster does not propagate kubectl exit codes, so the script exits 0.
+  expect(result.status).toBe(0);
+}, 30_000);
 
-test(
-  'studio:down exits 0 with no-resources message when k8s dir has no YAML files',
-  () => {
-    const stubDir = makeTempDir('studio-down-empty-');
-    const sourceDir = makeTempDir('studio-down-empty-src-');
-    mkdirSync(join(sourceDir, 'k8s'), { recursive: true });
-    // k8s dir exists but has no YAML files.
+test("studio:down exits 0 with no-resources message when k8s dir has no YAML files", () => {
+  const stubDir = makeTempDir("studio-down-empty-");
+  const sourceDir = makeTempDir("studio-down-empty-src-");
+  mkdirSync(join(sourceDir, "k8s"), { recursive: true });
+  // k8s dir exists but has no YAML files.
 
-    writeFakeExec(stubDir, 'kubectl', { exitCode: 0 });
+  writeFakeExec(stubDir, "kubectl", { exitCode: 0 });
 
-    const result = runScript(
-      join(STUDIO_ROOT, 'scripts', 'studio-down.ts'),
-      stubDir,
-      {},
-      [sourceDir],
-    );
+  const result = runScript(
+    join(STUDIO_ROOT, "scripts", "studio-down.ts"),
+    stubDir,
+    {},
+    [sourceDir],
+  );
 
-    expect(result.status).toBe(0);
-    const out = new TextDecoder().decode(result.stdout);
-    expect(out).toContain('No resources found');
-  },
-  30_000,
-);
+  expect(result.status).toBe(0);
+  const out = new TextDecoder().decode(result.stdout);
+  expect(out).toContain("No resources found");
+}, 30_000);
 
 // ── Cleanup ────────────────────────────────────────────────────────────────────
 
@@ -186,7 +184,7 @@ afterEach(() => {
   // avoid leaking large numbers of temp files.
   try {
     const dirs = readdirSync(tmpdir())
-      .filter((f) => f.startsWith('studio-'))
+      .filter((f) => f.startsWith("studio-"))
       .map((f) => join(tmpdir(), f))
       .filter((p) => {
         try {

@@ -8,11 +8,11 @@
  * Canonical docs: docs/studio-mode.md — "Cluster Status Stream"
  */
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from "react";
 import {
   ClusterStatusController,
   type ClusterStatus,
-} from '../controllers/ClusterStatusController';
+} from "../controllers/ClusterStatusController";
 
 export type { ClusterStatus };
 
@@ -25,29 +25,31 @@ interface ClusterStatusIndicatorProps {
   controller?: ClusterStatusController;
 }
 
-const STATUS_CONFIG: Record<ClusterStatus, { label: string; dotClass: string; textClass: string }> =
-  {
-    healthy: {
-      label: 'Cluster healthy',
-      dotClass: 'bg-emerald-400',
-      textClass: 'text-emerald-700',
-    },
-    restarting: {
-      label: 'Cluster restarting',
-      dotClass: 'bg-amber-400 animate-pulse',
-      textClass: 'text-amber-700',
-    },
-    degraded: {
-      label: 'Cluster degraded',
-      dotClass: 'bg-red-400',
-      textClass: 'text-red-700',
-    },
-    unknown: {
-      label: 'Cluster status unknown',
-      dotClass: 'bg-zinc-300',
-      textClass: 'text-zinc-500',
-    },
-  };
+const STATUS_CONFIG: Record<
+  ClusterStatus,
+  { label: string; dotClass: string; textClass: string }
+> = {
+  healthy: {
+    label: "Cluster healthy",
+    dotClass: "bg-emerald-400",
+    textClass: "text-emerald-700",
+  },
+  restarting: {
+    label: "Cluster restarting",
+    dotClass: "bg-amber-400 animate-pulse",
+    textClass: "text-amber-700",
+  },
+  degraded: {
+    label: "Cluster degraded",
+    dotClass: "bg-red-400",
+    textClass: "text-red-700",
+  },
+  unknown: {
+    label: "Cluster status unknown",
+    dotClass: "bg-zinc-300",
+    textClass: "text-zinc-500",
+  },
+};
 
 /**
  * ClusterStatusIndicator — reads cluster status from ClusterStatusController
@@ -56,10 +58,12 @@ const STATUS_CONFIG: Record<ClusterStatus, { label: string; dotClass: string; te
  */
 export function ClusterStatusIndicator({
   statusOverride,
-  eventsUrl = '/studio/cluster/events',
+  eventsUrl = "/studio/cluster/events",
   controller: controllerProp,
 }: ClusterStatusIndicatorProps) {
-  const [status, setStatus] = useState<ClusterStatus>(statusOverride ?? 'unknown');
+  const [status, setStatus] = useState<ClusterStatus>(
+    statusOverride ?? "unknown",
+  );
 
   const controllerRef = useRef<ClusterStatusController | null>(null);
 
@@ -98,8 +102,13 @@ export function ClusterStatusIndicator({
       aria-label={`Cluster status: ${status}`}
       data-testid="cluster-status-indicator"
     >
-      <span className={`w-2 h-2 rounded-full shrink-0 ${config.dotClass}`} aria-hidden="true" />
-      <span className={`text-xs font-medium ${config.textClass}`}>{config.label}</span>
+      <span
+        className={`w-2 h-2 rounded-full shrink-0 ${config.dotClass}`}
+        aria-hidden="true"
+      />
+      <span className={`text-xs font-medium ${config.textClass}`}>
+        {config.label}
+      </span>
     </div>
   );
 }

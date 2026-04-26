@@ -1,44 +1,64 @@
-import { afterAll, beforeAll, beforeEach, describe, expect, test } from 'vitest';
-import { type ChildProcess, type SpawnSyncReturns, spawn, spawnSync } from 'child_process';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs';
-import { delimiter, join } from 'path';
-import { startPostgres, type PgContainer } from '../helpers/pg-container';
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "vitest";
+import {
+  type ChildProcess,
+  type SpawnSyncReturns,
+  spawn,
+  spawnSync,
+} from "child_process";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "fs";
+import { delimiter, join } from "path";
+import { startPostgres, type PgContainer } from "../helpers/pg-container";
 
 const PORT = 31417;
 const BASE = `http://localhost:${PORT}`;
 const SERVER_READY_TIMEOUT_MS = 60_000;
-const REPO_ROOT = new URL('../../../../', import.meta.url).pathname;
-const CLONE_ROOT = join('/tmp', `superfield-studio-api-${Date.now()}`);
-const SERVER_ENTRY = join(REPO_ROOT, 'apps/server/src/index.ts');
-const CLAUDE_STUB_DIR = join(REPO_ROOT, 'tests', 'fixtures');
-const CLAUDE_LOG_PATH = join(CLONE_ROOT, 'tests', 'fixtures', 'claude-integration.log');
+const REPO_ROOT = new URL("../../../../", import.meta.url).pathname;
+const CLONE_ROOT = join("/tmp", `superfield-studio-api-${Date.now()}`);
+const SERVER_ENTRY = join(REPO_ROOT, "apps/server/src/index.ts");
+const CLAUDE_STUB_DIR = join(REPO_ROOT, "tests", "fixtures");
+const CLAUDE_LOG_PATH = join(
+  CLONE_ROOT,
+  "tests",
+  "fixtures",
+  "claude-integration.log",
+);
 const GIT_ENV = sanitizedGitEnv();
 
 let pg: PgContainer;
 let server: ChildProcess;
-let studioBranch = '';
-let studioFilePath = '';
-let sessionDir = '';
-let changesPath = '';
-let authCookie = '';
+let studioBranch = "";
+let studioFilePath = "";
+let sessionDir = "";
+let changesPath = "";
+let authCookie = "";
 
 beforeAll(async () => {
-  const clone = spawnGitSync(['clone', REPO_ROOT, CLONE_ROOT], REPO_ROOT);
+  const clone = spawnGitSync(["clone", REPO_ROOT, CLONE_ROOT], REPO_ROOT);
   expect(clone.status).toBe(0);
 
-  spawnGitSync(['config', 'user.name', 'Studio API Test'], CLONE_ROOT);
-  spawnGitSync(['config', 'user.email', 'studio-api-test@example.com'], CLONE_ROOT);
-  spawnGitSync(['branch', '-f', 'main', 'HEAD'], CLONE_ROOT);
+  spawnGitSync(["config", "user.name", "Studio API Test"], CLONE_ROOT);
+  spawnGitSync(
+    ["config", "user.email", "studio-api-test@example.com"],
+    CLONE_ROOT,
+  );
+  spawnGitSync(["branch", "-f", "main", "HEAD"], CLONE_ROOT);
 
-  const mainHash = spawnGitSync(['rev-parse', '--short', 'main'], CLONE_ROOT);
+  const mainHash = spawnGitSync(["rev-parse", "--short", "main"], CLONE_ROOT);
   expect(mainHash.status).toBe(0);
 
   studioBranch = `studio/session-${mainHash.stdout.toString().trim()}-itest`;
-  spawnGitSync(['checkout', '-b', studioBranch], CLONE_ROOT);
+  spawnGitSync(["checkout", "-b", studioBranch], CLONE_ROOT);
 
-  studioFilePath = join(CLONE_ROOT, '.studio');
-  sessionDir = join(CLONE_ROOT, 'docs', 'studio-sessions', studioBranch);
-  changesPath = join(sessionDir, 'changes.md');
+  studioFilePath = join(CLONE_ROOT, ".studio");
+  sessionDir = join(CLONE_ROOT, "docs", "studio-sessions", studioBranch);
+  changesPath = join(sessionDir, "changes.md");
 
   // Reuse a pre-existing DATABASE_URL (e.g. CI service container) if available
   let databaseUrl = process.env.DATABASE_URL;
@@ -46,7 +66,7 @@ beforeAll(async () => {
     pg = await startPostgres();
     databaseUrl = pg.url;
   }
-  mkdirSync(join(CLONE_ROOT, 'tests', 'fixtures'), { recursive: true });
+  mkdirSync(join(CLONE_ROOT, "tests", "fixtures"), { recursive: true });
   mkdirSync(sessionDir, { recursive: true });
   writeFileSync(
     changesPath,
@@ -58,40 +78,40 @@ beforeAll(async () => {
 `,
   );
 
-  server = spawn('bun', ['run', SERVER_ENTRY], {
+  server = spawn("bun", ["run", SERVER_ENTRY], {
     cwd: CLONE_ROOT,
     env: {
       ...process.env,
       SUPERFIELD_REPO_ROOT: CLONE_ROOT,
       DATABASE_URL: databaseUrl,
       CONTROL_PORT: String(PORT),
-      PATH: `${CLAUDE_STUB_DIR}${delimiter}${process.env.PATH ?? ''}`,
+      PATH: `${CLAUDE_STUB_DIR}${delimiter}${process.env.PATH ?? ""}`,
       CLAUDE_E2E_LOG_PATH: CLAUDE_LOG_PATH,
     },
-    stdio: ['ignore', 'ignore', 'pipe'],
+    stdio: ["ignore", "ignore", "pipe"],
   });
 
   const stderrChunks: Buffer[] = [];
-  server.stderr!.on('data', (chunk: Buffer) => stderrChunks.push(chunk));
+  server.stderr!.on("data", (chunk: Buffer) => stderrChunks.push(chunk));
 
   await waitForServer(BASE, server, stderrChunks);
 
   // Register a test user and capture the session cookie for auth-gated studio routes
   const username = `studio_test_${Date.now()}`;
   const registerRes = await fetch(`${BASE}/api/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username, password: 'testpass123' }),
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password: "testpass123" }),
   });
   const setCookies = registerRes.headers.getSetCookie
     ? registerRes.headers.getSetCookie()
-    : [registerRes.headers.get('set-cookie') ?? ''];
+    : [registerRes.headers.get("set-cookie") ?? ""];
   const cookiePairs: string[] = [];
   for (const raw of setCookies) {
-    const pair = raw.split(';')[0].trim();
+    const pair = raw.split(";")[0].trim();
     if (pair) cookiePairs.push(pair);
   }
-  authCookie = cookiePairs.join('; ');
+  authCookie = cookiePairs.join("; ");
 }, 120_000);
 
 afterAll(async () => {
@@ -117,41 +137,41 @@ beforeEach(() => {
   rmSync(CLAUDE_LOG_PATH, { force: true });
 });
 
-describe('Studio API integration', () => {
+describe("Studio API integration", () => {
   // --- Unauthenticated 401 checks ---
 
-  test('POST /studio/start returns 401 for unauthenticated request', async () => {
+  test("POST /studio/start returns 401 for unauthenticated request", async () => {
     const res = await fetch(`${BASE}/studio/start`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({}),
     });
 
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'Unauthorized' });
+    expect(await res.json()).toEqual({ error: "Unauthorized" });
   });
 
-  test('POST /studio/chat returns 401 for unauthenticated request', async () => {
+  test("POST /studio/chat returns 401 for unauthenticated request", async () => {
     const res = await fetch(`${BASE}/studio/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Please adjust the header.' }),
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ message: "Please adjust the header." }),
     });
 
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'Unauthorized' });
+    expect(await res.json()).toEqual({ error: "Unauthorized" });
   });
 
-  test('GET /studio/status returns 401 for unauthenticated request', async () => {
+  test("GET /studio/status returns 401 for unauthenticated request", async () => {
     const res = await fetch(`${BASE}/studio/status`);
 
     expect(res.status).toBe(401);
-    expect(await res.json()).toEqual({ error: 'Unauthorized' });
+    expect(await res.json()).toEqual({ error: "Unauthorized" });
   });
 
   // --- Authenticated requests ---
 
-  test('GET /studio/status returns inactive when .studio is absent (authenticated)', async () => {
+  test("GET /studio/status returns inactive when .studio is absent (authenticated)", async () => {
     const res = await fetch(`${BASE}/studio/status`, {
       headers: { Cookie: authCookie },
     });
@@ -160,7 +180,7 @@ describe('Studio API integration', () => {
     expect(await res.json()).toEqual({ active: false });
   });
 
-  test('GET /studio/status returns session metadata when .studio is present (authenticated)', async () => {
+  test("GET /studio/status returns session metadata when .studio is present (authenticated)", async () => {
     writeStudioFile();
 
     const res = await fetch(`${BASE}/studio/status`, {
@@ -170,76 +190,76 @@ describe('Studio API integration', () => {
 
     expect(res.status).toBe(200);
     expect(body.active).toBe(true);
-    expect(body.sessionId).toBe('itest');
+    expect(body.sessionId).toBe("itest");
     expect(body.branch).toBe(studioBranch);
     expect(Array.isArray(body.commits)).toBe(true);
   });
 
-  test('POST /studio/chat returns 403 when studio mode is inactive (authenticated)', async () => {
+  test("POST /studio/chat returns 403 when studio mode is inactive (authenticated)", async () => {
     const res = await fetch(`${BASE}/studio/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: authCookie },
-      body: JSON.stringify({ message: 'Please adjust the header.' }),
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: authCookie },
+      body: JSON.stringify({ message: "Please adjust the header." }),
     });
 
     expect(res.status).toBe(403);
-    expect(await res.json()).toEqual({ error: 'Studio mode is not active' });
+    expect(await res.json()).toEqual({ error: "Studio mode is not active" });
   });
 
-  test('POST /studio/chat returns 400 when message is missing (authenticated)', async () => {
+  test("POST /studio/chat returns 400 when message is missing (authenticated)", async () => {
     writeStudioFile();
 
     const res = await fetch(`${BASE}/studio/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: authCookie },
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: authCookie },
       body: JSON.stringify({}),
     });
 
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: 'message required' });
+    expect(await res.json()).toEqual({ error: "message required" });
   });
 
-  test('POST /studio/chat preserves prior turns across a multi-turn session (authenticated)', async () => {
+  test("POST /studio/chat preserves prior turns across a multi-turn session (authenticated)", async () => {
     writeStudioFile();
 
-    const firstMessage = 'Please group dispatches by status.';
-    const secondMessage = 'Now rename Tasks to Dispatches.';
+    const firstMessage = "Please group dispatches by status.";
+    const secondMessage = "Now rename Tasks to Dispatches.";
 
     const firstRes = await fetch(`${BASE}/studio/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: authCookie },
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: authCookie },
       body: JSON.stringify({ message: firstMessage }),
     });
     expect(firstRes.status).toBe(200);
 
     const secondRes = await fetch(`${BASE}/studio/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: authCookie },
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: authCookie },
       body: JSON.stringify({ message: secondMessage }),
     });
     expect(secondRes.status).toBe(200);
 
     const prompt = await waitForLatestPromptContains(secondMessage);
     expect(prompt).toContain(`Partner: ${firstMessage}`);
-    expect(prompt).toContain('Agent: Mocked Claude response for studio e2e.');
+    expect(prompt).toContain("Agent: Mocked Claude response for studio e2e.");
     expect(prompt).toContain(`Partner: ${secondMessage}`);
   });
 
-  test('POST /studio/reset clears prior session context (authenticated)', async () => {
+  test("POST /studio/reset clears prior session context (authenticated)", async () => {
     writeStudioFile();
 
-    const firstMessage = 'Add a priority badge to each card.';
-    const secondMessage = 'Rename Tasks to Dispatches.';
+    const firstMessage = "Add a priority badge to each card.";
+    const secondMessage = "Rename Tasks to Dispatches.";
 
     const firstRes = await fetch(`${BASE}/studio/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: authCookie },
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: authCookie },
       body: JSON.stringify({ message: firstMessage }),
     });
     expect(firstRes.status).toBe(200);
 
     const resetRes = await fetch(`${BASE}/studio/reset`, {
-      method: 'POST',
+      method: "POST",
       headers: { Cookie: authCookie },
     });
     expect(resetRes.status).toBe(200);
@@ -247,29 +267,31 @@ describe('Studio API integration', () => {
     rmSync(CLAUDE_LOG_PATH, { force: true });
 
     const secondRes = await fetch(`${BASE}/studio/chat`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: authCookie },
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: authCookie },
       body: JSON.stringify({ message: secondMessage }),
     });
     expect(secondRes.status).toBe(200);
 
     const prompt = await waitForLatestPromptContains(secondMessage);
     expect(prompt).not.toContain(`Partner: ${firstMessage}`);
-    expect(prompt).not.toContain('Agent: Mocked Claude response for studio e2e.');
+    expect(prompt).not.toContain(
+      "Agent: Mocked Claude response for studio e2e.",
+    );
     expect(prompt).toContain(`Partner: ${secondMessage}`);
   });
 
-  test('POST /studio/rollback returns 400 when hash is missing (authenticated)', async () => {
+  test("POST /studio/rollback returns 400 when hash is missing (authenticated)", async () => {
     writeStudioFile();
 
     const res = await fetch(`${BASE}/studio/rollback`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', Cookie: authCookie },
+      method: "POST",
+      headers: { "Content-Type": "application/json", Cookie: authCookie },
       body: JSON.stringify({}),
     });
 
     expect(res.status).toBe(400);
-    expect(await res.json()).toEqual({ error: 'hash required' });
+    expect(await res.json()).toEqual({ error: "hash required" });
   });
 });
 
@@ -278,7 +300,7 @@ function writeStudioFile() {
     studioFilePath,
     JSON.stringify(
       {
-        sessionId: 'itest',
+        sessionId: "itest",
         branch: studioBranch,
         startedAt: new Date().toISOString(),
       },
@@ -307,14 +329,18 @@ function sanitizedGitEnv(): NodeJS.ProcessEnv {
 }
 
 function spawnGitSync(args: string[], cwd: string): SpawnSyncReturns<Buffer> {
-  return spawnSync('git', args, {
+  return spawnSync("git", args, {
     cwd,
     env: GIT_ENV,
-    stdio: 'pipe',
+    stdio: "pipe",
   });
 }
 
-async function waitForServer(base: string, proc: ChildProcess, stderrChunks: Buffer[]): Promise<void> {
+async function waitForServer(
+  base: string,
+  proc: ChildProcess,
+  stderrChunks: Buffer[],
+): Promise<void> {
   const deadline = Date.now() + SERVER_READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
     try {
@@ -326,11 +352,11 @@ async function waitForServer(base: string, proc: ChildProcess, stderrChunks: Buf
   }
   // Kill the process so the stderr stream reaches EOF, then read what was captured.
   proc.kill();
-  let stderrOutput = '';
+  let stderrOutput = "";
   try {
-    await new Promise<void>((r) => proc.once('close', r));
+    await new Promise<void>((r) => proc.once("close", r));
     const stderrText = Buffer.concat(stderrChunks).toString();
-    stderrOutput = stderrText ? `\nServer stderr:\n${stderrText}` : '';
+    stderrOutput = stderrText ? `\nServer stderr:\n${stderrText}` : "";
   } catch {
     // ignore errors reading stderr
   }
@@ -343,12 +369,12 @@ async function waitForLatestPromptContains(message: string): Promise<string> {
   const deadline = Date.now() + 5_000;
   while (Date.now() < deadline) {
     if (existsSync(CLAUDE_LOG_PATH)) {
-      const log = readFileSync(CLAUDE_LOG_PATH, 'utf8');
+      const log = readFileSync(CLAUDE_LOG_PATH, "utf8");
       const prompts = log
-        .split('PROMPT: ')
+        .split("PROMPT: ")
         .map((entry) => entry.trim())
         .filter(Boolean);
-      const latestPrompt = prompts.at(-1) ?? '';
+      const latestPrompt = prompts.at(-1) ?? "";
       if (latestPrompt.includes(message)) return latestPrompt;
     }
     await new Promise<void>((r) => setTimeout(r, 200));

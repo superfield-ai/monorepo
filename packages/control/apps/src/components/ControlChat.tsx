@@ -10,10 +10,22 @@
  * Canonical docs: docs/studio-mode.md — "Claude CLI Integration", "Rollback"
  */
 
-import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, RotateCcw, Send, GitCommit, Loader } from 'lucide-react';
-import { ChatController, type ChatControllerState } from '../controllers/ChatController';
-import { CommitController, type CommitControllerState } from '../controllers/CommitController';
+import React, { useState, useEffect, useRef } from "react";
+import {
+  MessageSquare,
+  RotateCcw,
+  Send,
+  GitCommit,
+  Loader,
+} from "lucide-react";
+import {
+  ChatController,
+  type ChatControllerState,
+} from "../controllers/ChatController";
+import {
+  CommitController,
+  type CommitControllerState,
+} from "../controllers/CommitController";
 
 /**
  * Format an ISO 8601 timestamp into a human-readable relative or absolute string.
@@ -25,11 +37,16 @@ function formatTimestamp(iso: string): string {
     const diffMs = now.getTime() - date.getTime();
     const diffMins = Math.floor(diffMs / 60000);
 
-    if (diffMins < 1) return 'just now';
+    if (diffMins < 1) return "just now";
     if (diffMins < 60) return `${diffMins}m ago`;
     const diffHours = Math.floor(diffMins / 60);
     if (diffHours < 24) return `${diffHours}h ago`;
-    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    return date.toLocaleDateString(undefined, {
+      month: "short",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
     return iso;
   }
@@ -42,7 +59,7 @@ interface ControlChatProps {
   commitController?: CommitController;
 }
 
-type StatusState = 'loading' | 'ready' | 'error';
+type StatusState = "loading" | "ready" | "error";
 
 interface ControlInfo {
   active: boolean;
@@ -60,7 +77,7 @@ export function ControlChat({
       new ChatController({
         chatEndpoint: fixtureId
           ? `/studio/chat?fixtureId=${encodeURIComponent(fixtureId)}`
-          : '/studio/chat',
+          : "/studio/chat",
       }),
   );
   const commitControllerRef = useRef<CommitController>(
@@ -68,14 +85,14 @@ export function ControlChat({
   );
 
   const [studioInfo, setControlInfo] = useState<ControlInfo>({ active: false });
-  const [statusState, setStatusState] = useState<StatusState>('loading');
+  const [statusState, setStatusState] = useState<StatusState>("loading");
   const [chatState, setChatState] = useState<ChatControllerState>(
     chatControllerRef.current.getState(),
   );
   const [commitState, setCommitState] = useState<CommitControllerState>(
     commitControllerRef.current.getState(),
   );
-  const [input, setInput] = useState('');
+  const [input, setInput] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Fetch initial studio status
@@ -83,10 +100,14 @@ export function ControlChat({
     void (async () => {
       try {
         const info = await commitControllerRef.current.fetchStatus();
-        setControlInfo({ active: info.active, sessionId: info.sessionId, branch: info.branch });
-        setStatusState('ready');
+        setControlInfo({
+          active: info.active,
+          sessionId: info.sessionId,
+          branch: info.branch,
+        });
+        setStatusState("ready");
       } catch {
-        setStatusState('error');
+        setStatusState("error");
       }
     })();
   }, []);
@@ -102,15 +123,22 @@ export function ControlChat({
   }, []);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatState.messages]);
 
   // After each chat turn completes (streaming done), refresh commit list
   const prevTurnState = useRef(chatState.turnState);
   useEffect(() => {
-    if (prevTurnState.current === 'streaming' && chatState.turnState === 'idle') {
+    if (
+      prevTurnState.current === "streaming" &&
+      chatState.turnState === "idle"
+    ) {
       void commitControllerRef.current.fetchStatus().then((info) => {
-        setControlInfo({ active: info.active, sessionId: info.sessionId, branch: info.branch });
+        setControlInfo({
+          active: info.active,
+          sessionId: info.sessionId,
+          branch: info.branch,
+        });
       });
     }
     prevTurnState.current = chatState.turnState;
@@ -118,30 +146,34 @@ export function ControlChat({
 
   async function send() {
     const text = input.trim();
-    if (!text || chatState.turnState !== 'idle') return;
-    setInput('');
+    if (!text || chatState.turnState !== "idle") return;
+    setInput("");
     await chatControllerRef.current.sendMessage(text);
   }
 
   async function rollback(hash: string) {
     if (
-      !confirm(`Roll back to commit ${hash.slice(0, 7)}? Commits after this point will be lost.`)
+      !confirm(
+        `Roll back to commit ${hash.slice(0, 7)}? Commits after this point will be lost.`,
+      )
     )
       return;
     await commitControllerRef.current.rollback(hash);
   }
 
-  const loading = chatState.turnState !== 'idle';
+  const loading = chatState.turnState !== "idle";
   const { messages } = chatState;
   const { commits, timeline, error } = commitState;
 
-  if (statusState === 'error') {
+  if (statusState === "error") {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
         <div className="w-12 h-12 rounded-xl bg-red-50 border border-red-200 shadow-sm flex items-center justify-center mb-4">
           <MessageSquare className="text-red-300" size={20} />
         </div>
-        <p className="text-sm text-zinc-700 font-medium">Studio mode is unavailable right now.</p>
+        <p className="text-sm text-zinc-700 font-medium">
+          Studio mode is unavailable right now.
+        </p>
         <p className="text-xs text-zinc-500 mt-2">
           Try reloading the page or restarting studio mode.
         </p>
@@ -149,7 +181,7 @@ export function ControlChat({
     );
   }
 
-  if (statusState !== 'ready' || !studioInfo.active) {
+  if (statusState !== "ready" || !studioInfo.active) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center text-center p-6">
         <div className="w-12 h-12 rounded-xl bg-white border border-zinc-200 shadow-sm flex items-center justify-center mb-4">
@@ -158,8 +190,11 @@ export function ControlChat({
         <p className="text-sm text-zinc-500 font-medium">
           Studio mode is not active.
           <br />
-          Run <code className="font-mono text-xs bg-zinc-100 px-1 rounded">bun run studio</code> to
-          begin.
+          Run{" "}
+          <code className="font-mono text-xs bg-zinc-100 px-1 rounded">
+            bun run studio
+          </code>{" "}
+          to begin.
         </p>
       </div>
     );
@@ -169,18 +204,33 @@ export function ControlChat({
     <div className="flex-1 flex flex-col overflow-hidden">
       {/* Timeline view — checkpoint history with timestamps */}
       {(timeline.length > 0 || commits.length > 0) && (
-        <div className="border-b border-zinc-200 bg-zinc-50 px-4 py-2 shrink-0" data-testid="timeline-view">
+        <div
+          className="border-b border-zinc-200 bg-zinc-50 px-4 py-2 shrink-0"
+          data-testid="timeline-view"
+        >
           <p className="text-xs font-semibold text-zinc-400 uppercase tracking-wider mb-1">
             Timeline
           </p>
           <div className="flex flex-col gap-1 max-h-36 overflow-y-auto">
             {(timeline.length > 0 ? timeline : commits).map((c) => (
-              <div key={c.hash} className="flex items-center gap-2 group" data-testid="timeline-entry">
+              <div
+                key={c.hash}
+                className="flex items-center gap-2 group"
+                data-testid="timeline-entry"
+              >
                 <GitCommit size={12} className="text-zinc-300 shrink-0" />
                 <div className="flex flex-col flex-1 min-w-0">
-                  <span className="text-xs text-zinc-600 truncate" data-testid="timeline-summary">{c.message}</span>
-                  {'timestamp' in c && c.timestamp && (
-                    <span className="text-[10px] text-zinc-400" data-testid="timeline-timestamp">
+                  <span
+                    className="text-xs text-zinc-600 truncate"
+                    data-testid="timeline-summary"
+                  >
+                    {c.message}
+                  </span>
+                  {"timestamp" in c && c.timestamp && (
+                    <span
+                      className="text-[10px] text-zinc-400"
+                      data-testid="timeline-timestamp"
+                    >
                       {formatTimestamp(c.timestamp)}
                     </span>
                   )}
@@ -216,12 +266,15 @@ export function ControlChat({
           </div>
         )}
         {messages.map((m) => (
-          <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+          <div
+            key={m.id}
+            className={`flex ${m.role === "user" ? "justify-end" : "justify-start"}`}
+          >
             <div
               className={`max-w-[85%] rounded-xl px-3 py-2 text-sm ${
-                m.role === 'user'
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-white border border-zinc-200 text-zinc-800'
+                m.role === "user"
+                  ? "bg-indigo-600 text-white"
+                  : "bg-white border border-zinc-200 text-zinc-800"
               }`}
             >
               <p className="whitespace-pre-wrap">{m.content}</p>
@@ -234,7 +287,7 @@ export function ControlChat({
             </div>
           </div>
         ))}
-        {loading && messages[messages.length - 1]?.role !== 'assistant' && (
+        {loading && messages[messages.length - 1]?.role !== "assistant" && (
           <div className="flex justify-start">
             <div
               aria-label="Studio response pending"
@@ -254,7 +307,7 @@ export function ControlChat({
             type="text"
             value={input}
             onChange={(e) => setInput(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && !e.shiftKey && void send()}
+            onKeyDown={(e) => e.key === "Enter" && !e.shiftKey && void send()}
             placeholder="Describe a change..."
             disabled={loading}
             className="flex-1 bg-zinc-50 border border-zinc-200 rounded-xl px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 transition-shadow placeholder:text-zinc-400 disabled:opacity-50"

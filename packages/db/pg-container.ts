@@ -9,12 +9,12 @@
  *   // pg.stop() — removes the container
  */
 
-import { spawnSync } from 'child_process';
+import { spawnSync } from "child_process";
 
-const PG_USER = 'superfield';
-const PG_PASSWORD = 'superfield';
-const PG_DB = 'superfield';
-const PG_IMAGE = 'postgres:16';
+const PG_USER = "superfield";
+const PG_PASSWORD = "superfield";
+const PG_DB = "superfield";
+const PG_IMAGE = "postgres:16";
 const READY_TIMEOUT_MS = 30_000;
 const PORT_POLL_INTERVAL_MS = 250;
 
@@ -25,20 +25,24 @@ export interface PgContainer {
 }
 
 export async function startPostgres(): Promise<PgContainer> {
-  const runResult = spawnSync('docker', [
-    'run',
-    '-d',
-    '--rm',
-    '-e',
-    `POSTGRES_USER=${PG_USER}`,
-    '-e',
-    `POSTGRES_PASSWORD=${PG_PASSWORD}`,
-    '-e',
-    `POSTGRES_DB=${PG_DB}`,
-    '-p',
-    '0:5432',
-    PG_IMAGE,
-  ], { stdio: 'pipe' });
+  const runResult = spawnSync(
+    "docker",
+    [
+      "run",
+      "-d",
+      "--rm",
+      "-e",
+      `POSTGRES_USER=${PG_USER}`,
+      "-e",
+      `POSTGRES_PASSWORD=${PG_PASSWORD}`,
+      "-e",
+      `POSTGRES_DB=${PG_DB}`,
+      "-p",
+      "0:5432",
+      PG_IMAGE,
+    ],
+    { stdio: "pipe" },
+  );
 
   if (runResult.status !== 0) {
     throw new Error(
@@ -56,7 +60,7 @@ export async function startPostgres(): Promise<PgContainer> {
     url,
     containerId,
     stop: async () => {
-      spawnSync('docker', ['stop', containerId]);
+      spawnSync("docker", ["stop", containerId]);
     },
   };
 }
@@ -64,7 +68,9 @@ export async function startPostgres(): Promise<PgContainer> {
 async function getContainerPortWithRetry(containerId: string): Promise<number> {
   const deadline = Date.now() + READY_TIMEOUT_MS;
   while (Date.now() < deadline) {
-    const result = spawnSync('docker', ['port', containerId, '5432'], { stdio: 'pipe' });
+    const result = spawnSync("docker", ["port", containerId, "5432"], {
+      stdio: "pipe",
+    });
     const output = result.stdout.toString().trim();
     try {
       return parseDockerPortOutput(output);
@@ -72,38 +78,49 @@ async function getContainerPortWithRetry(containerId: string): Promise<number> {
       await new Promise<void>((r) => setTimeout(r, PORT_POLL_INTERVAL_MS));
     }
   }
-  throw new Error(`Timed out waiting for docker to publish port for container ${containerId}`);
+  throw new Error(
+    `Timed out waiting for docker to publish port for container ${containerId}`,
+  );
 }
 
-async function waitForPostgres(containerId: string, port: number): Promise<void> {
+async function waitForPostgres(
+  containerId: string,
+  port: number,
+): Promise<void> {
   const deadline = Date.now() + READY_TIMEOUT_MS;
 
   while (Date.now() < deadline) {
     const result = spawnSync(
-      'pg_isready',
-      ['-h', 'localhost', '-p', String(port), '-U', PG_USER],
-      { env: { ...process.env, PGPASSWORD: PG_PASSWORD }, stdio: 'pipe' },
+      "pg_isready",
+      ["-h", "localhost", "-p", String(port), "-U", PG_USER],
+      { env: { ...process.env, PGPASSWORD: PG_PASSWORD }, stdio: "pipe" },
     );
     if (result.status === 0) return;
 
     // Fallback: check container logs for "ready to accept connections"
-    const logs = spawnSync('docker', ['logs', '--tail', '10', containerId], { stdio: 'pipe' });
+    const logs = spawnSync("docker", ["logs", "--tail", "10", containerId], {
+      stdio: "pipe",
+    });
     const out = logs.stdout.toString() + logs.stderr.toString();
-    if (out.includes('ready to accept connections')) return;
+    if (out.includes("ready to accept connections")) return;
 
     await new Promise<void>((r) => setTimeout(r, 300));
   }
-  throw new Error(`Postgres container did not become ready within ${READY_TIMEOUT_MS}ms`);
+  throw new Error(
+    `Postgres container did not become ready within ${READY_TIMEOUT_MS}ms`,
+  );
 }
 
 export function parseDockerPortOutput(output: string): number {
   if (!output.trim()) {
     throw new Error('Could not parse port from docker port output: ""');
   }
-  const firstLine = output.split('\n')[0].trim();
-  const port = parseInt(firstLine.split(':').at(-1) ?? '', 10);
+  const firstLine = output.split("\n")[0].trim();
+  const port = parseInt(firstLine.split(":").at(-1) ?? "", 10);
   if (!Number.isFinite(port)) {
-    throw new Error(`Could not parse port from docker port output: "${output}"`);
+    throw new Error(
+      `Could not parse port from docker port output: "${output}"`,
+    );
   }
   return port;
 }

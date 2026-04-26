@@ -25,14 +25,14 @@
  * @see docs/studio-sessions.md
  */
 
-import type { StudioClusterConfig } from './types';
+import type { StudioClusterConfig } from "./types";
 import {
   createWorktree,
   deleteWorktree,
   getMainHash,
   worktreeExists,
-} from './worktree-manager';
-import type { WorktreeCreateResult } from './worktree-manager';
+} from "./worktree-manager";
+import type { WorktreeCreateResult } from "./worktree-manager";
 
 // ── Types ────────────────────────────────────────────────────────────────────
 
@@ -178,7 +178,10 @@ export async function restartSession(
  */
 export async function teardownSession(
   currentSession: SessionState,
-  opts: Pick<SessionStartOptions, 'sourceDir' | 'clusterConfig' | 'teardownCluster'>,
+  opts: Pick<
+    SessionStartOptions,
+    "sourceDir" | "clusterConfig" | "teardownCluster"
+  >,
 ): Promise<void> {
   // 1. Tear down the cluster.
   const clusterConfig: StudioClusterConfig = {
