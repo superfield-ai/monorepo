@@ -26,3 +26,4 @@ export { InlineError } from "./InlineError";
 export { EmptyState } from "./EmptyState";
 export { DebugView } from "./DebugView";
 export { DebugBadge } from "./DebugBadge";
+export { ConnectionBanner } from "./ConnectionBanner";
