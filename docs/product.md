@@ -77,12 +77,112 @@ superfield export-db <env>     # dump the database to a local file
 
 ---
 
+---
+
+## Control Webapp
+
+`superfield control` is the operator-facing browser UI for a Superfield project. It is the **single pane of glass** for iterative development, UX design, agent monitoring, and deployment health. It is not a generic dashboard — every panel is tied to a real Superfield primitive (a turn, an agent slot, a Plan issue, a deployed env, a blueprint rule).
+
+```
+superfield control [--port <n>] [--repo <path>] [--api-url <url>]
+```
+
+The webapp runs at `http://127.0.0.1:7000` by default. It is read/write against the dev-loop API on `:7837` (analytics + steering) and the forge (commit log, PR / CI status). It does not own state — the forge and the dev-loop process do.
+
+### Audience
+
+- **Builder** — runs the dev loop, watches agents work, steers them mid-turn, ships PRs.
+- **Designer** — iterates on components and routes against live fixtures inside an active studio session.
+- **Operator** — checks env health, rolls deployments forward, rolls back.
+
+The same person is often all three. The webapp is laid out so a single demo can move through all three pillars without leaving the page.
+
+### The four pillars
+
+#### 1. Iterative development (the studio session)
+
+What the page is *for*: writing a turn, watching the agent work, seeing the result in the iframe, committing or rolling back. This is the default landing view.
+
+| Capability                                                  | Status |
+| ----------------------------------------------------------- | ------ |
+| Chat panel ↔ agent (`POST /studio/run` SSE → WS chunks)      | ✅     |
+| App iframe with cluster-status-aware reload overlay         | ✅     |
+| Mid-turn steer (`POST /steer/context` via `/studio/steer`)   | ✅     |
+| Commit log + checkpoint timeline + rollback                 | ✅     |
+| Per-turn file diff inline in chat                           | ⬜     |
+| Per-route preview map (sidebar: app routes → click to load) | ⬜     |
+| Fixture switcher (per-route, persisted in `.studio/`)        | ⬜     |
+| Viewport toolbar (mobile / tablet / desktop) on iframe      | ⬜     |
+| Screenshot capture per turn (saved to `studio-sessions/`)    | ⬜     |
+
+#### 2. UX design (`/studio/preview`)
+
+What the page is *for*: a designer reviewing components and mock routes against fixture data while the agent iterates. Lives at `/studio/preview` and is only mounted when studio mode is active.
+
+| Capability                                              | Status |
+| ------------------------------------------------------- | ------ |
+| Component preview panel (isolated render, fixtures)     | ✅     |
+| WikiRender + CitationHoverPopover                       | ✅     |
+| Mock-route gallery (full-page views with fixture data)   | ⬜     |
+| Design-tokens panel (palette, type, spacing, shadows)    | ⬜     |
+| Responsive viewport toolbar                              | ⬜     |
+| Visual diff before / after a turn (latest commit baseline) | ⬜    |
+| Deep-link to chat: "edit this component" prefilled       | ⬜     |
+
+#### 3. Agent monitoring (`/studio/orchestrator`)
+
+What the page is *for*: an operator running the dev loop, watching all slots, intervening when a session goes off-rails. Sourced from `/analytics/*` on `:7837`.
+
+| Capability                                                            | Status |
+| --------------------------------------------------------------------- | ------ |
+| Process controls (Start / Stop dev loop child process)                | ✅     |
+| Loop status bar (plan / dev / doc — last tick, duration, circuit)     | ✅     |
+| Active slots list (issue, role, backend, elapsed, heartbeat)          | ✅     |
+| Cost summary (USD total, per-backend, agent count, error count)       | ✅     |
+| Steer + Escalate buttons per slot                                     | ✅     |
+| Dev-loop log tail (SSE, ring buffer)                                   | ✅     |
+| Turn timeline per session (turn 1..N — start, end, tokens, cost)      | ⬜     |
+| Prompt/response inspector (click a turn → see prompt + tool calls)    | ⬜     |
+| Blueprint conformance feed (last N rule citations posted to issues)   | ⬜     |
+| Cost-over-time sparkline (per session and per loop)                   | ⬜     |
+| Log search + level filter (info / warn / error / agent-stdout)         | ⬜     |
+| Slot heartbeat history (sparkline, last 60 ticks)                     | ⬜     |
+
+#### 4. Deployment health (`/studio/deploy`)
+
+What the page is *for*: an operator deploying or triaging dev / staging / prod. Backed by `superfield doctor`, `deploy-env`, `rollback-env` over a thin HTTP wrapper. **New panel — not yet built.**
+
+| Capability                                                              | Status |
+| ----------------------------------------------------------------------- | ------ |
+| Cluster status indicator (current env)                                  | ✅     |
+| Rebuild + rollout restart trigger                                       | ✅     |
+| Per-env doctor matrix (SSH / k3s / DB / secrets — green/red per env)    | ⬜     |
+| Rolling-deploy progress strip (build → push → apply → health gate)      | ⬜     |
+| Rollback button surfaced (calls `rollback-env` with confirmation)       | ⬜     |
+| k3s pod / Job status table (control-plane, postgres, migration Job)     | ⬜     |
+| Latest-PR / CI-on-`main` strip (green/red, click → forge)               | ⬜     |
+| Secrets-presence audit (`DEPLOY_HOST_<ENV>`, `DEPLOY_KEY_<ENV>`, `DATABASE_URL_<ENV>`) | ⬜ |
+| Last DB-migration Job log tail                                          | ⬜     |
+
+### Non-goals
+
+- **Multi-user collaboration.** One operator at a time. No presence, no comments, no role-based access.
+- **Generic observability.** This is not a Grafana replacement. Every metric we surface is one a Superfield operator acts on.
+- **Configuration UI.** Superfield encodes one correct way to do things — there are no settings panels.
+- **Production-grade auth.** The webapp inherits the studio session JWT cookie. Anyone who can reach `:7000` has full access. It is intended for an operator's own machine or a tunneled session.
+
+### Out of scope for the 48-hour demo
+
+The pillars 1–4 above describe the destination. The demo cut targets the gaps marked highest-impact in `TASKS.md` (per-route preview map, design-tokens panel, deployment health matrix, turn timeline). Everything else stays as-is.
+
+---
+
 ## Out of Scope (entire roadmap)
 
 - Slack / webhook notifications
-- Web UI
 - Forges other than GitHub
 - Self-hosted LLM backends (Claude and Codex CLIs are supported)
+- Multi-tenant / multi-user control webapp (single-operator only)
 
 ---
 
