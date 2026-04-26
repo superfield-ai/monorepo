@@ -62,8 +62,8 @@ describe("Question mode — end-to-end prompt construction", () => {
     const files = selectRelevantFiles(
       "How does authentication work with OAuth?",
     );
-    expect(files).toContain("apps/server/src/auth.ts");
-    expect(files).toContain("apps/web/src/controllers/OAuthController.ts");
+    expect(files).toContain("packages/control/src/auth.ts");
+    expect(files).toContain("packages/control/apps/web/src/controllers/OAuthController.ts");
     // Should NOT include unrelated files
     expect(files).not.toContain("packages/core/image-builder.ts");
   });
