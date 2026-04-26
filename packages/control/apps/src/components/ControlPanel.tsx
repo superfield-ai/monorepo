@@ -27,6 +27,10 @@ import { OrchestratorView } from "./OrchestratorView";
 import { ComponentPreviewPanel } from "./ComponentPreviewPanel";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
+import { DebugView } from "./DebugView";
+import { DebugBadge } from "./DebugBadge";
+import { Toaster } from "./Toaster";
+import { ErrorBoundary } from "./ErrorBoundary";
 
 interface ControlPanelProps {
   /** URL loaded in the app iframe; defaults to /app/ */
@@ -89,7 +93,7 @@ export function ControlPanel({
   }, [initialClusterStatus]);
 
   const [activeTab, setActiveTab] = useState<
-    "studio" | "orchestrator" | "preview"
+    "studio" | "orchestrator" | "preview" | "debug"
   >("studio");
 
   return (
@@ -123,40 +127,58 @@ export function ControlPanel({
         >
           Preview
         </button>
+        <DebugBadge
+          active={activeTab === "debug"}
+          onClick={() => setActiveTab("debug")}
+        />
       </div>
 
       {/* Studio tab */}
       {activeTab === "studio" && (
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left panel — Claude chat sidebar (fixed width) */}
-          <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
-            <ChatPanel
-              clusterStatus={clusterStatus}
-              chatEndpoint={chatEndpoint}
-              clusterEventsUrl={clusterEventsUrl}
-            />
+        <ErrorBoundary label="Studio">
+          <div className="flex flex-1 overflow-hidden">
+            <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
+              <ChatPanel
+                clusterStatus={clusterStatus}
+                chatEndpoint={chatEndpoint}
+                clusterEventsUrl={clusterEventsUrl}
+              />
+            </div>
+            <div className="flex-1 flex flex-col">
+              <IframePanel src={appSrc} clusterStatus={clusterStatus} />
+            </div>
           </div>
-
-          {/* Right panel — Superfield app iframe (fills remaining space) */}
-          <div className="flex-1 flex flex-col">
-            <IframePanel src={appSrc} clusterStatus={clusterStatus} />
-          </div>
-        </div>
+        </ErrorBoundary>
       )}
 
       {/* Orchestrator tab */}
       {activeTab === "orchestrator" && (
-        <div className="flex-1 overflow-hidden bg-gray-50">
-          <OrchestratorView />
-        </div>
+        <ErrorBoundary label="Orchestrator">
+          <div className="flex-1 overflow-hidden bg-gray-50">
+            <OrchestratorView />
+          </div>
+        </ErrorBoundary>
       )}
 
-      {/* Preview tab — studio-mode component preview panel */}
+      {/* Preview tab */}
       {activeTab === "preview" && (
-        <div className="flex-1 overflow-hidden bg-white">
-          <ComponentPreviewPanel />
-        </div>
+        <ErrorBoundary label="Preview">
+          <div className="flex-1 overflow-hidden bg-white">
+            <ComponentPreviewPanel />
+          </div>
+        </ErrorBoundary>
       )}
+
+      {/* Debug tab */}
+      {activeTab === "debug" && (
+        <ErrorBoundary label="Debug">
+          <div className="flex-1 overflow-hidden">
+            <DebugView />
+          </div>
+        </ErrorBoundary>
+      )}
+
+      <Toaster />
     </div>
   );
 }
