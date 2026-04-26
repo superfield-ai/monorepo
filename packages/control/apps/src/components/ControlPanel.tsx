@@ -33,6 +33,7 @@ import { Toaster } from "./Toaster";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { DeployView } from "./DeployView";
+import { RouteMap, loadSelectedRoute } from "./RouteMap";
 import {
   ViewportToolbar,
   VIEWPORT_WIDTHS,
@@ -115,6 +116,15 @@ export function ControlPanel({
     saveViewport(v);
   };
 
+  const [iframeSrc, setIframeSrc] = useState<string>(() => {
+    const stored = loadSelectedRoute();
+    if (stored) {
+      const tail = stored.startsWith("/") ? stored.slice(1) : stored;
+      return `/app/${tail}`;
+    }
+    return appSrc;
+  });
+
   // DB6 — record a route breadcrumb each time the active tab changes so the
   // DebugView timeline can correlate UI events with the user's location.
   useEffect(() => {
@@ -181,10 +191,18 @@ export function ControlPanel({
                 clusterEventsUrl={clusterEventsUrl}
               />
             </div>
+            <div className="hidden lg:flex">
+              <RouteMap
+                onSelect={(path) => {
+                  const tail = path.startsWith("/") ? path.slice(1) : path;
+                  setIframeSrc(`/app/${tail}`);
+                }}
+              />
+            </div>
             <div className="flex-1 flex flex-col">
               <ViewportToolbar value={viewport} onChange={setViewport} />
               <IframePanel
-                src={appSrc}
+                src={iframeSrc}
                 clusterStatus={clusterStatus}
                 iframeWidth={VIEWPORT_WIDTHS[viewport]}
               />

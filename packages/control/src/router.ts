@@ -69,6 +69,7 @@ import { clusterStatusSseResponse } from "./cluster-status-sse";
 import { type WsData } from "./control-ws";
 import { handleOrchestratorRequest } from "./orchestrator";
 import { handleDeployRequest } from "./deploy";
+import { handleDemoRequest } from "./demo";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
 
@@ -337,6 +338,10 @@ export async function route(
   // Deploy endpoints — D1 / C-9.5 deployment health view.
   const deployResponse = await handleDeployRequest(req, url);
   if (deployResponse) return deployResponse;
+
+  // Demo content endpoints — D2 / D3 / D6 fixtures from .studio/demo/*.
+  const demoResponse = handleDemoRequest(req, url);
+  if (demoResponse) return demoResponse;
 
   // Orchestrator endpoints — manage the dev loop child process.
   const orchResponse = await handleOrchestratorRequest(
