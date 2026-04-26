@@ -112,7 +112,7 @@ export class MissingDependencyError extends Error {
 export const DEMO_DEPLOY_TARGET: DeployTargetModel = {
   name: "demo",
   description:
-    "Local Calypso demo environment rooted at ~/calypso-distribution.",
+    "Local Superfield demo environment rooted at ~/superfield-distribution.",
   phases: [
     {
       name: "provision",
@@ -173,7 +173,7 @@ export async function runDemoTeardown(
 ): Promise<void> {
   const env = buildDemoEnv(opts.env);
   const demoRoot =
-    opts.demoRoot ?? path.join(homedir(), "calypso-distribution");
+    opts.demoRoot ?? path.join(homedir(), "superfield-distribution");
   const runProcess = deps.runProcess ?? spawnProcess;
   await runProcess({
     phase: "provision",
@@ -215,7 +215,7 @@ function buildDemoContext(
 ): DemoContext {
   const env = buildDemoEnv(opts.env);
   const demoRoot =
-    opts.demoRoot ?? path.join(homedir(), "calypso-distribution");
+    opts.demoRoot ?? path.join(homedir(), "superfield-distribution");
   return {
     target,
     demoRoot,
@@ -546,8 +546,8 @@ async function spawnProcess(step: DeployProcessStep): Promise<void> {
 }
 
 function getDemoUrl(env: NodeJS.ProcessEnv): string {
-  const host = env.CALYPSO_DEMO_HOST ?? "localhost";
-  const port = Number(env.CALYPSO_DEMO_PORT ?? DEFAULT_DEMO_PORT);
+  const host = env.SUPERFIELD_DEMO_HOST ?? "localhost";
+  const port = Number(env.SUPERFIELD_DEMO_PORT ?? DEFAULT_DEMO_PORT);
   return `http://${host}:${port}/`;
 }
 

@@ -51,7 +51,7 @@ jobs:
                       print('.'.join(str(int(h[i:i+2],16)) for i in [6,4,2,0]))
                       break
           ")
-          echo "CALYPSO_DEMO_HOST=${HOST_GW}" >> "$GITHUB_ENV"
+          echo "SUPERFIELD_DEMO_HOST=${HOST_GW}" >> "$GITHUB_ENV"
       - name: Run E2E tests
         run: bun --bun vitest run packages/*/tests/e2e
       - name: Dump pod state on failure

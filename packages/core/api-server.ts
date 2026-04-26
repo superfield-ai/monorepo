@@ -148,6 +148,96 @@ export function startApiServer(
       return json(res, 200, { requestId, accepted: true });
     }
 
+    // POST /studio/run — SSE stream of a Claude agent turn
+    if (method === "POST" && url === "/studio/run") {
+      const body = (await readBody(req)) as {
+        message?: string;
+        repoRoot?: string;
+        sessionKey?: string;
+        allowedTools?: string;
+        mode?: string;
+      };
+
+      if (!body.message) {
+        return json(res, 400, { error: "message is required" });
+      }
+
+      const sessionId = randomUUID();
+      const repoRoot = body.repoRoot ?? process.cwd();
+      const allowedTools =
+        body.allowedTools ?? "Read,Edit,Write,Bash,Glob,Grep";
+      const args = [
+        "claude",
+        "-p",
+        body.message,
+        "--dangerously-skip-permissions",
+        "--allowedTools",
+        allowedTools,
+      ];
+      if (body.sessionKey) {
+        args.push("--session-key", body.sessionKey);
+      }
+
+      res.writeHead(200, {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      });
+
+      // Emit session ID before any content chunks.
+      res.write(`event: session\ndata: ${JSON.stringify({ sessionId })}\n\n`);
+
+      let proc: ReturnType<typeof Bun.spawn> | undefined;
+      try {
+        proc = Bun.spawn(args, {
+          cwd: repoRoot,
+          stdout: "pipe",
+          stderr: "pipe",
+          // Pass process.env at spawn time so PATH mutations in tests are respected.
+          env: { ...process.env },
+        });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.write(`event: error\ndata: ${JSON.stringify(msg)}\n\n`);
+        res.end();
+        return;
+      }
+
+      // Stream stdout chunks as SSE data events.
+      const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
+      const decoder = new TextDecoder();
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+          const chunk = decoder.decode(value, { stream: true });
+          // Prefix each line with "data: " for proper SSE formatting.
+          for (const line of chunk.split("\n")) {
+            res.write(`data: ${line}\n`);
+          }
+          res.write("\n");
+        }
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        res.write(`event: error\ndata: ${JSON.stringify(msg)}\n\n`);
+        res.end();
+        return;
+      }
+
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        res.write(
+          `event: error\ndata: ${JSON.stringify(`claude exited with code ${exitCode}`)}\n\n`,
+        );
+      } else {
+        res.write(
+          `event: done\ndata: ${JSON.stringify({ filesChanged: [] })}\n\n`,
+        );
+      }
+      res.end();
+      return;
+    }
+
     return json(res, 404, { error: "not found" });
   });
 

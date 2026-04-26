@@ -41,7 +41,7 @@ export interface DevelopIssueContext {
  * speculative slots — the role fragment varies the stop conditions and
  * PR-opening behavior.
  *
- * Replaces calypso-agents `develop-issue` SKILL.md, restructured around
+ * Replaces superfield-agents `develop-issue` SKILL.md, restructured around
  * Superfield's 7-stage dev-loop lifecycle and the unified IssueBody schema.
  */
 export function buildDevelopIssuePrompt(ctx: DevelopIssueContext): string {

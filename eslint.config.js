@@ -23,6 +23,6 @@ export default tseslint.config(
     },
   },
   {
-    ignores: ["node_modules/**", "dist/**", ".claude/**"],
+    ignores: ["node_modules/**", "dist/**", "**/dist/**", ".claude/**"],
   },
 );
