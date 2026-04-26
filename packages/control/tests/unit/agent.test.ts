@@ -181,7 +181,7 @@ describe("REPO_ROOT", () => {
     const original = process.env.SUPERFIELD_REPO_ROOT;
     delete process.env.SUPERFIELD_REPO_ROOT;
     try {
-      // @ts-ignore — cache-busting query string not resolvable by tsc
+      // @ts-expect-error — cache-busting query string not resolvable by tsc
       const { REPO_ROOT } = await import("../../src/agent?t=reporoot");
       expect(typeof REPO_ROOT).toBe("string");
       expect(REPO_ROOT.length).toBeGreaterThan(0);
