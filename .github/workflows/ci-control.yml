@@ -53,6 +53,8 @@ jobs:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
+      - name: Install Playwright browsers
+        run: npx playwright install chromium --with-deps
       - name: Build control web app
         run: bun run build:control-web
       - name: E2E tests (real control server + superfield fixture, no k3d)
