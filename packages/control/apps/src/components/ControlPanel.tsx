@@ -31,6 +31,8 @@ import { DebugView } from "./DebugView";
 import { DebugBadge } from "./DebugBadge";
 import { Toaster } from "./Toaster";
 import { ErrorBoundary } from "./ErrorBoundary";
+import { ConnectionBanner } from "./ConnectionBanner";
+import { debugStore } from "../lib/debug-store";
 
 interface ControlPanelProps {
   /** URL loaded in the app iframe; defaults to /app/ */
@@ -43,6 +45,8 @@ interface ControlPanelProps {
   initialClusterStatus?: ClusterStatus;
   /** Optional pre-constructed controller instance (for testing) */
   clusterStatusController?: ClusterStatusController;
+  /** When true, hide the dev-loop ConnectionBanner (tests / Storybook). */
+  hideConnectionBanner?: boolean;
 }
 
 /**
@@ -59,6 +63,7 @@ export function ControlPanel({
   chatEndpoint = "/studio/chat",
   initialClusterStatus,
   clusterStatusController: controllerProp,
+  hideConnectionBanner = false,
 }: ControlPanelProps) {
   const [clusterStatus, setClusterStatus] = useState<ClusterStatus>(
     initialClusterStatus ?? "unknown",
@@ -96,11 +101,22 @@ export function ControlPanel({
     "studio" | "orchestrator" | "preview" | "debug"
   >("studio");
 
+  // DB6 — record a route breadcrumb each time the active tab changes so the
+  // DebugView timeline can correlate UI events with the user's location.
+  useEffect(() => {
+    debugStore.breadcrumb({
+      category: "route",
+      message: `tab: ${activeTab}`,
+      data: { tab: activeTab },
+    });
+  }, [activeTab]);
+
   return (
     <div
       className="flex h-screen w-full flex-col overflow-hidden bg-zinc-900"
       data-testid="studio-panel"
     >
+      {!hideConnectionBanner && <ConnectionBanner />}
       {/* Tab bar */}
       <div
         className="flex shrink-0 border-b border-zinc-700 bg-zinc-800"
