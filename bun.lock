@@ -24,13 +24,47 @@
         "superfield": "./bin/superfield.ts",
       },
       "dependencies": {
+        "@superfield/control": "workspace:*",
         "@superfield/core": "workspace:*",
         "@superfield/git": "workspace:*",
         "@superfield/github": "workspace:*",
-        "@superfield/studio": "workspace:*",
       },
       "devDependencies": {
         "@types/node": "^20.0.0",
+      },
+    },
+    "packages/control": {
+      "name": "@superfield/control",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.0.0",
+        "vitest": "^2.0.0",
+      },
+    },
+    "packages/control-core": {
+      "name": "@superfield/control-core",
+      "devDependencies": {
+        "@types/bun": "latest",
+        "typescript": "^5.0.0",
+      },
+    },
+    "packages/control/apps": {
+      "name": "web",
+      "dependencies": {
+        "lucide-react": "^0.577.0",
+        "react": "^18.2.0",
+        "react-dom": "^18.2.0",
+      },
+      "devDependencies": {
+        "@playwright/test": "^1.58.2",
+        "@types/react": "^18.2.0",
+        "@types/react-dom": "^18.2.0",
+        "@vitejs/plugin-react": "^4.2.0",
+        "@vitest/browser": "^2.0.0",
+        "playwright": "^1.58.2",
+        "typescript": "^5.0.0",
+        "vitest": "^2.0.0",
+        "vitest-browser-react": "^0.0.4",
       },
     },
     "packages/core": {
@@ -75,40 +109,6 @@
       "devDependencies": {
         "@types/node": "^20.0.0",
         "msw": "^2.0.0",
-      },
-    },
-    "packages/studio": {
-      "name": "@superfield/studio",
-      "devDependencies": {
-        "@types/bun": "latest",
-        "typescript": "^5.0.0",
-        "vitest": "^2.0.0",
-      },
-    },
-    "packages/studio-core": {
-      "name": "@superfield/studio-core",
-      "devDependencies": {
-        "@types/bun": "latest",
-        "typescript": "^5.0.0",
-      },
-    },
-    "packages/studio/apps": {
-      "name": "web",
-      "dependencies": {
-        "lucide-react": "^0.577.0",
-        "react": "^18.2.0",
-        "react-dom": "^18.2.0",
-      },
-      "devDependencies": {
-        "@playwright/test": "^1.58.2",
-        "@types/react": "^18.2.0",
-        "@types/react-dom": "^18.2.0",
-        "@vitejs/plugin-react": "^4.2.0",
-        "@vitest/browser": "^2.0.0",
-        "playwright": "^1.58.2",
-        "typescript": "^5.0.0",
-        "vitest": "^2.0.0",
-        "vitest-browser-react": "^0.0.4",
       },
     },
   },
@@ -493,6 +493,10 @@
 
     "@superfield/cli": ["@superfield/cli@workspace:packages/cli"],
 
+    "@superfield/control": ["@superfield/control@workspace:packages/control"],
+
+    "@superfield/control-core": ["@superfield/control-core@workspace:packages/control-core"],
+
     "@superfield/core": ["@superfield/core@workspace:packages/core"],
 
     "@superfield/db": ["@superfield/db@workspace:packages/db"],
@@ -500,10 +504,6 @@
     "@superfield/git": ["@superfield/git@workspace:packages/git"],
 
     "@superfield/github": ["@superfield/github@workspace:packages/github"],
-
-    "@superfield/studio": ["@superfield/studio@workspace:packages/studio"],
-
-    "@superfield/studio-core": ["@superfield/studio-core@workspace:packages/studio-core"],
 
     "@testing-library/dom": ["@testing-library/dom@10.4.1", "", { "dependencies": { "@babel/code-frame": "^7.10.4", "@babel/runtime": "^7.12.5", "@types/aria-query": "^5.0.1", "aria-query": "5.3.0", "dom-accessibility-api": "^0.5.9", "lz-string": "^1.5.0", "picocolors": "1.1.1", "pretty-format": "^27.0.2" } }, "sha512-o4PXJQidqJl82ckFaXUeoAW+XysPLauYI43Abki5hABd853iMhitooc6znOnczgbTYmEP6U6/y1ZyKAIsvMKGg=="],
 
@@ -1031,7 +1031,7 @@
 
     "vitest-browser-react": ["vitest-browser-react@0.0.4", "", { "peerDependencies": { "@types/react": ">18.0.0", "@types/react-dom": ">18.0.0", "@vitest/browser": ">=2.1.0", "react": ">18.0.0", "react-dom": ">18.0.0", "vitest": ">=2.1.0" }, "optionalPeers": ["@types/react", "@types/react-dom"] }, "sha512-4uK8zgo5eHlhrBVEPX8ejRt8Bn4gzV6OZFTPdb1en3FtgjEhhst400XkIQHUC875Q90rOO5Tc4zPpCl8YXvoxg=="],
 
-    "web": ["web@workspace:packages/studio/apps"],
+    "web": ["web@workspace:packages/control/apps"],
 
     "which": ["which@2.0.2", "", { "dependencies": { "isexe": "^2.0.0" }, "bin": { "node-which": "./bin/node-which" } }, "sha512-BLI3Tl1TW3Pvl70l3yq3Y64i+awpwXqsGBYWkkqMtnbXgrMD+yj7rhW0kuEDxzJaYXGjEW5ogapKNMEKNMjibA=="],
 

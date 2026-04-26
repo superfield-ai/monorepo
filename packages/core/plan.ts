@@ -44,7 +44,7 @@ export interface Plan {
 }
 
 const SUPERFIELD_METADATA_RE = /<!--\s*superfield:\s*(\{.*?\})\s*-->/;
-const CALYPSO_METADATA_RE = /<!--\s*calypso:\s*(\{.*?\})\s*-->/;
+const SUPERFIELD_METADATA_RE = /<!--\s*superfield:\s*(\{.*?\})\s*-->/;
 const ENTRY_RE = /^\s*-\s+#(\d+)\s+[—-]\s+(.+?)(?:\s+\[risk:\s*(\d+)\])?\s*$/;
 const PHASE_HEADER_RE = /^##\s+Phase:\s+(.+?)\s*$/;
 const GOAL_RE = /^Goal:\s*(.*)$/;
@@ -99,7 +99,7 @@ export function parsePlan(body: string): Plan {
       const nextLine = lines[i + 1] ?? "";
       const metadataMatch =
         SUPERFIELD_METADATA_RE.exec(nextLine) ??
-        CALYPSO_METADATA_RE.exec(nextLine);
+        SUPERFIELD_METADATA_RE.exec(nextLine);
       if (!metadataMatch) {
         // Orphan entry line without metadata — skip silently
         continue;

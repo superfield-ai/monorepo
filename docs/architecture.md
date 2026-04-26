@@ -17,16 +17,16 @@ All orchestration state lives in the forge. The only local state is `~/.superfie
 
 Superfield is stateless at the process level. Any instance can resume from the forge alone. Killing and restarting the process loses nothing. The sole local exception is `~/.superfield/config.yaml` (credentials and repo assignments). All orchestration state — including active agent sessions — lives in the forge.
 
-## Calypso Mapping
+## Superfield Mapping
 
-Superfield is a direct replacement for the calypso-agents + shell script stack:
+Superfield is a direct replacement for the superfield-agents + shell script stack:
 
-| calypso-agents concept                 | Superfield equivalent                                                                   |
+| superfield-agents concept                 | Superfield equivalent                                                                   |
 | -------------------------------------- | --------------------------------------------------------------------------------------- |
 | Markdown skill (`SKILL.md`)            | TypeScript skill module with typed I/O                                                  |
 | Shell script (`.agents/scripts/`)      | TypeScript function; agent vendor CLIs (e.g. `claude`, `codex`) spawned as subprocesses |
-| `calypso-auto` orchestrator loop       | `superfield start`                                                                      |
-| `calypso-feature` + `feature-evaluate` | `superfield feature`                                                                    |
+| `superfield-auto` orchestrator loop       | `superfield start`                                                                      |
+| `superfield-feature` + `feature-evaluate` | `superfield feature`                                                                    |
 | Plan rebuild / replan                  | `superfield plan`                                                                       |
 | Plan issue (GitHub)                    | Plan issue (GitHub, same format)                                                        |
 
@@ -42,7 +42,7 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 
 ## Superfield Blueprint
 
-The Superfield Blueprint is a compiled knowledge graph of design rules — architectural constraints, security principles, design patterns, checklists, and antipatterns — sourced from `dot-matrix-labs/calypso-blueprint` and tracked as a git subtree at `blueprint/`. The compiled graph lives at `blueprint/rules/graph.yaml` (1 231 nodes across ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, WORKER), with domain bodies under `blueprint/rules/blueprints/*.yaml` and TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
+The Superfield Blueprint is a compiled knowledge graph of design rules — architectural constraints, security principles, design patterns, checklists, and antipatterns — sourced from `dot-matrix-labs/superfield-blueprint` and tracked as a git subtree at `blueprint/`. The compiled graph lives at `blueprint/rules/graph.yaml` (1 231 nodes across ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, WORKER), with domain bodies under `blueprint/rules/blueprints/*.yaml` and TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
 
 **Current integration state:**
 
@@ -369,7 +369,7 @@ Rendered issue body:
 
 ## Prompt Templates
 
-Every LLM interaction in Superfield runs through a typed prompt builder, never a free-form string assembled at the call site. Prompts live in source code at `packages/core/prompts/`, are unit-tested like any other module, and ship inside the `superfield` executable. There are no external markdown skill files at runtime — the calypso-agents `SKILL.md` files are reference material, not loaded artifacts.
+Every LLM interaction in Superfield runs through a typed prompt builder, never a free-form string assembled at the call site. Prompts live in source code at `packages/core/prompts/`, are unit-tested like any other module, and ship inside the `superfield` executable. There are no external markdown skill files at runtime — the superfield-agents `SKILL.md` files are reference material, not loaded artifacts.
 
 ### Why prompts as code
 

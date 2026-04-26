@@ -99,10 +99,10 @@ otherwise) is a future concern once the feature is validated.
 
 ### Why not SQLite now?
 
-`bun:sqlite` is explicitly banned in the calypso app blueprint
-(`IMPL-DATA-038`). That rule targets the calypso data layer, not CLI
+`bun:sqlite` is explicitly banned in the superfield app blueprint
+(`IMPL-DATA-038`). That rule targets the superfield data layer, not CLI
 tooling, but it signals the project's direction toward PostgreSQL. The
-calypso app already runs Postgres; using SQLite for superfield IPC would
+superfield app already runs Postgres; using SQLite for superfield IPC would
 introduce a second database technology into the workspace. More importantly,
 the HTTP-API approach described above needs no new storage at all — the
 dev loop process IS the shared state. Add SQLite only if durable steer
@@ -182,7 +182,7 @@ runtime state.
 - Dev loop stdout/stderr tail — last N lines in a scrollable log pane,
   streamed via `GET /orchestrator/logs` SSE endpoint.
 
-### New backend endpoints in `packages/studio/src/`
+### New backend endpoints in `packages/control/src/`
 
 **`GET /orchestrator/status`** — returns dev loop process state:
 ```json
@@ -205,7 +205,7 @@ Returns `{ ok: true }`.
 stdout/stderr. Each event is one log line. Reconnects automatically if the
 process restarts.
 
-### New module: `packages/studio/src/dev-loop-process.ts`
+### New module: `packages/control/src/dev-loop-process.ts`
 
 Manages the child process lifecycle:
 
@@ -231,7 +231,7 @@ distinct categories of tooling that go to two different destinations.
 ### Category A — Design system display (→ starter template)
 
 These features belong in every new project scaffolded from
-`superfield/template`. They help developers working on the calypso app see
+`superfield/template`. They help developers working on the superfield app see
 their own components and design tokens without running the backend.
 
 **What moves to `template/apps/kitchen-sink/`:**
@@ -258,7 +258,7 @@ dev-mode route (`/studio/preview`) — not as a separate Vite app — because
 they need to be accessible from within the studio browser session without
 switching ports.
 
-**What moves to `cli/packages/studio/apps/web/src/`:**
+**What moves to `cli/packages/control/apps/web/src/`:**
 
 - **Component preview panel** (`/studio/preview`) — renders any component in
   isolation with static fixture data. During a studio turn, the agent can
@@ -273,8 +273,8 @@ switching ports.
   realistic layout with realistic data.
 
 These routes are only rendered when studio mode is active
-(`isStudioMode() === true`). They are not included in production builds of
-the calypso app itself.
+(`isControlMode() === true`). They are not included in production builds of
+the superfield app itself.
 
 ### Source extraction
 
@@ -287,10 +287,10 @@ fixture-driven rendering harness. Each project provides its own components.
 
 ## Changes required
 
-### 1. New package: `cli/packages/studio/`
+### 1. New package: `cli/packages/control/`
 
 Move all `control/apps/server/src/` code here. Update imports. Add
-`package.json` declaring it as `@superfield/studio` with `workspace:*`
+`package.json` declaring it as `@superfield/control` with `workspace:*`
 deps on `@superfield/core` and `@superfield/git`.
 
 ### 2. New subcommand: `superfield control`
@@ -301,11 +301,11 @@ deps on `@superfield/core` and `@superfield/git`.
 superfield control [--port <n>] [--repo <path>] [--api-url <url>]
 
   --port      Studio server port. Default: 7000.
-  --repo      Repo root (CALYPSO_REPO_ROOT). Default: cwd.
+  --repo      Repo root (SUPERFIELD_REPO_ROOT). Default: cwd.
   --api-url   Superfield API base URL. Default: http://127.0.0.1:7837.
 ```
 
-Starts the studio HTTP server from `@superfield/studio`. Does not start any
+Starts the studio HTTP server from `@superfield/control`. Does not start any
 loops. Does not read `~/.superfield/config.yaml`. The only external
 dependency is the superfield API server at `--api-url`.
 
@@ -340,18 +340,18 @@ the subprocess in `ApiState` slot tracking.
 
 ### 4. Studio — replace `Bun.spawn` with HTTP calls
 
-**`packages/studio/src/agent.ts`** — `runAgent()` calls
+**`packages/control/src/agent.ts`** — `runAgent()` calls
 `POST <SUPERFIELD_API_URL>/studio/run`, collects the full SSE body into a
 string, returns it. Call signature unchanged.
 
-**`packages/studio/src/claude-session.ts`** — `streamTurn()` calls
+**`packages/control/src/claude-session.ts`** — `streamTurn()` calls
 `POST <SUPERFIELD_API_URL>/studio/run` with `{ duplex: 'half' }` and pipes
 the SSE response body directly into the `ReadableStream` controller. Parses
 `event: session` to capture `sessionId`.
 
 ### 5. Studio — WebSocket handler
 
-**`packages/studio/src/studio-ws.ts`**
+**`packages/control/src/studio-ws.ts`**
 
 Bun's native WebSocket API (`server.upgrade()`). One socket per studio
 session.
@@ -363,11 +363,11 @@ session.
 
 On disconnect: cancels the in-flight SSE fetch.
 
-**`packages/studio/src/router.ts`** — adds `GET /studio/ws` upgrade path.
+**`packages/control/src/router.ts`** — adds `GET /studio/ws` upgrade path.
 
 ### 6. Studio — steer proxy (REST fallback)
 
-**`packages/studio/src/router.ts`** — adds `POST /studio/steer`.
+**`packages/control/src/router.ts`** — adds `POST /studio/steer`.
 
 Validates body, proxies to `POST <SUPERFIELD_API_URL>/steer/context` using
 the active `sessionId`. For callers that cannot use WebSocket (integration
@@ -407,7 +407,7 @@ bun packages/cli/bin/superfield.ts control \
 | `<repo>/docs/studio-sessions/` | not touched | written |
 
 The studio server's only filesystem writes are:
-- `<STUDIO_LOG_DIR>/YYYY-MM-DD.jsonl` — turn logs (defaults to tmpdir or
+- `<CONTROL_LOG_DIR>/YYYY-MM-DD.jsonl` — turn logs (defaults to tmpdir or
   `../studio-logs` relative to repo root)
 
 ### Running without the dev loop
@@ -426,7 +426,7 @@ stub server that implements only `POST /studio/run`.
 
 ### Unit tests
 
-Location: `cli/packages/studio/tests/unit/` (same structure as current
+Location: `cli/packages/control/tests/unit/` (same structure as current
 `control/apps/server/tests/unit/`).
 
 `agent.ts` and `claude-session.ts` tests stub `fetch` instead of
@@ -434,7 +434,7 @@ Location: `cli/packages/studio/tests/unit/` (same structure as current
 
 ### Integration tests
 
-Location: `cli/packages/studio/tests/integration/`.
+Location: `cli/packages/control/tests/integration/`.
 
 New fixture `tests/integration/helpers/superfield-server.ts` starts the
 superfield API server in-process on a random port using the claude stub on
@@ -454,7 +454,7 @@ only need the superfield HTTP server and Postgres.
 ### E2E tests (k3d + Playwright)
 
 Two containers in the k8s test cluster:
-- `superfield-studio` — `cli/packages/studio/` compiled + entrypoint, runs
+- `superfield-studio` — `cli/packages/control/` compiled + entrypoint, runs
   `superfield control`
 - `superfield-agent` — CLI image, runs `superfield start` (no loops, API
   only via a future `--no-loops` flag or mocked loop deps), with claude stub
@@ -475,7 +475,7 @@ image has no claude dependency.
 
 ## Rollout order
 
-1. **Move studio source into `cli/packages/studio/`** — mechanical port,
+1. **Move studio source into `cli/packages/control/`** — mechanical port,
    all existing tests pass.
 
 2. **Add `superfield control` subcommand** — wires up the studio server,
@@ -516,18 +516,18 @@ image has no claude dependency.
 ## Implementation notes (cli-migration branch, 2026-04-25)
 
 ### Phase 1 (completed)
-- `packages/studio/` was already partially migrated on main; remaining work
+- `packages/control/` was already partially migrated on main; remaining work
   was fixing unit tests and adding the `_readProc` DI parameter to `runAgent`.
-- `packages/studio-core/` and `packages/db/` copied from control and already
+- `packages/control-core/` and `packages/db/` copied from control and already
   tracked on main.
 
 ### Phase 2 (completed)
 - `packages/cli/commands/control.ts` parses `--port`, `--repo`, `--api-url`,
   pings dev-loop health on startup (warns if unreachable), then delegates
-  to `startStudio()`.
-- `packages/studio/src/index.ts` refactored to export `startStudio(opts?)`
+  to `startControl()`.
+- `packages/control/src/index.ts` refactored to export `startControl(opts?)`
   instead of side-effect startup. Server only starts when called explicitly.
-- `SUPERFIELD_API_URL` (default `http://127.0.0.1:7837`) added to `StudioConfig`.
+- `SUPERFIELD_API_URL` (default `http://127.0.0.1:7837`) added to `ControlConfig`.
 
 ### Phase 3 (completed)
 - `POST /studio/run` SSE endpoint added to `packages/core/api-server.ts`.
@@ -541,27 +541,27 @@ image has no claude dependency.
 - Claude stub at `tests/fixtures/claude`.
 
 ### Phase 4 (completed)
-- `packages/studio/src/studio-ws.ts` — Bun native WebSocket handler.
+- `packages/control/src/studio-ws.ts` — Bun native WebSocket handler.
 - `GET /studio/ws` upgrade path and `POST /studio/steer` REST fallback in router.
 - `WsChatController` added to `ChatController.ts` alongside existing SSE controller.
 - `route()` signature updated to accept optional Bun server reference.
 
 ### Phase 5 (completed)
-- `packages/studio/src/dev-loop-process.ts` — manages `superfield start` lifecycle.
-- `packages/studio/src/orchestrator.ts` — GET/POST /orchestrator/* endpoints.
+- `packages/control/src/dev-loop-process.ts` — manages `superfield start` lifecycle.
+- `packages/control/src/orchestrator.ts` — GET/POST /orchestrator/* endpoints.
 - `OrchestratorController.ts` + `OrchestratorView.tsx` added to browser UI.
-- Orchestrator tab added to StudioPanel nav.
+- Orchestrator tab added to ControlPanel nav.
 
 ### Phase 6 (completed)
 - `template/apps/kitchen-sink/` — standalone Vite app (port 5174) with design
   token section and component catalogue shell. Excluded from Docker + CI build.
-- `packages/studio/apps/src/components/WikiRender.tsx` and `CitationHoverPopover.tsx`
+- `packages/control/apps/src/components/WikiRender.tsx` and `CitationHoverPopover.tsx`
   ported from teamster kitchen sink (self-contained, no external API deps).
 - `ComponentPreviewPanel.tsx` added for `/studio/preview` route.
-- Preview tab added to StudioPanel.
+- Preview tab added to ControlPanel.
 
 ### Phase 7 (completed)
-- `.github/workflows/ci-studio.yml` added: build/typecheck + unit tests +
+- `.github/workflows/ci-control.yml` added: build/typecheck + unit tests +
   integration tests with in-process superfield fixture (no k3d).
 
 ### Phase 8 (completed)

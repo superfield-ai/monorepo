@@ -7,10 +7,10 @@
  *   superfield control [--port <n>] [--repo <path>] [--api-url <url>]
  *
  *   --port      Studio server port. Default: 7000.
- *   --repo      Repo root (CALYPSO_REPO_ROOT). Default: cwd.
+ *   --repo      Repo root (SUPERFIELD_REPO_ROOT). Default: cwd.
  *   --api-url   Superfield API base URL. Default: http://127.0.0.1:7837.
  *
- * Starts the studio HTTP server from @superfield/studio. Does not start
+ * Starts the studio HTTP server from @superfield/control. Does not start
  * any dev loops. Does not read ~/.superfield/config.yaml. The only external
  * dependency is the superfield API server at --api-url (used for agent turns
  * and steering). If the API is unreachable at startup a warning is logged and
@@ -23,8 +23,8 @@ export interface ControlCommandDeps {
   exit?: (code: number) => never;
   /** Injected fetch for health-check (tests). */
   _fetch?: typeof fetch;
-  /** Injected studio starter (tests — avoids dynamic import). */
-  _startStudio?: () => Promise<void>;
+  /** Injected control starter (tests — avoids dynamic import). */
+  _startControl?: () => Promise<void>;
 }
 
 export function parseControlArgs(args: string[]): {
@@ -76,7 +76,7 @@ superfield control [--port <n>] [--repo <path>] [--api-url <url>]
   Start the studio HTTP server.
 
   --port      Studio server port. Default: 7000.
-  --repo      Repo root (CALYPSO_REPO_ROOT). Default: cwd.
+  --repo      Repo root (SUPERFIELD_REPO_ROOT). Default: cwd.
   --api-url   Superfield dev-loop API base URL. Default: http://127.0.0.1:7837.
 
   The dev-loop API is used for agent turns and steering. If it is unreachable
@@ -93,9 +93,9 @@ export async function controlCommand(
   const warn = deps.warn ?? ((m: string) => console.warn(m));
   const exit = deps.exit ?? ((code: number) => process.exit(code) as never);
   const _fetch = deps._fetch ?? globalThis.fetch;
-  const _startStudio = deps._startStudio ?? (async () => {
-    const { startStudio } = await import('@superfield/studio');
-    await startStudio();
+  const _startControl = deps._startControl ?? (async () => {
+    const { startControl } = await import('@superfield/control');
+    await startControl();
   });
 
   const parsed = parseControlArgs(args);
@@ -112,13 +112,13 @@ export async function controlCommand(
     return;
   }
 
-  // Apply CLI overrides to env vars before importing @superfield/studio so
+  // Apply CLI overrides to env vars before importing @superfield/control so
   // that loadConfig() picks them up.
   if (parsed.port !== undefined) {
-    process.env.STUDIO_PORT = String(parsed.port);
+    process.env.CONTROL_PORT = String(parsed.port);
   }
   if (parsed.repo !== undefined) {
-    process.env.CALYPSO_REPO_ROOT = parsed.repo;
+    process.env.SUPERFIELD_REPO_ROOT = parsed.repo;
   }
   if (parsed.apiUrl !== undefined) {
     process.env.SUPERFIELD_API_URL = parsed.apiUrl;
@@ -136,5 +136,5 @@ export async function controlCommand(
     warn(`[studio] Warning: dev-loop API unreachable at ${apiUrl}. Agent turns will fail until a dev loop is running.`);
   }
 
-  await _startStudio();
+  await _startControl();
 }

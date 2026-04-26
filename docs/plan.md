@@ -22,7 +22,7 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 - ✅ Golden fixtures recorder (`bun record-fixtures`)
 - ✅ `superfield github add` (device flow + app installation polling + repo registration)
 - ✅ `superfield github forget` (account-type-aware uninstall URL)
-- ✅ Calypso Blueprint integrated as git subtree at `blueprint/`
+- ✅ Superfield Blueprint integrated as git subtree at `blueprint/`
 
 ### Phase A-2 — Planning loop: CI watchdog ✅
 

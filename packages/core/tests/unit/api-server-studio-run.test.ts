@@ -13,7 +13,7 @@ import { startApiServer } from '../../api-server.js';
 import type { Logger } from '../../logger.js';
 
 // Path to the studio claude stub (emits "Mocked Claude response for studio tests.")
-const STUB_DIR = new URL('../../../../packages/studio/tests/fixtures', import.meta.url).pathname;
+const STUB_DIR = new URL('../../../../packages/control/tests/fixtures', import.meta.url).pathname;
 
 const noopLogger: Logger = { currentLevel: 'info', emit: () => {} };
 

@@ -4,7 +4,7 @@
   "type": "module",
   "workspaces": [
     "packages/*",
-    "packages/studio/apps"
+    "packages/control/apps"
   ],
   "scripts": {
     "start": "SUPERFIELD_DEV=1 bun packages/cli/bin/superfield.ts start",
@@ -14,8 +14,8 @@
     "test": "bun run test:unit && bun run test:integration",
     "test:unit": "bun --bun vitest run --reporter=verbose packages/*/tests/unit",
     "test:integration": "bun --bun vitest run --reporter=verbose packages/*/tests/integration",
-    "test:e2e:studio": "npx playwright test --config packages/studio/tests/e2e/playwright.config.ts",
-    "build:studio-web": "bun run --cwd packages/studio/apps build",
+    "test:e2e:control": "npx playwright test --config packages/control/tests/e2e/playwright.config.ts",
+    "build:control-web": "bun run --cwd packages/control/apps build",
     "typecheck": "tsc --noEmit",
     "lint": "bunx eslint .",
     "format": "bunx prettier --write .",

@@ -74,7 +74,7 @@ function makeDeps(overrides: Partial<ControlCommandDeps> = {}): ControlCommandDe
     warn: vi.fn(),
     exit: vi.fn() as unknown as ControlCommandDeps['exit'],
     _fetch: vi.fn().mockResolvedValue({ ok: true, status: 200 } as Response),
-    _startStudio: vi.fn().mockResolvedValue(undefined),
+    _startControl: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -82,16 +82,16 @@ function makeDeps(overrides: Partial<ControlCommandDeps> = {}): ControlCommandDe
 describe('controlCommand', () => {
   afterEach(() => {
     // Clean up any env vars set during tests.
-    delete process.env.STUDIO_PORT;
-    delete process.env.CALYPSO_REPO_ROOT;
+    delete process.env.CONTROL_PORT;
+    delete process.env.SUPERFIELD_REPO_ROOT;
     delete process.env.SUPERFIELD_API_URL;
   });
 
-  it('--help → logs usage, does not call _startStudio or _fetch', async () => {
+  it('--help → logs usage, does not call _startControl or _fetch', async () => {
     const deps = makeDeps();
     await controlCommand(['--help'], deps);
     expect(deps.log).toHaveBeenCalledWith(expect.stringContaining('superfield control'));
-    expect(deps._startStudio).not.toHaveBeenCalled();
+    expect(deps._startControl).not.toHaveBeenCalled();
     expect(deps._fetch).not.toHaveBeenCalled();
   });
 
@@ -109,19 +109,19 @@ describe('controlCommand', () => {
     await controlCommand(['--unknown-flag'], deps);
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('Unknown arguments'));
     expect(deps.exit).toHaveBeenCalledWith(1);
-    expect(deps._startStudio).not.toHaveBeenCalled();
+    expect(deps._startControl).not.toHaveBeenCalled();
   });
 
-  it('--port sets STUDIO_PORT env var', async () => {
+  it('--port sets CONTROL_PORT env var', async () => {
     const deps = makeDeps();
     await controlCommand(['--port', '9000'], deps);
-    expect(process.env.STUDIO_PORT).toBe('9000');
+    expect(process.env.CONTROL_PORT).toBe('9000');
   });
 
-  it('--repo sets CALYPSO_REPO_ROOT env var', async () => {
+  it('--repo sets SUPERFIELD_REPO_ROOT env var', async () => {
     const deps = makeDeps();
     await controlCommand(['--repo', '/my/repo'], deps);
-    expect(process.env.CALYPSO_REPO_ROOT).toBe('/my/repo');
+    expect(process.env.SUPERFIELD_REPO_ROOT).toBe('/my/repo');
   });
 
   it('--api-url sets SUPERFIELD_API_URL env var', async () => {
@@ -130,11 +130,11 @@ describe('controlCommand', () => {
     expect(process.env.SUPERFIELD_API_URL).toBe('http://remote:7837');
   });
 
-  it('health check 200 → no warning, calls _startStudio', async () => {
+  it('health check 200 → no warning, calls _startControl', async () => {
     const deps = makeDeps();
     await controlCommand([], deps);
     expect(deps.warn).not.toHaveBeenCalled();
-    expect(deps._startStudio).toHaveBeenCalledOnce();
+    expect(deps._startControl).toHaveBeenCalledOnce();
   });
 
   it('health check non-200 → warns with HTTP status', async () => {
@@ -143,16 +143,16 @@ describe('controlCommand', () => {
     });
     await controlCommand([], deps);
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('503'));
-    expect(deps._startStudio).toHaveBeenCalledOnce();
+    expect(deps._startControl).toHaveBeenCalledOnce();
   });
 
-  it('health check network error → warns unreachable, still calls _startStudio', async () => {
+  it('health check network error → warns unreachable, still calls _startControl', async () => {
     const deps = makeDeps({
       _fetch: vi.fn().mockRejectedValue(new Error('ECONNREFUSED')),
     });
     await controlCommand([], deps);
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining('unreachable'));
-    expect(deps._startStudio).toHaveBeenCalledOnce();
+    expect(deps._startControl).toHaveBeenCalledOnce();
   });
 
   it('health check uses --api-url value', async () => {

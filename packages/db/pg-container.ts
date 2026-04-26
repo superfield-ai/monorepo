@@ -11,9 +11,9 @@
 
 import { spawnSync } from 'child_process';
 
-const PG_USER = 'calypso';
-const PG_PASSWORD = 'calypso';
-const PG_DB = 'calypso';
+const PG_USER = 'superfield';
+const PG_PASSWORD = 'superfield';
+const PG_DB = 'superfield';
 const PG_IMAGE = 'postgres:16';
 const READY_TIMEOUT_MS = 30_000;
 const PORT_POLL_INTERVAL_MS = 250;
