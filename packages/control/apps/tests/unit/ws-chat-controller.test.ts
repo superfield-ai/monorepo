@@ -55,7 +55,9 @@ class FakeWebSocket {
 beforeEach(() => {
   FakeWebSocket.last = null;
   vi.stubGlobal("WebSocket", FakeWebSocket);
-  vi.stubGlobal("location", { protocol: "http:", host: "localhost:7000" });
+  // location is read by WsChatController.connect() to build the WS URL, but
+  // FakeWebSocket discards the URL — no need to stub it. (And in the browser
+  // test env it is non-configurable, so vi.stubGlobal would throw.)
   vi.stubGlobal("crypto", {
     randomUUID: () => `uuid-${Math.random().toString(36).slice(2)}`,
   });
