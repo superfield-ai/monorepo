@@ -225,7 +225,7 @@ Apply these rules to your work. Cite the rule ID in your commit body if you devi
 - **IMPL-PROCESS-005** \`early-pull-request-creation\` [process]: Pull requests are created early in the feature lifecycle, not deferred until work is complete.
 - **IMPL-PROCESS-006** \`structured-agent-outcomes\` [process]: Agent tasks produce structured outcomes: OK, NOK, or ABORTED. These are the only valid agent result values.
 - **IMPL-PROCESS-007** \`gh-as-github-surface\` [process]: The gh CLI is the required GitHub control surface for all GitHub operations.
-- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Superfield.
+- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Calypso.
 - **IMPL-PROCESS-016** \`documentation-merge-gitattributes\` [process]: .gitattributes marks documentation files (*.md, *.rst, *.txt) with merge=binary to prevent automatic line-level merges.
 - **IMPL-PROCESS-017** \`documentation-merge-conflict-check\` [process]: .githooks/pre-commit scans staged documentation files and blocks commits containing merge conflict markers.
 - **IMPL-PROCESS-020** \`no-runtime-dependencies\` [process]: The process implementation introduces no runtime dependencies.
@@ -513,7 +513,7 @@ Apply these rules to your work. Cite the rule ID in your commit body if you devi
 - **IMPL-AUTH-006** \`algorithm-pinning-es256\` [auth]: JWT header alg is verified to be ES256 before validation; any other value is rejected outright.
 - **IMPL-AUTH-007** \`token-httponly-cookie\` [auth]: Tokens stored in HTTP-only, Secure, SameSite=Strict cookies. Never exposed in response bodies, URLs, or client-accessible storage.
 - **IMPL-AUTH-008** \`token-expiry-1h-rotation\` [auth]: Default token expiry is 1 hour. Refresh uses rotation: new token issued on each refresh, old token invalidated immediately.
-- **IMPL-AUTH-009** \`jti-revocation-table\` [auth]: Every token carries a jti claim. Revocation list is a table in superfield_app queried on every authenticated request.
+- **IMPL-AUTH-009** \`jti-revocation-table\` [auth]: Every token carries a jti claim. Revocation list is a table in calypso_app queried on every authenticated request.
 - **IMPL-AUTH-010** \`revocation-cache-ttl-60s\` [auth]: In-memory caching of revoked jti values is permitted with a TTL of 60 seconds maximum for standard revocations (e.g., logout).
 - **IMPL-AUTH-012** \`revocation-entry-expiry-cleanup\` [auth]: Revocation entries expire from the table after the token's own exp timestamp. Expired entries are cleaned up by a scheduled job.
 - **IMPL-AUTH-013** \`agent-scoped-tokens\` [auth]: Agents receive scoped tokens with an explicit scopes claim (e.g., ['analytics:read', 'schema:read']).
@@ -653,7 +653,7 @@ Apply these rules to your work. Cite the rule ID in your commit body if you devi
 - **IMPL-PROCESS-005** \`early-pull-request-creation\` [process]: Pull requests are created early in the feature lifecycle, not deferred until work is complete.
 - **IMPL-PROCESS-006** \`structured-agent-outcomes\` [process]: Agent tasks produce structured outcomes: OK, NOK, or ABORTED. These are the only valid agent result values.
 - **IMPL-PROCESS-007** \`gh-as-github-surface\` [process]: The gh CLI is the required GitHub control surface for all GitHub operations.
-- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Superfield.
+- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Calypso.
 - **IMPL-PROCESS-016** \`documentation-merge-gitattributes\` [process]: .gitattributes marks documentation files (*.md, *.rst, *.txt) with merge=binary to prevent automatic line-level merges.
 - **IMPL-PROCESS-017** \`documentation-merge-conflict-check\` [process]: .githooks/pre-commit scans staged documentation files and blocks commits containing merge conflict markers.
 - **IMPL-PROCESS-020** \`no-runtime-dependencies\` [process]: The process implementation introduces no runtime dependencies.
@@ -801,7 +801,7 @@ Apply these rules to your work. Cite the rule ID in your commit body if you devi
 - **IMPL-PROCESS-005** \`early-pull-request-creation\` [process]: Pull requests are created early in the feature lifecycle, not deferred until work is complete.
 - **IMPL-PROCESS-006** \`structured-agent-outcomes\` [process]: Agent tasks produce structured outcomes: OK, NOK, or ABORTED. These are the only valid agent result values.
 - **IMPL-PROCESS-007** \`gh-as-github-surface\` [process]: The gh CLI is the required GitHub control surface for all GitHub operations.
-- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Superfield.
+- **IMPL-PROCESS-008** \`cli-tui-operator-surfaces\` [process]: CLI and TUI are the primary operator surfaces for interacting with Calypso.
 - **IMPL-PROCESS-016** \`documentation-merge-gitattributes\` [process]: .gitattributes marks documentation files (*.md, *.rst, *.txt) with merge=binary to prevent automatic line-level merges.
 - **IMPL-PROCESS-017** \`documentation-merge-conflict-check\` [process]: .githooks/pre-commit scans staged documentation files and blocks commits containing merge conflict markers.
 - **IMPL-PROCESS-020** \`no-runtime-dependencies\` [process]: The process implementation introduces no runtime dependencies.
