@@ -44,7 +44,10 @@ function StateBadge({ state }: { state: ProcessState }) {
     stopping: 'bg-orange-100 text-orange-700',
   };
   return (
-    <span className={`inline-block rounded px-2 py-0.5 text-xs font-mono font-semibold ${colours[state]}`}>
+    <span
+      data-testid="process-state-badge"
+      className={`inline-block rounded px-2 py-0.5 text-xs font-mono font-semibold ${colours[state]}`}
+    >
       {state}
     </span>
   );
@@ -153,12 +156,14 @@ export function OrchestratorView({ controller: controllerProp, repo = '' }: Orch
           API {state.apiReachable ? 'reachable' : 'unreachable'}
         </span>
         <input
+          data-testid="repo-input"
           className="ml-4 w-48 rounded border border-gray-200 px-2 py-1 text-xs"
           placeholder="/path/to/repo"
           value={repoInput}
           onChange={(e) => setRepoInput(e.target.value)}
         />
         <button
+          data-testid="start-button"
           className="rounded bg-green-600 px-3 py-1 text-xs text-white disabled:opacity-40"
           disabled={!canStart || !repoInput}
           onClick={() => controllerRef.current.startDevLoop(repoInput)}
@@ -166,6 +171,7 @@ export function OrchestratorView({ controller: controllerProp, repo = '' }: Orch
           Start
         </button>
         <button
+          data-testid="stop-button"
           className="rounded bg-red-500 px-3 py-1 text-xs text-white disabled:opacity-40"
           disabled={!canStop}
           onClick={() => controllerRef.current.stopDevLoop()}
@@ -182,7 +188,7 @@ export function OrchestratorView({ controller: controllerProp, repo = '' }: Orch
         <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
           Loops
         </h2>
-        <table className="w-full">
+        <table className="w-full" data-testid="loop-table">
           <thead>
             <tr className="text-left text-xs text-gray-400">
               <th className="pb-1 pr-4">Loop</th>
@@ -215,7 +221,7 @@ export function OrchestratorView({ controller: controllerProp, repo = '' }: Orch
       )}
 
       {/* Log tail */}
-      <section className="flex flex-1 flex-col rounded border border-gray-200 bg-gray-950 px-3 py-2 shadow-sm">
+      <section data-testid="log-pane" className="flex flex-1 flex-col rounded border border-gray-200 bg-gray-950 px-3 py-2 shadow-sm">
         <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
           Dev loop logs
         </h2>

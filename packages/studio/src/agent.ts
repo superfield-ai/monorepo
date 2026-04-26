@@ -22,7 +22,8 @@
 
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { buildStudioPrompt, buildQuestionModePrompt, type StudioMessage, type StudioMode } from './helpers';
+import { buildStudioPrompt, type StudioMessage, type StudioMode } from './helpers';
+import { buildQuestionModePrompt } from './question-mode';
 import { buildAllowedToolsFlag } from './permissions';
 
 export const REPO_ROOT = process.env.CALYPSO_REPO_ROOT ?? process.cwd();

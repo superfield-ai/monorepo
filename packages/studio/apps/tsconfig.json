@@ -10,7 +10,6 @@
     "jsx": "react-jsx",
     "noEmit": true,
     "lib": ["ESNext", "DOM", "DOM.Iterable"],
-    "types": ["@vitest/browser/matchers"]
   },
-  "include": ["src", "tests"]
+  "include": ["src"]
 }

@@ -92,20 +92,23 @@ export function StudioPanel({
   return (
     <div className="flex h-screen w-full flex-col overflow-hidden bg-zinc-900" data-testid="studio-panel">
       {/* Tab bar */}
-      <div className="flex shrink-0 border-b border-zinc-700 bg-zinc-800">
+      <div className="flex shrink-0 border-b border-zinc-700 bg-zinc-800" data-testid="tab-bar">
         <button
+          data-testid="tab-studio"
           className={`px-4 py-2 text-sm font-medium ${activeTab === 'studio' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
           onClick={() => setActiveTab('studio')}
         >
           Studio
         </button>
         <button
+          data-testid="tab-orchestrator"
           className={`px-4 py-2 text-sm font-medium ${activeTab === 'orchestrator' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
           onClick={() => setActiveTab('orchestrator')}
         >
           Orchestrator
         </button>
         <button
+          data-testid="tab-preview"
           className={`px-4 py-2 text-sm font-medium ${activeTab === 'preview' ? 'border-b-2 border-blue-400 text-blue-300' : 'text-zinc-400 hover:text-zinc-200'}`}
           onClick={() => setActiveTab('preview')}
         >

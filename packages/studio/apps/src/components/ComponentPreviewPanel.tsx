@@ -108,10 +108,11 @@ export function ComponentPreviewPanel() {
   return (
     <div className="flex h-full flex-col overflow-auto p-4">
       {/* View selector */}
-      <div className="mb-4 flex gap-2">
+      <div className="mb-4 flex gap-2" data-testid="preview-view-selector">
         {VIEWS.map(({ name, label }) => (
           <button
             key={name}
+            data-testid={`preview-view-${name}`}
             className={`rounded px-3 py-1.5 text-sm font-medium transition-colors ${
               activeView === name
                 ? 'bg-blue-50 text-blue-700 border border-blue-200'
@@ -125,7 +126,7 @@ export function ComponentPreviewPanel() {
       </div>
 
       {/* Active view */}
-      <div className="flex-1">
+      <div className="flex-1" data-testid="preview-content">
         {activeView === 'wiki' && <WikiPreview />}
         {activeView === 'citations' && <CitationsPreview />}
         {activeView === 'empty' && <EmptyShell />}
