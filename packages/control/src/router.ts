@@ -68,6 +68,7 @@ import { handleControlRequest } from "./api";
 import { clusterStatusSseResponse } from "./cluster-status-sse";
 import { type WsData } from "./control-ws";
 import { handleOrchestratorRequest } from "./orchestrator";
+import { handleDeployRequest } from "./deploy";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
 
@@ -332,6 +333,10 @@ export async function route(
   if (req.method === "GET" && pathname === "/studio/cluster/events") {
     return clusterStatusSseResponse(config.clusterContext);
   }
+
+  // Deploy endpoints — D1 / C-9.5 deployment health view.
+  const deployResponse = await handleDeployRequest(req, url);
+  if (deployResponse) return deployResponse;
 
   // Orchestrator endpoints — manage the dev loop child process.
   const orchResponse = await handleOrchestratorRequest(

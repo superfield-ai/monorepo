@@ -32,6 +32,7 @@ import { DebugBadge } from "./DebugBadge";
 import { Toaster } from "./Toaster";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ConnectionBanner } from "./ConnectionBanner";
+import { DeployView } from "./DeployView";
 import { debugStore } from "../lib/debug-store";
 
 interface ControlPanelProps {
@@ -98,7 +99,7 @@ export function ControlPanel({
   }, [initialClusterStatus]);
 
   const [activeTab, setActiveTab] = useState<
-    "studio" | "orchestrator" | "preview" | "debug"
+    "studio" | "orchestrator" | "preview" | "deploy" | "debug"
   >("studio");
 
   // DB6 — record a route breadcrumb each time the active tab changes so the
@@ -143,6 +144,13 @@ export function ControlPanel({
         >
           Preview
         </button>
+        <button
+          data-testid="tab-deploy"
+          className={`px-4 py-2 text-sm font-medium ${activeTab === "deploy" ? "border-b-2 border-blue-400 text-blue-300" : "text-zinc-400 hover:text-zinc-200"}`}
+          onClick={() => setActiveTab("deploy")}
+        >
+          Deploy
+        </button>
         <DebugBadge
           active={activeTab === "debug"}
           onClick={() => setActiveTab("debug")}
@@ -181,6 +189,15 @@ export function ControlPanel({
         <ErrorBoundary label="Preview">
           <div className="flex-1 overflow-hidden bg-white">
             <ComponentPreviewPanel />
+          </div>
+        </ErrorBoundary>
+      )}
+
+      {/* Deploy tab */}
+      {activeTab === "deploy" && (
+        <ErrorBoundary label="Deploy">
+          <div className="flex-1 overflow-hidden">
+            <DeployView />
           </div>
         </ErrorBoundary>
       )}
