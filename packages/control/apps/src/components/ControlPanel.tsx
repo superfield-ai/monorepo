@@ -33,6 +33,13 @@ import { Toaster } from "./Toaster";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ConnectionBanner } from "./ConnectionBanner";
 import { DeployView } from "./DeployView";
+import {
+  ViewportToolbar,
+  VIEWPORT_WIDTHS,
+  loadViewport,
+  saveViewport,
+  type Viewport,
+} from "./ViewportToolbar";
 import { debugStore } from "../lib/debug-store";
 
 interface ControlPanelProps {
@@ -102,6 +109,12 @@ export function ControlPanel({
     "studio" | "orchestrator" | "preview" | "deploy" | "debug"
   >("studio");
 
+  const [viewport, setViewportState] = useState<Viewport>(() => loadViewport());
+  const setViewport = (v: Viewport): void => {
+    setViewportState(v);
+    saveViewport(v);
+  };
+
   // DB6 — record a route breadcrumb each time the active tab changes so the
   // DebugView timeline can correlate UI events with the user's location.
   useEffect(() => {
@@ -169,7 +182,12 @@ export function ControlPanel({
               />
             </div>
             <div className="flex-1 flex flex-col">
-              <IframePanel src={appSrc} clusterStatus={clusterStatus} />
+              <ViewportToolbar value={viewport} onChange={setViewport} />
+              <IframePanel
+                src={appSrc}
+                clusterStatus={clusterStatus}
+                iframeWidth={VIEWPORT_WIDTHS[viewport]}
+              />
             </div>
           </div>
         </ErrorBoundary>
