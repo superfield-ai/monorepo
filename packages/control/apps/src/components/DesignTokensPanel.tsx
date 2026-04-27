@@ -95,14 +95,14 @@ export function DesignTokensPanel({
       await navigator.clipboard.writeText(cls);
       toastStore.show({
         severity: "success",
-        title: "Copied to clipboard",
+        title: "COPIED — CLIPBOARD",
         message: cls,
         timeoutMs: 1800,
       });
     } catch {
       toastStore.show({
         severity: "warn",
-        title: "Clipboard unavailable",
+        title: "UNABLE — CLIPBOARD",
         message: cls,
         timeoutMs: 1800,
       });
@@ -116,7 +116,7 @@ export function DesignTokensPanel({
         className="label"
         style={{ padding: "var(--sp-3)", color: "var(--fg-3)" }}
       >
-        LOADING TOKENS…
+        SYNCHRONISING — TOKENS
       </div>
     );
   }
@@ -125,7 +125,7 @@ export function DesignTokensPanel({
     return (
       <div data-testid="design-tokens-panel" style={{ padding: "var(--sp-3)" }}>
         <InlineError
-          title="Failed to load design tokens"
+          title="RESOURCE FAULT — DESIGN TOKENS"
           error={error}
           onRetry={() => window.location.reload()}
         />

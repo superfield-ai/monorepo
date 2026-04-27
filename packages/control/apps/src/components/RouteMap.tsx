@@ -99,7 +99,7 @@ export function RouteMap({
     return (
       <div data-testid="route-map" style={{ padding: "var(--sp-3)" }}>
         <InlineError
-          title="Failed to load route map"
+          title="RESOURCE FAULT — ROUTE MAP"
           error={error}
           onRetry={() => window.location.reload()}
         />

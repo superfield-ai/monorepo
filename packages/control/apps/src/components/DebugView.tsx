@@ -274,7 +274,7 @@ function DebugRow({ entry, expanded, onToggle }: DebugRowProps): JSX.Element {
     await navigator.clipboard.writeText(dump);
     toastStore.show({
       severity: "success",
-      title: "Copied debug entry",
+      title: "COPIED — DEBUG ENTRY",
       timeoutMs: 2000,
     });
   };

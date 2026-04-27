@@ -60,7 +60,7 @@ describe("DesignTokensPanel", () => {
     await new Promise((r) => setTimeout(r, 10));
     expect(writeText).toHaveBeenCalledWith("bg-blue-500");
     const toasts = toastStore.getAll();
-    expect(toasts.some((t) => t.title === "Copied to clipboard")).toBe(true);
+    expect(toasts.some((t) => t.title === "COPIED — CLIPBOARD")).toBe(true);
   });
 
   test("renders fallback EmptyState when tokens are explicitly null", async () => {

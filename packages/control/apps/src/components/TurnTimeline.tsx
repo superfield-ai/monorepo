@@ -82,7 +82,7 @@ export function TurnTimeline({
     return (
       <div data-testid={`turn-timeline-${sessionId}`}>
         <InlineError
-          title="Failed to load turn timeline"
+          title="RESOURCE FAULT — TURN TIMELINE"
           error={error}
           onRetry={() => window.location.reload()}
         />

@@ -108,7 +108,10 @@ export class CommitController {
         branch: data.branch,
       };
     } catch {
-      this.setState({ loading: false, error: "Failed to fetch studio status" });
+      this.setState({
+        loading: false,
+        error: "RESOURCE FAULT — STUDIO STATUS",
+      });
       return { active: false };
     }
   }
@@ -128,7 +131,7 @@ export class CommitController {
       });
       if (!res.ok) {
         this.setState({
-          error: "Studio could not roll back that change. Try again.",
+          error: "UNABLE — ROLLBACK REJECTED. RETRY.",
         });
         return null;
       }
@@ -138,7 +141,7 @@ export class CommitController {
       };
       if (!Array.isArray(data.commits)) {
         this.setState({
-          error: "Studio could not roll back that change. Try again.",
+          error: "UNABLE — ROLLBACK REJECTED. RETRY.",
         });
         return null;
       }
@@ -146,7 +149,7 @@ export class CommitController {
       return data.commits;
     } catch {
       this.setState({
-        error: "Studio could not roll back that change. Try again.",
+        error: "UNABLE — ROLLBACK REJECTED. RETRY.",
       });
       return null;
     }

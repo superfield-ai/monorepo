@@ -130,7 +130,7 @@ export function OAuthPanel({
                 disabled={status === "pending" && oauthState.loading}
                 className="px-3 py-2 text-xs font-medium bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-lg transition-colors"
               >
-                {oauthState.loading ? "Connecting..." : "Submit"}
+                {oauthState.loading ? "SYNCHRONISING" : "Submit"}
               </button>
             </div>
           </div>
