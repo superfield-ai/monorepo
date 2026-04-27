@@ -75,29 +75,52 @@ export function subscribe(fn: Subscriber): () => void {
  *   2. Streams every subsequent backend debug event live.
  */
 export function debugEventsSseResponse(): Response {
+  // Track lifecycle state across start()/cancel() so we never enqueue or
+  // close on an already-closed controller (Bun's native ReadableStream
+  // throws "Invalid state: Controller is already closed", which crashes
+  // Bun.serve mid-stream). The previous implementation stashed cleanup on
+  // the controller but never invoked it from cancel(), leaking the
+  // subscriber and ping interval — both of which then enqueued onto a
+  // closed controller as soon as the client disconnected.
+  let closed = false;
+  let cleanup: (() => void) | null = null;
+
   const stream = new ReadableStream<Uint8Array>({
     start(controller) {
       const encoder = new TextEncoder();
+      const safeEnqueue = (chunk: Uint8Array): void => {
+        if (closed) return;
+        try {
+          controller.enqueue(chunk);
+        } catch {
+          // Controller transitioned to closed between the check and the
+          // enqueue (e.g. client aborted). Tear down so we stop trying.
+          closed = true;
+          cleanup?.();
+          cleanup = null;
+        }
+      };
       const send = (event: BackendEvent): void => {
         const data = `data: ${JSON.stringify(event)}\n\n`;
-        controller.enqueue(encoder.encode(data));
+        safeEnqueue(encoder.encode(data));
       };
       // Replay history.
       for (const event of ring) send(event);
       // Subscribe for live events. Unsubscribe on cancel.
       const unsub = subscribe(send);
       const ping = setInterval(() => {
-        controller.enqueue(encoder.encode(": ping\n\n"));
+        safeEnqueue(encoder.encode(": ping\n\n"));
       }, 25_000);
-      // Save cleanup on the controller for cancel().
-      (controller as unknown as { _cleanup?: () => void })._cleanup = () => {
+      cleanup = () => {
         unsub();
         clearInterval(ping);
       };
     },
     cancel(reason) {
-      // Best-effort cleanup; controller is already closed.
       void reason;
+      closed = true;
+      cleanup?.();
+      cleanup = null;
     },
   });
   return new Response(stream, {
