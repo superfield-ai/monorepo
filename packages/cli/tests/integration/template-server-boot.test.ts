@@ -1,12 +1,28 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
+import { resolve } from "node:path";
+import { existsSync } from "node:fs";
 import {
   controlCommand,
   type ControlCommandDeps,
 } from "../../commands/control.ts";
 
-// Absolute literal path to the template repo. Chosen over path.resolve to keep
-// the test independent of __dirname semantics under vitest/bun.
-const TEMPLATE_REPO = "/home/lucas/superfield/template";
+function resolveTemplatePath(): string {
+  const fromEnv = process.env.TEMPLATE_REPO_PATH;
+  if (fromEnv) {
+    if (!existsSync(fromEnv)) {
+      throw new Error(`TEMPLATE_REPO_PATH=${fromEnv} does not exist.`);
+    }
+    return fromEnv;
+  }
+  const sibling = resolve(import.meta.dirname, "../../../../../template");
+  if (existsSync(sibling)) return sibling;
+  throw new Error(
+    `Could not locate template repo. Set TEMPLATE_REPO_PATH or check out ` +
+      `superfield-ai/superfield-starter-ts at ${sibling}.`,
+  );
+}
+
+const TEMPLATE_REPO = resolveTemplatePath();
 
 function makeDeps(
   overrides: Partial<ControlCommandDeps> = {},

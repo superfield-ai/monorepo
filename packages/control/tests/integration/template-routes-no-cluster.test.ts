@@ -12,6 +12,7 @@ import { createServer, type Server } from "http";
 import type { AddressInfo } from "net";
 import { route } from "../../src/router";
 import type { ControlConfig } from "../../src/config";
+import { resolveTemplatePath } from "../helpers/template-path";
 
 // ── Helpers (mirrored from studio-server.test.ts) ─────────────────────────────
 
@@ -90,7 +91,7 @@ describe("template routes — no cluster", () => {
 
   beforeAll(async () => {
     priorRepoRoot = process.env.SUPERFIELD_REPO_ROOT;
-    process.env.SUPERFIELD_REPO_ROOT = "/home/lucas/superfield/template";
+    process.env.SUPERFIELD_REPO_ROOT = resolveTemplatePath();
 
     const config = makeConfig({
       webServiceUrl: "http://127.0.0.1:1",

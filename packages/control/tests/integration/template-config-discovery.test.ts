@@ -15,6 +15,9 @@
 
 import { describe, it, expect } from "vitest";
 import { loadConfig } from "../../src/config";
+import { resolveTemplatePath } from "../helpers/template-path";
+
+const TEMPLATE = resolveTemplatePath();
 
 function withEnv(
   vars: Record<string, string | undefined>,
@@ -46,7 +49,7 @@ describe("loadConfig — template k8s service discovery", () => {
   it("discovers webPort=80 from template/k8s/app.yaml when CONTROL_WEB_SERVICE_NAME=superfield-app", () => {
     withEnv(
       {
-        SUPERFIELD_REPO_ROOT: "/home/lucas/superfield/template",
+        SUPERFIELD_REPO_ROOT: TEMPLATE,
         CONTROL_WEB_SERVICE_NAME: "superfield-app",
         CONTROL_WEB_SERVICE_PORT: undefined,
         CONTROL_WEB_SERVICE_HOST: undefined,
@@ -61,7 +64,7 @@ describe("loadConfig — template k8s service discovery", () => {
   it("falls back to webPort=80 when CONTROL_WEB_SERVICE_NAME is unset (default 'web' not found in template)", () => {
     withEnv(
       {
-        SUPERFIELD_REPO_ROOT: "/home/lucas/superfield/template",
+        SUPERFIELD_REPO_ROOT: TEMPLATE,
         CONTROL_WEB_SERVICE_NAME: undefined,
         CONTROL_WEB_SERVICE_PORT: undefined,
         CONTROL_WEB_SERVICE_HOST: undefined,
@@ -76,7 +79,7 @@ describe("loadConfig — template k8s service discovery", () => {
   it("CONTROL_WEB_SERVICE_PORT overrides discovery", () => {
     withEnv(
       {
-        SUPERFIELD_REPO_ROOT: "/home/lucas/superfield/template",
+        SUPERFIELD_REPO_ROOT: TEMPLATE,
         CONTROL_WEB_SERVICE_NAME: "superfield-app",
         CONTROL_WEB_SERVICE_PORT: "9999",
         CONTROL_WEB_SERVICE_HOST: undefined,
