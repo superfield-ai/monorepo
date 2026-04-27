@@ -1,0 +1,134 @@
+name: Control × Template Integration
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/control/**"
+      - "packages/control-core/**"
+      - "packages/cli/commands/control.ts"
+      - "packages/cli/tests/integration/template-server-boot.test.ts"
+      - "docs/control-template-integration.md"
+      - ".github/workflows/ci-control-template.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/control/**"
+      - "packages/control-core/**"
+      - "packages/cli/commands/control.ts"
+      - "packages/cli/tests/integration/template-server-boot.test.ts"
+      - "docs/control-template-integration.md"
+      - ".github/workflows/ci-control-template.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: ci-control-template-${{ github.ref }}
+  cancel-in-progress: true
+
+# Pinned commit of superfield-ai/superfield-starter-ts. When the template
+# repo lands changes that this CI should pick up, bump TEMPLATE_REF to the
+# new SHA in a dedicated PR so the test surface and the fixture move
+# together.
+env:
+  TEMPLATE_REPO: superfield-ai/superfield-starter-ts
+  TEMPLATE_REF: 9c803f9b6690511c6d3947e2083f65eaa0ea3fa6
+
+jobs:
+  template-integration:
+    name: Integration tests against pinned template
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout cli
+        uses: actions/checkout@v4
+        with:
+          path: cli
+          submodules: recursive
+          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+
+      - name: Checkout template at pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TEMPLATE_REPO }}
+          ref: ${{ env.TEMPLATE_REF }}
+          path: template
+          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+
+      - name: Install cli deps
+        working-directory: cli
+        run: bun install --frozen-lockfile
+
+      - name: Run template integration tests
+        working-directory: cli
+        env:
+          TEMPLATE_REPO_PATH: ${{ github.workspace }}/template
+          CONTROL_WEB_SERVICE_NAME: superfield-app
+        run: |
+          bun --bun vitest run \
+            packages/control/tests/integration/template-config-discovery.test.ts \
+            packages/control/tests/integration/template-config-fallback.test.ts \
+            packages/control/tests/integration/template-routes-no-cluster.test.ts \
+            packages/control/tests/integration/template-auth-roundtrip.test.ts \
+            packages/control/tests/integration/template-repo-root-resolution.test.ts \
+            packages/control/tests/integration/template-malformed-k8s.test.ts \
+            packages/cli/tests/integration/template-server-boot.test.ts
+
+  template-e2e:
+    name: Playwright pages coverage against pinned template
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Checkout cli
+        uses: actions/checkout@v4
+        with:
+          path: cli
+          submodules: recursive
+          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+
+      - name: Checkout template at pinned commit
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.TEMPLATE_REPO }}
+          ref: ${{ env.TEMPLATE_REF }}
+          path: template
+          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+
+      - name: Install cli deps
+        working-directory: cli
+        run: bun install --frozen-lockfile
+
+      - name: Install Playwright chromium
+        working-directory: cli
+        run: bun x playwright install chromium
+
+      - name: Build control web app
+        working-directory: cli
+        run: bun run --cwd packages/control/apps build
+
+      - name: Run template Playwright specs
+        working-directory: cli
+        env:
+          SUPERFIELD_REPO_ROOT: ${{ github.workspace }}/template
+          TEMPLATE_REPO_PATH: ${{ github.workspace }}/template
+          CONTROL_WEB_SERVICE_NAME: superfield-app
+        run: |
+          bun x playwright test \
+            --config=packages/control/tests/e2e/playwright.config.ts \
+            packages/control/tests/e2e/specs/template-control-smoke.spec.ts \
+            packages/control/tests/e2e/specs/template-pages-coverage.spec.ts
+
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-template
+          path: cli/packages/control/playwright-report
+          retention-days: 7
