@@ -143,7 +143,7 @@ describe("checkPrerequisites", () => {
       _cmd: string,
       args: string[],
     ) => {
-      toolsChecked.push((args as string[])[0]);
+      toolsChecked.push((args as string[])[0]!);
       return {
         status: 0,
         stdout: Buffer.from("/usr/bin/tool"),

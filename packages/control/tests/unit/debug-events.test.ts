@@ -24,9 +24,9 @@ describe("logBackend", () => {
     logBackend("error", "router", "boom", { context: { url: "/x" } });
     const recent = getRecentEvents();
     expect(recent).toHaveLength(1);
-    expect(recent[0].level).toBe("error");
-    expect(recent[0].message).toBe("boom");
-    expect(recent[0].context).toEqual({ url: "/x" });
+    expect(recent[0]!.level).toBe("error");
+    expect(recent[0]!.message).toBe("boom");
+    expect(recent[0]!.context).toEqual({ url: "/x" });
   });
 
   it("notifies live subscribers", () => {
@@ -44,7 +44,7 @@ describe("logBackend", () => {
     for (let i = 0; i < 210; i++) logBackend("info", "x", `m${i}`);
     const recent = getRecentEvents();
     expect(recent).toHaveLength(200);
-    expect(recent[0].message).toBe("m10");
+    expect(recent[0]!.message).toBe("m10");
   });
 });
 
@@ -54,15 +54,15 @@ describe("logBackendError", () => {
   it("captures Error message and stack", () => {
     logBackendError(new Error("blew up"), "test-source");
     const recent = getRecentEvents();
-    expect(recent[0].level).toBe("error");
-    expect(recent[0].message).toBe("blew up");
-    expect(recent[0].source).toBe("test-source");
-    expect(recent[0].stack).toBeDefined();
+    expect(recent[0]!.level).toBe("error");
+    expect(recent[0]!.message).toBe("blew up");
+    expect(recent[0]!.source).toBe("test-source");
+    expect(recent[0]!.stack).toBeDefined();
   });
 
   it("falls back to String(err) for non-Error values", () => {
     logBackendError("just a string", "src");
-    expect(getRecentEvents()[0].message).toBe("just a string");
+    expect(getRecentEvents()[0]!.message).toBe("just a string");
   });
 });
 

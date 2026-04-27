@@ -24,6 +24,10 @@ export function parseDestroyArgs(args: string[]): ParsedDestroyArgs {
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
+    if (arg === undefined) {
+      i++;
+      continue;
+    }
     if (arg === "--env") {
       env = args[++i];
     } else if (arg.startsWith("--env=")) {

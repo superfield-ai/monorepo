@@ -257,7 +257,13 @@ async function waitForPodsReady(opts: {
         return false;
       }
       const [current, total] = readyCol.split("/").map(Number);
-      return statusCol === "Running" && current > 0 && current === total;
+      return (
+        statusCol === "Running" &&
+        current !== undefined &&
+        total !== undefined &&
+        current > 0 &&
+        current === total
+      );
     });
 
     if (allReady && lines.length > 0) {

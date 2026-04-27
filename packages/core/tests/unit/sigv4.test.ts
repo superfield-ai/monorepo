@@ -88,7 +88,7 @@ describe("signRequest", () => {
 
     // SignedHeaders should include host and x-amz-date at minimum.
     const authParts = Object.fromEntries(
-      headers.authorization
+      headers.authorization!
         .replace("AWS4-HMAC-SHA256 ", "")
         .split(", ")
         .map((p) => {
@@ -114,7 +114,7 @@ describe("signRequest", () => {
     });
 
     const authParts = Object.fromEntries(
-      headers.authorization
+      headers.authorization!
         .replace("AWS4-HMAC-SHA256 ", "")
         .split(", ")
         .map((p) => {

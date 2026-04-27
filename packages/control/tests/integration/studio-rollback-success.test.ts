@@ -154,7 +154,7 @@ Added a rollback target change.
         : [registerRes.headers.get("set-cookie") ?? ""];
       const cookiePairs: string[] = [];
       for (const raw of setCookies) {
-        const pair = raw.split(";")[0].trim();
+        const pair = raw.split(";")[0]!.trim();
         if (pair) cookiePairs.push(pair);
       }
       authCookie = cookiePairs.join("; ");

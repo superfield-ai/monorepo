@@ -24,8 +24,8 @@ describe("loadConfig", () => {
 
     const config = await loadConfig(p);
     expect(config.users).toHaveLength(1);
-    expect(config.users[0].handle).toBe("octocat");
-    expect(config.repositories[0].repo).toBe("my-repo");
+    expect(config.users[0]!.handle).toBe("octocat");
+    expect(config.repositories[0]!.repo).toBe("my-repo");
   });
 });
 

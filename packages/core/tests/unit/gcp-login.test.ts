@@ -78,7 +78,7 @@ describe("runDeviceCodeFlow", () => {
     );
 
     expect(writtenFiles["/tmp/sf-oauth.json"]).toBeDefined();
-    const written = JSON.parse(writtenFiles["/tmp/sf-oauth.json"]);
+    const written = JSON.parse(writtenFiles["/tmp/sf-oauth.json"]!);
     expect(written.access_token).toBe("new-access-token");
     expect(written.refresh_token).toBe("new-refresh-token");
     expect(written.client_id).toBe("client-id");

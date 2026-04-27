@@ -129,7 +129,7 @@ describe("parseTimelineCommits", () => {
     const output = "abc1234|2025-03-15T10:30:00+00:00|Updated | blue to red\n";
     const entries = parseTimelineCommits(output);
     expect(entries).toHaveLength(1);
-    expect(entries[0].message).toBe("Updated | blue to red");
+    expect(entries[0]!.message).toBe("Updated | blue to red");
   });
 
   it("returns empty array for empty output", () => {
@@ -140,7 +140,7 @@ describe("parseTimelineCommits", () => {
     const output = "no-pipes\nabc1234|2025-03-15T10:30:00+00:00|Valid\n";
     const entries = parseTimelineCommits(output);
     expect(entries).toHaveLength(1);
-    expect(entries[0].hash).toBe("abc1234");
+    expect(entries[0]!.hash).toBe("abc1234");
   });
 
   it("handles a line with only one pipe separator", () => {

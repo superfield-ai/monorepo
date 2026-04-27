@@ -101,8 +101,8 @@ describe("appendTurn", () => {
     });
 
     expect(updated.turns).toHaveLength(1);
-    expect(updated.turns[0].mode).toBe("question");
-    expect(updated.turns[0].checkpointCommit).toBeNull();
+    expect(updated.turns[0]!.mode).toBe("question");
+    expect(updated.turns[0]!.checkpointCommit).toBeNull();
   });
 
   it("auto-increments the turn index", () => {
@@ -123,8 +123,8 @@ describe("appendTurn", () => {
     });
 
     expect(meta.turns).toHaveLength(2);
-    expect(meta.turns[0].index).toBe(0);
-    expect(meta.turns[1].index).toBe(1);
+    expect(meta.turns[0]!.index).toBe(0);
+    expect(meta.turns[1]!.index).toBe(1);
   });
 
   it("does not mutate the original metadata", () => {
@@ -149,8 +149,8 @@ describe("appendTurn", () => {
     });
     const after = new Date().toISOString();
 
-    expect(updated.turns[0].timestamp >= before).toBe(true);
-    expect(updated.turns[0].timestamp <= after).toBe(true);
+    expect(updated.turns[0]!.timestamp >= before).toBe(true);
+    expect(updated.turns[0]!.timestamp <= after).toBe(true);
   });
 });
 
@@ -426,7 +426,7 @@ describe("metadata sanitization", () => {
 
     // Only git notes commands were invoked, not any file writes.
     expect(mockSpawn).toHaveBeenCalledTimes(1);
-    expect(mockSpawn.mock.calls[0][0]).toBe("git");
-    expect(mockSpawn.mock.calls[0][1][0]).toBe("notes");
+    expect(mockSpawn.mock.calls[0]![0]).toBe("git");
+    expect(mockSpawn.mock.calls[0]![1][0]).toBe("notes");
   });
 });

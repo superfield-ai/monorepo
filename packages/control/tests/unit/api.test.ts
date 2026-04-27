@@ -96,7 +96,7 @@ async function getAuthToken(): Promise<string> {
   });
   const regRes = await handleAuthRequest(regReq, new URL(regReq.url));
   const cookie = regRes!.headers.get("Set-Cookie")!;
-  return cookie.split(";")[0].replace("superfield_auth=", "");
+  return cookie.split(";")[0]!.replace("superfield_auth=", "");
 }
 
 /** Create a .studio file in the temp directory. */

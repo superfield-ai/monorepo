@@ -75,10 +75,10 @@ describe("checkpoint integration — full cycle", () => {
       baseRef: initialHash,
     });
     expect(timeline).toHaveLength(1);
-    expect(timeline[0].summary).toBe("Added a greeting message");
-    expect(timeline[0].timestamp).toBeTruthy();
+    expect(timeline[0]!.summary).toBe("Added a greeting message");
+    expect(timeline[0]!.timestamp).toBeTruthy();
     // Verify ISO 8601 format
-    expect(new Date(timeline[0].timestamp).toISOString()).toBeTruthy();
+    expect(new Date(timeline[0]!.timestamp).toISOString()).toBeTruthy();
   });
 
   it("does not create a checkpoint when there are no changes", () => {
@@ -126,9 +126,9 @@ describe("checkpoint integration — rollback", () => {
     // Verify all three are in the timeline
     let timeline = getTimeline({ worktreePath: repoDir, baseRef: initialHash });
     expect(timeline).toHaveLength(3);
-    expect(timeline[0].summary).toBe("Added file one");
-    expect(timeline[1].summary).toBe("Added file two");
-    expect(timeline[2].summary).toBe("Added file three");
+    expect(timeline[0]!.summary).toBe("Added file one");
+    expect(timeline[1]!.summary).toBe("Added file two");
+    expect(timeline[2]!.summary).toBe("Added file three");
 
     // Roll back to checkpoint 1
     rollbackToCheckpoint({ worktreePath: repoDir, targetHash: cp1.hash! });
@@ -136,7 +136,7 @@ describe("checkpoint integration — rollback", () => {
     // Verify only one checkpoint remains
     timeline = getTimeline({ worktreePath: repoDir, baseRef: initialHash });
     expect(timeline).toHaveLength(1);
-    expect(timeline[0].summary).toBe("Added file one");
+    expect(timeline[0]!.summary).toBe("Added file one");
 
     // Verify files 2 and 3 are gone from the worktree
     expect(() => readFileSync(join(repoDir, "file2.ts"))).toThrow();
@@ -168,8 +168,8 @@ describe("checkpoint integration — rollback", () => {
       baseRef: initialHash,
     });
     expect(timeline).toHaveLength(1);
-    expect(timeline[0].summary).toBe("First change");
-    expect(timeline[0].hash).toBe(cp1.hash);
+    expect(timeline[0]!.summary).toBe("First change");
+    expect(timeline[0]!.hash).toBe(cp1.hash);
   });
 });
 
@@ -192,8 +192,8 @@ describe("checkpoint integration — timeline is linear", () => {
 
     // Each entry's timestamp should be >= the previous one (chronological order)
     for (let i = 1; i < timeline.length; i++) {
-      const prev = new Date(timeline[i - 1].timestamp).getTime();
-      const curr = new Date(timeline[i].timestamp).getTime();
+      const prev = new Date(timeline[i - 1]!.timestamp).getTime();
+      const curr = new Date(timeline[i]!.timestamp).getTime();
       expect(curr).toBeGreaterThanOrEqual(prev);
     }
   });

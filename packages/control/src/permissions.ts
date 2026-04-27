@@ -230,7 +230,7 @@ export function extractCommandBinaries(command: string): string[] {
 
     // Extract the first word (the binary name)
     const match = withoutEnv.match(/^([^\s]+)/);
-    if (match) {
+    if (match?.[1]) {
       binaries.push(match[1]);
     }
   }
@@ -238,14 +238,14 @@ export function extractCommandBinaries(command: string): string[] {
   // Also scan for subshell/backtick commands: $(...) or `...`
   const subshellMatches = command.matchAll(/\$\(([^)]+)\)/g);
   for (const m of subshellMatches) {
-    const innerBinaries = extractCommandBinaries(m[1]);
-    binaries.push(...innerBinaries);
+    if (!m[1]) continue;
+    binaries.push(...extractCommandBinaries(m[1]));
   }
 
   const backtickMatches = command.matchAll(/`([^`]+)`/g);
   for (const m of backtickMatches) {
-    const innerBinaries = extractCommandBinaries(m[1]);
-    binaries.push(...innerBinaries);
+    if (!m[1]) continue;
+    binaries.push(...extractCommandBinaries(m[1]));
   }
 
   return binaries;

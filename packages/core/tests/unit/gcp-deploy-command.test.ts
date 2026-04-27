@@ -94,9 +94,9 @@ describe("runGcpDeployCommand", () => {
 
     // Verify runProvision was called before runGcpDeploy
     const provisionOrder = (deps.runProvision as ReturnType<typeof vi.fn>).mock
-      .invocationCallOrder[0];
+      .invocationCallOrder[0]!;
     const deployOrder = (deps.runGcpDeploy as ReturnType<typeof vi.fn>).mock
-      .invocationCallOrder[0];
+      .invocationCallOrder[0]!;
     expect(provisionOrder).toBeLessThan(deployOrder);
   });
 
@@ -109,7 +109,7 @@ describe("runGcpDeployCommand", () => {
     );
 
     const deployCallArgs = (deps.runGcpDeploy as ReturnType<typeof vi.fn>).mock
-      .calls[0];
+      .calls[0]!;
     const deployConfig = deployCallArgs[0] as { imageTag: string };
     expect(deployConfig.imageTag).toBe("v2.3.4");
   });
@@ -175,7 +175,7 @@ describe("runGcpDeployCommand", () => {
     );
 
     const provisionCallArgs = (deps.runProvision as ReturnType<typeof vi.fn>)
-      .mock.calls[0];
+      .mock.calls[0]!;
     const provisionConfig = provisionCallArgs[0] as {
       projectId: string;
       region: string;

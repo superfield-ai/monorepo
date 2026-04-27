@@ -25,11 +25,11 @@ export function parsePodLine(line: string): PodEvent | null {
   // Skip header lines
   if (parts[0] === "NAME") return null;
   return {
-    name: parts[0],
-    ready: parts[1],
-    status: parts[2],
-    restarts: parts[3],
-    age: parts[4],
+    name: parts[0] ?? "",
+    ready: parts[1] ?? "",
+    status: parts[2] ?? "",
+    restarts: parts[3] ?? "",
+    age: parts[4] ?? "",
     raw: line.trim(),
   };
 }

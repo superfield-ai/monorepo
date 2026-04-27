@@ -200,7 +200,7 @@ describe("container-sandbox", () => {
       startSandbox(sandboxConfig);
 
       // Second call is docker create.
-      const createCall = spawnSyncMock.mock.calls[1];
+      const createCall = spawnSyncMock.mock.calls[1]!;
       expect(createCall[0]).toBe("docker");
       expect(createCall[1]).toContain("--network");
       expect(createCall[1]).toContain("none");
@@ -217,7 +217,7 @@ describe("container-sandbox", () => {
       const { startSandbox } = await import("../container-sandbox");
       startSandbox(sandboxConfig);
 
-      const createArgs = spawnSyncMock.mock.calls[1][1] as string[];
+      const createArgs = spawnSyncMock.mock.calls[1]![1] as string[];
       expect(createArgs).toContain("-v");
       expect(createArgs).toContain(
         `${sandboxConfig.worktreePath}:/studio/src:rw`,
@@ -238,7 +238,7 @@ describe("container-sandbox", () => {
       const { startSandbox } = await import("../container-sandbox");
       startSandbox(sandboxConfig);
 
-      const createArgs = spawnSyncMock.mock.calls[1][1] as string[];
+      const createArgs = spawnSyncMock.mock.calls[1]![1] as string[];
       expect(createArgs).toContain("--cap-add");
       expect(createArgs).toContain("NET_ADMIN");
     });
@@ -254,7 +254,7 @@ describe("container-sandbox", () => {
       const { startSandbox } = await import("../container-sandbox");
       startSandbox(sandboxConfig);
 
-      const createArgs = spawnSyncMock.mock.calls[1][1] as string[];
+      const createArgs = spawnSyncMock.mock.calls[1]![1] as string[];
       expect(createArgs).toContain("--security-opt");
       expect(createArgs).toContain("no-new-privileges");
     });
@@ -270,7 +270,7 @@ describe("container-sandbox", () => {
       const { startSandbox } = await import("../container-sandbox");
       startSandbox(sandboxConfig);
 
-      const createArgs = spawnSyncMock.mock.calls[1][1] as string[];
+      const createArgs = spawnSyncMock.mock.calls[1]![1] as string[];
       expect(createArgs).toContain("--label");
       expect(createArgs).toContain("app=superfield-studio-sandbox");
       expect(createArgs).toContain("session=a1b2");
@@ -301,7 +301,7 @@ describe("container-sandbox", () => {
 
       // Verify cleanup rm -f was called.
       const lastCall =
-        spawnSyncMock.mock.calls[spawnSyncMock.mock.calls.length - 1];
+        spawnSyncMock.mock.calls[spawnSyncMock.mock.calls.length - 1]!;
       expect(lastCall[0]).toBe("docker");
       expect((lastCall[1] as string[])[0]).toBe("rm");
     });
@@ -318,7 +318,7 @@ describe("container-sandbox", () => {
       startSandbox(sandboxConfig);
 
       // Fourth call: exec for iptables rules.
-      const rulesCall = spawnSyncMock.mock.calls[3];
+      const rulesCall = spawnSyncMock.mock.calls[3]!;
       expect(rulesCall[0]).toBe("docker");
       expect((rulesCall[1] as string[])[0]).toBe("exec");
       expect((rulesCall[1] as string[])[1]).toBe("studio-sandbox-a1b2");
@@ -336,7 +336,7 @@ describe("container-sandbox", () => {
       startSandbox(sandboxConfig);
 
       // Fifth call: exec for DNS config.
-      const dnsCall = spawnSyncMock.mock.calls[4];
+      const dnsCall = spawnSyncMock.mock.calls[4]!;
       expect(dnsCall[0]).toBe("docker");
       expect((dnsCall[1] as string[])[0]).toBe("exec");
       expect(dnsCall[1] as string[]).toContain("studio-sandbox-a1b2");
@@ -362,15 +362,15 @@ describe("container-sandbox", () => {
       stopSandbox(sandbox);
 
       expect(spawnSyncMock).toHaveBeenCalledTimes(2);
-      expect(spawnSyncMock.mock.calls[0][0]).toBe("docker");
-      expect(spawnSyncMock.mock.calls[0][1]).toEqual([
+      expect(spawnSyncMock.mock.calls[0]![0]).toBe("docker");
+      expect(spawnSyncMock.mock.calls[0]![1]).toEqual([
         "stop",
         "--time",
         "5",
         "studio-sandbox-a1b2",
       ]);
-      expect(spawnSyncMock.mock.calls[1][0]).toBe("docker");
-      expect(spawnSyncMock.mock.calls[1][1]).toEqual([
+      expect(spawnSyncMock.mock.calls[1]![0]).toBe("docker");
+      expect(spawnSyncMock.mock.calls[1]![1]).toEqual([
         "rm",
         "-f",
         "studio-sandbox-a1b2",
@@ -428,7 +428,7 @@ describe("container-sandbox", () => {
       const { listSandboxes } = await import("../container-sandbox");
       listSandboxes();
 
-      const args = spawnSyncMock.mock.calls[0][1] as string[];
+      const args = spawnSyncMock.mock.calls[0]![1] as string[];
       expect(args).toContain("--filter");
       expect(args).toContain("label=app=superfield-studio-sandbox");
     });
@@ -462,8 +462,8 @@ describe("container-sandbox", () => {
       const { cleanupOrphanedSandboxes } = await import("../container-sandbox");
       expect(cleanupOrphanedSandboxes()).toBe(1);
 
-      expect(spawnSyncMock.mock.calls[1][1]).toContain("studio-sandbox-old1");
-      expect(spawnSyncMock.mock.calls[2][1]).toContain("studio-sandbox-old1");
+      expect(spawnSyncMock.mock.calls[1]![1]).toContain("studio-sandbox-old1");
+      expect(spawnSyncMock.mock.calls[2]![1]).toContain("studio-sandbox-old1");
     });
   });
 
@@ -485,8 +485,8 @@ describe("container-sandbox", () => {
       const { buildAndExportImage } = await import("../container-sandbox");
       buildAndExportImage(sandbox, "superfield-release:studio");
 
-      const buildArgs = spawnSyncMock.mock.calls[0][1] as string[];
-      expect(spawnSyncMock.mock.calls[0][0]).toBe("docker");
+      const buildArgs = spawnSyncMock.mock.calls[0]![1] as string[];
+      expect(spawnSyncMock.mock.calls[0]![0]).toBe("docker");
       expect(buildArgs[0]).toBe("exec");
       expect(buildArgs[1]).toBe("studio-sandbox-a1b2");
       expect(buildArgs).toContain("build");
@@ -500,7 +500,7 @@ describe("container-sandbox", () => {
       const { buildAndExportImage } = await import("../container-sandbox");
       buildAndExportImage(sandbox, "superfield-release:studio");
 
-      const saveArgs = spawnSyncMock.mock.calls[1][1] as string[];
+      const saveArgs = spawnSyncMock.mock.calls[1]![1] as string[];
       expect(saveArgs).toContain("save");
       const outputArg = saveArgs.find((a: string) =>
         a.includes("/studio/build-output/"),
@@ -562,7 +562,7 @@ describe("container-sandbox", () => {
       const { isSandboxRunning } = await import("../container-sandbox");
       expect(isSandboxRunning("a1b2")).toBe(true);
 
-      expect(spawnSyncMock.mock.calls[0][1]).toContain("studio-sandbox-a1b2");
+      expect(spawnSyncMock.mock.calls[0]![1]).toContain("studio-sandbox-a1b2");
     });
 
     it("returns false when container is not running", async () => {

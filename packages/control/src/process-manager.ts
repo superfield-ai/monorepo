@@ -51,7 +51,7 @@ export class ProcessManager {
   spawn(
     cmd: string[],
     opts: Parameters<typeof Bun.spawn>[1],
-    label = cmd[0],
+    label: string = cmd[0] ?? "(unnamed)",
   ): ReturnType<typeof Bun.spawn> {
     const proc = Bun.spawn(cmd, opts);
     this.children.push({ proc, label });

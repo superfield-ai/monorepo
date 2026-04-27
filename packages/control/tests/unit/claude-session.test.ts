@@ -33,8 +33,8 @@ describe("generateSessionKey", () => {
     const { generateSessionKey } = await import("../../src/claude-session");
     const k1 = generateSessionKey();
     const k2 = generateSessionKey();
-    const ts1 = parseInt(k1.split("-")[0], 16);
-    const ts2 = parseInt(k2.split("-")[0], 16);
+    const ts1 = parseInt(k1.split("-")[0]!, 16);
+    const ts2 = parseInt(k2.split("-")[0]!, 16);
     // ts2 must be >= ts1 (both generated in quick succession).
     expect(ts2).toBeGreaterThanOrEqual(ts1);
   });
@@ -44,7 +44,7 @@ describe("generateSessionKey", () => {
     const before = Date.now();
     const key = generateSessionKey();
     const after = Date.now();
-    const ts = parseInt(key.split("-")[0], 16);
+    const ts = parseInt(key.split("-")[0]!, 16);
     expect(ts).toBeGreaterThanOrEqual(before);
     expect(ts).toBeLessThanOrEqual(after);
   });
@@ -159,9 +159,9 @@ describe("appendTurnLog", () => {
     expect(lines).toHaveLength(3);
 
     const entries = lines.map((l) => JSON.parse(l) as Record<string, unknown>);
-    expect(entries[0].message).toBe("turn one");
-    expect(entries[1].message).toBe("turn two");
-    expect(entries[2].message).toBe("turn three");
+    expect(entries[0]!.message).toBe("turn one");
+    expect(entries[1]!.message).toBe("turn two");
+    expect(entries[2]!.message).toBe("turn three");
   });
 });
 

@@ -110,7 +110,7 @@ function makeApiMock(options: {
 
     // Service state
     const serviceMatch = /\/services\/([^/?]+)$/.exec(url);
-    if (serviceMatch) {
+    if (serviceMatch?.[1]) {
       const service = serviceMatch[1];
       const state = enabledServices.includes(service) ? "ENABLED" : "DISABLED";
       return new Response(JSON.stringify({ state }), { status: 200 });

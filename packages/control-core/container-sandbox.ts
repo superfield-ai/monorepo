@@ -360,7 +360,11 @@ export function listSandboxes(): SandboxInfo[] {
     .filter(Boolean)
     .map((line) => {
       const [containerId, containerName, status] = line.split("|");
-      return { containerId, containerName, status };
+      return {
+        containerId: containerId ?? "",
+        containerName: containerName ?? "",
+        status: status ?? "",
+      };
     });
 }
 

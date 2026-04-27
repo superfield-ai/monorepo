@@ -21,7 +21,7 @@ function getHostGatewayIp(): string | null {
       // Destination "00000000" = default route; gateway is parts[2] in
       // little-endian hex (e.g. "0101A8C0" = 192.168.1.1)
       if (parts.length > 2 && parts[1] === "00000000") {
-        const hex = parts[2];
+        const hex = parts[2] ?? "";
         const ip = [6, 4, 2, 0]
           .map((i) => parseInt(hex.slice(i, i + 2), 16))
           .join(".");

@@ -160,7 +160,7 @@ describe("GET /studio/chat/stream — SSE streaming via API fixture", () => {
       .filter(Boolean);
     expect(lines.length).toBeGreaterThan(0);
 
-    const entry = JSON.parse(lines[lines.length - 1]) as Record<
+    const entry = JSON.parse(lines[lines.length - 1]!) as Record<
       string,
       unknown
     >;

@@ -55,7 +55,7 @@ describe("GitHubClient.getCheckRuns", () => {
     const runs = await client.getCheckRuns("test-org", "test-repo", "abc123");
     const failed = runs.filter((r) => r.conclusion === "failure");
     expect(failed).toHaveLength(1);
-    expect(failed[0].name).toBe("test:unit");
+    expect(failed[0]!.name).toBe("test:unit");
   });
 });
 

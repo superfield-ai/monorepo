@@ -88,6 +88,8 @@ export function parseGitHubRemote(url: string): {
     url.match(/github\.com[/:]([^/]+)\/([^/.]+)(?:\.git)?$/) ??
     url.match(/github\.com\/([^/]+)\/([^/.]+)/) ??
     url.match(/^git@[^:]+:([^/]+)\/([^/.]+)(?:\.git)?$/);
-  if (!match) throw new Error(`Cannot parse GitHub remote URL: ${url}`);
+  if (!match || match[1] === undefined || match[2] === undefined) {
+    throw new Error(`Cannot parse GitHub remote URL: ${url}`);
+  }
   return { owner: match[1], repo: match[2] };
 }

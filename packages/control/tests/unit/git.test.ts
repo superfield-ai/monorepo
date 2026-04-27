@@ -25,8 +25,8 @@ describe("parseSessionCommits", () => {
     const output = "abc1234 feat: add login page\n";
     const commits = parseSessionCommits(output);
     expect(commits).toHaveLength(1);
-    expect(commits[0].hash).toBe("abc1234");
-    expect(commits[0].message).toBe("feat: add login page");
+    expect(commits[0]!.hash).toBe("abc1234");
+    expect(commits[0]!.message).toBe("feat: add login page");
   });
 
   it("parses multiple --oneline entries", () => {
@@ -71,7 +71,7 @@ describe("parseSessionCommits", () => {
   it("handles a commit message that contains spaces", () => {
     const output = "abc1234 feat(auth): add JWT sign and verify helpers\n";
     const commits = parseSessionCommits(output);
-    expect(commits[0].message).toBe(
+    expect(commits[0]!.message).toBe(
       "feat(auth): add JWT sign and verify helpers",
     );
   });
@@ -79,7 +79,7 @@ describe("parseSessionCommits", () => {
   it("handles a commit message that contains a colon", () => {
     const output = "1a2b3c4d chore: update deps: vitest 2.1\n";
     const commits = parseSessionCommits(output);
-    expect(commits[0].message).toBe("chore: update deps: vitest 2.1");
+    expect(commits[0]!.message).toBe("chore: update deps: vitest 2.1");
   });
 
   it("trims trailing whitespace from the full output before splitting", () => {
@@ -130,8 +130,8 @@ describe("parseSessionCommits — negative paths", () => {
     const commits = parseSessionCommits(output);
     expect(commits).toHaveLength(1);
     // The function still returns a result — it does not crash
-    expect(typeof commits[0].hash).toBe("string");
-    expect(typeof commits[0].message).toBe("string");
+    expect(typeof commits[0]!.hash).toBe("string");
+    expect(typeof commits[0]!.message).toBe("string");
   });
 
   it("handles extremely long commit messages without truncation", () => {
@@ -139,8 +139,8 @@ describe("parseSessionCommits — negative paths", () => {
     const output = `abc1234 ${longMsg}\n`;
     const commits = parseSessionCommits(output);
     expect(commits).toHaveLength(1);
-    expect(commits[0].message).toBe(longMsg);
-    expect(commits[0].hash).toBe("abc1234");
+    expect(commits[0]!.message).toBe(longMsg);
+    expect(commits[0]!.hash).toBe("abc1234");
   });
 
   it("handles output containing only newlines", () => {
@@ -157,6 +157,6 @@ describe("parseSessionCommits — negative paths", () => {
     expect(commits).toHaveLength(1);
     // The space-based split won't find the tab, so it treats the whole line
     // differently — verify it does not throw
-    expect(typeof commits[0].hash).toBe("string");
+    expect(typeof commits[0]!.hash).toBe("string");
   });
 });

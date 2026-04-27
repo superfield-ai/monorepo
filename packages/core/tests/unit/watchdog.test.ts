@@ -33,7 +33,7 @@ describe("hasFailedChecks", () => {
     ];
     const failed = hasFailedChecks(runs);
     expect(failed).toHaveLength(1);
-    expect(failed[0].name).toBe("test:unit");
+    expect(failed[0]!.name).toBe("test:unit");
   });
 
   it("ignores in-progress checks", () => {
