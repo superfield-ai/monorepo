@@ -61,7 +61,13 @@ async function authenticate(
   ]);
 }
 
-test.describe("template pages coverage", () => {
+// Skip when SUPERFIELD_REPO_ROOT is unset — only the dedicated
+// ci-control-template workflow provides a template fixture; the default
+// Control browser E2E tests job does not.
+const describeFn = process.env.SUPERFIELD_REPO_ROOT
+  ? test.describe
+  : test.describe.skip;
+describeFn("template pages coverage", () => {
   test("every top-level tab activates and renders without ErrorBoundary fallback", async ({
     page,
     context,
