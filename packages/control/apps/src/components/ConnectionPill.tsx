@@ -2,9 +2,14 @@
  * ConnectionPill — small status indicator for the chat WebSocket connection.
  *
  * Subscribes to a WsChatController and renders nothing while the socket is
- * idle/open. While reconnecting, shows a "Reconnecting…" pill. When the
- * reconnect budget is exhausted, shows "Reconnect now" — the only path back
- * to a healthy chat without reloading the page.
+ * idle/open. While reconnecting, shows the operator-grade
+ * "LINK DEGRADED — RECONNECTING" pill. When the reconnect budget is
+ * exhausted, shows "RECONNECT NOW" — the only path back to a healthy chat
+ * without reloading the page.
+ *
+ * Visuals follow the Superfield Control Room design system: .badge with the
+ * appropriate semantic tone (info / caution / critical), mono ALL-CAPS
+ * labels, sharp corners on the inline button.
  */
 
 import React, { useEffect, useState } from "react";
@@ -17,8 +22,16 @@ interface ConnectionPillProps {
   controller: WsChatController;
 }
 
-const baseClass =
-  "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium";
+const dotStyle = (color: string, pulse: boolean): React.CSSProperties => ({
+  height: 6,
+  width: 6,
+  background: color,
+  borderRadius: "50%",
+  flexShrink: 0,
+  animation: pulse
+    ? "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite"
+    : undefined,
+});
 
 export function ConnectionPill({ controller }: ConnectionPillProps) {
   const [state, setState] = useState<WsChatControllerState>(
@@ -34,14 +47,13 @@ export function ConnectionPill({ controller }: ConnectionPillProps) {
       <span
         data-testid="connection-pill"
         data-state="connecting"
-        className={`${baseClass} bg-gray-100 text-gray-600`}
+        data-pill="true"
+        className="badge badge-info"
         aria-live="polite"
+        style={{ gap: 6 }}
       >
-        <span
-          aria-hidden
-          className="h-1.5 w-1.5 animate-pulse rounded-full bg-gray-400"
-        />
-        Connecting…
+        <span aria-hidden style={dotStyle("var(--accent-blue)", true)} />
+        LINK — CONNECTING
       </span>
     );
   }
@@ -51,14 +63,13 @@ export function ConnectionPill({ controller }: ConnectionPillProps) {
       <span
         data-testid="connection-pill"
         data-state="reconnecting"
-        className={`${baseClass} bg-yellow-50 text-yellow-700`}
+        data-pill="true"
+        className="badge badge-caution"
         aria-live="polite"
+        style={{ gap: 6 }}
       >
-        <span
-          aria-hidden
-          className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500"
-        />
-        Reconnecting… (attempt {state.reconnectAttempt})
+        <span aria-hidden style={dotStyle("var(--accent-amber)", true)} />
+        LINK DEGRADED — RECONNECTING (attempt {state.reconnectAttempt})
       </span>
     );
   }
@@ -68,17 +79,30 @@ export function ConnectionPill({ controller }: ConnectionPillProps) {
     <span
       data-testid="connection-pill"
       data-state="failed"
-      className={`${baseClass} bg-red-50 text-red-700`}
+      data-pill="true"
+      className="badge badge-critical"
       role="alert"
+      style={{ gap: 6 }}
     >
-      <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-red-500" />
-      Disconnected
+      <span aria-hidden style={dotStyle("var(--accent-red)", false)} />
+      LINK FAULT
       <button
         type="button"
         onClick={() => controller.reconnectNow()}
-        className="ml-2 rounded border border-red-300 px-1.5 py-0.5 text-xs hover:bg-red-100"
+        style={{
+          marginLeft: "var(--sp-2)",
+          background: "transparent",
+          border: "1px solid var(--accent-red)",
+          color: "var(--accent-red)",
+          padding: "0 var(--sp-2)",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-2xs)",
+          letterSpacing: "var(--ls-widest)",
+          textTransform: "uppercase",
+          cursor: "pointer",
+        }}
       >
-        Reconnect now
+        RECONNECT NOW
       </button>
     </span>
   );

@@ -171,7 +171,7 @@ describe("ConnectionPill", () => {
     );
     expect(pill?.getAttribute("data-state")).toBe("failed");
     const btn = pill?.querySelector("button") as HTMLButtonElement | null;
-    expect(btn?.textContent).toContain("Reconnect now");
+    expect(btn?.textContent).toContain("RECONNECT NOW");
     btn?.click();
     await flush();
     expect(ctrl.getState().connState).not.toBe("failed");
