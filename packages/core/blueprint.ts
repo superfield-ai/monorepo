@@ -258,7 +258,7 @@ async function loadBlueprintFromDisk(dir: string): Promise<Blueprint> {
     }
     console.warn(`⚠ ${message}`);
     console.warn(
-      "  This is a data quality issue in dot-matrix-labs/calypso-blueprint.",
+      "  This is a data quality issue in dot-matrix-labs/superfield-blueprint.",
     );
     console.warn(
       "  Last-write-wins is the current behaviour. File an upstream issue.",

@@ -6,23 +6,22 @@ Two parallel delivery tracks. Track A is the orchestrator; Track B is the ops/de
 
 ## Track A — GitOps Orchestrator
 
-| Phase | Scope                                                                                                                                             | Status     |
-| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ---------- |
-| A-1   | Foundation: config, GitHub client, git client, MSW test harness, golden fixtures, `github add`, `github forget`                                   | ✅ Done    |
-| A-2   | Planning loop — CI watchdog: detect failed checks on `main`, create deduplicated `ci-failure` issues, insert at top of Plan                       | ✅ Done    |
-| A-3   | Planning loop — issue audit and Plan coverage: schema conformance scan, append missing issues to Plan                                             | ✅ Done    |
-| A-4   | Planning loop — blueprint conformance: load `blueprint/rules/graph.yaml`, evaluate open issues against active rules, post advisory comments       | ✅ Done    |
-| A-5   | Agent infrastructure: `claude` / `codex` CLI spawner, prompt builders (dev-scout, feature, ci-failure), forge-stored sessions with deadman switch | ✅ Done    |
-| A-6   | `plan` command — LLM-driven phase grouping, scout creation, Plan rendering with `<!-- superfield: -->` metadata                                   | ✅ Done    |
-| A-7   | Dev loop — primary agent only: select top of Plan, prep worktree, run agent through 7-stage lifecycle to merge                                    | ✅ Done    |
-| A-8   | Dev loop — speculative slots: scout-gated parallel feature work (slots 2..N)                                                                      | ✅ Done    |
-| A-9   | `feature` command — interactive issue creation with PRD/duplicate evaluation                                                                      | ✅ Done    |
-| A-10  | Documentation loop — coverage scan, canonical sync, consistency check, doc PR creation                                                            | ✅ Done    |
-| A-11  | Analytics & Steering API — in-process HTTP server for live telemetry and agent context injection                                                  | ⬜ Planned |
+| Phase | Scope                                                                                                                                             | Status  |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
+| A-1   | Foundation: config, GitHub client, git client, MSW test harness, golden fixtures, `github add`, `github forget`                                   | ✅ Done |
+| A-2   | Planning loop — CI watchdog: detect failed checks on `main`, create deduplicated `ci-failure` issues, insert at top of Plan                       | ✅ Done |
+| A-3   | Planning loop — issue audit and Plan coverage: schema conformance scan, append missing issues to Plan                                             | ✅ Done |
+| A-4   | Planning loop — blueprint conformance: load `blueprint/rules/graph.yaml`, evaluate open issues against active rules, post advisory comments       | ✅ Done |
+| A-5   | Agent infrastructure: `claude` / `codex` CLI spawner, prompt builders (dev-scout, feature, ci-failure), forge-stored sessions with deadman switch | ✅ Done |
+| A-6   | `plan` command — LLM-driven phase grouping, scout creation, Plan rendering with `<!-- superfield: -->` metadata                                   | ✅ Done |
+| A-7   | Dev loop — primary agent only: select top of Plan, prep worktree, run agent through 7-stage lifecycle to merge                                    | ✅ Done |
+| A-8   | Dev loop — speculative slots: scout-gated parallel feature work (slots 2..N)                                                                      | ✅ Done |
+| A-9   | `feature` command — interactive issue creation with PRD/duplicate evaluation                                                                      | ✅ Done |
+| A-10  | Documentation loop — coverage scan, canonical sync, consistency check, doc PR creation                                                            | ✅ Done |
+| A-11  | Analytics & Steering API — in-process HTTP server for live telemetry and agent context injection                                                  | ✅ Done |
 
 ### Track A — Remaining cross-cutting work
 
-- ⬜ Wire all three loops together inside `superfield start` (currently only the planning loop runs)
 - ⬜ Integration test that exercises a full planning-loop tick end-to-end against MSW
 - ⬜ Integration tests for dev-loop and doc-loop using recorded fixtures
 
@@ -62,8 +61,31 @@ These correctness gaps were identified in review and must be fixed before the op
 
 ### Track B — Remaining planned work
 
-- ⬜ Fix Phase 6 known issues (see above)
-- ⬜ Extract a shared `resolveEnvCredentials(env)` helper used by all ops commands
+- 🟡 Fix Phase 6 known issues — partial; `resolveEnvCredentials` extraction in flight as PR #208
+- 🟡 AWS RDS snapshot: real SigV4 signing — in flight as PR #202
 - ⬜ Integration tests for ops commands using a self-hosted runner as the deployment target (see GitHub issue)
-- ⬜ AWS RDS snapshot: implement real SigV4 signing or delegate to the AWS CLI
 - ⬜ GCP provision path wired through the CLI (currently requires injected deps)
+
+---
+
+## Track C — Control Webapp
+
+| Phase | Scope                                                                                                                | Status                       |
+| ----- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
+| C-1   | Move studio source into `cli/packages/control/`; tests pass with DI                                                  | ✅ Done (cli-migration)      |
+| C-2   | `superfield control` subcommand — `--port`, `--repo`, `--api-url`; `startControl(opts?)` exported                    | ✅ Done (cli-migration)      |
+| C-3   | `POST /studio/run` SSE on superfield API; `runAgent`/`streamTurn` switched to `fetch`                                | ✅ Done (cli-migration)      |
+| C-4   | WebSocket handler (`/studio/ws`) + REST steer fallback (`/studio/steer`)                                             | ✅ Done (cli-migration)      |
+| C-5   | Orchestrator: `dev-loop-process.ts`, `/orchestrator/*` endpoints, `OrchestratorView.tsx`, ControlPanel tab           | ✅ Done (cli-migration)      |
+| C-6   | Studio preview (`/studio/preview`) + kitchen-sink split (template + control)                                         | ✅ Done (cli-migration)      |
+| C-7   | CI workflow `ci-control.yml` (build + unit + in-process integration)                                                 | ✅ Done (cli-migration)      |
+| C-8   | Retire standalone `control/` repo (deprecation banner, workflows disabled)                                           | ✅ Done                      |
+| C-9   | Demo-readiness extensions: route map, design tokens, viewport, deploy view, turn timeline, blueprint feed, seed-demo | ⬜ In progress (T-48h, demo) |
+
+PR #204 (`cli-migration`) is currently **OPEN** — landing it is task D1 in `TASKS.md`.
+
+### Track C — Cross-cutting
+
+- ⬜ Merge PR #204 to main
+- ⬜ Archive `superfield-studio` GitHub repo after PR #73 merges
+- See `TASKS.md` "Post-demo backlog" for v2 items (screenshots, visual diff, cost charts, log search, fixture switcher)

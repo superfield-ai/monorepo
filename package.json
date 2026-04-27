@@ -3,7 +3,8 @@
   "private": true,
   "type": "module",
   "workspaces": [
-    "packages/*"
+    "packages/*",
+    "packages/control/apps"
   ],
   "scripts": {
     "start": "SUPERFIELD_DEV=1 bun packages/cli/bin/superfield.ts start",
@@ -13,6 +14,8 @@
     "test": "bun run test:unit && bun run test:integration",
     "test:unit": "bun --bun vitest run --reporter=verbose packages/*/tests/unit",
     "test:integration": "bun --bun vitest run --reporter=verbose packages/*/tests/integration",
+    "test:e2e:control": "npx playwright test --config packages/control/tests/e2e/playwright.config.ts",
+    "build:control-web": "bun run --cwd packages/control/apps build",
     "typecheck": "tsc --noEmit",
     "lint": "bunx eslint .",
     "format": "bunx prettier --write .",
@@ -23,13 +26,16 @@
     "blueprint:compile": "bun run scripts/compile-blueprint.ts"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.2",
     "@eslint/js": "^9.0.0",
+    "@playwright/test": "^1.58.2",
     "eslint": "^9.0.0",
     "globals": "^15.0.0",
     "msw": "^2.0.0",
     "prettier": "^3.0.0",
     "typescript": "^5.0.0",
     "typescript-eslint": "^8.0.0",
+    "vite": "^5.0.0",
     "vitest": "^2.0.0",
     "yaml": "^2.8.3"
   }

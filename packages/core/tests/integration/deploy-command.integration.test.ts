@@ -24,7 +24,7 @@ spec:
       volumes:
         - name: postgres-data
           hostPath:
-            path: /tmp/calypso-postgres-data
+            path: /tmp/superfield-postgres-data
             type: DirectoryOrCreate
 `;
 
@@ -76,7 +76,7 @@ describe("runDeployCommand — demo wiring", () => {
         },
         // data dir does not exist → no prompt; everything else uses real fs
         fileExists: (p) =>
-          p.endsWith("calypso-postgres-data") ? false : existsSync(p),
+          p.endsWith("superfield-postgres-data") ? false : existsSync(p),
       },
     );
 
@@ -144,7 +144,7 @@ describe("runDeployCommand — demo wiring", () => {
       {
         runProcess: async () => undefined,
         probeIngress: async () => undefined,
-        fileExists: (p) => !p.endsWith("calypso-postgres-data"),
+        fileExists: (p) => !p.endsWith("superfield-postgres-data"),
         readFile: () => POSTGRES_YAML_WITH_HOSTPATH,
         promptDeleteDataDir: async () => {
           promptCalled = true;

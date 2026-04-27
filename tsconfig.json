@@ -12,10 +12,11 @@
     "baseUrl": ".",
     "paths": {
       "@superfield/core": ["packages/core/index.ts"],
+      "@superfield/core/*": ["packages/core/*.ts"],
       "@superfield/github": ["packages/github/index.ts"],
       "@superfield/git": ["packages/git/index.ts"],
       "@superfield/cli": ["packages/cli/index.ts"]
     }
   },
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "packages/control/apps"]
 }
