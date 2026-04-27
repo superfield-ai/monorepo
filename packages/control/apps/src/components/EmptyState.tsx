@@ -3,6 +3,10 @@
  *
  * One-line explanation panel for any list that may legitimately be empty
  * (slots, turns, commits, envs, conformance) (E12). Never a blank box.
+ *
+ * Visuals follow the Superfield Control Room design system: flat bg-raised
+ * panel with a 1px subtle dashed border, mono ALL-CAPS title and INFO
+ * status pill, cyan-outlined action button.
  */
 
 import React from "react";
@@ -25,16 +29,55 @@ export function EmptyState({
     <div
       role="status"
       data-testid={`empty-state-${testId ?? slug(title)}`}
-      className="flex flex-col items-start gap-1 rounded border border-dashed border-zinc-700 bg-zinc-900/50 p-4 text-sm text-zinc-300"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "flex-start",
+        gap: "var(--sp-2)",
+        background: "var(--bg-raised)",
+        border: "1px dashed var(--border-default)",
+        padding: "var(--sp-4)",
+        color: "var(--fg-1)",
+      }}
     >
-      <div className="font-medium text-zinc-200">{title}</div>
-      {hint ? <div className="text-xs text-zinc-400">{hint}</div> : null}
+      <div
+        style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}
+      >
+        <span className="badge badge-info" data-pill="true">
+          INFO
+        </span>
+        <span className="label" style={{ color: "var(--fg-1)" }}>
+          {title}
+        </span>
+      </div>
+      {hint ? (
+        <div
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "var(--text-sm)",
+            color: "var(--fg-2)",
+            lineHeight: "var(--lh-relaxed)",
+          }}
+        >
+          {hint}
+        </div>
+      ) : null}
       {action ? (
         <button
           type="button"
           onClick={action.onClick}
           data-testid="empty-state-action"
-          className="mt-2 rounded bg-blue-700 px-2 py-1 text-xs font-medium text-white hover:bg-blue-600"
+          style={{
+            background: "transparent",
+            border: "1px solid var(--accent-cyan)",
+            color: "var(--accent-cyan)",
+            padding: "var(--sp-1) var(--sp-3)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-xs)",
+            letterSpacing: "var(--ls-wider)",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
         >
           {action.label}
         </button>

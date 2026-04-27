@@ -113,16 +113,17 @@ export function DesignTokensPanel({
     return (
       <div
         data-testid="design-tokens-panel"
-        className="p-3 text-sm text-zinc-400"
+        className="label"
+        style={{ padding: "var(--sp-3)", color: "var(--fg-3)" }}
       >
-        Loading tokens…
+        LOADING TOKENS…
       </div>
     );
   }
 
   if (error) {
     return (
-      <div data-testid="design-tokens-panel" className="p-3">
+      <div data-testid="design-tokens-panel" style={{ padding: "var(--sp-3)" }}>
         <InlineError
           title="Failed to load design tokens"
           error={error}
@@ -134,7 +135,7 @@ export function DesignTokensPanel({
 
   if (!tokens) {
     return (
-      <div data-testid="design-tokens-panel" className="p-3">
+      <div data-testid="design-tokens-panel" style={{ padding: "var(--sp-3)" }}>
         <EmptyState
           title="Tokens not exported"
           hint="Add `bun run build:tokens` to your project, or check that /app/__tokens.json is served by the web service."
@@ -151,7 +152,7 @@ export function DesignTokensPanel({
 
   if (sections.length === 0) {
     return (
-      <div data-testid="design-tokens-panel" className="p-3">
+      <div data-testid="design-tokens-panel" style={{ padding: "var(--sp-3)" }}>
         <EmptyState
           title="Tokens file is empty"
           hint="The /app/__tokens.json document was reachable but contained no sections."
@@ -164,7 +165,15 @@ export function DesignTokensPanel({
   return (
     <div
       data-testid="design-tokens-panel"
-      className="flex flex-col gap-4 overflow-y-auto p-3 text-sm text-zinc-100"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--sp-4)",
+        overflowY: "auto",
+        padding: "var(--sp-3)",
+        background: "var(--bg-base)",
+        color: "var(--fg-1)",
+      }}
     >
       {sections.map(({ key, label }) => {
         const entries = tokens[key] ?? {};
@@ -173,12 +182,34 @@ export function DesignTokensPanel({
           <section
             key={key}
             data-testid={`tokens-section-${key}`}
-            className="rounded border border-zinc-800 bg-zinc-900/40 p-3"
+            style={{
+              background: "var(--bg-raised)",
+              border: "1px solid var(--border-subtle)",
+              padding: "var(--sp-3)",
+            }}
           >
-            <div className="mb-2 text-xs uppercase tracking-wide text-zinc-400">
+            <h2
+              className="h2"
+              style={{
+                margin: 0,
+                marginBottom: "var(--sp-2)",
+                fontSize: "var(--text-xl)",
+                textTransform: "uppercase",
+                letterSpacing: "var(--ls-wider)",
+              }}
+            >
               {label}
-            </div>
-            <ul className="grid gap-2 sm:grid-cols-2 md:grid-cols-3">
+            </h2>
+            <ul
+              style={{
+                listStyle: "none",
+                margin: 0,
+                padding: 0,
+                display: "grid",
+                gap: "var(--sp-2)",
+                gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+              }}
+            >
               {Object.entries(entries).map(([name, value]) => {
                 const cls = `${prefix}${name}`;
                 return (
@@ -187,18 +218,56 @@ export function DesignTokensPanel({
                       type="button"
                       data-testid={`token-${key}-${name}`}
                       onClick={() => void copy(cls)}
-                      className="flex w-full items-center gap-3 rounded border border-zinc-800 bg-zinc-950 p-2 text-left hover:border-zinc-600"
+                      style={{
+                        display: "flex",
+                        width: "100%",
+                        alignItems: "center",
+                        gap: "var(--sp-3)",
+                        background: "var(--bg-void)",
+                        border: "1px solid var(--border-subtle)",
+                        padding: "var(--sp-2)",
+                        textAlign: "left",
+                        cursor: "pointer",
+                        color: "var(--fg-1)",
+                      }}
                     >
                       {key === "colors" ? (
                         <span
                           aria-hidden="true"
-                          className="h-6 w-6 shrink-0 rounded border border-zinc-700"
-                          style={{ backgroundColor: value }}
+                          style={{
+                            height: 24,
+                            width: 24,
+                            flexShrink: 0,
+                            border: "1px solid var(--border-default)",
+                            backgroundColor: value,
+                          }}
                         />
                       ) : null}
-                      <span className="flex flex-1 flex-col">
-                        <span className="font-mono text-xs">{cls}</span>
-                        <span className="text-[11px] text-zinc-500">
+                      <span
+                        style={{
+                          display: "flex",
+                          flex: 1,
+                          flexDirection: "column",
+                        }}
+                      >
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: "var(--text-xs)",
+                            letterSpacing: "var(--ls-wider)",
+                            color: "var(--fg-1)",
+                          }}
+                        >
+                          {cls}
+                        </span>
+                        <span
+                          style={{
+                            fontFamily: "var(--font-mono)",
+                            fontSize: 11,
+                            color: "var(--fg-3)",
+                            marginTop: 2,
+                          }}
+                        >
                           {value}
                         </span>
                       </span>

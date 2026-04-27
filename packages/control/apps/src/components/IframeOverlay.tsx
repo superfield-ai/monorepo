@@ -3,15 +3,17 @@
  *
  * Three modes, each with a recovery action:
  *
- *   cluster-down  → "The deployed app is unreachable" + "Rebuild" button
+ *   cluster-down  → "APP UNREACHABLE" + "REBUILD" / "RETRY"
  *                   (POST /studio/rebuild, surfaces toast on failure)
- *   build-error   → "Last build failed" + stderr tail + "Retry" button
+ *   build-error   → "BUILD FAILED" + stderr tail + "RETRY"
  *                   (reloads the iframe)
- *   not-found     → "Route not found: /<path>" + "Back to /" button
+ *   not-found     → "ROUTE NOT FOUND: /<path>" + "BACK TO /"
  *                   (resets iframe src to /app/)
  *
- * The overlay is purely presentational — IframePanel (or any other host) owns
- * the failure-detection logic and decides which mode to render.
+ * Visuals follow the Superfield Control Room design system: bg-overlay
+ * backdrop, bg-raised flat panel with a status-coloured 1px border,
+ * mono ALL-CAPS labels, sharp corners. Behaviour, event handlers and
+ * data-testid values are preserved.
  */
 
 import React from "react";
@@ -33,6 +35,37 @@ interface IframeOverlayProps {
   /** Override the rebuild endpoint, defaults to /studio/rebuild. */
   rebuildEndpoint?: string;
 }
+
+const MODE_BORDER: Record<IframeFailureMode, string> = {
+  "cluster-down": "var(--accent-red)",
+  "build-error": "var(--accent-red)",
+  "not-found": "var(--accent-amber)",
+};
+
+const MODE_BADGE: Record<IframeFailureMode, { label: string; cls: string }> = {
+  "cluster-down": { label: "FAULT", cls: "badge badge-critical" },
+  "build-error": { label: "FAULT", cls: "badge badge-critical" },
+  "not-found": { label: "CAUTION", cls: "badge badge-caution" },
+};
+
+const primaryButton: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid var(--accent-cyan)",
+  color: "var(--accent-cyan)",
+  padding: "var(--sp-1) var(--sp-3)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 500,
+  letterSpacing: "var(--ls-wider)",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+
+const ghostButton: React.CSSProperties = {
+  ...primaryButton,
+  border: "1px solid var(--border-default)",
+  color: "var(--fg-1)",
+};
 
 export function IframeOverlay({
   mode,
@@ -66,38 +99,80 @@ export function IframeOverlay({
     }
   }
 
+  const badge = MODE_BADGE[mode];
+
   return (
     <div
-      className="absolute inset-0 z-10 flex items-center justify-center bg-zinc-950/85 p-6 backdrop-blur-sm"
       role="alert"
       data-testid="iframe-overlay"
       data-mode={mode}
+      style={{
+        position: "absolute",
+        inset: 0,
+        zIndex: 10,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "var(--bg-overlay)",
+        padding: "var(--sp-6)",
+      }}
     >
-      <div className="flex max-w-xl flex-col gap-4 rounded-lg border border-zinc-800 bg-zinc-900 p-6 text-zinc-100 shadow-xl">
+      <div
+        style={{
+          display: "flex",
+          maxWidth: 560,
+          flexDirection: "column",
+          gap: "var(--sp-3)",
+          background: "var(--bg-raised)",
+          border: `1px solid ${MODE_BORDER[mode]}`,
+          padding: "var(--sp-6)",
+          color: "var(--fg-1)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-2)",
+          }}
+        >
+          <span className={badge.cls} data-pill="true">
+            {badge.label}
+          </span>
+          <h2 className="h3" style={{ margin: 0 }}>
+            {mode === "cluster-down" && "APP UNREACHABLE"}
+            {mode === "build-error" && "BUILD FAILED"}
+            {mode === "not-found" && "ROUTE NOT FOUND"}
+          </h2>
+        </div>
+
         {mode === "cluster-down" && (
           <>
-            <h2 className="text-lg font-semibold">App unreachable</h2>
-            <p className="text-sm text-zinc-300">
+            <p style={{ color: "var(--fg-2)" }}>
               The cluster is unhealthy or not running. The Superfield app is not
               currently being served.
             </p>
-            <div className="flex gap-2">
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
               <button
                 type="button"
                 onClick={handleRebuild}
                 disabled={rebuilding}
-                className="rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500 disabled:opacity-60"
                 data-testid="iframe-overlay-rebuild"
+                style={{
+                  ...primaryButton,
+                  opacity: rebuilding ? 0.6 : 1,
+                  cursor: rebuilding ? "not-allowed" : "pointer",
+                }}
               >
-                {rebuilding ? "Rebuilding…" : "Rebuild"}
+                {rebuilding ? "REBUILDING…" : "REBUILD"}
               </button>
               <button
                 type="button"
                 onClick={onRetry}
-                className="rounded border border-zinc-700 px-3 py-1.5 text-sm hover:bg-zinc-800"
                 data-testid="iframe-overlay-retry"
+                style={ghostButton}
               >
-                Retry
+                RETRY
               </button>
             </div>
           </>
@@ -105,33 +180,44 @@ export function IframeOverlay({
 
         {mode === "build-error" && (
           <>
-            <h2 className="text-lg font-semibold">App build failed</h2>
-            <p className="text-sm text-zinc-300">
+            <p style={{ color: "var(--fg-2)" }}>
               The last rebuild produced errors. Fix the underlying issue and
               retry.
             </p>
             {buildStderr && (
-              <pre className="max-h-48 overflow-auto rounded bg-zinc-950 p-3 font-mono text-xs leading-relaxed text-red-300">
+              <pre
+                style={{
+                  maxHeight: 192,
+                  overflow: "auto",
+                  background: "var(--bg-void)",
+                  border: "1px solid var(--border-subtle)",
+                  padding: "var(--sp-3)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  lineHeight: "var(--lh-normal)",
+                  color: "var(--accent-red)",
+                  margin: 0,
+                }}
+              >
                 {buildStderr}
               </pre>
             )}
             <button
               type="button"
               onClick={onRetry}
-              className="self-start rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
               data-testid="iframe-overlay-retry"
+              style={{ ...primaryButton, alignSelf: "flex-start" }}
             >
-              Retry
+              RETRY
             </button>
           </>
         )}
 
         {mode === "not-found" && (
           <>
-            <h2 className="text-lg font-semibold">Route not found</h2>
-            <p className="text-sm text-zinc-300">
+            <p style={{ color: "var(--fg-2)" }}>
               The app does not have a route matching{" "}
-              <code className="rounded bg-zinc-800 px-1.5 py-0.5 font-mono text-xs">
+              <code style={{ fontSize: "var(--text-xs)" }}>
                 {failedPath ?? "this path"}
               </code>
               .
@@ -139,10 +225,10 @@ export function IframeOverlay({
             <button
               type="button"
               onClick={onResetToRoot}
-              className="self-start rounded bg-indigo-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-indigo-500"
               data-testid="iframe-overlay-back"
+              style={{ ...primaryButton, alignSelf: "flex-start" }}
             >
-              Back to /
+              BACK TO /
             </button>
           </>
         )}

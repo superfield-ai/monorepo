@@ -8,6 +8,10 @@
  *
  * When the fixture is absent the component renders an EmptyState rather than
  * a blank box.
+ *
+ * Visuals follow the Superfield Control Room design system: bg-raised list
+ * items with sharp corners, mono path text, cyan left-accent on the
+ * selected route. Behaviour and data-testid values are preserved.
  */
 
 import React, { useEffect, useState } from "react";
@@ -93,7 +97,7 @@ export function RouteMap({
 
   if (error) {
     return (
-      <div data-testid="route-map" className="p-3">
+      <div data-testid="route-map" style={{ padding: "var(--sp-3)" }}>
         <InlineError
           title="Failed to load route map"
           error={error}
@@ -105,7 +109,7 @@ export function RouteMap({
 
   if (!loading && routes.length === 0) {
     return (
-      <div data-testid="route-map" className="p-3">
+      <div data-testid="route-map" style={{ padding: "var(--sp-3)" }}>
         <EmptyState
           title="No demo routes configured"
           hint="Run `bun run scripts/seed-demo.ts` to populate .studio/demo/routes.json."
@@ -119,10 +123,21 @@ export function RouteMap({
     <nav
       data-testid="route-map"
       aria-label="Preview routes"
-      className="flex h-full w-64 shrink-0 flex-col gap-1 overflow-y-auto border-r border-zinc-800 bg-zinc-950 p-2 text-xs"
+      style={{
+        display: "flex",
+        height: "100%",
+        width: 240,
+        flexShrink: 0,
+        flexDirection: "column",
+        gap: "var(--sp-1)",
+        overflowY: "auto",
+        borderRight: "1px solid var(--border-subtle)",
+        background: "var(--bg-base)",
+        padding: "var(--sp-2)",
+      }}
     >
-      <div className="px-2 py-1 text-[10px] uppercase tracking-wide text-zinc-500">
-        Routes
+      <div className="label" style={{ padding: "var(--sp-1) var(--sp-2)" }}>
+        ROUTES
       </div>
       {routes.map((route) => {
         const active = route.path === activePath;
@@ -135,14 +150,38 @@ export function RouteMap({
               saveSelectedRoute(route.path);
               onSelect(route.path);
             }}
-            className={
-              active
-                ? "rounded bg-blue-600/30 px-2 py-1 text-left text-blue-100"
-                : "rounded px-2 py-1 text-left text-zinc-300 hover:bg-zinc-900"
-            }
+            style={{
+              display: "block",
+              textAlign: "left",
+              background: active ? "rgba(0,200,204,0.06)" : "var(--bg-raised)",
+              border: "1px solid var(--border-subtle)",
+              borderLeft: active
+                ? "3px solid var(--accent-cyan)"
+                : "3px solid transparent",
+              padding: "var(--sp-2)",
+              color: active ? "var(--fg-1)" : "var(--fg-2)",
+              cursor: "pointer",
+            }}
           >
-            <div className="font-medium">{route.title}</div>
-            <div className="font-mono text-[10px] text-zinc-500">
+            <div
+              style={{
+                fontFamily: "var(--font-sans)",
+                fontWeight: 500,
+                fontSize: "var(--text-sm)",
+                color: "var(--fg-1)",
+              }}
+            >
+              {route.title}
+            </div>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: 11,
+                letterSpacing: "var(--ls-wider)",
+                color: "var(--fg-3)",
+                marginTop: 2,
+              }}
+            >
               {route.path}
             </div>
           </button>
