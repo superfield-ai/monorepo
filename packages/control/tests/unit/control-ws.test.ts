@@ -1,9 +1,23 @@
 import { describe, it, expect, vi } from "vitest";
+import type { ServerWebSocket } from "bun";
 import { controlWsHandler, type WsData } from "../../src/control-ws";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-function makeWs(data: Partial<WsData> = {}) {
+interface MockWs {
+  send: (msg: string) => number;
+  data: WsData;
+  sent: string[];
+  frames: () => Array<{ type: string; [k: string]: unknown }>;
+}
+
+/** Cast a mock ws to ServerWebSocket<WsData> for handler calls.
+ *  The handler only touches `send` and `data`, so the partial mock is safe. */
+function asServerWs(ws: MockWs): ServerWebSocket<WsData> {
+  return ws as unknown as ServerWebSocket<WsData>;
+}
+
+function makeWs(data: Partial<WsData> = {}): MockWs {
   const sent: string[] = [];
   return {
     send: (msg: string) => sent.push(msg),
@@ -37,7 +51,7 @@ function makeStreamTurn(sseText: string): WsData["_streamTurn"] {
 describe("invalid JSON", () => {
   it("sends error frame", async () => {
     const ws = makeWs();
-    await controlWsHandler.message(ws, "not-json");
+    await controlWsHandler.message(asServerWs(ws), "not-json");
     expect(ws.frames()[0]).toEqual({
       type: "error",
       message: "Invalid JSON frame",
@@ -57,8 +71,7 @@ describe("turn frame", () => {
         ),
       );
     const ws = makeWs({ _streamTurn: streamTurnSpy });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "hello" }),
     );
     const [, , , mode] = streamTurnSpy.mock.calls[0] as [
@@ -79,8 +92,7 @@ describe("turn frame", () => {
         ),
       );
     const ws = makeWs({ _streamTurn: streamTurnSpy });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "q", mode: "question" }),
     );
     const [, , , mode] = streamTurnSpy.mock.calls[0] as unknown as [
@@ -98,14 +110,15 @@ describe("turn frame", () => {
         'event: session\ndata: {"sessionId":"s1"}\n\ndata: hello world\n\nevent: done\ndata: {"filesChanged":[]}\n\n',
       ),
     });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "test" }),
     );
     const chunks = ws.frames().filter((f) => f.type === "chunk");
     expect(chunks.length).toBeGreaterThan(0);
     expect(
-      chunks.some((c) => (c as { text: string }).text.includes("hello world")),
+      chunks.some((c) =>
+        ((c as unknown as { text: string }).text ?? "").includes("hello world"),
+      ),
     ).toBe(true);
   });
 
@@ -115,8 +128,7 @@ describe("turn frame", () => {
         'event: session\ndata: {"sessionId":"my-session-id"}\n\nevent: done\ndata: {"filesChanged":["a.ts"]}\n\n',
       ),
     });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "test" }),
     );
     const done = ws.frames().find((f) => f.type === "done") as
@@ -132,8 +144,7 @@ describe("turn frame", () => {
         'event: session\ndata: {"sessionId":"s"}\n\nevent: error\ndata: "spawn failed"\n\n',
       ),
     });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "test" }),
     );
     const frames = ws.frames();
@@ -148,8 +159,7 @@ describe("turn frame", () => {
       },
     });
     const ws = makeWs({ _streamTurn: () => errorStream });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "test" }),
     );
     expect(ws.frames().some((f) => f.type === "error")).toBe(true);
@@ -165,8 +175,7 @@ describe("turn frame", () => {
       },
     });
     const ws = makeWs({ _streamTurn: () => abortStream });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "test" }),
     );
     expect(ws.frames().every((f) => f.type !== "error")).toBe(true);
@@ -199,8 +208,7 @@ describe("turn frame", () => {
     });
 
     // Fire first turn (don't await — stream never closes).
-    const p1 = controlWsHandler.message(
-      ws,
+    const p1 = controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "first" }),
     );
 
@@ -210,8 +218,7 @@ describe("turn frame", () => {
     expect(firstAc).toBeDefined();
 
     // Fire second turn — this should abort the first AC and replace it.
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "turn", message: "second" }),
     );
 
@@ -220,7 +227,7 @@ describe("turn frame", () => {
     // The WS has a new AbortController for the second turn.
     expect(ws.data.abortController).not.toBe(firstAc);
 
-    p1.catch(() => {});
+    void Promise.resolve(p1).catch(() => {});
   });
 });
 
@@ -234,8 +241,7 @@ describe("steer frame", () => {
         json: () => Promise.resolve({ requestId: "req-abc", accepted: true }),
       }),
     });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "steer", context: "focus on auth" }),
     );
     const ack = ws.frames().find((f) => f.type === "steer-ack") as
@@ -248,8 +254,7 @@ describe("steer frame", () => {
     const ws = makeWs({
       _fetch: vi.fn().mockRejectedValue(new Error("timeout")),
     });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "steer", context: "x" }),
     );
     const err = ws.frames().find((f) => f.type === "error") as
@@ -267,8 +272,7 @@ describe("steer frame", () => {
       superfieldApiUrl: "http://custom:9999",
       _fetch: fetchSpy,
     });
-    await controlWsHandler.message(
-      ws,
+    await controlWsHandler.message(asServerWs(ws),
       JSON.stringify({ type: "steer", context: "focus" }),
     );
     expect(fetchSpy).toHaveBeenCalledWith(
@@ -284,12 +288,12 @@ describe("close", () => {
   it("aborts in-flight AbortController on disconnect", () => {
     const ac = new AbortController();
     const ws = makeWs({ abortController: ac });
-    controlWsHandler.close(ws);
+    controlWsHandler.close!(asServerWs(ws), 1000, "");
     expect(ac.signal.aborted).toBe(true);
   });
 
   it("no-op when no AbortController present", () => {
     const ws = makeWs();
-    expect(() => controlWsHandler.close(ws)).not.toThrow();
+    expect(() => controlWsHandler.close!(asServerWs(ws), 1000, "")).not.toThrow();
   });
 });

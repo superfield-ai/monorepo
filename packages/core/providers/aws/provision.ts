@@ -24,7 +24,7 @@
  */
 
 import { derivePassword } from "../../secrets/index.js";
-import { buildDefaultClients } from "./clients.js";
+import { buildDefaultClients, type AwsClient } from "./clients.js";
 import {
   ensureImportedKeyPair,
   ensureSecurityGroup,
@@ -181,8 +181,8 @@ function distinctAzSubnetIds(
 }
 
 interface ProvisionDbArgs {
-  ec2: import("./clients.js").AwsClient;
-  rds: import("./clients.js").AwsClient;
+  ec2: AwsClient;
+  rds: AwsClient;
   vpcId: string;
   subnetIds: string[];
   ec2SgId: string;

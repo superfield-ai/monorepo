@@ -27,7 +27,7 @@ vi.mock("child_process", async (importOriginal) => {
 });
 
 describe("checkPrerequisites", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+
   let processExitSpy: ReturnType<typeof vi.spyOn<any, any>>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
