@@ -243,8 +243,8 @@ export function sshSha256Fingerprint(publicKeyOpenSsh: string): string {
 
 function openSshKeyBody(openSsh: string): string {
   const parts = openSsh.trim().split(/\s+/);
-  if (parts.length < 2) return openSsh.trim();
-  return parts[1]!;
+  if (parts.length < 2 || parts[1] === undefined) return openSsh.trim();
+  return parts[1];
 }
 
 /**

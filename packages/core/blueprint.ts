@@ -114,8 +114,8 @@ export function scanGraphForDuplicateKeys(rawYaml: string): string[] {
 
     // Match `  <key>: [...]` indented under nodes
     const match = /^\s+([0-9a-fA-F]+):/.exec(line);
-    if (!match) continue;
-    const key = match[1]!;
+    if (!match || match[1] === undefined) continue;
+    const key = match[1];
     if (seen.has(key)) {
       duplicates.add(key);
     } else {
@@ -275,11 +275,11 @@ async function loadBlueprintFromDisk(dir: string): Promise<Blueprint> {
   const nodes: BlueprintGraphNode[] = Object.entries(graph.nodes).map(
     ([hash, tuple]) => ({
       hash,
-      ruleId: tuple[0]!,
-      name: tuple[1]!,
+      ruleId: tuple[0],
+      name: tuple[1],
       type: tuple[2] as BlueprintRuleType,
-      domain: tuple[3]!.toLowerCase(),
-      sourceFile: tuple[4]!,
+      domain: tuple[3].toLowerCase(),
+      sourceFile: tuple[4],
     }),
   );
 

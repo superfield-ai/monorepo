@@ -34,7 +34,11 @@ export function parseInitArgs(args: string[]): ParsedInitArgs {
 
   let i = 0;
   while (i < args.length) {
-    const a = args[i]!;
+    const a = args[i];
+    if (a === undefined) {
+      i++;
+      continue;
+    }
     const take = (): string | undefined => args[++i];
 
     if (a === "--env") out.env = take();
@@ -88,12 +92,19 @@ export async function initCommand(args: string[]): Promise<void> {
   if (!parsed.repo) missing.push("--repo");
   if (!parsed.imageTag) missing.push("--image-tag");
 
-  if (missing.length > 0) {
+  if (
+    missing.length > 0 ||
+    !parsed.env ||
+    !parsed.provider ||
+    !parsed.repo ||
+    !parsed.imageTag
+  ) {
     console.error(`error: missing required flag(s): ${missing.join(", ")}`);
     console.error(USAGE);
     process.exit(1);
     return;
   }
+  const { env, repo, imageTag } = parsed;
 
   if (!VALID_PROVIDERS.includes(parsed.provider as InitProvider)) {
     console.error(
@@ -106,10 +117,10 @@ export async function initCommand(args: string[]): Promise<void> {
 
   try {
     const result = await init({
-      env: parsed.env!,
+      env,
       provider: parsed.provider as InitProvider,
-      repo: parsed.repo!,
-      imageTag: parsed.imageTag!,
+      repo,
+      imageTag,
       managedDb: parsed.managedDb,
       ...(parsed.region ? { region: parsed.region } : {}),
       ...(parsed.fromStep !== undefined ? { fromStep: parsed.fromStep } : {}),

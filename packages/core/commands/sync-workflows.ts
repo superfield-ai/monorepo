@@ -123,7 +123,7 @@ export function substitute(
 ): string {
   return template.replace(/\{\{\s*([A-Z_]+)\s*\}\}/g, (match, key: string) => {
     if (Object.prototype.hasOwnProperty.call(values, key)) {
-      return values[key]!;
+      return values[key] ?? match;
     }
     return match;
   });

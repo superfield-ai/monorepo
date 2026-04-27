@@ -230,7 +230,10 @@ export async function runFeatureCommand(
     });
     planCreated = true;
   } else {
-    const planIssue = planIssues[0]!;
+    const planIssue = planIssues[0];
+    if (!planIssue) {
+      throw new Error("plan issue list is unexpectedly empty");
+    }
     const plan = parsePlan(planIssue.body ?? "");
     const updated = appendToPhase(plan, narrowed.phase, planEntry);
     await client.updateIssueBody({

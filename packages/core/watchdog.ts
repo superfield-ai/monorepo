@@ -132,7 +132,8 @@ async function upsertPlanIssue(
     return;
   }
 
-  const plan = plans[0]!;
+  const plan = plans[0];
+  if (!plan) return;
   const parsed = parsePlan(plan.body ?? "");
   const updated = insertCIFailureAtTop(parsed, entry);
   await client.updateIssueBody({

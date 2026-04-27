@@ -75,7 +75,7 @@ function log(deps: AuditDeps | undefined, line: string): void {
  */
 function extractFinding(text: string): CapabilityFinding | null {
   const fenceMatch = text.match(/```json\s*([\s\S]*?)```/);
-  const candidate = fenceMatch ? fenceMatch[1]! : text.trim();
+  const candidate = fenceMatch?.[1] ?? text.trim();
   try {
     const parsed = JSON.parse(candidate) as Record<string, unknown>;
     if (
@@ -149,7 +149,8 @@ async function createIssueDefault(
     },
     githubDeps,
   );
-  return { url: data!.html_url, number: data!.number };
+  if (!data) throw new Error("github: failed to create issue (no response body)");
+  return { url: data.html_url, number: data.number };
 }
 
 // ── Core function ─────────────────────────────────────────────────────────────
@@ -174,8 +175,9 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
 
   await mkdirFn(outputDir);
 
-  const capsToRun = opts.capabilities
-    ? CAPABILITIES.filter((c) => opts.capabilities!.includes(c.id))
+  const requestedCaps = opts.capabilities;
+  const capsToRun = requestedCaps
+    ? CAPABILITIES.filter((c) => requestedCaps.includes(c.id))
     : CAPABILITIES;
 
   if (capsToRun.length === 0) {

@@ -161,7 +161,11 @@ export class SshClient {
       ];
       return await new Promise<number>((resolve, reject) => {
         const child = spawn("ssh", args, { stdio: ["ignore", "pipe", "pipe"] });
-        const rl = createInterface({ input: child.stdout! });
+        if (!child.stdout || !child.stderr) {
+          reject(new Error("ssh: failed to capture stdout/stderr streams"));
+          return;
+        }
+        const rl = createInterface({ input: child.stdout });
         rl.on("line", (line) => {
           try {
             onLine(line);
@@ -171,7 +175,7 @@ export class SshClient {
           }
         });
         let stderr = "";
-        child.stderr!.on("data", (chunk: Buffer) => {
+        child.stderr.on("data", (chunk: Buffer) => {
           stderr += chunk.toString("utf8");
         });
         child.on("error", reject);
@@ -243,9 +247,12 @@ export class SshClient {
         `${this.user}@${this.host}`,
       ];
       const child = spawn("ssh", args, { stdio: ["ignore", "pipe", "pipe"] });
-
+      if (!child.stderr) {
+        await cleanupKey();
+        throw new Error("ssh: failed to capture stderr stream");
+      }
       let stderr = "";
-      child.stderr!.on("data", (chunk: Buffer) => {
+      child.stderr.on("data", (chunk: Buffer) => {
         stderr += chunk.toString("utf8");
       });
 
@@ -305,12 +312,16 @@ export class SshClient {
 function runCapture(cmd: string, args: string[]): Promise<SshExecResult> {
   return new Promise((resolve, reject) => {
     const child = spawn(cmd, args, { stdio: ["ignore", "pipe", "pipe"] });
+    if (!child.stdout || !child.stderr) {
+      reject(new Error(`${cmd}: failed to capture stdout/stderr streams`));
+      return;
+    }
     let stdout = "";
     let stderr = "";
-    child.stdout!.on("data", (chunk: Buffer) => {
+    child.stdout.on("data", (chunk: Buffer) => {
       stdout += chunk.toString("utf8");
     });
-    child.stderr!.on("data", (chunk: Buffer) => {
+    child.stderr.on("data", (chunk: Buffer) => {
       stderr += chunk.toString("utf8");
     });
     child.on("error", reject);

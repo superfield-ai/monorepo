@@ -88,11 +88,11 @@ async function readGraph(blueprintDir: string): Promise<{
   const nodes: GraphNodeOut[] = Object.entries(parsed.nodes).map(
     ([hash, tuple]) => ({
       hash,
-      ruleId: tuple[0]!,
-      name: tuple[1]!,
+      ruleId: tuple[0],
+      name: tuple[1],
       type: tuple[2] as RuleType,
-      domain: tuple[3]!.toLowerCase(),
-      sourceFile: tuple[4]!,
+      domain: tuple[3].toLowerCase(),
+      sourceFile: tuple[4],
     }),
   );
 
@@ -177,7 +177,10 @@ async function readImplementations(
   }
   // Return already key-sorted via insertion order.
   const sorted: Record<string, string> = {};
-  for (const k of Object.keys(out).sort()) sorted[k] = out[k]!;
+  for (const k of Object.keys(out).sort()) {
+    const v = out[k];
+    if (v !== undefined) sorted[k] = v;
+  }
   return sorted;
 }
 

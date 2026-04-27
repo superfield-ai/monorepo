@@ -196,7 +196,7 @@ export async function upsertSession(
     if (storedVersion > expectedVersion) {
       // Conflict detected — another writer incremented the version.
       if (attempt < RETRY_DELAYS_MS.length) {
-        const delay = RETRY_DELAYS_MS[attempt]!;
+        const delay = RETRY_DELAYS_MS[attempt] ?? 0;
         console.warn(
           `[sessions] version conflict on issue #${issueNumber} ` +
             `(expected ${expectedVersion}, found ${storedVersion}), ` +

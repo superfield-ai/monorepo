@@ -130,8 +130,12 @@ export function discoverSecretRefs(k8sDir: string): SecretSpec[] {
       }
 
       if (secretName && secretKey) {
-        if (!secretMap.has(secretName)) secretMap.set(secretName, new Set());
-        secretMap.get(secretName)!.add(secretKey);
+        let entry = secretMap.get(secretName);
+        if (!entry) {
+          entry = new Set();
+          secretMap.set(secretName, entry);
+        }
+        entry.add(secretKey);
       }
     }
   }

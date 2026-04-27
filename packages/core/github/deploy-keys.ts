@@ -10,8 +10,8 @@ import type { DeployKey, GitHubHttpDeps } from "./types.ts";
 function publicKeyBody(openSsh: string): string {
   const trimmed = openSsh.trim();
   const parts = trimmed.split(/\s+/);
-  if (parts.length < 2) return trimmed;
-  return parts[1]!;
+  if (parts.length < 2 || parts[1] === undefined) return trimmed;
+  return parts[1];
 }
 
 export async function listDeployKeys(

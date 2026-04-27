@@ -127,7 +127,8 @@ export async function runPlanCommand(
   const scoutsCreated: number[] = [];
   if (proposal.scout_specs && proposal.scout_specs.length > 0) {
     for (let specIdx = 0; specIdx < proposal.scout_specs.length; specIdx++) {
-      const spec = proposal.scout_specs[specIdx]!;
+      const spec = proposal.scout_specs[specIdx];
+      if (!spec) continue;
       const issueBody: IssueBody = {
         title: spec.title,
         phase: spec.phase,
@@ -185,12 +186,15 @@ export async function runPlanCommand(
     });
     planCreated = true;
   } else {
-    await client.updateIssueBody({
-      owner,
-      repo,
-      issue_number: planIssues[0]!.number,
-      body,
-    });
+    const first = planIssues[0];
+    if (first) {
+      await client.updateIssueBody({
+        owner,
+        repo,
+        issue_number: first.number,
+        body,
+      });
+    }
   }
 
   return {
@@ -241,7 +245,8 @@ function patchScoutNumber(
   specIdx: number,
   realNumber: number,
 ): void {
-  const spec = proposal.scout_specs[specIdx]!;
+  const spec = proposal.scout_specs[specIdx];
+  if (!spec) return;
   const phaseName = spec.phase;
 
   // Find an existing null-numbered dev-scout slot for this phase
@@ -331,7 +336,7 @@ function validateProposal(proposal: PlanProposal): string[] {
       errors.push(
         `phase "${phase.name}" has ${scouts.length} dev-scouts (must be exactly 1)`,
       );
-    } else if (phaseIssues[0]!.kind !== "dev-scout") {
+    } else if (phaseIssues[0] && phaseIssues[0].kind !== "dev-scout") {
       errors.push(`phase "${phase.name}" scout is not first`);
     }
   }
@@ -379,9 +384,12 @@ function hasCycle(adj: Map<string, string[]>): boolean {
 function buildPlanFromProposal(proposal: PlanProposal): Plan {
   const phases: PlanPhase[] = proposal.phases.map((p) => {
     const issues: PlanIssueMetadata[] = proposal.ordered_issues
-      .filter((i) => i.phase === p.name && i.number !== null)
+      .filter(
+        (i): i is typeof i & { number: number } =>
+          i.phase === p.name && i.number !== null,
+      )
       .map((i) => ({
-        number: i.number!,
+        number: i.number,
         title: i.title,
         phase: i.phase,
         kind: i.kind,

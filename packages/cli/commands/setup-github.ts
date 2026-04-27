@@ -29,7 +29,8 @@ export function parseSetupGithubArgs(args: string[]): ParsedSetupGithubArgs {
   const unknown: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i]!;
+    const arg = args[i];
+    if (arg === undefined) continue;
     if (arg === "--deploy-key") {
       deployKey = true;
     } else if (arg === "--secrets") {
@@ -118,11 +119,16 @@ export async function setupGithubCommand(args: string[]): Promise<void> {
         );
       }
     } else {
+      if (!parsed.host || !parsed.databaseUrl) {
+        console.error(USAGE);
+        process.exit(1);
+        return;
+      }
       const result = await pushEnvSecrets({
         repo: parsed.repo,
         env: parsed.env,
-        host: parsed.host!,
-        databaseUrl: parsed.databaseUrl!,
+        host: parsed.host,
+        databaseUrl: parsed.databaseUrl,
         mnemonic,
       });
 

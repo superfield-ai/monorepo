@@ -27,7 +27,8 @@ interface RecorderArgs {
 function parseArgs(argv: string[]): RecorderArgs {
   const args: RecorderArgs = { name: "", prompt: "" };
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]!;
+    const a = argv[i];
+    if (a === undefined) continue;
     if (a === "--prompt") {
       args.prompt = argv[++i] ?? "";
     } else if (a === "--cwd") {
