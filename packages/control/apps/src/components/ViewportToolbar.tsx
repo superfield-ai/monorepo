@@ -44,9 +44,9 @@ interface ViewportToolbarProps {
 }
 
 const LABELS: Record<Viewport, string> = {
-  mobile: "Mobile",
-  tablet: "Tablet",
-  desktop: "Desktop",
+  mobile: "MOBILE",
+  tablet: "TABLET",
+  desktop: "DESKTOP",
 };
 
 export function ViewportToolbar({
@@ -58,9 +58,22 @@ export function ViewportToolbar({
       role="toolbar"
       aria-label="Viewport"
       data-testid="viewport-toolbar"
-      className="flex shrink-0 items-center gap-1 border-b border-zinc-800 bg-zinc-900 px-3 py-1 text-xs"
+      style={{
+        display: "flex",
+        flexShrink: 0,
+        alignItems: "center",
+        gap: "var(--sp-1)",
+        borderBottom: "1px solid var(--border-subtle)",
+        background: "var(--bg-raised)",
+        padding: "var(--sp-1) var(--sp-3)",
+        fontFamily: "var(--font-mono)",
+        fontSize: "var(--text-xs)",
+        letterSpacing: "var(--ls-wider)",
+      }}
     >
-      <span className="mr-2 text-zinc-400">Viewport</span>
+      <span className="label" style={{ marginRight: "var(--sp-2)" }}>
+        VIEWPORT
+      </span>
       {(Object.keys(VIEWPORT_WIDTHS) as Viewport[]).map((v) => {
         const active = v === value;
         return (
@@ -70,11 +83,18 @@ export function ViewportToolbar({
             data-testid={`viewport-${v}`}
             aria-pressed={active}
             onClick={() => onChange(v)}
-            className={
-              active
-                ? "rounded bg-blue-600 px-2 py-0.5 font-medium text-white"
-                : "rounded px-2 py-0.5 text-zinc-300 hover:text-white"
-            }
+            style={{
+              padding: "var(--sp-1) var(--sp-2)",
+              background: active ? "var(--accent-cyan)" : "transparent",
+              color: active ? "var(--fg-inv)" : "var(--fg-2)",
+              border: `1px solid ${active ? "var(--accent-cyan)" : "var(--border-subtle)"}`,
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              fontWeight: 500,
+              letterSpacing: "var(--ls-wider)",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
           >
             {LABELS[v]} ({VIEWPORT_WIDTHS[v]})
           </button>

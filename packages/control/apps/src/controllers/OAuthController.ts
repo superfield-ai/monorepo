@@ -118,7 +118,7 @@ export class OAuthController {
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
         this.setState({
-          error: data.error ?? "Failed to initiate OAuth",
+          error: data.error ?? "UNABLE — INITIATE OAUTH",
           status: "error",
         });
         return;
@@ -127,7 +127,7 @@ export class OAuthController {
       this.setState({ oauthUrl: data.url, status: "pending" });
     } catch {
       this.setState({
-        error: "Failed to connect. Please try again.",
+        error: "LINK DEGRADED — RETRY",
         status: "error",
       });
     }
@@ -140,7 +140,7 @@ export class OAuthController {
   async completeOAuth(confirmationCode: string): Promise<void> {
     if (!confirmationCode.trim()) {
       this.setState({
-        error: "Please enter the confirmation code",
+        error: "AWAITING — CONFIRMATION CODE",
         status: "error",
       });
       return;
@@ -159,7 +159,7 @@ export class OAuthController {
       if (!res.ok) {
         const data = (await res.json()) as { error?: string };
         this.setState({
-          error: data.error ?? "Failed to complete authentication",
+          error: data.error ?? "UNABLE — COMPLETE AUTHENTICATION",
           status: "error",
           loading: false,
         });
@@ -175,7 +175,7 @@ export class OAuthController {
       });
     } catch {
       this.setState({
-        error: "Failed to complete authentication. Please try again.",
+        error: "UNABLE — COMPLETE AUTHENTICATION. RETRY.",
         status: "error",
         loading: false,
       });

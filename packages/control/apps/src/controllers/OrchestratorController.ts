@@ -130,7 +130,7 @@ export class OrchestratorController {
       });
       const body = (await res.json()) as { ok: boolean; reason?: string };
       if (!body.ok) {
-        this.setError(body.reason ?? "Failed to start dev loop");
+        this.setError(body.reason ?? "UNABLE — START DEV LOOP");
       }
     } catch (err) {
       this.setError(err instanceof Error ? err.message : String(err));

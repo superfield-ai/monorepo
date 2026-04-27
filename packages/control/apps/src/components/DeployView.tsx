@@ -114,7 +114,7 @@ export function DeployView({
 
       {state.envsError ? (
         <InlineError
-          title="Failed to list environments"
+          title="RESOURCE FAULT — ENVIRONMENT LIST"
           error={state.envsError}
           onRetry={() => void controller.loadEnvs()}
         />
@@ -283,7 +283,7 @@ export function DeployView({
                       fontFamily: "var(--font-mono)",
                     }}
                   >
-                    No data yet
+                    NO TELEMETRY
                   </li>
                 ) : null}
               </ul>

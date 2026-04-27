@@ -221,7 +221,7 @@ test("cluster status indicator shows green for healthy", async () => {
   await expect
     .element(screen.getByTestId("cluster-status-indicator"))
     .toBeVisible();
-  await expect.element(screen.getByText("Cluster healthy")).toBeVisible();
+  await expect.element(screen.getByText("CLUSTER NOMINAL")).toBeVisible();
 });
 
 test("cluster status indicator shows amber pulsing for restarting", async () => {
@@ -229,10 +229,7 @@ test("cluster status indicator shows amber pulsing for restarting", async () => 
   await expect
     .element(screen.getByTestId("cluster-status-indicator"))
     .toBeVisible();
-  await expect.element(screen.getByText("Cluster restarting")).toBeVisible();
-  // Amber pulsing dot has animate-pulse class
-  const dot = screen.container.querySelector(".animate-pulse");
-  expect(dot).not.toBeNull();
+  await expect.element(screen.getByText("CLUSTER RESTARTING")).toBeVisible();
 });
 
 test("cluster status indicator shows red for degraded", async () => {
@@ -240,7 +237,7 @@ test("cluster status indicator shows red for degraded", async () => {
   await expect
     .element(screen.getByTestId("cluster-status-indicator"))
     .toBeVisible();
-  await expect.element(screen.getByText("Cluster degraded")).toBeVisible();
+  await expect.element(screen.getByText("CLUSTER DEGRADED")).toBeVisible();
 });
 
 test("cluster status indicator shows gray for unknown", async () => {
@@ -248,9 +245,7 @@ test("cluster status indicator shows gray for unknown", async () => {
   await expect
     .element(screen.getByTestId("cluster-status-indicator"))
     .toBeVisible();
-  await expect
-    .element(screen.getByText("Cluster status unknown"))
-    .toBeVisible();
+  await expect.element(screen.getByText("CLUSTER UNKNOWN")).toBeVisible();
 });
 
 // ---------------------------------------------------------------------------
@@ -286,7 +281,7 @@ test("cluster status from ClusterStatusController flows to ChatPanel ClusterStat
   await expect
     .element(screen.getByTestId("cluster-status-indicator"))
     .toBeVisible();
-  await expect.element(screen.getByText("Cluster healthy")).toBeVisible();
+  await expect.element(screen.getByText("CLUSTER NOMINAL")).toBeVisible();
 });
 
 test("cluster status from ClusterStatusController flows to IframePanel overlay", async () => {

@@ -154,7 +154,7 @@ export function ControlChat({
   async function rollback(hash: string) {
     if (
       !confirm(
-        `Roll back to commit ${hash.slice(0, 7)}? Commits after this point will be lost.`,
+        `ROLLBACK ${hash.slice(0, 7)} — CONFIRM. Commits after this point will be lost.`,
       )
     )
       return;

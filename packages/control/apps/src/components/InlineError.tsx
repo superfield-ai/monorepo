@@ -52,7 +52,7 @@ export function InlineError({
     await navigator.clipboard.writeText(detail);
     toastStore.show({
       severity: "success",
-      title: "Copied error details",
+      title: "COPIED — ERROR DETAILS",
       timeoutMs: 2000,
     });
   };

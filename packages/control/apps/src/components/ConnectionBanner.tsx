@@ -73,7 +73,7 @@ export function ConnectionBanner({
     if (!result.ok) {
       toastStore.show({
         severity: "error",
-        title: "Could not start dev loop",
+        title: "UNABLE — START DEV LOOP",
         message: result.error.message,
         timeoutMs: 6000,
       });
@@ -81,7 +81,7 @@ export function ConnectionBanner({
     }
     toastStore.show({
       severity: "success",
-      title: "Dev loop starting…",
+      title: "DEV LOOP — STARTING",
       timeoutMs: 3000,
     });
     void poll();

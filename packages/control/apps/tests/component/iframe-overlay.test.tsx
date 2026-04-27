@@ -117,7 +117,7 @@ describe("IframeOverlay", () => {
     await flush();
     await flush();
     expect(seen.find((t) => t.severity === "error")?.title).toBe(
-      "Rebuild failed",
+      "RESOURCE FAULT — REBUILD",
     );
     unsub();
   });

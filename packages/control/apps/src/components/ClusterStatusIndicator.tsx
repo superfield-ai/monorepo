@@ -27,27 +27,27 @@ interface ClusterStatusIndicatorProps {
 
 const STATUS_CONFIG: Record<
   ClusterStatus,
-  { label: string; dotClass: string; textClass: string }
+  { label: string; dotColor: string; pulse: boolean }
 > = {
   healthy: {
-    label: "Cluster healthy",
-    dotClass: "bg-emerald-400",
-    textClass: "text-emerald-700",
+    label: "CLUSTER NOMINAL",
+    dotColor: "var(--status-nominal)",
+    pulse: false,
   },
   restarting: {
-    label: "Cluster restarting",
-    dotClass: "bg-amber-400 animate-pulse",
-    textClass: "text-amber-700",
+    label: "CLUSTER RESTARTING",
+    dotColor: "var(--status-caution)",
+    pulse: true,
   },
   degraded: {
-    label: "Cluster degraded",
-    dotClass: "bg-red-400",
-    textClass: "text-red-700",
+    label: "CLUSTER DEGRADED",
+    dotColor: "var(--status-critical)",
+    pulse: false,
   },
   unknown: {
-    label: "Cluster status unknown",
-    dotClass: "bg-zinc-300",
-    textClass: "text-zinc-500",
+    label: "CLUSTER UNKNOWN",
+    dotColor: "var(--fg-3)",
+    pulse: false,
   },
 };
 
@@ -98,15 +98,40 @@ export function ClusterStatusIndicator({
 
   return (
     <div
-      className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-zinc-50 border border-zinc-200"
       aria-label={`Cluster status: ${status}`}
       data-testid="cluster-status-indicator"
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--sp-1)",
+        padding: "var(--sp-1) var(--sp-2)",
+        background: "var(--bg-raised)",
+        border: "1px solid var(--border-subtle)",
+        color: "var(--fg-1)",
+      }}
     >
       <span
-        className={`w-2 h-2 rounded-full shrink-0 ${config.dotClass}`}
         aria-hidden="true"
+        data-pill="true"
+        style={{
+          width: 8,
+          height: 8,
+          flexShrink: 0,
+          background: config.dotColor,
+          animation: config.pulse
+            ? "var(--pulse-anim, pulse 1.5s ease-in-out infinite)"
+            : undefined,
+        }}
       />
-      <span className={`text-xs font-medium ${config.textClass}`}>
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-xs)",
+          fontWeight: 500,
+          letterSpacing: "var(--ls-wider)",
+          color: config.dotColor,
+        }}
+      >
         {config.label}
       </span>
     </div>

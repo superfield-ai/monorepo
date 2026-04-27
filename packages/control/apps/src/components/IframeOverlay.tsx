@@ -86,13 +86,13 @@ export function IframeOverlay({
     if (!result.ok) {
       toastStore.show({
         severity: "error",
-        title: "Rebuild failed",
+        title: "RESOURCE FAULT — REBUILD",
         message: result.error.message,
       });
     } else {
       toastStore.show({
         severity: "success",
-        title: "Rebuild started",
+        title: "REBUILD — DISPATCHED",
         message:
           "Cluster is rebuilding the app — the iframe will reload when it's healthy.",
       });
