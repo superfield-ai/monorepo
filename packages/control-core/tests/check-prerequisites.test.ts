@@ -27,7 +27,6 @@ vi.mock("child_process", async (importOriginal) => {
 });
 
 describe("checkPrerequisites", () => {
-
   let processExitSpy: ReturnType<typeof vi.spyOn<any, any>>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 

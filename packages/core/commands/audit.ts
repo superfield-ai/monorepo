@@ -149,7 +149,8 @@ async function createIssueDefault(
     },
     githubDeps,
   );
-  if (!data) throw new Error("github: failed to create issue (no response body)");
+  if (!data)
+    throw new Error("github: failed to create issue (no response body)");
   return { url: data.html_url, number: data.number };
 }
 

@@ -55,7 +55,11 @@ export class SuperfieldError extends Error {
   override readonly cause: unknown;
   readonly context: Record<string, unknown> | undefined;
 
-  constructor(code: ErrorCode, message: string, opts: SuperfieldErrorOpts = {}) {
+  constructor(
+    code: ErrorCode,
+    message: string,
+    opts: SuperfieldErrorOpts = {},
+  ) {
     super(message);
     this.name = this.constructor.name;
     this.code = code;

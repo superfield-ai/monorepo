@@ -138,7 +138,7 @@ d("template auth round-trip — studio router", () => {
   it("GET /studio/status with the auth cookie returns 200", async () => {
     expect(registerCookie).not.toBeNull();
     // Strip everything after the first `;` to get just `superfield_auth=<jwt>`.
-    const cookiePair = registerCookie!.split(";")[0].trim();
+    const cookiePair = registerCookie!.split(";")[0]!.trim();
     const res = await fetch(`${baseUrl}/studio/status`, {
       headers: { Cookie: cookiePair },
     });

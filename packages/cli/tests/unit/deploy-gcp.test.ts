@@ -18,7 +18,6 @@ vi.mock("@superfield/core", () => ({
   DEFAULT_DEMO_PORT: 58080,
 }));
 
-
 let mockExit: any;
 
 beforeEach(() => {
