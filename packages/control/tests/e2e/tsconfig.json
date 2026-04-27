@@ -1,0 +1,15 @@
+{
+  "compilerOptions": {
+    "target": "ESNext",
+    "module": "CommonJS",
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "paths": {
+      "@superfield/core": ["../../../core/index.ts"],
+      "@superfield/core/*": ["../../../core/*.ts"]
+    }
+  },
+  "include": ["."]
+}

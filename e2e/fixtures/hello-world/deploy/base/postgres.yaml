@@ -41,5 +41,5 @@ spec:
       volumes:
         - name: postgres-data
           hostPath:
-            path: /tmp/calypso-postgres-data
+            path: /tmp/superfield-postgres-data
             type: DirectoryOrCreate

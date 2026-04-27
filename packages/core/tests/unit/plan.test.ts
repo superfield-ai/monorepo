@@ -117,7 +117,7 @@ Scout gate: #1
     expect(plan.phases[0]?.issues).toEqual([scoutEntry]);
   });
 
-  it("parses legacy calypso metadata and dash entry format", () => {
+  it("parses legacy superfield metadata and dash entry format", () => {
     const body = `## Phase: Identity foundation
 
 Goal: legacy format.
@@ -125,9 +125,9 @@ Depends on phases: None.
 Scout gate: #196
 
 - #196 - scout identity
-  <!-- calypso: {"number":196,"phase":"Identity foundation","kind":"dev-scout","dependencies":[],"parallel_safe":false} -->
+  <!-- superfield: {"number":196,"phase":"Identity foundation","kind":"dev-scout","dependencies":[],"parallel_safe":false} -->
 - #201 - feat: build user authentication
-  <!-- calypso: {"number":201,"phase":"Identity foundation","kind":"feature","dependencies":[196],"parallel_safe":false} -->
+  <!-- superfield: {"number":201,"phase":"Identity foundation","kind":"feature","dependencies":[196],"parallel_safe":false} -->
 `;
     const plan = parsePlan(body);
     expect(plan.phases).toHaveLength(1);

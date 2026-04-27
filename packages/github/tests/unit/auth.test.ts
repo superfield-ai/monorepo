@@ -24,7 +24,7 @@ describe("requestGitHubAppDeviceCode", () => {
 
     const response = await requestGitHubAppDeviceCode(
       "client-123",
-      fetchImpl as typeof fetch,
+      fetchImpl as unknown as typeof fetch,
     );
 
     expect(response).toEqual({
@@ -65,7 +65,7 @@ describe("pollGitHubAppAccessToken", () => {
       "client-123",
       "device-123",
       1,
-      fetchImpl as typeof fetch,
+      fetchImpl as unknown as typeof fetch,
     );
     await vi.advanceTimersByTimeAsync(1000);
     await vi.advanceTimersByTimeAsync(1000);
@@ -93,7 +93,7 @@ describe("pollGitHubAppAccessToken", () => {
       "client-123",
       "device-123",
       1,
-      fetchImpl as typeof fetch,
+      fetchImpl as unknown as typeof fetch,
     );
     await vi.advanceTimersByTimeAsync(1000);
     const token = await promise;
@@ -117,7 +117,7 @@ describe("pollGitHubAppAccessToken", () => {
       "client-123",
       "device-123",
       1,
-      fetchImpl as typeof fetch,
+      fetchImpl as unknown as typeof fetch,
     ).catch((error: unknown) => error);
     await vi.advanceTimersByTimeAsync(1000);
 

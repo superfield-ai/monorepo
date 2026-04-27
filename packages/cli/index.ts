@@ -12,6 +12,7 @@ import { doctorCommand } from "./commands/doctor.ts";
 import { exportDbCommand } from "./commands/export-db.ts";
 import { initCommand } from "./commands/init.ts";
 import { auditCommand } from "./commands/audit.ts";
+import { controlCommand } from "./commands/control.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -30,6 +31,8 @@ Build date: ${BUILD_DATE}
 Commands:
   github add    Authenticate and register a repository
   github forget Remove credentials and print app uninstall link
+  control [--port <n>] [--repo <path>] [--api-url <url>]
+                Start the studio HTTP server.
   start <path> [slotCount]
                 Begin all three loops (plan, dev, doc).
   plan          Replan: group issues into phases, create scouts, write Plan
@@ -106,6 +109,11 @@ export async function runCLI(
 
   if (cmd === "github") {
     await githubCommand(sub, third);
+    return;
+  }
+
+  if (cmd === "control") {
+    await controlCommand(args.slice(1));
     return;
   }
 

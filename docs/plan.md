@@ -22,7 +22,7 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 - ✅ Golden fixtures recorder (`bun record-fixtures`)
 - ✅ `superfield github add` (device flow + app installation polling + repo registration)
 - ✅ `superfield github forget` (account-type-aware uninstall URL)
-- ✅ Calypso Blueprint integrated as git subtree at `blueprint/`
+- ✅ Superfield Blueprint integrated as git subtree at `blueprint/`
 
 ### Phase A-2 — Planning loop: CI watchdog ✅
 
@@ -33,8 +33,8 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 
 ### Phase A-3 — Planning loop: issue audit + Plan coverage ✅
 
-- ✅ `runIssueAudit` — LLM-driven schema conformance via `buildIssueAuditPrompt`
-- ✅ `runPlanCoverage` — pure deterministic, appends missing open issues to Backlog phase
+- ✅ `runIssueAudit` — LLM-driven schema conformance via `buildIssueAuditPrompt`; issues processed in batches of 25 (up to 3 concurrent), result shape `{ audited, nonConformant[], reports: Record<number, IssueAuditReport> }`; non-conformant issues body-rewritten and labelled `non-conformant`; incremental state cache on Plan issue skips unchanged issues (10-min TTL)
+- ✅ `runPlanCoverage` — deterministic placement for issues declaring `## Phase`; LLM batch placement (Haiku, `buildPlanPlacementPrompt`) for issues without a declared phase; LLM can place into existing phases or create new ones; result shape `{ appended, alreadyCovered, skipped, llmPlaced, createdPhases, planCreated }`
 - ✅ `runLLMTask` reusable helper with `extractJson`
 
 ### Phase A-4 — Planning loop: blueprint conformance ✅
@@ -74,14 +74,14 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 - ✅ `runDocLoop` / `tickDocLoop` — third concurrent loop
 - ✅ `openDocPR` — creates `docs/auto-N` branch, applies patches via Contents API, opens PR
 
-### Phase A-11 — Analytics & Steering API ⬜
+### Phase A-11 — Analytics & Steering API ✅
 
-- ⬜ `ApiState` — shared in-memory state object passed to all three loops
-- ⬜ `startApiServer` — in-process HTTP server on `127.0.0.1:7837`
-- ⬜ Analytics endpoints: `/health`, `/analytics/status`, `/analytics/slots`, `/analytics/loops`, `/analytics/costs`, `/analytics/circuit`
-- ⬜ Steering endpoints: `/steer/context` (inject context into running agent), `/steer/escalate`
-- ⬜ Wire into `superfield start` with `--no-api` and `--api-port` flags
-- ⬜ Instrument dev loop, planning loop, doc loop with `recordLoopTick`, `recordAgentStart`, `recordAgentEnd`
+- ✅ `ApiState` — shared in-memory state object passed to all three loops
+- ✅ `startApiServer` — in-process HTTP server on `127.0.0.1:7837`
+- ✅ Analytics endpoints: `/health`, `/analytics/status`, `/analytics/slots`, `/analytics/loops`, `/analytics/costs`, `/analytics/circuit`
+- ✅ Steering endpoints: `/steer/context`, `/steer/escalate`
+- ✅ Wired into `superfield start` with `--no-api` and `--api-port` flags
+- ✅ Loops instrumented with `recordLoopTick`, `recordAgentStart`, `recordAgentEnd`
 
 ### Phase A-12 — `audit` command 🟡
 
@@ -98,7 +98,7 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 
 ### Cross-cutting A (remaining)
 
-- ⬜ Wire all three loops in `superfield start` (currently only planning loop runs)
+- ✅ All three loops wired in `superfield start` (`packages/cli/commands/start.ts`)
 - ⬜ Integration test: full planning-loop tick end-to-end against MSW
 - ⬜ Integration tests for dev-loop and doc-loop using recorded fixtures
 
@@ -161,8 +161,87 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 
 ### Cross-cutting B (remaining)
 
-- ⬜ Fix Phase B-6 known issues
-- ⬜ Extract shared `resolveEnvCredentials(env)` used by all ops commands
+- 🟡 Fix Phase B-6 known issues — partial; `resolveEnvCredentials` helper in flight as PR #208
+- 🟡 Extract shared `resolveEnvCredentials(env)` — PR #208 (open)
 - ⬜ Self-hosted runner CI for ops integration tests (see GitHub issue)
-- ⬜ AWS RDS: implement real SigV4 signing
+- 🟡 AWS RDS: real SigV4 signing — in flight as PR #202
 - ⬜ GCP provision path functional from the CLI
+
+---
+
+## Track C — Control Webapp
+
+Spec: [`product.md` § Control Webapp](./product.md#control-webapp). Implementation contract: [`architecture.md` § Control Webapp](./architecture.md#control-webapp). All Track C work lives on the `cli-migration` branch (PR #204, currently OPEN).
+
+### Phase C-1 — Move studio source into `cli/packages/control/` ✅
+
+- ✅ Source ported from the standalone `control` repo
+- ✅ Unit tests passing with DI `_readProc` parameter on `runAgent`
+- ✅ `packages/control-core/` and `packages/db/` tracked on main
+
+### Phase C-2 — `superfield control` subcommand ✅
+
+- ✅ `packages/cli/commands/control.ts` parses `--port`, `--repo`, `--api-url`
+- ✅ Pings dev-loop `/health` on startup; warns if unreachable, starts anyway
+- ✅ `startControl(opts?)` exported from `packages/control/src/index.ts` (no side-effect startup)
+
+### Phase C-3 — `POST /studio/run` SSE on superfield API ✅
+
+- ✅ Endpoint added to `packages/core/api-server.ts`
+- ✅ Streams claude stdout chunk-by-chunk; emits `event: session/done/error`
+- ✅ `runAgent()` and `streamTurn()` switched from `Bun.spawn` to `fetch`
+- ✅ Integration fixture `tests/integration/helpers/superfield-server.ts` + claude stub
+
+### Phase C-4 — WebSocket + steer proxy ✅
+
+- ✅ `packages/control/src/control-ws.ts` — Bun native WebSocket handler
+- ✅ `GET /studio/ws` upgrade path, `POST /studio/steer` REST fallback
+- ✅ `WsChatController` alongside the existing SSE controller
+
+### Phase C-5 — Orchestrator (process + view) ✅
+
+- ✅ `packages/control/src/dev-loop-process.ts` — child-process lifecycle
+- ✅ `packages/control/src/orchestrator.ts` — `/orchestrator/*` endpoints
+- ✅ `OrchestratorController.ts` + `OrchestratorView.tsx` in browser UI
+- ✅ Orchestrator tab in ControlPanel nav
+
+### Phase C-6 — Studio preview + kitchen-sink split ✅
+
+- ✅ `template/apps/kitchen-sink/` shipped with design-token section + empty catalogue shell (port 5174, excluded from Docker + CI)
+- ✅ `WikiRender.tsx`, `CitationHoverPopover.tsx` ported into control
+- ✅ `ComponentPreviewPanel.tsx` at `/studio/preview`
+
+### Phase C-7 — CI ✅
+
+- ✅ `.github/workflows/ci-control.yml` — build + typecheck + unit + in-process integration (no k3d)
+
+### Phase C-8 — Retire standalone `control/` repo ✅
+
+- ✅ Deprecation banner on `control/README.md`
+- ✅ All control workflows renamed to `.yml.disabled`
+- ✅ `cli-migration` branch pushed to origin for archival
+
+### Phase C-9 — Demo-readiness extensions ⬜
+
+Scoped for the 2026-04-28 client demo. Cut lines and per-task spec are in `TASKS.md` (P0/P1/P2). Source spec: `architecture.md § Control Webapp` (Phase 9 routes).
+
+| Item                                            | Pillar             | Status |
+| ----------------------------------------------- | ------------------ | ------ |
+| C-9.1 Per-route preview map                     | Iterative dev      | ⬜     |
+| C-9.2 Design-tokens panel                       | UX design          | ⬜     |
+| C-9.3 Mock-route gallery                        | UX design          | ⬜     |
+| C-9.4 Viewport toolbar                          | Iterative dev / UX | ⬜     |
+| C-9.5 Deployment health view (`/studio/deploy`) | Deployment health  | ⬜     |
+| C-9.6 Turn timeline + prompt inspector          | Agent monitoring   | ⬜     |
+| C-9.7 Blueprint conformance feed                | Agent monitoring   | ⬜     |
+| C-9.8 `scripts/seed-demo.ts`                    | Demo               | ⬜     |
+
+### Cross-cutting C (post-demo)
+
+- ⬜ Merge PR #204 to main (currently OPEN)
+- ⬜ Archive `superfield-studio` GitHub repo after PR #73 merges
+- ⬜ Per-turn screenshot capture into `docs/studio-sessions/`
+- ⬜ Visual diff before / after a turn
+- ⬜ Cost-over-time sparkline; log search/filter; slot heartbeat history
+- ⬜ DB-migration Job log tail on the deploy view
+- ⬜ Fixture switcher per route, persisted in `<repo>/.studio/`

@@ -65,7 +65,6 @@ export function freshLog(): CallLog {
 // XML builders — produce minimal but structurally correct Query API responses.
 // ---------------------------------------------------------------------------
 
-
 function tag(name: string, value: string | undefined): string {
   if (value === undefined) return "";
   return `<${name}>${value}</${name}>`;

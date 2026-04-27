@@ -28,7 +28,6 @@ function xmlText(xml: string, tag: string): string | undefined {
   return re.exec(xml)?.[1] ?? undefined;
 }
 
-
 /**
  * Extract repeated blocks between open/close tags (non-nested, returns inner
  * XML of each occurrence).

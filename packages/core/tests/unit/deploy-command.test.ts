@@ -38,7 +38,7 @@ describe("deploy command", () => {
     const steps: string[] = [];
 
     await runDeployCommand(
-      { provisionOnly: true, demoRoot: "/tmp/calypso" },
+      { provisionOnly: true, demoRoot: "/tmp/superfield" },
       {
         runProcess: async (step) => {
           steps.push(`${step.phase}:${step.command}`);
@@ -63,7 +63,7 @@ describe("deploy command", () => {
   it("wraps provisioning failures with a phase-scoped error", async () => {
     await expect(
       runDeployCommand(
-        { provisionOnly: true, demoRoot: "/tmp/calypso" },
+        { provisionOnly: true, demoRoot: "/tmp/superfield" },
         {
           runProcess: async (step) => {
             if (step.command === "docker" && step.args[0] === "info") {
@@ -95,10 +95,10 @@ describe("deploy command", () => {
       readFile: () => "",
     };
     await expect(
-      runDeployCommand({ demoRoot: "/tmp/calypso" }, noPvcDeps),
+      runDeployCommand({ demoRoot: "/tmp/superfield" }, noPvcDeps),
     ).rejects.toBeInstanceOf(DeployPhaseExecutionError);
     await expect(
-      runDeployCommand({ demoRoot: "/tmp/calypso" }, noPvcDeps),
+      runDeployCommand({ demoRoot: "/tmp/superfield" }, noPvcDeps),
     ).rejects.toMatchObject({ phase: "deploy", target: "demo" });
   });
 
@@ -107,7 +107,7 @@ describe("deploy command", () => {
 volumes:
   - name: postgres-data
     hostPath:
-      path: /tmp/calypso-postgres-data
+      path: /tmp/superfield-postgres-data
       type: DirectoryOrCreate
 `;
     const result = detectPostgresDataPath(
@@ -115,7 +115,7 @@ volumes:
       () => yaml,
       () => true,
     );
-    expect(result).toBe("/tmp/calypso-postgres-data");
+    expect(result).toBe("/tmp/superfield-postgres-data");
   });
 
   it("detectPostgresDataPath returns null when manifest has no hostPath", () => {

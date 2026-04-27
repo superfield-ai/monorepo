@@ -20,7 +20,7 @@ export interface ReplanEvaluateContext {
  * Prompt for the `plan` command's LLM call. Groups open issues into phases,
  * assigns scouts, and emits a structured Plan JSON object.
  *
- * Replaces calypso-agents `replan-evaluate` SKILL.md, adapted to Superfield's
+ * Replaces superfield-agents `replan-evaluate` SKILL.md, adapted to Superfield's
  * scout-gated speculative parallelization model.
  */
 export function buildReplanEvaluatePrompt(ctx: ReplanEvaluateContext): string {

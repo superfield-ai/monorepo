@@ -321,6 +321,11 @@ async function tickRepository(
   }
 
   // Step 4: Blueprint conformance — advisory check of issues against blueprint rules
+  // TODO: blueprint conformance runs on the `allOpenIssues` snapshot fetched at step 2,
+  // before issue-audit rewrites issue bodies. Post-remediation bodies are therefore not
+  // checked until the next planning-loop tick (when the fingerprint changes and the
+  // incremental cache triggers a re-audit). To fix this, re-fetch open issues after
+  // step 2 completes and pass the refreshed list to blueprintFn.
   let blueprintConformanceOutcome: TickRepositoryResult["blueprintConformance"];
   try {
     const conformance = await blueprintFn(client, owner, repo, {
