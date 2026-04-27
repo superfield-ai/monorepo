@@ -98,7 +98,7 @@ test("chat panel renders empty state initially", async () => {
   await expect.element(screen.getByTestId("chat-panel")).toBeVisible();
   await expect.element(screen.getByTestId("chat-messages")).toBeVisible();
   await expect
-    .element(screen.getByText(/Send a message to Claude/))
+    .element(screen.getByText(/SEND A MESSAGE TO BEGIN/))
     .toBeVisible();
 });
 

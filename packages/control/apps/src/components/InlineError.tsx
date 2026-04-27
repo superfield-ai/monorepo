@@ -4,6 +4,10 @@
  * In-panel error card with required Retry + optional "Copy details" / "Open
  * docs" affordances. Used everywhere a single sub-panel can fail without
  * tearing down the surrounding view (E9).
+ *
+ * Visuals follow the Superfield Control Room design system: flat bg-raised
+ * panel on a status-critical 1px border, FAULT badge, mono ALL-CAPS labels,
+ * status-coloured outlined action buttons.
  */
 
 import React from "react";
@@ -19,6 +23,21 @@ interface InlineErrorProps {
   readonly docsHref?: string;
   readonly docsLabel?: string;
 }
+
+const actionButton: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid var(--accent-red)",
+  color: "var(--accent-red)",
+  padding: "var(--sp-1) var(--sp-2)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 500,
+  letterSpacing: "var(--ls-wider)",
+  textTransform: "uppercase",
+  cursor: "pointer",
+  textDecoration: "none",
+  display: "inline-block",
+};
 
 export function InlineError({
   title,
@@ -42,31 +61,84 @@ export function InlineError({
     <div
       role="alert"
       data-testid="inline-error"
-      className="rounded border border-red-700 bg-red-950/40 p-3 text-sm text-red-100"
+      style={{
+        background: "var(--bg-raised)",
+        border: "1px solid var(--accent-red)",
+        padding: "var(--sp-3)",
+        color: "var(--fg-1)",
+        boxShadow: "var(--glow-red)",
+      }}
     >
-      <div className="font-medium text-red-200">{title}</div>
-      <div className="mt-1 break-words text-red-200/90">{error.message}</div>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sp-2)",
+          marginBottom: "var(--sp-1)",
+        }}
+      >
+        <span className="badge badge-critical" data-pill="true">
+          FAULT
+        </span>
+        <span className="label" style={{ color: "var(--fg-1)" }}>
+          {title}
+        </span>
+      </div>
+      <div
+        style={{
+          marginTop: "var(--sp-1)",
+          wordBreak: "break-word",
+          fontFamily: "var(--font-sans)",
+          fontSize: "var(--text-sm)",
+          color: "var(--fg-2)",
+          lineHeight: "var(--lh-relaxed)",
+        }}
+      >
+        {error.message}
+      </div>
       {error.hint ? (
-        <div className="mt-1 text-xs text-red-200/70">Hint: {error.hint}</div>
+        <div
+          style={{
+            marginTop: "var(--sp-1)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-xs)",
+            color: "var(--fg-3)",
+            letterSpacing: "var(--ls-wider)",
+            textTransform: "uppercase",
+          }}
+        >
+          HINT: {error.hint}
+        </div>
       ) : null}
-      <div className="mt-2 flex flex-wrap gap-2">
+      <div
+        style={{
+          marginTop: "var(--sp-2)",
+          display: "flex",
+          flexWrap: "wrap",
+          gap: "var(--sp-2)",
+        }}
+      >
         {onRetry ? (
           <button
             type="button"
             onClick={onRetry}
             data-testid="inline-error-retry"
-            className="rounded bg-red-700 px-2 py-1 text-xs font-medium text-white hover:bg-red-600"
+            style={{
+              ...actionButton,
+              background: "var(--accent-red)",
+              color: "var(--fg-inv)",
+            }}
           >
-            {retryLabel}
+            {retryLabel.toUpperCase()}
           </button>
         ) : null}
         <button
           type="button"
           onClick={handleCopy}
           data-testid="inline-error-copy"
-          className="rounded border border-red-500 px-2 py-1 text-xs font-medium text-red-100 hover:bg-red-900"
+          style={actionButton}
         >
-          Copy details
+          COPY DETAILS
         </button>
         {docsHref ? (
           <a
@@ -74,9 +146,9 @@ export function InlineError({
             target="_blank"
             rel="noreferrer"
             data-testid="inline-error-docs"
-            className="rounded border border-red-500 px-2 py-1 text-xs font-medium text-red-100 hover:bg-red-900"
+            style={actionButton}
           >
-            {docsLabel}
+            {docsLabel.toUpperCase()}
           </a>
         ) : null}
       </div>

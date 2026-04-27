@@ -9,8 +9,10 @@
  *   - Active slots list: issue, role, backend, elapsed, heartbeat indicator
  *   - Log tail pane: last N lines, auto-scroll, SSE-streamed
  *
- * No external dependencies — uses browser-native APIs and Tailwind classes
- * that match the existing studio UI palette.
+ * Visuals follow the Superfield Control Room design system: near-void
+ * backgrounds, sharp corners, mono ALL-CAPS labels, status-coloured badges
+ * sourced from the token sheet. Behaviour, event handlers and `data-testid`
+ * values are preserved verbatim.
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -37,17 +39,19 @@ function relativeTime(ts?: number): string {
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
+const STATE_BADGE_CLASS: Record<ProcessState, string> = {
+  stopped: "badge badge-offline",
+  starting: "badge badge-caution",
+  running: "badge badge-nominal",
+  stopping: "badge badge-caution",
+};
+
 function StateBadge({ state }: { state: ProcessState }) {
-  const colours: Record<ProcessState, string> = {
-    stopped: "bg-gray-200 text-gray-600",
-    starting: "bg-yellow-100 text-yellow-700",
-    running: "bg-green-100 text-green-700",
-    stopping: "bg-orange-100 text-orange-700",
-  };
   return (
     <span
       data-testid="process-state-badge"
-      className={`inline-block rounded px-2 py-0.5 text-xs font-mono font-semibold ${colours[state]}`}
+      data-pill="true"
+      className={STATE_BADGE_CLASS[state]}
     >
       {state}
     </span>
@@ -61,27 +65,48 @@ function LoopRow({
   name: string;
   health: OrchestratorState["loops"]["plan"];
 }) {
+  const cellStyle: React.CSSProperties = {
+    padding: "var(--sp-2) var(--sp-4) var(--sp-2) 0",
+    fontFamily: "var(--font-mono)",
+    fontSize: "var(--text-sm)",
+    color: "var(--fg-1)",
+    verticalAlign: "middle",
+  };
+  const mutedCell: React.CSSProperties = {
+    ...cellStyle,
+    color: "var(--fg-2)",
+  };
   return (
-    <tr className="border-t border-gray-100 text-sm">
-      <td className="py-1 pr-4 font-mono text-gray-500">{name}</td>
-      <td className="py-1 pr-4 text-gray-700">
-        {relativeTime(health.lastTickAt)}
+    <tr style={{ borderTop: "1px solid var(--border-subtle)" }}>
+      <td
+        style={{
+          ...cellStyle,
+          color: "var(--fg-2)",
+          letterSpacing: "var(--ls-wider)",
+          textTransform: "uppercase",
+        }}
+      >
+        {name}
       </td>
-      <td className="py-1 pr-4 text-gray-500">
+      <td style={cellStyle}>{relativeTime(health.lastTickAt)}</td>
+      <td style={mutedCell}>
         {health.lastTickDurationMs != null
           ? formatMs(health.lastTickDurationMs)
           : "—"}
       </td>
-      <td className="py-1 pr-4 text-gray-400 italic text-xs">
+      <td
+        style={{
+          ...mutedCell,
+          fontStyle: "italic",
+          fontSize: "var(--text-xs)",
+        }}
+      >
         {health.idleReason ?? ""}
       </td>
-      <td className="py-1">
+      <td style={{ ...cellStyle, paddingRight: 0 }}>
         <span
-          className={`rounded px-1 py-0.5 text-xs font-semibold ${
-            health.circuitTripped
-              ? "bg-red-100 text-red-600"
-              : "bg-green-50 text-green-600"
-          }`}
+          className={`badge ${health.circuitTripped ? "badge-critical" : "badge-nominal"}`}
+          data-pill="true"
         >
           {health.circuitTripped
             ? `tripped (${health.consecutiveFailures})`
@@ -101,22 +126,69 @@ function SlotCard({ slot }: { slot: OrchestratorState["slots"][number] }) {
   return (
     <div
       data-testid={`slot-card-${slot.slot}`}
-      className="rounded border border-gray-200 bg-white px-3 py-2 text-sm shadow-sm"
+      style={{
+        background: "var(--bg-raised)",
+        border: "1px solid var(--border-subtle)",
+        padding: "var(--sp-3)",
+        display: "flex",
+        flexDirection: "column",
+        gap: "var(--sp-2)",
+      }}
     >
-      <div className="flex items-center justify-between">
-        <span className="font-semibold text-gray-800">#{slot.issueNumber}</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
         <span
-          className={`ml-2 h-2 w-2 rounded-full ${
-            heartbeatOk ? "bg-green-400" : "bg-gray-300"
-          }`}
+          className="value-lg"
+          style={{ color: "var(--fg-1)" }}
+        >{`#${slot.issueNumber}`}</span>
+        <span
+          data-pill="true"
           title={heartbeatOk ? "heartbeat ok" : "no recent heartbeat"}
+          style={{
+            width: 8,
+            height: 8,
+            borderRadius: "50%",
+            background: heartbeatOk
+              ? "var(--status-nominal)"
+              : "var(--status-offline)",
+            boxShadow: heartbeatOk ? "var(--glow-green)" : "none",
+            flexShrink: 0,
+          }}
         />
       </div>
-      <div className="mt-1 text-xs text-gray-500">
-        <span className="mr-2">{slot.role}</span>
-        <span className="mr-2">{slot.backend}</span>
-        <span className="mr-2">{slot.model}</span>
-        <span>{formatMs(slot.elapsedMs)}</span>
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "auto 1fr",
+          rowGap: "var(--sp-1)",
+          columnGap: "var(--sp-3)",
+          alignItems: "baseline",
+        }}
+      >
+        <span className="label">ROLE</span>
+        <span className="value" style={{ fontSize: "var(--text-sm)" }}>
+          {slot.role}
+        </span>
+        <span className="label">BACKEND</span>
+        <span className="value" style={{ fontSize: "var(--text-sm)" }}>
+          {slot.backend}
+        </span>
+        <span className="label">MODEL</span>
+        <span
+          className="value"
+          style={{ fontSize: "var(--text-sm)", color: "var(--fg-2)" }}
+        >
+          {slot.model}
+        </span>
+        <span className="label">ELAPSED</span>
+        <span className="value-lg" style={{ fontSize: "var(--text-md)" }}>
+          {formatMs(slot.elapsedMs)}
+        </span>
       </div>
       {slot.sessionId ? <TurnTimeline sessionId={slot.sessionId} /> : null}
     </div>
@@ -129,6 +201,37 @@ interface OrchestratorViewProps {
   controller?: OrchestratorController;
   repo?: string;
 }
+
+const SECTION_STYLE: React.CSSProperties = {
+  background: "var(--bg-raised)",
+  border: "1px solid var(--border-subtle)",
+  padding: "var(--sp-3) var(--sp-4)",
+};
+
+const SECTION_TITLE_STYLE: React.CSSProperties = {
+  marginBottom: "var(--sp-2)",
+  display: "block",
+};
+
+const PRIMARY_BTN: React.CSSProperties = {
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 500,
+  letterSpacing: "var(--ls-wider)",
+  textTransform: "uppercase",
+  padding: "var(--sp-1) var(--sp-3)",
+  background: "transparent",
+  color: "var(--accent-green)",
+  border: "1px solid var(--accent-green)",
+  cursor: "pointer",
+  transition: "background var(--duration-fast) var(--ease-out)",
+};
+
+const DANGER_BTN: React.CSSProperties = {
+  ...PRIMARY_BTN,
+  color: "var(--accent-red)",
+  border: "1px solid var(--accent-red)",
+};
 
 export function OrchestratorView({
   controller: controllerProp,
@@ -163,64 +266,150 @@ export function OrchestratorView({
     state.processState === "running" || state.processState === "starting";
 
   return (
-    <div className="flex h-full flex-col gap-4 overflow-auto p-4 font-sans">
+    <div
+      style={{
+        display: "flex",
+        height: "100%",
+        flexDirection: "column",
+        gap: "var(--sp-4)",
+        overflow: "auto",
+        padding: "var(--sp-4)",
+        background: "var(--bg-base)",
+      }}
+    >
       {/* Process controls */}
-      <section className="flex items-center gap-4 rounded border border-gray-200 bg-white px-4 py-3 shadow-sm">
+      <section
+        style={{
+          ...SECTION_STYLE,
+          display: "flex",
+          alignItems: "center",
+          gap: "var(--sp-3)",
+          flexWrap: "wrap",
+        }}
+      >
         <StateBadge state={state.processState} />
         {state.pid && (
-          <span className="text-xs text-gray-400">pid {state.pid}</span>
+          <span className="label" style={{ color: "var(--fg-3)" }}>
+            PID&nbsp;
+            <span className="mono" style={{ fontSize: "var(--text-xs)" }}>
+              {state.pid}
+            </span>
+          </span>
         )}
         {state.uptimeMs > 0 && (
-          <span className="text-xs text-gray-400">
-            up {formatMs(state.uptimeMs)}
+          <span className="label" style={{ color: "var(--fg-3)" }}>
+            UP&nbsp;
+            <span className="mono" style={{ fontSize: "var(--text-xs)" }}>
+              {formatMs(state.uptimeMs)}
+            </span>
           </span>
         )}
         <span
-          className={`ml-auto text-xs ${state.apiReachable ? "text-green-600" : "text-gray-400"}`}
+          className="badge"
+          data-pill="true"
+          style={{
+            marginLeft: "auto",
+            color: state.apiReachable
+              ? "var(--status-nominal)"
+              : "var(--status-offline)",
+            background: state.apiReachable
+              ? "rgba(57, 217, 138, 0.06)"
+              : "transparent",
+          }}
         >
           API {state.apiReachable ? "reachable" : "unreachable"}
         </span>
         <input
           data-testid="repo-input"
-          className="ml-4 w-48 rounded border border-gray-200 px-2 py-1 text-xs"
           placeholder="/path/to/repo"
           value={repoInput}
           onChange={(e) => setRepoInput(e.target.value)}
+          style={{
+            width: 220,
+            padding: "var(--sp-1) var(--sp-2)",
+            background: "var(--bg-base)",
+            border: "1px solid var(--border-subtle)",
+            color: "var(--fg-1)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-xs)",
+            outline: "none",
+          }}
         />
         <button
           data-testid="start-button"
-          className="rounded bg-green-600 px-3 py-1 text-xs text-white disabled:opacity-40"
           disabled={!canStart || !repoInput}
           onClick={() => controllerRef.current.startDevLoop(repoInput)}
+          style={{
+            ...PRIMARY_BTN,
+            opacity: !canStart || !repoInput ? 0.4 : 1,
+            cursor: !canStart || !repoInput ? "not-allowed" : "pointer",
+          }}
         >
-          Start
+          START
         </button>
         <button
           data-testid="stop-button"
-          className="rounded bg-red-500 px-3 py-1 text-xs text-white disabled:opacity-40"
           disabled={!canStop}
           onClick={() => controllerRef.current.stopDevLoop()}
+          style={{
+            ...DANGER_BTN,
+            opacity: !canStop ? 0.4 : 1,
+            cursor: !canStop ? "not-allowed" : "pointer",
+          }}
         >
-          Stop
+          STOP
         </button>
         {state.error && (
-          <span className="ml-2 text-xs text-red-500">{state.error}</span>
+          <span
+            className="mono"
+            style={{
+              color: "var(--accent-red)",
+              fontSize: "var(--text-xs)",
+            }}
+          >
+            {state.error}
+          </span>
         )}
       </section>
 
       {/* Loop status bar */}
-      <section className="rounded border border-gray-200 bg-white px-4 py-3 shadow-sm">
-        <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-          Loops
+      <section style={SECTION_STYLE}>
+        <h2 className="label" style={SECTION_TITLE_STYLE}>
+          LOOPS
         </h2>
-        <table className="w-full" data-testid="loop-table">
+        <table
+          style={{ width: "100%", borderCollapse: "collapse" }}
+          data-testid="loop-table"
+        >
           <thead>
-            <tr className="text-left text-xs text-gray-400">
-              <th className="pb-1 pr-4">Loop</th>
-              <th className="pb-1 pr-4">Last tick</th>
-              <th className="pb-1 pr-4">Duration</th>
-              <th className="pb-1 pr-4">Idle reason</th>
-              <th className="pb-1">Circuit</th>
+            <tr style={{ textAlign: "left" }}>
+              <th
+                className="label"
+                style={{ padding: "var(--sp-1) var(--sp-4) var(--sp-1) 0" }}
+              >
+                LOOP
+              </th>
+              <th
+                className="label"
+                style={{ padding: "var(--sp-1) var(--sp-4) var(--sp-1) 0" }}
+              >
+                LAST TICK
+              </th>
+              <th
+                className="label"
+                style={{ padding: "var(--sp-1) var(--sp-4) var(--sp-1) 0" }}
+              >
+                DURATION
+              </th>
+              <th
+                className="label"
+                style={{ padding: "var(--sp-1) var(--sp-4) var(--sp-1) 0" }}
+              >
+                IDLE REASON
+              </th>
+              <th className="label" style={{ padding: "var(--sp-1) 0" }}>
+                CIRCUIT
+              </th>
             </tr>
           </thead>
           <tbody>
@@ -233,11 +422,17 @@ export function OrchestratorView({
 
       {/* Active slots */}
       {state.slots.length > 0 && (
-        <section className="rounded border border-gray-200 bg-white px-4 py-3 shadow-sm">
-          <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-            Active slots ({state.slots.length})
+        <section style={SECTION_STYLE}>
+          <h2 className="label" style={SECTION_TITLE_STYLE}>
+            ACTIVE SLOTS ({state.slots.length})
           </h2>
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-4">
+          <div
+            style={{
+              display: "grid",
+              gap: "var(--sp-2)",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+            }}
+          >
             {state.slots.map((slot) => (
               <SlotCard key={slot.slot} slot={slot} />
             ))}
@@ -248,14 +443,30 @@ export function OrchestratorView({
       {/* Log tail */}
       <section
         data-testid="log-pane"
-        className="flex flex-1 flex-col rounded border border-gray-200 bg-gray-950 px-3 py-2 shadow-sm"
+        style={{
+          ...SECTION_STYLE,
+          background: "var(--bg-void)",
+          display: "flex",
+          flex: 1,
+          flexDirection: "column",
+          padding: "var(--sp-3)",
+        }}
       >
-        <h2 className="mb-1 text-xs font-semibold uppercase tracking-wide text-gray-500">
+        <h2 className="label" style={SECTION_TITLE_STYLE}>
           Dev loop logs
         </h2>
-        <div className="flex-1 overflow-auto text-xs leading-5 text-green-300">
+        <div
+          style={{
+            flex: 1,
+            overflow: "auto",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-xs)",
+            lineHeight: "var(--lh-normal)",
+            color: "var(--accent-green)",
+          }}
+        >
           {state.logs.map((line, i) => (
-            <div key={i} className="whitespace-pre font-mono">
+            <div key={i} style={{ whiteSpace: "pre" }}>
               {line}
             </div>
           ))}
