@@ -17,6 +17,7 @@
  * | CONTROL_OPEN_BROWSER      | (unset)          | Set to 1 to auto-open the browser      |
  * | CONTROL_WEB_SERVICE_HOST  | 127.0.0.1        | ClusterIP host for the web service     |
  * | CONTROL_WEB_SERVICE_PORT  | (from k8s YAML)  | ClusterIP port for the web service     |
+ * | CONTROL_WEB_SERVICE_NAME  | web              | Service name to discover in k8s YAML   |
  * | CONTROL_API_SERVICE_HOST  | 127.0.0.1        | ClusterIP host for the api service     |
  * | CONTROL_API_SERVICE_PORT  | 31415            | ClusterIP port for the api service     |
  * | CONTROL_ASSETS_DIR        | (unset)          | Directory of pre-built browser UI      |
@@ -65,10 +66,11 @@ export function loadConfig(): ControlConfig {
     webPort = parseInt(process.env.CONTROL_WEB_SERVICE_PORT, 10);
   } else {
     const appRoot = process.env.SUPERFIELD_REPO_ROOT;
+    const webServiceName = process.env.CONTROL_WEB_SERVICE_NAME ?? "web";
     let discovered: number | null = null;
     if (appRoot) {
       try {
-        discovered = discoverServicePort(join(appRoot, "k8s"), "web");
+        discovered = discoverServicePort(join(appRoot, "k8s"), webServiceName);
       } catch {
         // Discovery is best-effort — fall through to default.
       }
