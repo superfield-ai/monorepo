@@ -85,18 +85,18 @@ Behavior to preserve:
 
 These are the user-visible guarantees, expressed against the template repo:
 
-| Endpoint | Expected behavior with `--repo ./template` |
-|---|---|
-| `GET /studio/status` (auth) | 200, returns studio mode flag |
-| `GET /studio/timeline` (auth) | 200, returns checkpoints from template's git history |
-| `GET /studio/commits` (auth) | 200, returns recent commits from template |
-| `POST /studio/chat` (auth) | proxies turn to `SUPERFIELD_API_URL`; 502 with structured envelope when API is down |
-| `GET /studio/chat/stream` | SSE opens; closes cleanly when no session active |
-| `GET /studio/cluster/events` | SSE opens; emits `unknown` health when no cluster |
-| `GET /app/*` | reverse-proxies to discovered web service; 502 envelope when unreachable |
-| `GET /api/*` | reverse-proxies to api service; 502 envelope when unreachable |
-| `GET /` | serves placeholder HTML when `CONTROL_ASSETS_DIR` unset; serves SPA when set |
-| `POST /api/auth/register`, `POST /api/auth/login` | issue JWT cookie |
+| Endpoint                                          | Expected behavior with `--repo ./template`                                          |
+| ------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| `GET /studio/status` (auth)                       | 200, returns studio mode flag                                                       |
+| `GET /studio/timeline` (auth)                     | 200, returns checkpoints from template's git history                                |
+| `GET /studio/commits` (auth)                      | 200, returns recent commits from template                                           |
+| `POST /studio/chat` (auth)                        | proxies turn to `SUPERFIELD_API_URL`; 502 with structured envelope when API is down |
+| `GET /studio/chat/stream`                         | SSE opens; closes cleanly when no session active                                    |
+| `GET /studio/cluster/events`                      | SSE opens; emits `unknown` health when no cluster                                   |
+| `GET /app/*`                                      | reverse-proxies to discovered web service; 502 envelope when unreachable            |
+| `GET /api/*`                                      | reverse-proxies to api service; 502 envelope when unreachable                       |
+| `GET /`                                           | serves placeholder HTML when `CONTROL_ASSETS_DIR` unset; serves SPA when set        |
+| `POST /api/auth/register`, `POST /api/auth/login` | issue JWT cookie                                                                    |
 
 ### 1.4 Failure modes that must be graceful
 
@@ -161,7 +161,7 @@ port, and tears it down in `afterAll`.
    authenticated `GET /studio/status` returns 200 and an unauthenticated
    call returns 401.
 9. `template-repo-root-resolution.test.ts` — invoke `superfield control
-   --repo <abs path to ./template>` from a `cwd` that is NOT the template:
+--repo <abs path to ./template>` from a `cwd` that is NOT the template:
    any endpoint that touches the repo (e.g. `/studio/timeline`) operates on
    the template's git history, not on the cwd.
 10. `template-malformed-k8s.test.ts` — point at a tmp copy of `./template`
@@ -171,7 +171,7 @@ port, and tears it down in `afterAll`.
 ### 2.3 E2E — `tests/e2e/specs/`
 
 11. `template-control-smoke.spec.ts` (Playwright) — boot `superfield control
-    --repo ./template` against an ephemeral port with `CONTROL_ASSETS_DIR`
+--repo ./template` against an ephemeral port with `CONTROL_ASSETS_DIR`
     set to a built UI bundle; load `/`, register a user, hit `/studio/status`
     via the UI, and assert the page renders without console errors.
 

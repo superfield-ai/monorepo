@@ -15,12 +15,10 @@
 
 import { describe, it, expect } from "vitest";
 import { loadConfig } from "../../src/config";
-import {
-  findTemplatePath,
-  resolveTemplatePath,
-} from "../helpers/template-path";
+import { findTemplatePath } from "../helpers/template-path";
 
-const d = findTemplatePath() ? describe : describe.skip;
+const TEMPLATE = findTemplatePath();
+const d = TEMPLATE ? describe : describe.skip;
 
 function withEnv(
   vars: Record<string, string | undefined>,
@@ -49,7 +47,6 @@ function withEnv(
 }
 
 d("loadConfig — template k8s service discovery", () => {
-  const TEMPLATE = resolveTemplatePath();
   it("discovers webPort=80 from template/k8s/app.yaml when CONTROL_WEB_SERVICE_NAME=superfield-app", () => {
     withEnv(
       {
