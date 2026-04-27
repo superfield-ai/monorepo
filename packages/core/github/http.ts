@@ -1,13 +1,14 @@
 import type { GitHubHttpDeps } from "./types.ts";
+import { SuperfieldError } from "../errors.ts";
 
 export const GITHUB_API_BASE = "https://api.github.com";
 export const GITHUB_API_VERSION = "2022-11-28";
 
-export class GitHubApiError extends Error {
-  status: number;
-  url: string;
-  githubMessage: string;
-  responseBody: string;
+export class GitHubApiError extends SuperfieldError {
+  readonly status: number;
+  readonly url: string;
+  readonly githubMessage: string;
+  readonly responseBody: string;
 
   constructor(opts: {
     status: number;
@@ -16,9 +17,16 @@ export class GitHubApiError extends Error {
     responseBody: string;
   }) {
     super(
+      "github_api",
       `GitHub API request failed (${opts.status}) for ${opts.url}: ${opts.githubMessage}`,
+      {
+        context: {
+          status: opts.status,
+          url: opts.url,
+          githubMessage: opts.githubMessage,
+        },
+      },
     );
-    this.name = "GitHubApiError";
     this.status = opts.status;
     this.url = opts.url;
     this.githubMessage = opts.githubMessage;

@@ -4,14 +4,15 @@
  * transient process-spawn errors.
  */
 
+import { SuperfieldError } from "./errors.ts";
+
 /**
  * Thrown by CircuitBreaker.call() when the circuit is open.
  * withRetry rethrows this immediately without sleeping or decrementing attempts.
  */
-export class CircuitBreakerOpenError extends Error {
+export class CircuitBreakerOpenError extends SuperfieldError {
   constructor(message: string) {
-    super(message);
-    this.name = "CircuitBreakerOpenError";
+    super("internal", message);
   }
 }
 

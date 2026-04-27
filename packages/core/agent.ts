@@ -6,6 +6,7 @@ import {
   type CandidateEntry,
 } from "./job-registry.ts";
 import { availabilityStore } from "./backend-availability.ts";
+import { AgentError } from "./errors.ts";
 export {
   type AgentBackend,
   type AgentMode,
@@ -93,23 +94,23 @@ export interface AgentResult {
   needsBlueprintEscalation?: boolean;
 }
 
-class AgentRateLimitError extends Error {
+class AgentRateLimitError extends AgentError {
   constructor(
     readonly backend: AgentBackend,
     message: string,
   ) {
-    super(message);
-    this.name = "AgentRateLimitError";
+    super(message, { context: { backend } });
   }
 }
 
-export class StaleSessionError extends Error {
+export class StaleSessionError extends AgentError {
   constructor(
     readonly sessionId: string,
     readonly backend: AgentBackend,
   ) {
-    super(`Session ${sessionId} not found on ${backend} — session is stale`);
-    this.name = "StaleSessionError";
+    super(`Session ${sessionId} not found on ${backend} — session is stale`, {
+      context: { sessionId, backend },
+    });
   }
 }
 

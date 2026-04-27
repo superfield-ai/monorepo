@@ -15,6 +15,12 @@ import {
 } from "../gcp/index.js";
 import type { ProvisionConfig } from "../gcp/index.js";
 import type { GcpDeployConfig, GcpDeployDeps } from "../gcp/index.js";
+import {
+  ConfigError,
+  InternalError,
+  ProviderError,
+  UserInputError,
+} from "../errors.ts";
 
 export const DEPLOY_PHASES = ["provision", "deploy"] as const;
 
@@ -64,26 +70,27 @@ export interface DeployCommandDeps {
   deleteDataDir?: (dataPath: string) => void;
 }
 
-export class DeployTargetNotImplementedError extends Error {
+export class DeployTargetNotImplementedError extends UserInputError {
   constructor(readonly target: string) {
-    super(`Deploy target "${target}" is not implemented yet.`);
-    this.name = "DeployTargetNotImplementedError";
+    super(`Deploy target "${target}" is not implemented yet.`, {
+      context: { target },
+    });
   }
 }
 
-export class DeployPhaseNotImplementedError extends Error {
+export class DeployPhaseNotImplementedError extends InternalError {
   constructor(
     readonly target: string,
     readonly phase: DeployPhase,
   ) {
     super(
       `Deploy phase "${phase}" for target "${target}" is not implemented yet.`,
+      { context: { target, phase } },
     );
-    this.name = "DeployPhaseNotImplementedError";
   }
 }
 
-export class DeployPhaseExecutionError extends Error {
+export class DeployPhaseExecutionError extends ProviderError {
   constructor(
     readonly target: string,
     readonly phase: DeployPhase,
@@ -91,21 +98,22 @@ export class DeployPhaseExecutionError extends Error {
     cause: unknown,
   ) {
     super(
+      target,
       `${phaseTitle(phase)} failed for target "${target}" during ${step}: ${formatError(cause)}`,
-      { cause: cause instanceof Error ? cause : undefined },
+      { cause, context: { target, phase, step } },
     );
-    this.name = "DeployPhaseExecutionError";
   }
 }
 
-export class MissingDependencyError extends Error {
+export class MissingDependencyError extends ConfigError {
   constructor(
     readonly command: string,
     readonly installHint?: string,
   ) {
     const hint = installHint ? `\n  Install it with: ${installHint}` : "";
-    super(`"${command}" not found on PATH.${hint}`);
-    this.name = "MissingDependencyError";
+    super(`"${command}" not found on PATH.${hint}`, {
+      context: { command, installHint },
+    });
   }
 }
 
