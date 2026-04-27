@@ -94,10 +94,10 @@ export function TurnTimeline({
     return (
       <div
         data-testid={`turn-timeline-${sessionId}`}
-        className="mt-2 text-xs text-zinc-500"
+        style={{ marginTop: "var(--sp-2)" }}
       >
         <EmptyState
-          title="No turns recorded yet"
+          title="NO TURNS RECORDED"
           hint="The agent has not produced any turns for this session."
           testId={`timeline-${sessionId}`}
         />
@@ -106,21 +106,61 @@ export function TurnTimeline({
   }
 
   return (
-    <div data-testid={`turn-timeline-${sessionId}`} className="mt-2">
-      <ol className="flex flex-col gap-1">
+    <div
+      data-testid={`turn-timeline-${sessionId}`}
+      style={{ marginTop: "var(--sp-2)" }}
+    >
+      <ol
+        style={{
+          listStyle: "none",
+          margin: 0,
+          padding: 0,
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--sp-1)",
+        }}
+      >
         {turns.map((turn, idx) => (
           <li key={`${turn.ts}-${idx}`}>
             <button
               type="button"
               data-testid={`turn-row-${sessionId}-${idx}`}
               onClick={() => setActive(turn)}
-              className="w-full rounded border border-zinc-200 bg-white px-2 py-1 text-left text-xs hover:border-zinc-400"
+              style={{
+                width: "100%",
+                background: "var(--bg-raised)",
+                border: "1px solid var(--border-subtle)",
+                padding: "var(--sp-1) var(--sp-2)",
+                textAlign: "left",
+                fontSize: "var(--text-xs)",
+                color: "var(--fg-1)",
+                cursor: "pointer",
+              }}
             >
-              <div className="flex items-center justify-between text-[11px] text-gray-500">
-                <span className="font-mono">{formatTs(turn.ts)}</span>
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--fg-3)",
+                  letterSpacing: "var(--ls-wider)",
+                  textTransform: "uppercase",
+                }}
+              >
+                <span>{formatTs(turn.ts)}</span>
                 <span>{formatDuration(turn.durationMs)}</span>
               </div>
-              <div className="truncate text-gray-800">
+              <div
+                style={{
+                  overflow: "hidden",
+                  textOverflow: "ellipsis",
+                  whiteSpace: "nowrap",
+                  color: "var(--fg-1)",
+                  fontFamily: "var(--font-sans)",
+                }}
+              >
                 {turn.prompt || "(no prompt)"}
               </div>
             </button>
@@ -159,56 +199,127 @@ function TurnModal({
       role="dialog"
       aria-modal="true"
       data-testid="turn-modal"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60 p-4"
       onClick={onClose}
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: 40,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "rgba(0,0,0,0.6)",
+        padding: "var(--sp-4)",
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="max-h-[80vh] w-full max-w-2xl overflow-y-auto rounded border border-zinc-700 bg-zinc-950 p-4 text-sm text-zinc-100"
+        style={{
+          maxHeight: "80vh",
+          width: "100%",
+          maxWidth: 768,
+          overflowY: "auto",
+          background: "var(--bg-raised)",
+          border: "1px solid var(--border-default)",
+          padding: "var(--sp-4)",
+          fontSize: "var(--text-sm)",
+          color: "var(--fg-1)",
+        }}
       >
-        <div className="flex items-center justify-between">
-          <h3 className="text-base font-semibold">Turn detail</h3>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+          }}
+        >
+          <h3 className="h2" style={{ margin: 0 }}>
+            TURN DETAIL
+          </h3>
           <button
             type="button"
             data-testid="turn-modal-close"
             onClick={onClose}
-            className="rounded border border-zinc-600 px-2 py-0.5 text-xs hover:border-zinc-400"
+            style={{
+              background: "transparent",
+              border: "1px solid var(--border-default)",
+              color: "var(--fg-1)",
+              padding: "var(--sp-1) var(--sp-2)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              letterSpacing: "var(--ls-wider)",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
           >
-            Close
+            CLOSE
           </button>
         </div>
-        <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-zinc-400">
-          <dt>Timestamp</dt>
-          <dd className="text-zinc-200">{turn.ts}</dd>
-          <dt>Duration</dt>
-          <dd className="text-zinc-200">{formatDuration(turn.durationMs)}</dd>
-          <dt>Exit</dt>
-          <dd className="text-zinc-200">{turn.exitStatus}</dd>
-          <dt>Tokens</dt>
-          <dd className="text-zinc-200">{turn.tokens || "—"}</dd>
+        <dl
+          style={{
+            marginTop: "var(--sp-3)",
+            display: "grid",
+            gridTemplateColumns: "auto 1fr",
+            columnGap: "var(--sp-4)",
+            rowGap: "var(--sp-1)",
+            fontSize: "var(--text-xs)",
+            color: "var(--fg-3)",
+            fontFamily: "var(--font-mono)",
+            letterSpacing: "var(--ls-wider)",
+            textTransform: "uppercase",
+          }}
+        >
+          <dt>TIMESTAMP</dt>
+          <dd style={{ color: "var(--fg-1)", margin: 0 }}>{turn.ts}</dd>
+          <dt>DURATION</dt>
+          <dd style={{ color: "var(--fg-1)", margin: 0 }}>
+            {formatDuration(turn.durationMs)}
+          </dd>
+          <dt>EXIT</dt>
+          <dd style={{ color: "var(--fg-1)", margin: 0 }}>{turn.exitStatus}</dd>
+          <dt>TOKENS</dt>
+          <dd style={{ color: "var(--fg-1)", margin: 0 }}>
+            {turn.tokens || "—"}
+          </dd>
         </dl>
 
-        <Section title="Prompt" body={turn.prompt} />
-        <Section title="Response" body={turn.response} />
+        <Section title="PROMPT" body={turn.prompt} />
+        <Section title="RESPONSE" body={turn.response} />
 
         {(turn.filesChanged?.length ?? 0) > 0 ||
         (turn.servicesRestarted?.length ?? 0) > 0 ? (
-          <div className="mt-3 rounded border border-zinc-800 p-2 text-xs">
-            <div className="mb-1 uppercase tracking-wide text-zinc-500">
-              Tool-call summary
+          <div
+            style={{
+              marginTop: "var(--sp-3)",
+              border: "1px solid var(--border-subtle)",
+              padding: "var(--sp-2)",
+              fontSize: "var(--text-xs)",
+            }}
+          >
+            <div className="label" style={{ marginBottom: "var(--sp-1)" }}>
+              TOOL-CALL SUMMARY
             </div>
             {turn.filesChanged?.length ? (
               <div>
-                <span className="text-zinc-400">files: </span>
-                <span className="font-mono text-zinc-200">
+                <span style={{ color: "var(--fg-3)" }}>files: </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--fg-1)",
+                  }}
+                >
                   {turn.filesChanged.join(", ")}
                 </span>
               </div>
             ) : null}
             {turn.servicesRestarted?.length ? (
               <div>
-                <span className="text-zinc-400">restarted: </span>
-                <span className="font-mono text-zinc-200">
+                <span style={{ color: "var(--fg-3)" }}>restarted: </span>
+                <span
+                  style={{
+                    fontFamily: "var(--font-mono)",
+                    color: "var(--fg-1)",
+                  }}
+                >
                   {turn.servicesRestarted.join(", ")}
                 </span>
               </div>
@@ -228,11 +339,22 @@ function Section({
   readonly body: string;
 }): JSX.Element {
   return (
-    <div className="mt-3">
-      <div className="text-xs uppercase tracking-wide text-zinc-500">
-        {title}
-      </div>
-      <pre className="mt-1 max-h-48 overflow-y-auto whitespace-pre-wrap rounded bg-black/50 p-2 text-xs text-zinc-100">
+    <div style={{ marginTop: "var(--sp-3)" }}>
+      <div className="label">{title}</div>
+      <pre
+        style={{
+          marginTop: "var(--sp-1)",
+          maxHeight: 192,
+          overflowY: "auto",
+          whiteSpace: "pre-wrap",
+          background: "var(--bg-base)",
+          border: "1px solid var(--border-subtle)",
+          padding: "var(--sp-2)",
+          fontSize: "var(--text-xs)",
+          color: "var(--fg-1)",
+          fontFamily: "var(--font-mono)",
+        }}
+      >
         {body || "(empty)"}
       </pre>
     </div>
