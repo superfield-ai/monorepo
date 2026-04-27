@@ -55,4 +55,3 @@ jobs:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
       - run: bun run format:check
-
