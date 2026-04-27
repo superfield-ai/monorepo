@@ -23,7 +23,13 @@ const RAND = Math.random().toString(36).slice(2, 10);
 const USERNAME = `e2e-smoke-${RAND}`;
 const PASSWORD = "smoke-password-123";
 
-test.describe("template control smoke", () => {
+// Requires SUPERFIELD_REPO_ROOT to point at a real template checkout. The
+// dedicated ci-control-template workflow sets this; the default control
+// e2e job does not, so skip there.
+const describeFn = process.env.SUPERFIELD_REPO_ROOT
+  ? test.describe
+  : test.describe.skip;
+describeFn("template control smoke", () => {
   test("browser UI loads without console errors", async ({ page }) => {
     await page.goto("/");
     // Root SPA mount signal — same selector existing specs rely on.
