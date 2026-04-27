@@ -33,8 +33,8 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 
 ### Phase A-3 — Planning loop: issue audit + Plan coverage ✅
 
-- ✅ `runIssueAudit` — LLM-driven schema conformance via `buildIssueAuditPrompt`
-- ✅ `runPlanCoverage` — pure deterministic, appends missing open issues to Backlog phase
+- ✅ `runIssueAudit` — LLM-driven schema conformance via `buildIssueAuditPrompt`; issues processed in batches of 25 (up to 3 concurrent), result shape `{ audited, nonConformant[], reports: Record<number, IssueAuditReport> }`; non-conformant issues body-rewritten and labelled `non-conformant`; incremental state cache on Plan issue skips unchanged issues (10-min TTL)
+- ✅ `runPlanCoverage` — deterministic placement for issues declaring `## Phase`; LLM batch placement (Haiku, `buildPlanPlacementPrompt`) for issues without a declared phase; LLM can place into existing phases or create new ones; result shape `{ appended, alreadyCovered, skipped, llmPlaced, createdPhases, planCreated }`
 - ✅ `runLLMTask` reusable helper with `extractJson`
 
 ### Phase A-4 — Planning loop: blueprint conformance ✅
