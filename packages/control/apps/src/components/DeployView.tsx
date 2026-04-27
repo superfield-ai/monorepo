@@ -4,12 +4,18 @@
  * Deployment health view (D1 / C-9.5). The headline demo screen.
  *
  * Layout:
- *   - Env switcher pill (selected env highlighted)
+ *   - Env switcher pills (selected env highlighted with cyan tint)
  *   - Doctor matrix: rows = check name, cols = env. Red cells render an
  *     <InlineError> with retry that re-runs the doctor for that env.
- *   - Secrets-presence row: per-env required-secret audit.
+ *   - Secrets-presence row: per-env required-secret audit, status pills.
  *   - CI strip: latest workflow run per env, click to open in GitHub.
  *   - Rollback button (per selected env) with confirm modal → SSE log pane.
+ *     Prod requires a typed-name safety gate (E13). Confirm button uses the
+ *     FAULT colour from the design system.
+ *
+ * Visuals follow the Superfield Control Room design language: near-void
+ * backgrounds, sharp 1px borders, mono ALL-CAPS labels, status badges.
+ * Behaviour, event handlers and `data-testid` values are preserved.
  */
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
@@ -24,6 +30,16 @@ import type { AppError } from "../lib/errors";
 interface DeployViewProps {
   readonly controller?: DeployController;
 }
+
+const SECTION_STYLE: React.CSSProperties = {
+  background: "var(--bg-raised)",
+  border: "1px solid var(--border-subtle)",
+};
+
+const SECTION_HEADER_STYLE: React.CSSProperties = {
+  borderBottom: "1px solid var(--border-subtle)",
+  padding: "var(--sp-2) var(--sp-3)",
+};
 
 export function DeployView({
   controller: ctrlProp,
@@ -65,17 +81,34 @@ export function DeployView({
   return (
     <div
       data-testid="deploy-view"
-      className="flex h-full flex-col gap-4 overflow-y-auto bg-zinc-950 p-4 text-zinc-100"
+      style={{
+        display: "flex",
+        height: "100%",
+        flexDirection: "column",
+        gap: "var(--sp-4)",
+        overflowY: "auto",
+        background: "var(--bg-base)",
+        color: "var(--fg-1)",
+        padding: "var(--sp-4)",
+      }}
     >
-      <header className="flex items-center justify-between">
-        <h2 className="text-lg font-semibold">Deployment health</h2>
+      <header
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}
+      >
+        <h2 className="h2" style={{ margin: 0 }}>
+          DEPLOYMENT HEALTH
+        </h2>
         <button
           type="button"
           data-testid="deploy-refresh"
           onClick={() => void controller.refreshAll()}
-          className="rounded border border-zinc-600 px-3 py-1 text-xs hover:border-zinc-400"
+          style={ghostButton}
         >
-          Refresh
+          REFRESH
         </button>
       </header>
 
@@ -93,15 +126,12 @@ export function DeployView({
         onSelect={(e) => controller.selectEnv(e)}
       />
 
-      <section
-        data-testid="doctor-matrix"
-        className="rounded border border-zinc-800"
-      >
-        <div className="border-b border-zinc-800 px-3 py-2 text-sm font-medium">
-          Doctor checks
+      <section data-testid="doctor-matrix" style={SECTION_STYLE}>
+        <div style={SECTION_HEADER_STYLE}>
+          <span className="label">DOCTOR CHECKS</span>
         </div>
         {checkNames.length === 0 ? (
-          <div className="p-3">
+          <div style={{ padding: "var(--sp-3)" }}>
             <EmptyState
               title="Doctor results not loaded"
               hint="Click Refresh, or check the studio debug view if this persists."
@@ -109,14 +139,26 @@ export function DeployView({
             />
           </div>
         ) : (
-          <table className="w-full text-sm">
-            <thead className="bg-zinc-900 text-xs uppercase text-zinc-400">
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead style={{ background: "var(--bg-elevated)" }}>
               <tr>
-                <th className="px-3 py-2 text-left">Check</th>
+                <th
+                  className="label"
+                  style={{
+                    textAlign: "left",
+                    padding: "var(--sp-2) var(--sp-3)",
+                  }}
+                >
+                  CHECK
+                </th>
                 {envs.map((env) => (
                   <th
                     key={env}
-                    className="px-3 py-2 text-left"
+                    className="label"
+                    style={{
+                      textAlign: "left",
+                      padding: "var(--sp-2) var(--sp-3)",
+                    }}
                     data-testid={`doctor-col-${env}`}
                   >
                     {env}
@@ -126,15 +168,32 @@ export function DeployView({
             </thead>
             <tbody>
               {checkNames.map((name) => (
-                <tr key={name} className="border-t border-zinc-800 align-top">
-                  <td className="px-3 py-2 font-mono text-xs">{name}</td>
+                <tr
+                  key={name}
+                  style={{
+                    borderTop: "1px solid var(--border-subtle)",
+                    verticalAlign: "top",
+                  }}
+                >
+                  <td
+                    style={{
+                      padding: "var(--sp-2) var(--sp-3)",
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--text-xs)",
+                      color: "var(--fg-1)",
+                      letterSpacing: "var(--ls-wider)",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    {name}
+                  </td>
                   {envs.map((env) => {
                     const checks = state.doctorByEnv[env] ?? [];
                     const c = checks.find((x) => x.name === name);
                     return (
                       <td
                         key={env}
-                        className="px-3 py-2"
+                        style={{ padding: "var(--sp-2) var(--sp-3)" }}
                         data-testid={`doctor-cell-${env}-${name}`}
                       >
                         {renderDoctorCell({
@@ -153,39 +212,79 @@ export function DeployView({
         )}
       </section>
 
-      <section className="rounded border border-zinc-800">
-        <div className="border-b border-zinc-800 px-3 py-2 text-sm font-medium">
-          Secrets presence
+      <section style={SECTION_STYLE}>
+        <div style={SECTION_HEADER_STYLE}>
+          <span className="label">SECRETS PRESENCE</span>
         </div>
-        <div className="grid gap-3 p-3 md:grid-cols-3">
+        <div
+          style={{
+            display: "grid",
+            gap: "var(--sp-3)",
+            padding: "var(--sp-3)",
+            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+          }}
+        >
           {envs.map((env) => (
             <div
               key={env}
               data-testid={`secrets-card-${env}`}
-              className="rounded border border-zinc-800 bg-zinc-900/40 p-3"
+              style={{
+                background: "var(--bg-base)",
+                border: "1px solid var(--border-subtle)",
+                padding: "var(--sp-3)",
+              }}
             >
-              <div className="mb-2 text-xs uppercase text-zinc-400">{env}</div>
-              <ul className="space-y-1 text-sm">
+              <div className="label" style={{ marginBottom: "var(--sp-2)" }}>
+                {env}
+              </div>
+              <ul
+                style={{
+                  listStyle: "none",
+                  margin: 0,
+                  padding: 0,
+                  display: "flex",
+                  flexDirection: "column",
+                  gap: "var(--sp-1)",
+                }}
+              >
                 {(state.secretsByEnv[env] ?? []).map((s) => (
                   <li
                     key={s.name}
-                    className="flex items-center justify-between gap-2"
                     data-testid={`secret-${env}-${s.name}`}
+                    style={{
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "space-between",
+                      gap: "var(--sp-2)",
+                    }}
                   >
-                    <span className="font-mono text-xs">{s.name}</span>
                     <span
-                      className={
-                        s.present
-                          ? "rounded bg-emerald-900/50 px-2 py-0.5 text-xs text-emerald-200"
-                          : "rounded bg-red-900/50 px-2 py-0.5 text-xs text-red-200"
-                      }
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "var(--text-xs)",
+                        color: "var(--fg-1)",
+                      }}
+                    >
+                      {s.name}
+                    </span>
+                    <span
+                      data-pill="true"
+                      className={`badge ${s.present ? "badge-nominal" : "badge-critical"}`}
                     >
                       {s.present ? "present" : "missing"}
                     </span>
                   </li>
                 ))}
                 {(state.secretsByEnv[env] ?? []).length === 0 ? (
-                  <li className="text-xs text-zinc-500">No data yet</li>
+                  <li
+                    style={{
+                      fontSize: "var(--text-xs)",
+                      color: "var(--fg-3)",
+                      fontFamily: "var(--font-mono)",
+                    }}
+                  >
+                    No data yet
+                  </li>
                 ) : null}
               </ul>
             </div>
@@ -193,23 +292,31 @@ export function DeployView({
         </div>
       </section>
 
-      <section
-        data-testid="ci-strip"
-        className="rounded border border-zinc-800"
-      >
-        <div className="border-b border-zinc-800 px-3 py-2 text-sm font-medium">
-          Latest CI runs
+      <section data-testid="ci-strip" style={SECTION_STYLE}>
+        <div style={SECTION_HEADER_STYLE}>
+          <span className="label">LATEST CI RUNS</span>
         </div>
-        <div className="grid gap-3 p-3 md:grid-cols-3">
+        <div
+          style={{
+            display: "grid",
+            gap: "var(--sp-3)",
+            padding: "var(--sp-3)",
+            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+          }}
+        >
           {envs.map((env) => {
             const run = runForEnv(env);
             return (
               <div
                 key={env}
                 data-testid={`ci-card-${env}`}
-                className="rounded border border-zinc-800 bg-zinc-900/40 p-3"
+                style={{
+                  background: "var(--bg-base)",
+                  border: "1px solid var(--border-subtle)",
+                  padding: "var(--sp-3)",
+                }}
               >
-                <div className="mb-1 text-xs uppercase text-zinc-400">
+                <div className="label" style={{ marginBottom: "var(--sp-1)" }}>
                   {env}
                 </div>
                 {run ? (
@@ -217,16 +324,28 @@ export function DeployView({
                     href={run.url}
                     target="_blank"
                     rel="noreferrer"
-                    className={
-                      run.ok
-                        ? "text-sm text-emerald-300 underline-offset-2 hover:underline"
-                        : "text-sm text-red-300 underline-offset-2 hover:underline"
-                    }
+                    style={{
+                      fontFamily: "var(--font-mono)",
+                      fontSize: "var(--text-xs)",
+                      letterSpacing: "var(--ls-wider)",
+                      textTransform: "uppercase",
+                      color: run.ok
+                        ? "var(--status-nominal)"
+                        : "var(--status-critical)",
+                      textDecoration: "underline",
+                      textUnderlineOffset: 2,
+                    }}
                   >
                     {run.label}
                   </a>
                 ) : (
-                  <div className="text-xs text-zinc-500">
+                  <div
+                    style={{
+                      fontSize: "var(--text-xs)",
+                      color: "var(--fg-3)",
+                      fontFamily: "var(--font-mono)",
+                    }}
+                  >
                     No deploy-{env} workflow run found
                   </div>
                 )}
@@ -238,26 +357,45 @@ export function DeployView({
 
       <section
         data-testid="rollback-section"
-        className="rounded border border-zinc-800 p-3"
+        style={{ ...SECTION_STYLE, padding: "var(--sp-3)" }}
       >
-        <div className="mb-2 flex items-center justify-between">
-          <div className="text-sm font-medium">
-            Rollback {state.selectedEnv}
-          </div>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "var(--sp-2)",
+          }}
+        >
+          <span className="label">ROLLBACK&nbsp;{state.selectedEnv}</span>
           <button
             type="button"
             data-testid="rollback-trigger"
             onClick={() => setConfirmOpen(true)}
             disabled={state.rolloutActive}
-            className="rounded border border-red-600 bg-red-900/40 px-3 py-1 text-xs font-medium text-red-100 hover:bg-red-900/70 disabled:opacity-50"
+            style={{
+              ...dangerButton,
+              opacity: state.rolloutActive ? 0.5 : 1,
+              cursor: state.rolloutActive ? "not-allowed" : "pointer",
+            }}
           >
-            Roll back this environment
+            ROLL BACK THIS ENVIRONMENT
           </button>
         </div>
         {state.rolloutLog.length > 0 ? (
           <pre
             data-testid="rollback-log"
-            className="max-h-48 overflow-y-auto rounded bg-black/60 p-2 text-xs text-emerald-200"
+            style={{
+              maxHeight: 192,
+              overflowY: "auto",
+              background: "var(--bg-void)",
+              padding: "var(--sp-2)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              color: "var(--accent-green)",
+              border: "1px solid var(--border-subtle)",
+              margin: 0,
+            }}
           >
             {state.rolloutLog.join("\n")}
           </pre>
@@ -284,6 +422,38 @@ interface CiRunDisplay {
   readonly ok: boolean;
 }
 
+const ghostButton: React.CSSProperties = {
+  padding: "var(--sp-1) var(--sp-3)",
+  background: "transparent",
+  border: "1px solid var(--border-default)",
+  color: "var(--fg-1)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 500,
+  letterSpacing: "var(--ls-wider)",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+
+const dangerButton: React.CSSProperties = {
+  padding: "var(--sp-1) var(--sp-3)",
+  background: "transparent",
+  border: "1px solid var(--accent-red)",
+  color: "var(--accent-red)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--text-xs)",
+  fontWeight: 600,
+  letterSpacing: "var(--ls-wider)",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};
+
+const dangerSolidButton: React.CSSProperties = {
+  ...dangerButton,
+  background: "var(--accent-red)",
+  color: "var(--fg-inv)",
+};
+
 function EnvSwitcher({
   envs,
   selected,
@@ -297,7 +467,11 @@ function EnvSwitcher({
     <div
       role="tablist"
       data-testid="env-switcher"
-      className="inline-flex rounded-full border border-zinc-700 bg-zinc-900 p-1 text-xs"
+      style={{
+        display: "inline-flex",
+        gap: "var(--sp-1)",
+        padding: 0,
+      }}
     >
       {envs.map((env) => {
         const active = env === selected;
@@ -308,12 +482,22 @@ function EnvSwitcher({
             type="button"
             aria-selected={active}
             data-testid={`env-pill-${env}`}
+            data-pill="true"
             onClick={() => onSelect(env)}
-            className={
-              active
-                ? "rounded-full bg-blue-600 px-3 py-1 font-medium text-white"
-                : "rounded-full px-3 py-1 text-zinc-300 hover:text-white"
-            }
+            className={`badge ${active ? "" : "badge-offline"}`}
+            style={{
+              fontSize: "var(--text-xs)",
+              padding: "var(--sp-1) var(--sp-3)",
+              cursor: "pointer",
+              ...(active
+                ? {
+                    color: "var(--accent-cyan)",
+                    background: "rgba(0, 200, 204, 0.08)",
+                    borderColor: "var(--accent-cyan)",
+                    boxShadow: "0 0 8px rgba(0, 200, 204, 0.18)",
+                  }
+                : {}),
+            }}
           >
             {env}
           </button>
@@ -344,22 +528,61 @@ function ConfirmModal({
       data-testid="rollback-confirm"
       role="dialog"
       aria-modal="true"
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/60"
+      style={{
+        position: "fixed",
+        inset: 0,
+        zIndex: "var(--z-modal)" as unknown as number,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "var(--bg-overlay)",
+      }}
     >
-      <div className="w-full max-w-md rounded border border-zinc-700 bg-zinc-900 p-4 text-sm text-zinc-100">
-        <h3 className="text-base font-semibold">Roll back {env}?</h3>
-        <p className="mt-2 text-zinc-300">
+      <div
+        style={{
+          width: "100%",
+          maxWidth: 480,
+          background: "var(--bg-raised)",
+          border: "1px solid var(--accent-red)",
+          padding: "var(--sp-4)",
+          color: "var(--fg-1)",
+          boxShadow: "var(--glow-red)",
+        }}
+      >
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-2)",
+            marginBottom: "var(--sp-2)",
+          }}
+        >
+          <span className="badge badge-critical" data-pill="true">
+            FAULT GATE
+          </span>
+          <h3 className="h3" style={{ margin: 0 }}>
+            ROLL BACK&nbsp;{env}?
+          </h3>
+        </div>
+        <p style={{ marginTop: "var(--sp-2)", color: "var(--fg-2)" }}>
           This will run <code>kubectl rollout undo</code> for the application
           and worker deployments. The studio will surface each step in the live
           log.
         </p>
         {requiresTypedConfirmation ? (
-          <label className="mt-4 block text-xs text-zinc-300">
-            Type{" "}
-            <code className="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[11px]">
-              {env}
-            </code>{" "}
-            to confirm:
+          <label
+            style={{
+              marginTop: "var(--sp-4)",
+              display: "block",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              color: "var(--fg-2)",
+              letterSpacing: "var(--ls-wider)",
+              textTransform: "uppercase",
+            }}
+          >
+            TYPE <code style={{ fontSize: "var(--text-xs)" }}>{env}</code> TO
+            CONFIRM:
             <input
               type="text"
               value={typed}
@@ -368,27 +591,48 @@ function ConfirmModal({
               autoFocus
               autoComplete="off"
               spellCheck={false}
-              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs text-zinc-100 focus:border-red-500 focus:outline-none"
+              style={{
+                marginTop: "var(--sp-1)",
+                width: "100%",
+                background: "var(--bg-void)",
+                border: "1px solid var(--border-subtle)",
+                color: "var(--fg-1)",
+                padding: "var(--sp-1) var(--sp-2)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-xs)",
+                outline: "none",
+              }}
             />
           </label>
         ) : null}
-        <div className="mt-4 flex justify-end gap-2">
+        <div
+          style={{
+            marginTop: "var(--sp-4)",
+            display: "flex",
+            justifyContent: "flex-end",
+            gap: "var(--sp-2)",
+          }}
+        >
           <button
             type="button"
             data-testid="rollback-cancel"
             onClick={onCancel}
-            className="rounded border border-zinc-600 px-3 py-1 text-xs hover:border-zinc-400"
+            style={ghostButton}
           >
-            Cancel
+            CANCEL
           </button>
           <button
             type="button"
             data-testid="rollback-confirm-action"
             onClick={onConfirm}
             disabled={!confirmEnabled}
-            className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
+            style={{
+              ...dangerSolidButton,
+              opacity: !confirmEnabled ? 0.4 : 1,
+              cursor: !confirmEnabled ? "not-allowed" : "pointer",
+            }}
           >
-            Confirm rollback
+            CONFIRM ROLLBACK
           </button>
         </div>
       </div>
@@ -419,7 +663,15 @@ function renderDoctorCell({
   }
   if (!check) {
     return (
-      <span className="text-xs text-zinc-500">
+      <span
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-xs)",
+          color: "var(--fg-3)",
+          letterSpacing: "var(--ls-wider)",
+          textTransform: "uppercase",
+        }}
+      >
         {loading ? "checking…" : "—"}
       </span>
     );
@@ -428,7 +680,8 @@ function renderDoctorCell({
     return (
       <span
         data-testid="doctor-ok"
-        className="rounded bg-emerald-900/40 px-2 py-0.5 text-xs text-emerald-200"
+        data-pill="true"
+        className="badge badge-nominal"
         title={check.detail}
       >
         ok
