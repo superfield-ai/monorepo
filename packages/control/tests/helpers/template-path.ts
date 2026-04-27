@@ -27,3 +27,20 @@ export function resolveTemplatePath(): string {
       `of superfield-ai/superfield-starter-ts as a sibling of the cli repo at ${sibling}.`,
   );
 }
+
+/**
+ * Non-throwing variant of {@link resolveTemplatePath}. Returns the resolved
+ * path if a template checkout is available, or `null` if none can be located.
+ *
+ * Use this from test files that should be skipped (rather than fail) when the
+ * fixture is not present, e.g. in CI jobs where the template repo isn't
+ * checked out.
+ */
+export function findTemplatePath(): string | null {
+  const fromEnv = process.env.TEMPLATE_REPO_PATH;
+  if (fromEnv) {
+    return existsSync(fromEnv) ? fromEnv : null;
+  }
+  const sibling = resolve(import.meta.dirname, "../../../../../template");
+  return existsSync(sibling) ? sibling : null;
+}

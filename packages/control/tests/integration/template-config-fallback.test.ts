@@ -14,6 +14,9 @@ import { mkdtempSync, rmSync, mkdirSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig } from "../../src/config";
+import { findTemplatePath } from "../helpers/template-path";
+
+const d = findTemplatePath() ? describe : describe.skip;
 
 // ── helpers ───────────────────────────────────────────────────────────────────
 
@@ -45,7 +48,7 @@ function withEnv(
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
-describe("loadConfig — webPort fallback when k8s/ is missing or empty", () => {
+d("loadConfig — webPort fallback when k8s/ is missing or empty", () => {
   let tmpDir: string | null = null;
 
   afterEach(() => {

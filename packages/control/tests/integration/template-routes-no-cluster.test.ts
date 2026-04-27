@@ -12,7 +12,12 @@ import { createServer, type Server } from "http";
 import type { AddressInfo } from "net";
 import { route } from "../../src/router";
 import type { ControlConfig } from "../../src/config";
-import { resolveTemplatePath } from "../helpers/template-path";
+import {
+  findTemplatePath,
+  resolveTemplatePath,
+} from "../helpers/template-path";
+
+const d = findTemplatePath() ? describe : describe.skip;
 
 // ── Helpers (mirrored from studio-server.test.ts) ─────────────────────────────
 
@@ -84,7 +89,7 @@ async function startRouterServer(
 
 // ── Tests ────────────────────────────────────────────────────────────────────
 
-describe("template routes — no cluster", () => {
+d("template routes — no cluster", () => {
   let routerServer: Server;
   let baseUrl: string;
   let priorRepoRoot: string | undefined;

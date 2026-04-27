@@ -13,7 +13,12 @@ import { createServer, type Server } from "http";
 import type { AddressInfo } from "net";
 import { route } from "../../src/router";
 import type { ControlConfig } from "../../src/config";
-import { resolveTemplatePath } from "../helpers/template-path";
+import {
+  findTemplatePath,
+  resolveTemplatePath,
+} from "../helpers/template-path";
+
+const d = findTemplatePath() ? describe : describe.skip;
 
 // ── Helpers (mirror studio-server.test.ts) ───────────────────────────────────
 
@@ -80,7 +85,7 @@ async function startRouterServer(
  * do not change the source"), this test uses the real contract. The session
  * cookie name is `superfield_auth` (HttpOnly, Path=/, SameSite=Lax).
  */
-describe("template auth round-trip — studio router", () => {
+d("template auth round-trip — studio router", () => {
   let routerServer: Server;
   let baseUrl: string;
   const prevRepoRoot = process.env.SUPERFIELD_REPO_ROOT;

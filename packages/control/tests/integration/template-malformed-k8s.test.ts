@@ -22,6 +22,12 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { loadConfig, type ControlConfig } from "../../src/config";
 import { route } from "../../src/router";
+import {
+  findTemplatePath,
+  resolveTemplatePath,
+} from "../helpers/template-path";
+
+const d = findTemplatePath() ? describe : describe.skip;
 
 // Truncated app.yaml — cut mid-Service definition, leaving spec dangling.
 const TRUNCATED_APP_YAML = `# Deployment + Service for the Superfield application container.
@@ -72,7 +78,8 @@ async function startRouterServer(
   const server = createServer(
     async (req: IncomingMessage, res: ServerResponse) => {
       const chunks: Buffer[] = [];
-      for await (const chunk of req as AsyncIterable<Buffer>) chunks.push(chunk);
+      for await (const chunk of req as AsyncIterable<Buffer>)
+        chunks.push(chunk);
       const body = chunks.length > 0 ? Buffer.concat(chunks) : null;
 
       const headers: Record<string, string> = {};
@@ -101,23 +108,14 @@ async function startRouterServer(
   return { baseUrl: `http://127.0.0.1:${port}`, server };
 }
 
-describe("template malformed k8s — loadConfig fallback", () => {
+d("template malformed k8s — loadConfig fallback", () => {
   let tmpDir: string;
   let priorRepoRoot: string | undefined;
 
   beforeAll(() => {
     priorRepoRoot = process.env.SUPERFIELD_REPO_ROOT;
     tmpDir = mkdtempSync(join(tmpdir(), "sf-malformed-k8s-"));
-    const srcK8s = join(
-      __dirname,
-      "..",
-      "..",
-      "..",
-      "..",
-      "..",
-      "template",
-      "k8s",
-    );
+    const srcK8s = join(resolveTemplatePath(), "k8s");
     const destK8s = join(tmpDir, "k8s");
     cpSync(srcK8s, destK8s, { recursive: true });
     // Overwrite app.yaml with a truncated, mid-Service-definition version.

@@ -37,6 +37,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
 import type { ControlConfig } from "../../src/config";
+import { findTemplatePath } from "../helpers/template-path";
+
+const d = findTemplatePath() ? describe : describe.skip;
 
 // ── Helpers (mirror studio-server.test.ts) ────────────────────────────────────
 
@@ -94,7 +97,7 @@ async function startRouterServer(
 
 // ── Test ──────────────────────────────────────────────────────────────────────
 
-describe("template repo-root resolution — SUPERFIELD_REPO_ROOT vs cwd", () => {
+d("template repo-root resolution — SUPERFIELD_REPO_ROOT vs cwd", () => {
   let routerServer: Server;
   let baseUrl: string;
   let repoRootDir: string;

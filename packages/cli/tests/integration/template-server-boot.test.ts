@@ -6,23 +6,16 @@ import {
   type ControlCommandDeps,
 } from "../../commands/control.ts";
 
-function resolveTemplatePath(): string {
+function findTemplatePath(): string | null {
   const fromEnv = process.env.TEMPLATE_REPO_PATH;
   if (fromEnv) {
-    if (!existsSync(fromEnv)) {
-      throw new Error(`TEMPLATE_REPO_PATH=${fromEnv} does not exist.`);
-    }
-    return fromEnv;
+    return existsSync(fromEnv) ? fromEnv : null;
   }
   const sibling = resolve(import.meta.dirname, "../../../../../template");
-  if (existsSync(sibling)) return sibling;
-  throw new Error(
-    `Could not locate template repo. Set TEMPLATE_REPO_PATH or check out ` +
-      `superfield-ai/superfield-starter-ts at ${sibling}.`,
-  );
+  return existsSync(sibling) ? sibling : null;
 }
 
-const TEMPLATE_REPO = resolveTemplatePath();
+const d = findTemplatePath() ? describe : describe.skip;
 
 function makeDeps(
   overrides: Partial<ControlCommandDeps> = {},
@@ -38,7 +31,8 @@ function makeDeps(
   };
 }
 
-describe("controlCommand integration: template + closed API port", () => {
+d("controlCommand integration: template + closed API port", () => {
+  const TEMPLATE_REPO = findTemplatePath()!;
   afterEach(() => {
     delete process.env.SUPERFIELD_REPO_ROOT;
     delete process.env.SUPERFIELD_API_URL;
