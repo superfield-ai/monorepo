@@ -303,11 +303,13 @@ describe("exportDb — managed mode, GCP AlloyDB", () => {
 describe("exportDb — managed mode, AWS RDS", () => {
   it("triggers CreateDBSnapshot and writes a receipt JSON", async () => {
     server.use(
-      http.get("https://rds.us-east-1.amazonaws.com/", ({ request }) => {
-        const url = new URL(request.url);
-        if (url.searchParams.get("Action") === "CreateDBSnapshot") {
+      http.post("https://rds.us-east-1.amazonaws.com/", async ({ request }) => {
+        const text = await request.text();
+        const params = new URLSearchParams(text);
+        if (params.get("Action") === "CreateDBSnapshot") {
+          const snapshotId = params.get("DBSnapshotIdentifier") ?? "";
           return HttpResponse.xml(
-            `<CreateDBSnapshotResponse><CreateDBSnapshotResult><DBSnapshot><DBSnapshotIdentifier>${url.searchParams.get("DBSnapshotIdentifier")}</DBSnapshotIdentifier></DBSnapshot></CreateDBSnapshotResult></CreateDBSnapshotResponse>`,
+            `<CreateDBSnapshotResponse><CreateDBSnapshotResult><DBSnapshot><DBSnapshotIdentifier>${snapshotId}</DBSnapshotIdentifier></DBSnapshot></CreateDBSnapshotResult></CreateDBSnapshotResponse>`,
           );
         }
         return new HttpResponse(null, { status: 400 });
@@ -335,7 +337,7 @@ describe("exportDb — managed mode, AWS RDS", () => {
 
   it("throws when AWS RDS API returns a non-ok response", async () => {
     server.use(
-      http.get(
+      http.post(
         "https://rds.us-west-2.amazonaws.com/",
         () => new HttpResponse("AccessDenied", { status: 403 }),
       ),

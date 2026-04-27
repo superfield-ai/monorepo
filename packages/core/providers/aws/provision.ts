@@ -181,8 +181,8 @@ function distinctAzSubnetIds(
 }
 
 interface ProvisionDbArgs {
-  ec2: import("@aws-sdk/client-ec2").EC2Client;
-  rds: import("@aws-sdk/client-rds").RDSClient;
+  ec2: import("./clients.js").AwsClient;
+  rds: import("./clients.js").AwsClient;
   vpcId: string;
   subnetIds: string[];
   ec2SgId: string;

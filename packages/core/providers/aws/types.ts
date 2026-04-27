@@ -7,9 +7,7 @@
  * `databaseUrl`.
  */
 
-import type { EC2Client } from "@aws-sdk/client-ec2";
-import type { RDSClient } from "@aws-sdk/client-rds";
-import type { SSMClient } from "@aws-sdk/client-ssm";
+import type { AwsClient } from "./clients.js";
 
 export interface ProvisionOpts {
   /** AWS region. Defaults to "us-east-1". */
@@ -40,17 +38,17 @@ export interface ProvisionResult {
 
 /**
  * Optional dependency injection for tests. Production callers omit this and
- * the provider builds default clients from the AWS SDK credential chain.
+ * the provider builds default clients from environment variable credentials.
  *
- * We do NOT ship a mock library. Test doubles are real objects whose `send`
+ * We do NOT ship a mock library. Test doubles are real objects whose `query`
  * method returns hand-rolled fixture responses; see
- * `tests/unit/aws/provision.test.ts`.
+ * `tests/unit/aws/`.
  */
 export interface ProvisionDeps {
   clients?: {
-    ec2: EC2Client;
-    rds: RDSClient;
-    ssm: SSMClient;
+    ec2: AwsClient;
+    rds: AwsClient;
+    ssm: AwsClient;
   };
   /** Sleep helper, injected so tests run instantly. Default: real setTimeout. */
   sleep?: (ms: number) => Promise<void>;
