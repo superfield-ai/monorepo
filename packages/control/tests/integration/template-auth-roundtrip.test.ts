@@ -13,6 +13,7 @@ import { createServer, type Server } from "http";
 import type { AddressInfo } from "net";
 import { route } from "../../src/router";
 import type { ControlConfig } from "../../src/config";
+import { resolveTemplatePath } from "../helpers/template-path";
 
 // ── Helpers (mirror studio-server.test.ts) ───────────────────────────────────
 
@@ -90,7 +91,7 @@ describe("template auth round-trip — studio router", () => {
   let registerCookie: string | null = null;
 
   beforeAll(async () => {
-    process.env.SUPERFIELD_REPO_ROOT = "/home/lucas/superfield/template";
+    process.env.SUPERFIELD_REPO_ROOT = resolveTemplatePath();
     ({ baseUrl, server: routerServer } = await startRouterServer(makeConfig()));
   });
 
