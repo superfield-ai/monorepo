@@ -5,11 +5,16 @@
  * captured by the DebugStore (DB1, DB3, DB4, DB5, DB6).
  *
  * Filters: level (error / warn / info / debug), source, free-text search.
- * Each entry is expandable; expansion reveals the full stack, request context,
- * breadcrumbs leading up to the event, and a "Copy to clipboard" action.
+ * Each entry is a flat `bg-raised` row with a status-coloured left border;
+ * expansion reveals the full stack, request context, breadcrumbs leading up
+ * to the event, and a "Copy to clipboard" action.
  *
  * "Clear" empties the store; sessionStorage persistence is handled by
  * debug-store.ts itself.
+ *
+ * Visuals follow the Superfield Control Room design system: near-void
+ * backgrounds, sharp 1px borders, mono ALL-CAPS labels, status badges.
+ * Behaviour and `data-testid` values are preserved.
  */
 
 import React from "react";
@@ -29,11 +34,18 @@ const SOURCES: readonly DebugSource[] = [
   "breadcrumb",
 ];
 
-const LEVEL_BADGE: Record<DebugLevel, string> = {
-  error: "bg-red-700 text-red-50",
-  warn: "bg-amber-600 text-amber-50",
-  info: "bg-blue-700 text-blue-50",
-  debug: "bg-zinc-700 text-zinc-100",
+const LEVEL_BADGE_CLASS: Record<DebugLevel, string> = {
+  error: "badge badge-critical",
+  warn: "badge badge-caution",
+  info: "badge badge-info",
+  debug: "badge badge-offline",
+};
+
+const LEVEL_ACCENT: Record<DebugLevel, string> = {
+  error: "var(--accent-red)",
+  warn: "var(--accent-amber)",
+  info: "var(--accent-blue)",
+  debug: "var(--status-offline)",
 };
 
 export function DebugView(): JSX.Element {
@@ -67,17 +79,42 @@ export function DebugView(): JSX.Element {
   return (
     <div
       data-testid="debug-view"
-      className="flex h-full flex-col bg-zinc-950 text-zinc-100"
+      style={{
+        display: "flex",
+        height: "100%",
+        flexDirection: "column",
+        background: "var(--bg-base)",
+        color: "var(--fg-1)",
+      }}
     >
-      <header className="flex flex-wrap items-center gap-2 border-b border-zinc-800 px-4 py-2 text-sm">
-        <span className="font-semibold">Debug</span>
+      <header
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          alignItems: "center",
+          gap: "var(--sp-2)",
+          borderBottom: "1px solid var(--border-subtle)",
+          padding: "var(--sp-2) var(--sp-4)",
+          background: "var(--bg-raised)",
+        }}
+      >
+        <span className="label" style={{ color: "var(--fg-1)" }}>
+          DEBUG
+        </span>
         <span
           data-testid="debug-view-count"
-          className="rounded bg-zinc-800 px-2 py-0.5 text-xs"
+          className="badge badge-offline"
+          data-pill="true"
         >
           {filtered.length} / {state.entries.length}
         </span>
-        <div className="ml-2 flex gap-1">
+        <div
+          style={{
+            display: "flex",
+            gap: "var(--sp-1)",
+            marginLeft: "var(--sp-2)",
+          }}
+        >
           {LEVELS.map((lvl) => (
             <FilterChip
               key={lvl}
@@ -88,7 +125,7 @@ export function DebugView(): JSX.Element {
             />
           ))}
         </div>
-        <div className="flex gap-1">
+        <div style={{ display: "flex", gap: "var(--sp-1)" }}>
           {SOURCES.map((src) => (
             <FilterChip
               key={src}
@@ -103,27 +140,66 @@ export function DebugView(): JSX.Element {
           type="search"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search…"
+          placeholder="SEARCH…"
           data-testid="debug-search"
-          className="ml-auto rounded border border-zinc-700 bg-zinc-900 px-2 py-1 text-xs"
+          style={{
+            marginLeft: "auto",
+            background: "var(--bg-base)",
+            border: "1px solid var(--border-subtle)",
+            color: "var(--fg-1)",
+            padding: "var(--sp-1) var(--sp-2)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-xs)",
+            letterSpacing: "var(--ls-wider)",
+            outline: "none",
+          }}
         />
         <button
           type="button"
           onClick={handleClear}
           data-testid="debug-clear"
-          className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800"
+          style={{
+            background: "transparent",
+            border: "1px solid var(--border-default)",
+            color: "var(--fg-1)",
+            padding: "var(--sp-1) var(--sp-3)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-xs)",
+            letterSpacing: "var(--ls-wider)",
+            textTransform: "uppercase",
+            cursor: "pointer",
+          }}
         >
-          Clear
+          CLEAR
         </button>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
+      <div style={{ flex: 1, overflowY: "auto", padding: "var(--sp-3)" }}>
         {filtered.length === 0 ? (
-          <div data-testid="debug-empty" className="p-6 text-sm text-zinc-400">
-            No matching events. The application is clean.
+          <div
+            data-testid="debug-empty"
+            style={{
+              padding: "var(--sp-6)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              letterSpacing: "var(--ls-wider)",
+              textTransform: "uppercase",
+              color: "var(--fg-3)",
+            }}
+          >
+            NO MATCHING EVENTS — APPLICATION CLEAN.
           </div>
         ) : (
-          <ul className="divide-y divide-zinc-800">
+          <ul
+            style={{
+              listStyle: "none",
+              margin: 0,
+              padding: 0,
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--sp-2)",
+            }}
+          >
             {filtered.map((entry) => (
               <DebugRow
                 key={entry.id}
@@ -167,11 +243,18 @@ function FilterChip({
       onClick={onToggle}
       data-testid={testId}
       data-active={active}
-      className={`rounded px-2 py-0.5 text-xs ${
-        active
-          ? "bg-zinc-700 text-zinc-100"
-          : "bg-transparent text-zinc-500 hover:text-zinc-300"
-      }`}
+      data-pill="true"
+      className={`badge ${active ? "" : "badge-offline"}`}
+      style={{
+        cursor: "pointer",
+        ...(active
+          ? {
+              color: "var(--accent-cyan)",
+              background: "rgba(0,200,204,0.06)",
+              borderColor: "var(--accent-cyan)",
+            }
+          : {}),
+      }}
     >
       {label}
     </button>
@@ -207,82 +290,140 @@ function DebugRow({ entry, expanded, onToggle }: DebugRowProps): JSX.Element {
     );
   };
 
+  const accent = LEVEL_ACCENT[entry.level];
+
   return (
     <li
       data-testid="debug-row"
       data-level={entry.level}
       data-source={entry.source}
+      style={{
+        background: "var(--bg-raised)",
+        border: "1px solid var(--border-subtle)",
+        borderLeft: `3px solid ${accent}`,
+      }}
     >
       <button
         type="button"
         onClick={onToggle}
-        className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs hover:bg-zinc-900/60"
+        style={{
+          display: "flex",
+          width: "100%",
+          alignItems: "center",
+          gap: "var(--sp-2)",
+          padding: "var(--sp-2) var(--sp-3)",
+          textAlign: "left",
+          background: "transparent",
+          border: "none",
+          color: "var(--fg-1)",
+          cursor: "pointer",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-xs)",
+        }}
       >
-        <span className="font-mono text-zinc-500">{time}</span>
         <span
-          className={`rounded px-1.5 py-0.5 font-medium ${LEVEL_BADGE[entry.level]}`}
+          style={{
+            color: "var(--fg-3)",
+            fontFamily: "var(--font-mono)",
+          }}
         >
+          {time}
+        </span>
+        <span className={LEVEL_BADGE_CLASS[entry.level]} data-pill="true">
           {entry.level}
         </span>
-        <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">
+        <span
+          data-pill="true"
+          className="badge badge-offline"
+          style={{ color: "var(--fg-2)" }}
+        >
           {entry.source}
         </span>
-        <span className="flex-1 truncate font-mono text-zinc-200">
+        <span
+          style={{
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            fontFamily: "var(--font-mono)",
+            color: "var(--fg-1)",
+          }}
+        >
           {entry.message}
         </span>
       </button>
       {expanded ? (
         <div
           data-testid="debug-row-detail"
-          className="space-y-2 border-t border-zinc-800 bg-zinc-900/40 px-4 py-3 text-xs text-zinc-300"
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--sp-2)",
+            borderTop: "1px solid var(--border-subtle)",
+            background: "var(--bg-base)",
+            padding: "var(--sp-3) var(--sp-4)",
+            fontSize: "var(--text-xs)",
+            color: "var(--fg-2)",
+          }}
         >
           {entry.context ? (
             <div>
-              <div className="text-zinc-500">Context</div>
-              <pre className="mt-1 overflow-x-auto rounded bg-zinc-950 p-2 font-mono text-[11px]">
+              <div className="label">CONTEXT</div>
+              <pre style={detailPreStyle}>
                 {JSON.stringify(entry.context, null, 2)}
               </pre>
             </div>
           ) : null}
           {entry.stack ? (
             <div>
-              <div className="text-zinc-500">Stack</div>
-              <pre className="mt-1 overflow-x-auto rounded bg-zinc-950 p-2 font-mono text-[11px]">
-                {entry.stack}
-              </pre>
+              <div className="label">STACK</div>
+              <pre style={detailPreStyle}>{entry.stack}</pre>
             </div>
           ) : null}
           {entry.breadcrumbs && entry.breadcrumbs.length > 0 ? (
-            <div>
-              <div className="text-zinc-500">Breadcrumbs</div>
-              <ul className="mt-1 space-y-0.5 font-mono text-[11px]">
+            <details>
+              <summary
+                className="label"
+                style={{ cursor: "pointer", listStyle: "none" }}
+              >
+                BREADCRUMBS ({entry.breadcrumbs.length})
+              </summary>
+              <ul
+                style={{
+                  listStyle: "none",
+                  margin: "var(--sp-1) 0 0 0",
+                  padding: 0,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: 11,
+                }}
+              >
                 {entry.breadcrumbs.map((b, i) => (
-                  <li key={i} className="text-zinc-400">
-                    <span className="text-zinc-600">
+                  <li key={i} style={{ color: "var(--fg-2)" }}>
+                    <span style={{ color: "var(--fg-3)" }}>
                       {new Date(b.ts).toISOString().slice(11, 23)}{" "}
                     </span>
                     [{b.category}] {b.message}
                   </li>
                 ))}
               </ul>
-            </div>
+            </details>
           ) : null}
-          <div className="flex gap-2">
+          <div style={{ display: "flex", gap: "var(--sp-2)" }}>
             <button
               type="button"
               onClick={handleCopy}
               data-testid="debug-row-copy"
-              className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800"
+              style={detailButtonStyle}
             >
-              Copy to clipboard
+              COPY TO CLIPBOARD
             </button>
             <button
               type="button"
               onClick={handleOpenIssue}
               data-testid="debug-row-issue"
-              className="rounded border border-zinc-700 px-2 py-1 text-xs hover:bg-zinc-800"
+              style={detailButtonStyle}
             >
-              Open issue
+              OPEN ISSUE
             </button>
           </div>
         </div>
@@ -290,3 +431,26 @@ function DebugRow({ entry, expanded, onToggle }: DebugRowProps): JSX.Element {
     </li>
   );
 }
+
+const detailPreStyle: React.CSSProperties = {
+  marginTop: "var(--sp-1)",
+  overflowX: "auto",
+  background: "var(--bg-void)",
+  border: "1px solid var(--border-subtle)",
+  padding: "var(--sp-2)",
+  fontFamily: "var(--font-mono)",
+  fontSize: 11,
+  color: "var(--fg-1)",
+};
+
+const detailButtonStyle: React.CSSProperties = {
+  background: "transparent",
+  border: "1px solid var(--border-default)",
+  color: "var(--fg-1)",
+  padding: "var(--sp-1) var(--sp-2)",
+  fontFamily: "var(--font-mono)",
+  fontSize: "var(--text-xs)",
+  letterSpacing: "var(--ls-wider)",
+  textTransform: "uppercase",
+  cursor: "pointer",
+};

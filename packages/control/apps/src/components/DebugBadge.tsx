@@ -1,8 +1,13 @@
 /**
  * @file DebugBadge.tsx
  *
- * Top-nav "Bug" indicator (DB2). Reads the unread error/warning count from the
- * DebugStore and pulses red when > 0. Click → activates the debug tab.
+ * Top-nav "FAULT" indicator (DB2). Reads the unread error/warning count from
+ * the DebugStore. Pulses the FAULT badge while > 0; renders the offline
+ * variant when the queue is clean. Click → activates the debug tab.
+ *
+ * Visuals follow the Superfield Control Room design system: `.badge` class
+ * with `badge-critical` / `badge-offline`, mono ALL-CAPS labels, sharp
+ * corners. Behaviour and `data-testid` values are preserved.
  */
 
 import React from "react";
@@ -22,6 +27,9 @@ export function DebugBadge({ onClick, active }: DebugBadgeProps): JSX.Element {
     [],
   );
   const has = count > 0;
+  const tone = has ? "badge-critical" : "badge-offline";
+  const display = count > 99 ? "99+" : String(count);
+
   return (
     <button
       type="button"
@@ -30,26 +38,42 @@ export function DebugBadge({ onClick, active }: DebugBadgeProps): JSX.Element {
       data-active={active}
       data-count={count}
       aria-label={`Debug — ${count} unread error${count === 1 ? "" : "s"}`}
-      className={`relative ml-auto mr-2 flex items-center gap-1 px-3 py-2 text-sm font-medium ${
-        active
-          ? "border-b-2 border-blue-400 text-blue-300"
-          : has
-            ? "text-red-300 hover:text-red-200"
-            : "text-zinc-400 hover:text-zinc-200"
-      }`}
+      style={{
+        marginLeft: "auto",
+        marginRight: "var(--sp-2)",
+        background: "transparent",
+        border: "none",
+        padding: "var(--sp-1) var(--sp-3)",
+        cursor: "pointer",
+        display: "inline-flex",
+        alignItems: "center",
+        gap: "var(--sp-2)",
+        fontFamily: "var(--font-mono)",
+        fontSize: "var(--text-xs)",
+        fontWeight: 500,
+        letterSpacing: "var(--ls-widest)",
+        textTransform: "uppercase",
+        color: active ? "var(--accent-cyan)" : "var(--fg-2)",
+        borderBottom: active
+          ? "1px solid var(--accent-cyan)"
+          : "1px solid transparent",
+      }}
     >
-      <span>Debug</span>
-      {has ? (
-        <span
-          data-testid="debug-badge-count"
-          className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-bold text-white"
-          style={{
-            animation: "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
-          }}
-        >
-          {count > 99 ? "99+" : count}
-        </span>
-      ) : null}
+      <span>DEBUG</span>
+      <span
+        data-testid="debug-badge-count"
+        data-pill="true"
+        className={`badge ${tone}`}
+        style={
+          has
+            ? {
+                animation: "pulse 1.5s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+              }
+            : undefined
+        }
+      >
+        FAULT&nbsp;{display}
+      </span>
     </button>
   );
 }

@@ -9,6 +9,11 @@
  * All API calls and SSE streaming are delegated to ChatController.
  * This component contains no fetch() calls or EventSource instances.
  *
+ * Visuals follow the Superfield Control Room design system: near-void
+ * backgrounds, sharp 1px borders, mono ALL-CAPS header label, role-coloured
+ * message rows (cyan for user, green for assistant). All `data-testid`
+ * values and event handlers are preserved.
+ *
  * Canonical docs: docs/studio-mode.md — "Browser Interface", "Claude CLI Integration"
  */
 
@@ -93,12 +98,30 @@ export function ChatPanel({
 
   return (
     <div
-      className="flex flex-col h-full bg-zinc-900 text-zinc-100"
       data-testid="chat-panel"
+      style={{
+        display: "flex",
+        flexDirection: "column",
+        height: "100%",
+        background: "var(--bg-base)",
+        color: "var(--fg-1)",
+      }}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-zinc-700 shrink-0">
-        <span className="text-sm font-semibold text-zinc-100">Claude Chat</span>
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+          padding: "var(--sp-3) var(--sp-4)",
+          borderBottom: "1px solid var(--border-subtle)",
+          flexShrink: 0,
+          background: "var(--bg-raised)",
+        }}
+      >
+        <span className="label" style={{ color: "var(--fg-1)" }}>
+          AGENT — STUDIO
+        </span>
         <ClusterStatusIndicator
           statusOverride={clusterStatus}
           eventsUrl={clusterEventsUrl}
@@ -110,70 +133,142 @@ export function ChatPanel({
 
       {/* Message list */}
       <div
-        className="flex-1 overflow-y-auto px-4 py-3 space-y-3"
         data-testid="chat-messages"
         aria-live="polite"
         aria-label="Chat messages"
+        style={{
+          flex: 1,
+          overflowY: "auto",
+          padding: "var(--sp-3) var(--sp-4)",
+          display: "flex",
+          flexDirection: "column",
+          gap: "var(--sp-2)",
+        }}
       >
         {messages.length === 0 && (
-          <p className="text-xs text-zinc-500 text-center mt-8">
-            Send a message to Claude to get started.
+          <p
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              letterSpacing: "var(--ls-wider)",
+              textTransform: "uppercase",
+              color: "var(--fg-3)",
+              textAlign: "center",
+              marginTop: "var(--sp-8)",
+            }}
+          >
+            SEND A MESSAGE TO BEGIN.
           </p>
         )}
-        {messages.map((msg) => (
-          <div
-            key={msg.id}
-            className={`flex ${msg.role === "user" ? "justify-end" : "justify-start"}`}
-            data-testid={`message-${msg.role}`}
-          >
+        {messages.map((msg) => {
+          const isUser = msg.role === "user";
+          const accent = isUser ? "var(--accent-cyan)" : "var(--accent-green)";
+          return (
             <div
-              className={`max-w-[85%] px-3 py-2 rounded-xl text-sm whitespace-pre-wrap break-words ${
-                msg.role === "user"
-                  ? "bg-indigo-600 text-white rounded-br-sm"
-                  : "bg-zinc-800 text-zinc-100 rounded-bl-sm"
-              }`}
-              aria-label={
-                msg.role === "user" ? "Your message" : "Claude response"
-              }
+              key={msg.id}
+              data-testid={`message-${msg.role}`}
+              style={{
+                display: "flex",
+                justifyContent: isUser ? "flex-end" : "flex-start",
+              }}
             >
-              {msg.content}
-              {msg.streaming && (
-                <span
-                  className="inline-block w-1.5 h-3 ml-0.5 bg-zinc-400 animate-pulse align-text-bottom"
-                  aria-label="streaming"
-                />
-              )}
+              <div
+                aria-label={isUser ? "Your message" : "Claude response"}
+                style={{
+                  maxWidth: "85%",
+                  padding: "var(--sp-2) var(--sp-3)",
+                  background: "var(--bg-raised)",
+                  borderLeft: `3px solid ${accent}`,
+                  border: "1px solid var(--border-subtle)",
+                  borderLeftWidth: 3,
+                  borderLeftColor: accent,
+                  color: "var(--fg-1)",
+                  fontSize: "var(--text-sm)",
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-word",
+                  fontFamily: "var(--font-sans)",
+                  lineHeight: "var(--lh-relaxed)",
+                }}
+              >
+                {msg.content}
+                {msg.streaming && (
+                  <span
+                    aria-label="streaming"
+                    style={{
+                      display: "inline-block",
+                      width: 6,
+                      height: 12,
+                      marginLeft: 2,
+                      background: "var(--fg-2)",
+                      verticalAlign: "text-bottom",
+                      animation:
+                        "pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                    }}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
         <div ref={bottomRef} />
       </div>
 
       {/* Input form */}
       <form
         onSubmit={(e) => void handleSubmit(e)}
-        className="px-4 py-3 border-t border-zinc-700 shrink-0"
         data-testid="chat-form"
+        style={{
+          padding: "var(--sp-3) var(--sp-4)",
+          borderTop: "1px solid var(--border-subtle)",
+          background: "var(--bg-raised)",
+          flexShrink: 0,
+        }}
       >
-        <div className="flex items-end gap-2">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            gap: "var(--sp-2)",
+          }}
+        >
           <textarea
             ref={textareaRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="Ask Claude…"
+            placeholder="ENTER COMMAND…"
             rows={1}
             disabled={submitting}
-            className="flex-1 resize-none rounded-lg bg-zinc-800 border border-zinc-700 text-sm text-zinc-100 placeholder-zinc-500 px-3 py-2 focus:outline-none focus:ring-1 focus:ring-indigo-500 disabled:opacity-50"
             aria-label="Chat input"
             data-testid="chat-input"
+            style={{
+              flex: 1,
+              resize: "none",
+              background: "var(--bg-base)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--fg-1)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-sm)",
+              padding: "var(--sp-2) var(--sp-3)",
+              outline: "none",
+              opacity: submitting ? 0.5 : 1,
+            }}
           />
           <button
             type="submit"
             disabled={submitting || !input.trim()}
-            className="p-2 rounded-lg bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-white transition-colors"
             aria-label="Send message"
             data-testid="chat-submit"
+            style={{
+              padding: "var(--sp-2) var(--sp-3)",
+              background: "transparent",
+              border: "1px solid var(--accent-cyan)",
+              color: "var(--accent-cyan)",
+              cursor: submitting || !input.trim() ? "not-allowed" : "pointer",
+              opacity: submitting || !input.trim() ? 0.4 : 1,
+              display: "inline-flex",
+              alignItems: "center",
+            }}
           >
             <Send size={16} />
           </button>
