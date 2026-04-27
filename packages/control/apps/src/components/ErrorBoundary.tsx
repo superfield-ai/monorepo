@@ -59,28 +59,94 @@ export class ErrorBoundary extends React.Component<
       <div
         role="alert"
         data-testid="error-boundary-card"
-        className="m-4 max-w-2xl rounded border border-red-700 bg-red-950/50 p-4 text-red-100"
+        style={{
+          margin: "var(--sp-4)",
+          maxWidth: "640px",
+          padding: "var(--sp-4)",
+          background: "var(--bg-raised)",
+          border: "1px solid var(--accent-red)",
+          color: "var(--fg-1)",
+        }}
       >
-        <h2 className="text-lg font-semibold text-red-200">
-          {this.props.label} crashed
-        </h2>
-        <p className="mt-1 text-sm text-red-200/90">{error.message}</p>
-        <div className="mt-3 flex gap-2">
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-2)",
+            marginBottom: "var(--sp-3)",
+          }}
+        >
+          <span
+            className="badge badge-critical"
+            data-pill="true"
+            style={{ flexShrink: 0 }}
+          >
+            FAULT
+          </span>
+          <h2
+            style={{
+              fontFamily: "var(--font-display)",
+              fontSize: "var(--text-xl)",
+              fontWeight: 500,
+              letterSpacing: "var(--ls-tight)",
+              color: "var(--fg-1)",
+            }}
+          >
+            {this.props.label.toUpperCase()} — RENDER FAILED
+          </h2>
+        </div>
+        <p
+          style={{
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-sm)",
+            color: "var(--accent-red)",
+            margin: 0,
+          }}
+        >
+          {error.message}
+        </p>
+        <div
+          style={{
+            display: "flex",
+            gap: "var(--sp-2)",
+            marginTop: "var(--sp-3)",
+          }}
+        >
           <button
             type="button"
             onClick={this.handleReset}
             data-testid="error-boundary-retry"
-            className="rounded bg-red-700 px-3 py-1 text-sm font-medium text-white hover:bg-red-600"
+            style={{
+              padding: "var(--sp-1) var(--sp-3)",
+              background: "var(--accent-red)",
+              color: "var(--fg-inv)",
+              border: "1px solid var(--accent-red)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              letterSpacing: "var(--ls-wider)",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
           >
-            Retry
+            RETRY
           </button>
           <button
             type="button"
             onClick={this.handleOpenDebug}
             data-testid="error-boundary-debug"
-            className="rounded border border-red-500 px-3 py-1 text-sm font-medium text-red-100 hover:bg-red-900"
+            style={{
+              padding: "var(--sp-1) var(--sp-3)",
+              background: "transparent",
+              color: "var(--accent-red)",
+              border: "1px solid var(--accent-red)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              letterSpacing: "var(--ls-wider)",
+              textTransform: "uppercase",
+              cursor: "pointer",
+            }}
           >
-            Open debug view
+            OPEN DEBUG VIEW
           </button>
         </div>
       </div>

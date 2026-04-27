@@ -9,7 +9,9 @@
    (e.g. `var(--bg-raised)`, `.label`, `.value-lg`) rather than
    adding new ad-hoc colours. */
 
-html, body, #root {
+html,
+body,
+#root {
   background: var(--bg-base);
   color: var(--fg-1);
   font-family: var(--font-sans);
@@ -25,14 +27,22 @@ body {
 }
 
 /* Sharp corners by default — undo any stray Tailwind rounded utilities. */
-button, input, textarea, select, .rounded, .rounded-md, .rounded-lg,
-.rounded-full, .rounded-sm {
+button,
+input,
+textarea,
+select,
+.rounded,
+.rounded-md,
+.rounded-lg,
+.rounded-full,
+.rounded-sm {
   border-radius: 0;
 }
 
 /* Pill-only exception: anything explicitly marked as a badge or pill keeps
    the 2px max defined in the token sheet. */
-.badge, [data-pill="true"] {
+.badge,
+[data-pill="true"] {
   border-radius: var(--radius-badge);
 }
 

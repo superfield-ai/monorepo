@@ -93,10 +93,34 @@ export function ConnectionBanner({
     <div
       role="alert"
       data-testid="connection-banner"
-      className="flex items-center gap-3 border-b border-amber-700 bg-amber-900/70 px-4 py-2 text-sm text-amber-50"
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "12px",
+        padding: "var(--sp-2) var(--sp-4)",
+        background: "rgba(212, 150, 42, 0.08)",
+        borderBottom: "1px solid var(--accent-amber)",
+        color: "var(--fg-1)",
+        fontFamily: "var(--font-mono)",
+        fontSize: "var(--text-xs)",
+      }}
     >
-      <span className="font-medium">Dev loop unreachable</span>
-      <span className="text-xs opacity-80">{state.error.message}</span>
+      <span
+        className="badge badge-caution"
+        style={{ flexShrink: 0 }}
+        data-pill="true"
+      >
+        DEV LOOP — OFFLINE
+      </span>
+      <span
+        style={{
+          color: "var(--fg-2)",
+          fontFamily: "var(--font-sans)",
+          fontSize: "var(--text-sm)",
+        }}
+      >
+        {state.error.message}
+      </span>
       <button
         type="button"
         data-testid="connection-banner-start"
@@ -104,9 +128,23 @@ export function ConnectionBanner({
           void handleStart();
         }}
         disabled={starting}
-        className="ml-auto rounded bg-amber-700 px-2 py-1 text-xs font-medium text-white hover:bg-amber-600 disabled:opacity-50"
+        style={{
+          marginLeft: "auto",
+          padding: "var(--sp-1) var(--sp-3)",
+          background: "var(--accent-amber)",
+          color: "var(--fg-inv)",
+          border: "1px solid var(--accent-amber)",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-xs)",
+          fontWeight: 500,
+          letterSpacing: "var(--ls-wider)",
+          textTransform: "uppercase",
+          cursor: starting ? "not-allowed" : "pointer",
+          opacity: starting ? 0.6 : 1,
+          transition: "background var(--duration-fast) var(--ease-out)",
+        }}
       >
-        {starting ? "Starting…" : "Start dev loop"}
+        {starting ? "STARTING…" : "START DEV LOOP"}
       </button>
       <button
         type="button"
@@ -114,9 +152,20 @@ export function ConnectionBanner({
         onClick={() => {
           void poll();
         }}
-        className="rounded border border-amber-500 px-2 py-1 text-xs font-medium text-amber-50 hover:bg-amber-800"
+        style={{
+          padding: "var(--sp-1) var(--sp-3)",
+          background: "transparent",
+          color: "var(--accent-amber)",
+          border: "1px solid var(--accent-amber)",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-xs)",
+          fontWeight: 500,
+          letterSpacing: "var(--ls-wider)",
+          textTransform: "uppercase",
+          cursor: "pointer",
+        }}
       >
-        Retry
+        RETRY
       </button>
     </div>
   );

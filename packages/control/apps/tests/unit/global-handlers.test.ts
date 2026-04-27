@@ -31,8 +31,7 @@ describe("installGlobalErrorHandlers", () => {
     window.dispatchEvent(evt);
     const errors = debugStore
       .getState()
-      .entries
-      .filter((e) => e.message.includes("boom"));
+      .entries.filter((e) => e.message.includes("boom"));
     expect(errors).toHaveLength(1);
   });
 
@@ -48,8 +47,7 @@ describe("installGlobalErrorHandlers", () => {
     window.dispatchEvent(evt);
     const entry = debugStore
       .getState()
-      .entries
-      .find((e) => e.message === "synthetic uncaught");
+      .entries.find((e) => e.message === "synthetic uncaught");
     expect(entry).toBeDefined();
     expect(entry?.level).toBe("error");
     expect(entry?.source).toBe("window");
@@ -92,8 +90,7 @@ describe("installGlobalErrorHandlers", () => {
     window.dispatchEvent(evt);
     const entry = debugStore
       .getState()
-      .entries
-      .find((e) => e.message === "string reason");
+      .entries.find((e) => e.message === "string reason");
     expect(entry).toBeDefined();
   });
 });

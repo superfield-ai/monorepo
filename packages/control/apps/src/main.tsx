@@ -26,8 +26,9 @@ bootstrapErrorHandling({ isDev: Boolean(import.meta.env.DEV) });
 // Test seam: expose the DebugStore on globalThis so Playwright specs can
 // record entries deterministically without going through the JS console.
 // (The webapp does not intercept console.error/warn — see bootstrap.ts.)
-(globalThis as unknown as { __superfieldDebug: typeof debugStore }).__superfieldDebug =
-  debugStore;
+(
+  globalThis as unknown as { __superfieldDebug: typeof debugStore }
+).__superfieldDebug = debugStore;
 
 const rootEl = document.getElementById("root");
 if (!rootEl) throw new Error("Missing #root element");
