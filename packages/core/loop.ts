@@ -138,7 +138,10 @@ async function tickRepository(
   let allOpenIssues: Issue[] | null = null;
 
   // Step 1: CI watchdog
-  let watchdogOutcome: TickRepositoryResult["watchdog"];
+  let watchdogOutcome: TickRepositoryResult["watchdog"] = {
+    ok: true,
+    issuesCreated: [],
+  };
   let watchdogIssuesCreated: number[] = [];
   try {
     watchdogIssuesCreated = await runWatchdogStep(client, owner, repo);
@@ -162,7 +165,10 @@ async function tickRepository(
   }
 
   // Step 2: Issue audit — validate open issues against the IssueBody schema
-  let issueAuditOutcome: TickRepositoryResult["issueAudit"];
+  let issueAuditOutcome: TickRepositoryResult["issueAudit"] = {
+    ok: false,
+    error: "not yet evaluated",
+  };
   try {
     allOpenIssues = await client.listIssues(owner, repo);
     // Only enable cache-driven incremental audit in production path.
@@ -254,7 +260,7 @@ async function tickRepository(
     if (isRateLimitError(msg)) {
       return {
         watchdogIssuesCreated,
-        watchdog: watchdogOutcome!,
+        watchdog: watchdogOutcome,
         issueAudit: issueAuditOutcome,
         planCoverage: { ok: false, error: "skipped due to GitHub rate limit" },
         blueprintConformance: {
@@ -266,7 +272,10 @@ async function tickRepository(
   }
 
   // Step 3: Plan coverage — append open issues not yet referenced in Plan
-  let planCoverageOutcome: TickRepositoryResult["planCoverage"];
+  let planCoverageOutcome: TickRepositoryResult["planCoverage"] = {
+    ok: false,
+    error: "not yet evaluated",
+  };
   try {
     const coverage = await coverageFn(client, owner, repo, {
       issues: allOpenIssues ?? undefined,
@@ -309,8 +318,8 @@ async function tickRepository(
     if (isRateLimitError(msg)) {
       return {
         watchdogIssuesCreated,
-        watchdog: watchdogOutcome!,
-        issueAudit: issueAuditOutcome!,
+        watchdog: watchdogOutcome,
+        issueAudit: issueAuditOutcome,
         planCoverage: planCoverageOutcome,
         blueprintConformance: {
           ok: false,
@@ -326,7 +335,8 @@ async function tickRepository(
   // checked until the next planning-loop tick (when the fingerprint changes and the
   // incremental cache triggers a re-audit). To fix this, re-fetch open issues after
   // step 2 completes and pass the refreshed list to blueprintFn.
-  let blueprintConformanceOutcome: TickRepositoryResult["blueprintConformance"];
+  let blueprintConformanceOutcome: TickRepositoryResult["blueprintConformance"] =
+    { ok: false, error: "not yet evaluated" };
   try {
     const conformance = await blueprintFn(client, owner, repo, {
       cwd: process.cwd(),
@@ -350,9 +360,9 @@ async function tickRepository(
   return {
     watchdogIssuesCreated,
     watchdog: watchdogOutcome,
-    issueAudit: issueAuditOutcome!,
-    planCoverage: planCoverageOutcome!,
-    blueprintConformance: blueprintConformanceOutcome!,
+    issueAudit: issueAuditOutcome,
+    planCoverage: planCoverageOutcome,
+    blueprintConformance: blueprintConformanceOutcome,
   };
 }
 

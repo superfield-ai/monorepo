@@ -39,36 +39,39 @@ export function parseDeployEnvArgs(args: string[]): ParsedDeployEnvArgs {
   };
   let i = 0;
   while (i < args.length) {
-    const a = args[i]!;
-    const take = () => args[++i];
-    const eq = (prefix: string) =>
-      a.startsWith(prefix) ? a.slice(prefix.length) : null;
+    const a = args[i];
+    if (a === undefined) {
+      i++;
+      continue;
+    }
+    const take = (): string | undefined => args[++i];
+    const eq = (prefix: string): string | undefined =>
+      a.startsWith(prefix) ? a.slice(prefix.length) : undefined;
+    let v: string | undefined;
     if (a === "--repo") out.repo = take();
-    else if (eq("--repo=") !== null) out.repo = eq("--repo=")!;
+    else if ((v = eq("--repo=")) !== undefined) out.repo = v;
     else if (a === "--env") out.env = take();
-    else if (eq("--env=") !== null) out.env = eq("--env=")!;
+    else if ((v = eq("--env=")) !== undefined) out.env = v;
     else if (a === "--tag") out.tag = take();
-    else if (eq("--tag=") !== null) out.tag = eq("--tag=")!;
+    else if ((v = eq("--tag=")) !== undefined) out.tag = v;
     else if (a === "--app-name") out.appName = take();
-    else if (eq("--app-name=") !== null) out.appName = eq("--app-name=")!;
+    else if ((v = eq("--app-name=")) !== undefined) out.appName = v;
     else if (a === "--workers")
       out.workers = (take() ?? "").split(",").filter(Boolean);
-    else if (eq("--workers=") !== null)
-      out.workers = eq("--workers=")!.split(",").filter(Boolean);
+    else if ((v = eq("--workers=")) !== undefined)
+      out.workers = v.split(",").filter(Boolean);
     else if (a === "--health-path") out.healthPath = take();
-    else if (eq("--health-path=") !== null)
-      out.healthPath = eq("--health-path=")!;
+    else if ((v = eq("--health-path=")) !== undefined) out.healthPath = v;
     else if (a === "--namespace") out.namespace = take();
-    else if (eq("--namespace=") !== null) out.namespace = eq("--namespace=")!;
+    else if ((v = eq("--namespace=")) !== undefined) out.namespace = v;
     else if (a === "--dry-run") out.dryRun = true;
     else if (a === "--json") out.json = true;
     else if (a === "--clean-room") out.cleanRoom = true;
     else if (a === "--db-mode") {
-      const v = take();
-      if (v === "local" || v === "managed") out.dbMode = v;
-      else out.unknown.push(`--db-mode=${v ?? ""}`);
-    } else if (eq("--db-mode=") !== null) {
-      const v = eq("--db-mode=")!;
+      const dm = take();
+      if (dm === "local" || dm === "managed") out.dbMode = dm;
+      else out.unknown.push(`--db-mode=${dm ?? ""}`);
+    } else if ((v = eq("--db-mode=")) !== undefined) {
       if (v === "local" || v === "managed") out.dbMode = v;
       else out.unknown.push(a);
     } else out.unknown.push(a);
@@ -90,12 +93,19 @@ export async function deployEnvCommand(args: string[]): Promise<void> {
   if (!parsed.env) missing.push("--env");
   if (!parsed.tag) missing.push("--tag");
   if (!parsed.appName) missing.push("--app-name");
-  if (missing.length) {
+  if (
+    missing.length ||
+    !parsed.repo ||
+    !parsed.env ||
+    !parsed.tag ||
+    !parsed.appName
+  ) {
     console.error(`error: missing required flag(s): ${missing.join(", ")}`);
     console.error(USAGE);
     process.exit(1);
     return;
   }
+  const { repo, env, tag, appName } = parsed;
 
   const host = process.env.DEPLOY_HOST;
   if (!host) {
@@ -130,10 +140,10 @@ export async function deployEnvCommand(args: string[]): Promise<void> {
 
   try {
     const result = await deployEnv({
-      repo: parsed.repo!,
-      env: parsed.env!,
-      tag: parsed.tag!,
-      appName: parsed.appName!,
+      repo,
+      env,
+      tag,
+      appName,
       workerNames: parsed.workers ?? [],
       ...(parsed.healthPath ? { healthPath: parsed.healthPath } : {}),
       ...(parsed.namespace ? { appNamespace: parsed.namespace } : {}),
