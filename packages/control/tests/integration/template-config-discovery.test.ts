@@ -17,7 +17,7 @@ import { describe, it, expect } from "vitest";
 import { loadConfig } from "../../src/config";
 import { findTemplatePath } from "../helpers/template-path";
 
-const TEMPLATE = findTemplatePath();
+const TEMPLATE = findTemplatePath() ?? undefined;
 const d = TEMPLATE ? describe : describe.skip;
 
 function withEnv(
