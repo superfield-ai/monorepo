@@ -24,7 +24,8 @@ interface InstallOptions {
 }
 
 let installed = false;
-const originals: Partial<Record<ConsoleMethod, (...args: unknown[]) => void>> = {};
+const originals: Partial<Record<ConsoleMethod, (...args: unknown[]) => void>> =
+  {};
 
 function stringifyArg(arg: unknown): string {
   if (arg instanceof Error) return arg.message;

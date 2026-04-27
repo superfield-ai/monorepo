@@ -18,10 +18,7 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
-import {
-  IframeOverlay,
-  type IframeFailureMode,
-} from "./IframeOverlay";
+import { IframeOverlay, type IframeFailureMode } from "./IframeOverlay";
 
 interface IframePanelProps {
   /** URL loaded in the iframe. Defaults to /app/ (studio proxy target). */

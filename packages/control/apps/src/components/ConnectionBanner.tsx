@@ -29,7 +29,10 @@ interface OrchestratorStatusBody {
 
 type State =
   | { readonly kind: "loading" }
-  | { readonly kind: "ok"; readonly process: NonNullable<OrchestratorStatusBody["process"]> }
+  | {
+      readonly kind: "ok";
+      readonly process: NonNullable<OrchestratorStatusBody["process"]>;
+    }
   | { readonly kind: "unreachable"; readonly error: AppError };
 
 export function ConnectionBanner({
@@ -59,10 +62,13 @@ export function ConnectionBanner({
 
   const handleStart = React.useCallback(async () => {
     setStarting(true);
-    const result = await fetchJson<{ ok?: boolean; reason?: string }>(startUrl, {
-      method: "POST",
-      body: {},
-    });
+    const result = await fetchJson<{ ok?: boolean; reason?: string }>(
+      startUrl,
+      {
+        method: "POST",
+        body: {},
+      },
+    );
     setStarting(false);
     if (!result.ok) {
       toastStore.show({

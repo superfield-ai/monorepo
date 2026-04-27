@@ -85,7 +85,10 @@ describe("wrapHandler", () => {
     );
     const res = await wrapped();
     expect(res.status).toBe(500);
-    const body = (await res.json()) as { ok: false; error: { code: string; message: string } };
+    const body = (await res.json()) as {
+      ok: false;
+      error: { code: string; message: string };
+    };
     expect(body.ok).toBe(false);
     expect(body.error.code).toBe("server");
     expect(body.error.message).toContain("boom");

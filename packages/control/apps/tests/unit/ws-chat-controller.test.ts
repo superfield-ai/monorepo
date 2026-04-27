@@ -306,8 +306,12 @@ describe("sendMessage", () => {
     const p = ctrl.sendMessage("hello");
     const state = ctrl.getState();
     expect(state.turnState).toBe("streaming");
-    expect(state.messages.find((m) => m.role === "user")?.content).toBe("hello");
-    expect(state.messages.find((m) => m.role === "assistant")?.streaming).toBe(true);
+    expect(state.messages.find((m) => m.role === "user")?.content).toBe(
+      "hello",
+    );
+    expect(state.messages.find((m) => m.role === "assistant")?.streaming).toBe(
+      true,
+    );
     openSocket.last!.fireMessage({ type: "done" });
     await p;
   });

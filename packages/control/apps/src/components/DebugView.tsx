@@ -13,11 +13,7 @@
  */
 
 import React from "react";
-import type {
-  DebugEntry,
-  DebugLevel,
-  DebugSource,
-} from "../lib/debug-store";
+import type { DebugEntry, DebugLevel, DebugSource } from "../lib/debug-store";
 import { debugStore } from "../lib/debug-store";
 import { toastStore } from "../lib/toast-store";
 
@@ -88,9 +84,7 @@ export function DebugView(): JSX.Element {
               label={lvl}
               testId={`debug-filter-level-${lvl}`}
               active={levelFilter.has(lvl)}
-              onToggle={() =>
-                setLevelFilter((prev) => toggle(prev, lvl))
-              }
+              onToggle={() => setLevelFilter((prev) => toggle(prev, lvl))}
             />
           ))}
         </div>
@@ -101,9 +95,7 @@ export function DebugView(): JSX.Element {
               label={src}
               testId={`debug-filter-source-${src}`}
               active={sourceFilter.has(src)}
-              onToggle={() =>
-                setSourceFilter((prev) => toggle(prev, src))
-              }
+              onToggle={() => setSourceFilter((prev) => toggle(prev, src))}
             />
           ))}
         </div>
@@ -127,10 +119,7 @@ export function DebugView(): JSX.Element {
 
       <div className="flex-1 overflow-y-auto">
         {filtered.length === 0 ? (
-          <div
-            data-testid="debug-empty"
-            className="p-6 text-sm text-zinc-400"
-          >
+          <div data-testid="debug-empty" className="p-6 text-sm text-zinc-400">
             No matching events. The application is clean.
           </div>
         ) : (
@@ -195,11 +184,7 @@ interface DebugRowProps {
   readonly onToggle: () => void;
 }
 
-function DebugRow({
-  entry,
-  expanded,
-  onToggle,
-}: DebugRowProps): JSX.Element {
+function DebugRow({ entry, expanded, onToggle }: DebugRowProps): JSX.Element {
   const time = new Date(entry.ts).toISOString().slice(11, 23);
   const handleCopy = async (): Promise<void> => {
     const dump = JSON.stringify(entry, null, 2);
@@ -223,14 +208,20 @@ function DebugRow({
   };
 
   return (
-    <li data-testid="debug-row" data-level={entry.level} data-source={entry.source}>
+    <li
+      data-testid="debug-row"
+      data-level={entry.level}
+      data-source={entry.source}
+    >
       <button
         type="button"
         onClick={onToggle}
         className="flex w-full items-center gap-2 px-4 py-2 text-left text-xs hover:bg-zinc-900/60"
       >
         <span className="font-mono text-zinc-500">{time}</span>
-        <span className={`rounded px-1.5 py-0.5 font-medium ${LEVEL_BADGE[entry.level]}`}>
+        <span
+          className={`rounded px-1.5 py-0.5 font-medium ${LEVEL_BADGE[entry.level]}`}
+        >
           {entry.level}
         </span>
         <span className="rounded bg-zinc-800 px-1.5 py-0.5 text-zinc-300">

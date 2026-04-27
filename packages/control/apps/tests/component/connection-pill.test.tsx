@@ -82,7 +82,8 @@ const setTimer = (fn: () => void) => {
   return e;
 };
 const clearTimer = (h: unknown) => {
-  if (h && typeof h === "object") (h as { cancelled: boolean }).cancelled = true;
+  if (h && typeof h === "object")
+    (h as { cancelled: boolean }).cancelled = true;
 };
 function runNextTimer() {
   while (pendingTimers.length > 0) {
@@ -107,7 +108,9 @@ describe("ConnectionPill", () => {
     installFakeSocket();
     const ctrl = new WsChatController({ setTimer, clearTimer });
     const screen = render(<ConnectionPill controller={ctrl} />);
-    expect(screen.container.querySelector('[data-testid="connection-pill"]')).toBeNull();
+    expect(
+      screen.container.querySelector('[data-testid="connection-pill"]'),
+    ).toBeNull();
   });
 
   it("renders 'Connecting…' on connect()", async () => {
@@ -117,11 +120,15 @@ describe("ConnectionPill", () => {
     ctrl.connect();
     await flush();
     expect(
-      screen.container.querySelector('[data-testid="connection-pill"]')?.getAttribute("data-state"),
+      screen.container
+        .querySelector('[data-testid="connection-pill"]')
+        ?.getAttribute("data-state"),
     ).toBe("connecting");
     tracker.last!.fireOpen();
     await flush();
-    expect(screen.container.querySelector('[data-testid="connection-pill"]')).toBeNull();
+    expect(
+      screen.container.querySelector('[data-testid="connection-pill"]'),
+    ).toBeNull();
   });
 
   it("renders 'Reconnecting…' after unclean close", async () => {
@@ -137,7 +144,9 @@ describe("ConnectionPill", () => {
     tracker.last!.fireOpen();
     tracker.last!.fireClose({ wasClean: false });
     await flush();
-    const pill = screen.container.querySelector('[data-testid="connection-pill"]');
+    const pill = screen.container.querySelector(
+      '[data-testid="connection-pill"]',
+    );
     expect(pill?.getAttribute("data-state")).toBe("reconnecting");
     expect(pill?.textContent).toContain("attempt 1");
   });
@@ -157,7 +166,9 @@ describe("ConnectionPill", () => {
     runNextTimer();
     tracker.last!.fireClose({ wasClean: false });
     await flush();
-    const pill = screen.container.querySelector('[data-testid="connection-pill"]');
+    const pill = screen.container.querySelector(
+      '[data-testid="connection-pill"]',
+    );
     expect(pill?.getAttribute("data-state")).toBe("failed");
     const btn = pill?.querySelector("button") as HTMLButtonElement | null;
     expect(btn?.textContent).toContain("Reconnect now");

@@ -41,7 +41,10 @@ function isErrorEnvelope(v: unknown): v is BackendErrorEnvelope {
   );
 }
 
-function recordFailure(error: AppError, source: "fetch" | "eventsource" | "websocket"): void {
+function recordFailure(
+  error: AppError,
+  source: "fetch" | "eventsource" | "websocket",
+): void {
   debugStore.record({
     level: "error",
     source,
@@ -73,7 +76,11 @@ export async function fetchJson<T = unknown>(
     signal: controller.signal,
   };
   if (body !== undefined) {
-    if (body instanceof FormData || body instanceof Blob || typeof body === "string") {
+    if (
+      body instanceof FormData ||
+      body instanceof Blob ||
+      typeof body === "string"
+    ) {
       init.body = body;
     } else {
       init.body = JSON.stringify(body);
@@ -126,8 +133,11 @@ export async function fetchJson<T = unknown>(
   if (!response.ok) {
     const envelope = isErrorEnvelope(parsed) ? parsed.error : undefined;
     const error: AppError = {
-      code: (envelope?.code as AppErrorCode | undefined) ?? codeForStatus(response.status),
-      message: envelope?.message ?? `HTTP ${response.status} ${response.statusText}`,
+      code:
+        (envelope?.code as AppErrorCode | undefined) ??
+        codeForStatus(response.status),
+      message:
+        envelope?.message ?? `HTTP ${response.status} ${response.statusText}`,
       hint: envelope?.hint,
       status: response.status,
       url,
@@ -173,11 +183,16 @@ export interface OpenEventSourceOptions {
   readonly events?: Record<string, (ev: MessageEvent) => void>;
 }
 
-export function openEventSource(opts: OpenEventSourceOptions): EventSourceHandle {
+export function openEventSource(
+  opts: OpenEventSourceOptions,
+): EventSourceHandle {
   const source = new EventSource(opts.url);
 
   if (opts.onOpen) source.addEventListener("open", () => opts.onOpen?.());
-  if (opts.onMessage) source.addEventListener("message", (ev) => opts.onMessage?.(ev as MessageEvent));
+  if (opts.onMessage)
+    source.addEventListener("message", (ev) =>
+      opts.onMessage?.(ev as MessageEvent),
+    );
   if (opts.events) {
     for (const [name, fn] of Object.entries(opts.events)) {
       source.addEventListener(name, (ev) => fn(ev as MessageEvent));
@@ -212,7 +227,9 @@ export function openEventSource(opts: OpenEventSourceOptions): EventSourceHandle
 
 export interface WebSocketHandle {
   readonly close: (code?: number, reason?: string) => void;
-  readonly send: (data: string | ArrayBufferLike | Blob | ArrayBufferView) => void;
+  readonly send: (
+    data: string | ArrayBufferLike | Blob | ArrayBufferView,
+  ) => void;
   readonly socket: WebSocket;
 }
 

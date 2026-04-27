@@ -33,7 +33,9 @@ export function connectBackendDebugStream(url: string): void {
     onMessage: (ev) => {
       const parsed = JSON.parse(ev.data as string) as BackendEvent;
       const level: DebugLevel =
-        parsed.level === "warn" || parsed.level === "info" || parsed.level === "debug"
+        parsed.level === "warn" ||
+        parsed.level === "info" ||
+        parsed.level === "debug"
           ? parsed.level
           : "error";
       debugStore.record({

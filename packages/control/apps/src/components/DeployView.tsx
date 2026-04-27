@@ -332,6 +332,13 @@ function ConfirmModal({
   readonly onCancel: () => void;
   readonly onConfirm: () => void;
 }): JSX.Element {
+  // Prod rollbacks require typing the env name to enable Confirm. Dev/staging
+  // are click-confirm only — matching the product.md design constraint that
+  // prod operations get an explicit safety gate.
+  const requiresTypedConfirmation = env === "prod";
+  const [typed, setTyped] = useState("");
+  const confirmEnabled = !requiresTypedConfirmation || typed.trim() === env;
+
   return (
     <div
       data-testid="rollback-confirm"
@@ -346,6 +353,25 @@ function ConfirmModal({
           and worker deployments. The studio will surface each step in the live
           log.
         </p>
+        {requiresTypedConfirmation ? (
+          <label className="mt-4 block text-xs text-zinc-300">
+            Type{" "}
+            <code className="rounded bg-zinc-800 px-1 py-0.5 font-mono text-[11px]">
+              {env}
+            </code>{" "}
+            to confirm:
+            <input
+              type="text"
+              value={typed}
+              onChange={(e) => setTyped(e.target.value)}
+              data-testid="rollback-confirm-input"
+              autoFocus
+              autoComplete="off"
+              spellCheck={false}
+              className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 px-2 py-1 font-mono text-xs text-zinc-100 focus:border-red-500 focus:outline-none"
+            />
+          </label>
+        ) : null}
         <div className="mt-4 flex justify-end gap-2">
           <button
             type="button"
@@ -359,7 +385,8 @@ function ConfirmModal({
             type="button"
             data-testid="rollback-confirm-action"
             onClick={onConfirm}
-            className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500"
+            disabled={!confirmEnabled}
+            className="rounded bg-red-600 px-3 py-1 text-xs font-medium text-white hover:bg-red-500 disabled:cursor-not-allowed disabled:opacity-50"
           >
             Confirm rollback
           </button>

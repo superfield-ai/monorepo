@@ -29,20 +29,20 @@ afterEach(() => {
 
 test("renders nothing when /orchestrator/status returns 200", async () => {
   window.fetch = vi.fn().mockResolvedValue(
-    new Response(
-      JSON.stringify({ process: "running", apiReachable: true }),
-      { status: 200, headers: { "Content-Type": "application/json" } },
-    ),
+    new Response(JSON.stringify({ process: "running", apiReachable: true }), {
+      status: 200,
+      headers: { "Content-Type": "application/json" },
+    }),
   );
 
-  const { container } = render(
-    <ConnectionBanner pollIntervalMs={60_000} />,
-  );
+  const { container } = render(<ConnectionBanner pollIntervalMs={60_000} />);
 
   // Wait for the initial poll to resolve.
   await new Promise((r) => setTimeout(r, 50));
 
-  expect(container.querySelector('[data-testid="connection-banner"]')).toBeNull();
+  expect(
+    container.querySelector('[data-testid="connection-banner"]'),
+  ).toBeNull();
 });
 
 test("renders banner with Start + Retry when status fetch fails", async () => {
@@ -50,9 +50,7 @@ test("renders banner with Start + Retry when status fetch fails", async () => {
 
   const screen = render(<ConnectionBanner pollIntervalMs={60_000} />);
 
-  await expect
-    .element(screen.getByTestId("connection-banner"))
-    .toBeVisible();
+  await expect.element(screen.getByTestId("connection-banner")).toBeVisible();
   await expect
     .element(screen.getByTestId("connection-banner-start"))
     .toBeVisible();

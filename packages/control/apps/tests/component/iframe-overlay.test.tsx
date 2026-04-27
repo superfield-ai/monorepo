@@ -2,7 +2,7 @@
  * Component tests for IframeOverlay (E14) and the IframePanel ↔ overlay wiring.
  */
 import React from "react";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { render } from "vitest-browser-react";
 import { IframeOverlay } from "../../src/components/IframeOverlay";
 import { IframePanel } from "../../src/components/IframePanel";
@@ -25,7 +25,9 @@ afterEach(() => {
 describe("IframeOverlay", () => {
   it("cluster-down mode renders Rebuild + Retry buttons", () => {
     const screen = render(<IframeOverlay mode="cluster-down" />);
-    const overlay = screen.container.querySelector('[data-testid="iframe-overlay"]');
+    const overlay = screen.container.querySelector(
+      '[data-testid="iframe-overlay"]',
+    );
     expect(overlay?.getAttribute("data-mode")).toBe("cluster-down");
     expect(
       screen.container.querySelector('[data-testid="iframe-overlay-rebuild"]'),
@@ -40,7 +42,9 @@ describe("IframeOverlay", () => {
       <IframeOverlay mode="build-error" buildStderr="error TS2304: foo" />,
     );
     expect(
-      screen.container.querySelector('[data-testid="iframe-overlay"]')?.getAttribute("data-mode"),
+      screen.container
+        .querySelector('[data-testid="iframe-overlay"]')
+        ?.getAttribute("data-mode"),
     ).toBe("build-error");
     expect(screen.container.querySelector("pre")?.textContent).toContain(
       "error TS2304: foo",
@@ -51,7 +55,9 @@ describe("IframeOverlay", () => {
     const screen = render(
       <IframeOverlay mode="not-found" failedPath="/missing" />,
     );
-    const overlay = screen.container.querySelector('[data-testid="iframe-overlay"]');
+    const overlay = screen.container.querySelector(
+      '[data-testid="iframe-overlay"]',
+    );
     expect(overlay?.getAttribute("data-mode")).toBe("not-found");
     expect(overlay?.textContent).toContain("/missing");
     expect(
@@ -85,15 +91,22 @@ describe("IframeOverlay", () => {
   it("Rebuild failure surfaces a toast", async () => {
     globalThis.fetch = (() =>
       Promise.resolve(
-        new Response(JSON.stringify({ ok: false, error: { code: "internal", message: "boom" } }), {
-          status: 500,
-          headers: { "content-type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({
+            ok: false,
+            error: { code: "internal", message: "boom" },
+          }),
+          {
+            status: 500,
+            headers: { "content-type": "application/json" },
+          },
+        ),
       )) as unknown as typeof globalThis.fetch;
 
     const seen: Array<{ severity: string; title: string }> = [];
     const unsub = toastStore.subscribe((toasts) => {
-      for (const t of toasts) seen.push({ severity: t.severity, title: t.title });
+      for (const t of toasts)
+        seen.push({ severity: t.severity, title: t.title });
     });
 
     const screen = render(<IframeOverlay mode="cluster-down" />);
@@ -112,11 +125,11 @@ describe("IframeOverlay", () => {
 
 describe("IframePanel + overlay wiring", () => {
   it("renders cluster-down overlay when clusterStatus is degraded", async () => {
-    const screen = render(
-      <IframePanel clusterStatus="degraded" />,
-    );
+    const screen = render(<IframePanel clusterStatus="degraded" />);
     await flush();
-    const overlay = screen.container.querySelector('[data-testid="iframe-overlay"]');
+    const overlay = screen.container.querySelector(
+      '[data-testid="iframe-overlay"]',
+    );
     expect(overlay?.getAttribute("data-mode")).toBe("cluster-down");
   });
 
@@ -142,7 +155,9 @@ describe("IframePanel + overlay wiring", () => {
       />,
     );
     await flush();
-    const overlay = screen.container.querySelector('[data-testid="iframe-overlay"]');
+    const overlay = screen.container.querySelector(
+      '[data-testid="iframe-overlay"]',
+    );
     expect(overlay?.getAttribute("data-mode")).toBe("not-found");
     expect(overlay?.textContent).toContain("/missing");
   });

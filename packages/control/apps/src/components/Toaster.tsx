@@ -37,7 +37,11 @@ export function Toaster(): JSX.Element {
 function ToastCard({ toast }: { readonly toast: Toast }): JSX.Element {
   return (
     <div
-      role={toast.severity === "error" || toast.severity === "warn" ? "alert" : "status"}
+      role={
+        toast.severity === "error" || toast.severity === "warn"
+          ? "alert"
+          : "status"
+      }
       data-testid={`toast-${toast.severity}`}
       data-toast-id={toast.id}
       className={`pointer-events-auto rounded border p-3 text-sm shadow-lg ${SEV_CLASS[toast.severity]}`}

@@ -36,21 +36,24 @@ export function installGlobalErrorHandlers(): void {
     event.preventDefault();
   });
 
-  window.addEventListener("unhandledrejection", (event: PromiseRejectionEvent) => {
-    const reason = event.reason;
-    const message =
-      reason instanceof Error
-        ? reason.message
-        : typeof reason === "string"
-          ? reason
-          : "Unhandled promise rejection";
-    debugStore.record({
-      level: "error",
-      source: "window",
-      message,
-      stack: reason instanceof Error ? reason.stack : undefined,
-      context: { kind: "unhandledrejection" },
-    });
-    event.preventDefault();
-  });
+  window.addEventListener(
+    "unhandledrejection",
+    (event: PromiseRejectionEvent) => {
+      const reason = event.reason;
+      const message =
+        reason instanceof Error
+          ? reason.message
+          : typeof reason === "string"
+            ? reason
+            : "Unhandled promise rejection";
+      debugStore.record({
+        level: "error",
+        source: "window",
+        message,
+        stack: reason instanceof Error ? reason.stack : undefined,
+        context: { kind: "unhandledrejection" },
+      });
+      event.preventDefault();
+    },
+  );
 }

@@ -255,7 +255,9 @@ function main(): void {
     appendFileSync(logPath, JSON.stringify(turn) + "\n", "utf8");
   }
 
-  console.log(`Seeded ${ROUTES.length} routes, ${MOCKS.length} mocks, ${ISSUES.length} issues.`);
+  console.log(
+    `Seeded ${ROUTES.length} routes, ${MOCKS.length} mocks, ${ISSUES.length} issues.`,
+  );
   console.log(`Demo fixtures: ${STUDIO_DIR}`);
   console.log(`Turn log:      ${logPath} (+${turns.length} entries)`);
 }

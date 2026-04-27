@@ -13,10 +13,7 @@ interface DebugBadgeProps {
   readonly active: boolean;
 }
 
-export function DebugBadge({
-  onClick,
-  active,
-}: DebugBadgeProps): JSX.Element {
+export function DebugBadge({ onClick, active }: DebugBadgeProps): JSX.Element {
   const [count, setCount] = React.useState<number>(
     () => debugStore.getState().unreadCount,
   );

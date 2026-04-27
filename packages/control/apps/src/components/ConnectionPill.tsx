@@ -21,7 +21,9 @@ const baseClass =
   "inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-xs font-medium";
 
 export function ConnectionPill({ controller }: ConnectionPillProps) {
-  const [state, setState] = useState<WsChatControllerState>(controller.getState());
+  const [state, setState] = useState<WsChatControllerState>(
+    controller.getState(),
+  );
 
   useEffect(() => controller.subscribe(setState), [controller]);
 

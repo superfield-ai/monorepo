@@ -264,8 +264,7 @@ export class WsChatController {
           onClose: (ev) => this.handleClose(ev),
           onError: (e) => this.handleError(e),
         }));
-    this.setTimer =
-      setTimer ?? ((fn, ms) => globalThis.setTimeout(fn, ms));
+    this.setTimer = setTimer ?? ((fn, ms) => globalThis.setTimeout(fn, ms));
     this.clearTimer =
       clearTimer ??
       ((h) => {
@@ -366,8 +365,7 @@ export class WsChatController {
 
   private openConnection(): void {
     this.manuallyClosed = false;
-    this.connState =
-      this.reconnectAttempt > 0 ? "reconnecting" : "connecting";
+    this.connState = this.reconnectAttempt > 0 ? "reconnecting" : "connecting";
     this.notify();
 
     const protocol = location.protocol === "https:" ? "wss:" : "ws:";

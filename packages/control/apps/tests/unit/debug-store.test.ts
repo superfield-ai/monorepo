@@ -77,10 +77,16 @@ describe("debugStore", () => {
   });
 
   it("persists across __resetForTest via sessionStorage when not explicitly reset", () => {
-    debugStore.record({ level: "error", source: "console", message: "persist" });
+    debugStore.record({
+      level: "error",
+      source: "console",
+      message: "persist",
+    });
     const stored = sessionStorage.getItem("superfield.debugStore.v1");
     expect(stored).not.toBeNull();
-    const parsed = JSON.parse(stored as string) as { entries: Array<{ message: string }> };
+    const parsed = JSON.parse(stored as string) as {
+      entries: Array<{ message: string }>;
+    };
     expect(parsed.entries[0].message).toBe("persist");
   });
 });

@@ -36,10 +36,16 @@ describe("fetchJson", () => {
 
   it("returns AppError with status on 500", async () => {
     window.fetch = vi.fn().mockResolvedValue(
-      new Response(JSON.stringify({ ok: false, error: { code: "server", message: "boom", hint: "retry" } }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
-      }),
+      new Response(
+        JSON.stringify({
+          ok: false,
+          error: { code: "server", message: "boom", hint: "retry" },
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      ),
     );
     const result = await fetchJson("/api/test");
     expect(result.ok).toBe(false);
@@ -69,7 +75,10 @@ describe("fetchJson", () => {
 
   it("emits a breadcrumb on success", async () => {
     window.fetch = vi.fn().mockResolvedValue(
-      new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+      new Response("{}", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
     await fetchJson("/api/test");
     const crumbs = debugStore.getBreadcrumbs();
@@ -77,9 +86,9 @@ describe("fetchJson", () => {
   });
 
   it("returns AppError code='parse' on non-JSON 200", async () => {
-    window.fetch = vi.fn().mockResolvedValue(
-      new Response("not json", { status: 200 }),
-    );
+    window.fetch = vi
+      .fn()
+      .mockResolvedValue(new Response("not json", { status: 200 }));
     const result = await fetchJson("/api/test");
     expect(result.ok).toBe(false);
     if (!result.ok) expect(result.error.code).toBe("parse");
@@ -87,12 +96,17 @@ describe("fetchJson", () => {
 
   it("serialises object body to JSON and sets Content-Type", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
-      new Response("{}", { status: 200, headers: { "Content-Type": "application/json" } }),
+      new Response("{}", {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
     );
     window.fetch = fetchMock;
     await fetchJson("/api/test", { method: "POST", body: { a: 1 } });
     const init = fetchMock.mock.calls[0][1] as RequestInit;
     expect(init.body).toBe(JSON.stringify({ a: 1 }));
-    expect((init.headers as Headers).get("Content-Type")).toBe("application/json");
+    expect((init.headers as Headers).get("Content-Type")).toBe(
+      "application/json",
+    );
   });
 });

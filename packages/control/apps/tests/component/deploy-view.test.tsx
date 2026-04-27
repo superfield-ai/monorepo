@@ -110,6 +110,35 @@ describe("DeployView", () => {
     expect(rollbackSpy).toHaveBeenCalledWith("staging");
   });
 
+  test("prod rollback requires typed env-name confirmation (E13)", async () => {
+    const rollbackSpy = vi
+      .spyOn(DeployController.prototype, "rollback")
+      .mockResolvedValue();
+    const { controller } = makeStubController({
+      selectedEnv: "prod",
+      envs: ["dev", "staging", "prod"],
+    });
+    const screen = render(<DeployView controller={controller} />);
+
+    await screen.getByTestId("rollback-trigger").click();
+    await expect.element(screen.getByTestId("rollback-confirm")).toBeVisible();
+
+    // Confirm button should be disabled until the env name is typed.
+    const confirmBtn = screen.getByTestId("rollback-confirm-action");
+    await expect.element(confirmBtn).toBeDisabled();
+
+    // Typing the wrong value keeps it disabled.
+    const input = screen.getByTestId("rollback-confirm-input");
+    await input.fill("dev");
+    await expect.element(confirmBtn).toBeDisabled();
+
+    // Typing the matching env name enables it; clicking calls rollback.
+    await input.fill("prod");
+    await expect.element(confirmBtn).toBeEnabled();
+    await confirmBtn.click();
+    expect(rollbackSpy).toHaveBeenCalledWith("prod");
+  });
+
   test("rolloutLog renders inside <pre> when present", async () => {
     const { controller } = makeStubController({
       rolloutLog: ["[t1] line one", "[t2] line two"],

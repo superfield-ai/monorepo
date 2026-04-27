@@ -27,7 +27,10 @@ async function gotoTab(
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
   // The Debug tab has a separate badge entry point; the rest are normal tabs.
-  const selector = tab === "debug" ? '[data-testid="debug-badge"]' : `[data-testid="tab-${tab}"]`;
+  const selector =
+    tab === "debug"
+      ? '[data-testid="debug-badge"]'
+      : `[data-testid="tab-${tab}"]`;
   await page.click(selector);
   await page.waitForTimeout(150);
 }

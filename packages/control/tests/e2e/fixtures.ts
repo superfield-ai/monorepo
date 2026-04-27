@@ -35,30 +35,33 @@ export const test = base.extend<CleanConsoleFixtures>({
   // `auto: true` forces this fixture to run for every test that uses our
   // extended `test`, so a spec author cannot opt out — that is the whole
   // point of T1.
-  capturedConsole: [async ({ page }, use) => {
-    const errors: string[] = [];
-    const warnings: string[] = [];
-    page.on("console", (msg) => {
-      if (msg.type() === "error") errors.push(msg.text());
-      if (msg.type() === "warning") warnings.push(msg.text());
-    });
-    page.on("pageerror", (err) => {
-      errors.push(`pageerror: ${err.message}`);
-    });
-    await use({ errors, warnings });
-    // Assertion runs even on test failure so the original failure is preserved.
-    if (errors.length > 0 || warnings.length > 0) {
-      const lines = [
-        errors.length > 0 ? `console.error (${errors.length}):` : null,
-        ...errors.map((e) => `  - ${e}`),
-        warnings.length > 0 ? `console.warn (${warnings.length}):` : null,
-        ...warnings.map((w) => `  - ${w}`),
-      ].filter(Boolean);
-      throw new Error(
-        `expectCleanConsole: console output detected during test\n${lines.join("\n")}`,
-      );
-    }
-  }, { auto: true }],
+  capturedConsole: [
+    async ({ page }, use) => {
+      const errors: string[] = [];
+      const warnings: string[] = [];
+      page.on("console", (msg) => {
+        if (msg.type() === "error") errors.push(msg.text());
+        if (msg.type() === "warning") warnings.push(msg.text());
+      });
+      page.on("pageerror", (err) => {
+        errors.push(`pageerror: ${err.message}`);
+      });
+      await use({ errors, warnings });
+      // Assertion runs even on test failure so the original failure is preserved.
+      if (errors.length > 0 || warnings.length > 0) {
+        const lines = [
+          errors.length > 0 ? `console.error (${errors.length}):` : null,
+          ...errors.map((e) => `  - ${e}`),
+          warnings.length > 0 ? `console.warn (${warnings.length}):` : null,
+          ...warnings.map((w) => `  - ${w}`),
+        ].filter(Boolean);
+        throw new Error(
+          `expectCleanConsole: console output detected during test\n${lines.join("\n")}`,
+        );
+      }
+    },
+    { auto: true },
+  ],
 });
 
 export { expect };
@@ -67,9 +70,9 @@ export { expect };
  * Attach the clean-console assertion inside any spec that already imports the
  * stock Playwright `test`. Adds an automatic teardown.
  */
-export function expectCleanConsole(
-  page: import("@playwright/test").Page,
-): { readonly assert: () => void } {
+export function expectCleanConsole(page: import("@playwright/test").Page): {
+  readonly assert: () => void;
+} {
   const errors: string[] = [];
   const warnings: string[] = [];
   page.on("console", (msg) => {
