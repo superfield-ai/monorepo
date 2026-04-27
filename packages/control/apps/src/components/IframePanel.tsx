@@ -18,6 +18,10 @@
 
 import React, { useEffect, useRef, useState } from "react";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
+import {
+  IframeOverlay,
+  type IframeFailureMode,
+} from "./IframeOverlay";
 
 interface IframePanelProps {
   /** URL loaded in the iframe. Defaults to /app/ (studio proxy target). */
@@ -29,6 +33,14 @@ interface IframePanelProps {
    * undefined, the iframe stretches to fill its container.
    */
   iframeWidth?: number | string;
+  /**
+   * Test seam: drive the failure overlay directly. When set, IframePanel
+   * shows the overlay regardless of internal load state. Used by E14 component
+   * tests and the error-handling Playwright spec.
+   */
+  failureModeOverride?: IframeFailureMode;
+  /** Stderr tail surfaced in the build-error overlay. */
+  buildStderr?: string;
 }
 
 /**
@@ -39,9 +51,14 @@ export function IframePanel({
   src = "/app/",
   clusterStatus,
   iframeWidth,
+  failureModeOverride,
+  buildStderr,
 }: IframePanelProps) {
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const [overlayVisible, setOverlayVisible] = useState(false);
+  const [failureMode, setFailureMode] = useState<IframeFailureMode | null>(
+    null,
+  );
   const prevStatusRef = useRef<ClusterStatus>(clusterStatus);
 
   useEffect(() => {
@@ -58,7 +75,38 @@ export function IframePanel({
         iframeRef.current.src = src;
       }
     }
+
+    // E14: surface a cluster-down failure overlay when the cluster reports it
+    // is unhealthy or unknown for long enough that the iframe is unusable.
+    if (clusterStatus === "degraded" || clusterStatus === "unknown") {
+      setFailureMode("cluster-down");
+    } else if (clusterStatus === "healthy") {
+      setFailureMode(null);
+    }
   }, [clusterStatus, src]);
+
+  function handleIframeError() {
+    // The iframe's `error` event fires for cross-origin or full-document load
+    // failures. Without cluster context we fall back to "build-error" — the
+    // operator gets a Retry button either way.
+    if (clusterStatus === "healthy") {
+      setFailureMode("build-error");
+    } else {
+      setFailureMode("cluster-down");
+    }
+  }
+
+  function handleRetry() {
+    setFailureMode(null);
+    if (iframeRef.current) iframeRef.current.src = src;
+  }
+
+  function handleResetToRoot() {
+    setFailureMode(null);
+    if (iframeRef.current) iframeRef.current.src = "/app/";
+  }
+
+  const effectiveFailureMode = failureModeOverride ?? failureMode;
 
   const iframeStyle: React.CSSProperties =
     iframeWidth !== undefined
@@ -85,7 +133,22 @@ export function IframePanel({
         }
         style={iframeStyle}
         data-testid="app-iframe"
+        onError={handleIframeError}
       />
+
+      {effectiveFailureMode && !overlayVisible && (
+        <IframeOverlay
+          mode={effectiveFailureMode}
+          failedPath={
+            effectiveFailureMode === "not-found"
+              ? src.replace(/^\/app/, "")
+              : undefined
+          }
+          buildStderr={buildStderr}
+          onRetry={handleRetry}
+          onResetToRoot={handleResetToRoot}
+        />
+      )}
 
       {/* Reloading overlay — visible during hot-swaps */}
       {overlayVisible && (
