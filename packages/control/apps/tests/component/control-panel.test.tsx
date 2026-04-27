@@ -264,6 +264,7 @@ test("studio panel renders ChatPanel and IframePanel at 1280x800", async () => {
         appSrc="/app/"
         initialClusterStatus="healthy"
         chatEndpoint="/studio/chat"
+        hideConnectionBanner
       />
     </div>,
   );
@@ -279,6 +280,7 @@ test("cluster status from ClusterStatusController flows to ChatPanel ClusterStat
       appSrc="/app/"
       initialClusterStatus="healthy"
       chatEndpoint="/studio/chat"
+      hideConnectionBanner
     />,
   );
   await expect
@@ -293,6 +295,7 @@ test("cluster status from ClusterStatusController flows to IframePanel overlay",
       appSrc="/app/"
       initialClusterStatus="restarting"
       chatEndpoint="/studio/chat"
+      hideConnectionBanner
     />,
   );
   await expect.element(screen.getByTestId("reloading-overlay")).toBeVisible();
@@ -304,6 +307,7 @@ test("studio panel propagates status update to both panels on prop change", asyn
       appSrc="/app/"
       initialClusterStatus="healthy"
       chatEndpoint="/studio/chat"
+      hideConnectionBanner
     />,
   );
 
@@ -318,6 +322,7 @@ test("studio panel propagates status update to both panels on prop change", asyn
       appSrc="/app/"
       initialClusterStatus="restarting"
       chatEndpoint="/studio/chat"
+      hideConnectionBanner
     />,
   );
 

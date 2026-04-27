@@ -10,7 +10,7 @@
  * Run:
  *   npx playwright test --config packages/control/tests/e2e/playwright.config.ts
  */
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures";
 
 // ---------------------------------------------------------------------------
 // Navigation helper
@@ -37,14 +37,21 @@ test.describe("tab bar", () => {
 
   test("Studio tab is active by default", async ({ page }) => {
     await goToStudio(page);
-    // Active tab has the blue border-b-2 class.
-    const studioBtn = page.getByTestId("tab-studio");
-    await expect(studioBtn).toHaveClass(/border-b-2/);
-    // Other tabs do not.
-    await expect(page.getByTestId("tab-orchestrator")).not.toHaveClass(
-      /border-b-2/,
+    // Active tab carries data-active="true" (the design system uses a
+    // semantic attribute rather than a class for active state — see NavTab in
+    // ControlPanel.tsx).
+    await expect(page.getByTestId("tab-studio")).toHaveAttribute(
+      "data-active",
+      "true",
     );
-    await expect(page.getByTestId("tab-preview")).not.toHaveClass(/border-b-2/);
+    await expect(page.getByTestId("tab-orchestrator")).toHaveAttribute(
+      "data-active",
+      "false",
+    );
+    await expect(page.getByTestId("tab-preview")).toHaveAttribute(
+      "data-active",
+      "false",
+    );
   });
 });
 

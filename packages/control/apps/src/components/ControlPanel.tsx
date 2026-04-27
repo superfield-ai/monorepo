@@ -27,6 +27,21 @@ import { OrchestratorView } from "./OrchestratorView";
 import { ComponentPreviewPanel } from "./ComponentPreviewPanel";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
+import { DebugView } from "./DebugView";
+import { DebugBadge } from "./DebugBadge";
+import { Toaster } from "./Toaster";
+import { ErrorBoundary } from "./ErrorBoundary";
+import { ConnectionBanner } from "./ConnectionBanner";
+import { DeployView } from "./DeployView";
+import { RouteMap, loadSelectedRoute } from "./RouteMap";
+import {
+  ViewportToolbar,
+  VIEWPORT_WIDTHS,
+  loadViewport,
+  saveViewport,
+  type Viewport,
+} from "./ViewportToolbar";
+import { debugStore } from "../lib/debug-store";
 
 interface ControlPanelProps {
   /** URL loaded in the app iframe; defaults to /app/ */
@@ -39,6 +54,8 @@ interface ControlPanelProps {
   initialClusterStatus?: ClusterStatus;
   /** Optional pre-constructed controller instance (for testing) */
   clusterStatusController?: ClusterStatusController;
+  /** When true, hide the dev-loop ConnectionBanner (tests / Storybook). */
+  hideConnectionBanner?: boolean;
 }
 
 /**
@@ -55,6 +72,7 @@ export function ControlPanel({
   chatEndpoint = "/studio/chat",
   initialClusterStatus,
   clusterStatusController: controllerProp,
+  hideConnectionBanner = false,
 }: ControlPanelProps) {
   const [clusterStatus, setClusterStatus] = useState<ClusterStatus>(
     initialClusterStatus ?? "unknown",
@@ -89,74 +107,191 @@ export function ControlPanel({
   }, [initialClusterStatus]);
 
   const [activeTab, setActiveTab] = useState<
-    "studio" | "orchestrator" | "preview"
+    "studio" | "orchestrator" | "preview" | "deploy" | "debug"
   >("studio");
+
+  const [viewport, setViewportState] = useState<Viewport>(() => loadViewport());
+  const setViewport = (v: Viewport): void => {
+    setViewportState(v);
+    saveViewport(v);
+  };
+
+  const [iframeSrc, setIframeSrc] = useState<string>(() => {
+    const stored = loadSelectedRoute();
+    if (stored) {
+      const tail = stored.startsWith("/") ? stored.slice(1) : stored;
+      return `/app/${tail}`;
+    }
+    return appSrc;
+  });
+
+  // DB6 — record a route breadcrumb each time the active tab changes so the
+  // DebugView timeline can correlate UI events with the user's location.
+  useEffect(() => {
+    debugStore.breadcrumb({
+      category: "route",
+      message: `tab: ${activeTab}`,
+      data: { tab: activeTab },
+    });
+  }, [activeTab]);
 
   return (
     <div
-      className="flex h-screen w-full flex-col overflow-hidden bg-zinc-900"
+      className="flex h-screen w-full flex-col overflow-hidden"
+      style={{ background: "var(--bg-base)" }}
       data-testid="studio-panel"
     >
-      {/* Tab bar */}
+      {!hideConnectionBanner && <ConnectionBanner />}
+      {/* Tab bar — operator-grade: ALL CAPS mono with widest tracking,
+          left-border accent on active per the design system. */}
       <div
-        className="flex shrink-0 border-b border-zinc-700 bg-zinc-800"
+        className="flex shrink-0"
+        style={{
+          background: "var(--bg-raised)",
+          borderBottom: "1px solid var(--border-subtle)",
+        }}
         data-testid="tab-bar"
       >
-        <button
-          data-testid="tab-studio"
-          className={`px-4 py-2 text-sm font-medium ${activeTab === "studio" ? "border-b-2 border-blue-400 text-blue-300" : "text-zinc-400 hover:text-zinc-200"}`}
+        <NavTab
+          testid="tab-studio"
+          label="Studio"
+          active={activeTab === "studio"}
           onClick={() => setActiveTab("studio")}
-        >
-          Studio
-        </button>
-        <button
-          data-testid="tab-orchestrator"
-          className={`px-4 py-2 text-sm font-medium ${activeTab === "orchestrator" ? "border-b-2 border-blue-400 text-blue-300" : "text-zinc-400 hover:text-zinc-200"}`}
+        />
+        <NavTab
+          testid="tab-orchestrator"
+          label="Orchestrator"
+          active={activeTab === "orchestrator"}
           onClick={() => setActiveTab("orchestrator")}
-        >
-          Orchestrator
-        </button>
-        <button
-          data-testid="tab-preview"
-          className={`px-4 py-2 text-sm font-medium ${activeTab === "preview" ? "border-b-2 border-blue-400 text-blue-300" : "text-zinc-400 hover:text-zinc-200"}`}
+        />
+        <NavTab
+          testid="tab-preview"
+          label="Preview"
+          active={activeTab === "preview"}
           onClick={() => setActiveTab("preview")}
-        >
-          Preview
-        </button>
+        />
+        <NavTab
+          testid="tab-deploy"
+          label="Deploy"
+          active={activeTab === "deploy"}
+          onClick={() => setActiveTab("deploy")}
+        />
+        <DebugBadge
+          active={activeTab === "debug"}
+          onClick={() => setActiveTab("debug")}
+        />
       </div>
 
       {/* Studio tab */}
       {activeTab === "studio" && (
-        <div className="flex flex-1 overflow-hidden">
-          {/* Left panel — Claude chat sidebar (fixed width) */}
-          <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
-            <ChatPanel
-              clusterStatus={clusterStatus}
-              chatEndpoint={chatEndpoint}
-              clusterEventsUrl={clusterEventsUrl}
-            />
+        <ErrorBoundary label="Studio">
+          <div className="flex flex-1 overflow-hidden">
+            <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
+              <ChatPanel
+                clusterStatus={clusterStatus}
+                chatEndpoint={chatEndpoint}
+                clusterEventsUrl={clusterEventsUrl}
+              />
+            </div>
+            <div className="hidden lg:flex">
+              <RouteMap
+                onSelect={(path) => {
+                  const tail = path.startsWith("/") ? path.slice(1) : path;
+                  setIframeSrc(`/app/${tail}`);
+                }}
+              />
+            </div>
+            <div className="flex-1 flex flex-col">
+              <ViewportToolbar value={viewport} onChange={setViewport} />
+              <IframePanel
+                src={iframeSrc}
+                clusterStatus={clusterStatus}
+                iframeWidth={VIEWPORT_WIDTHS[viewport]}
+              />
+            </div>
           </div>
-
-          {/* Right panel — Superfield app iframe (fills remaining space) */}
-          <div className="flex-1 flex flex-col">
-            <IframePanel src={appSrc} clusterStatus={clusterStatus} />
-          </div>
-        </div>
+        </ErrorBoundary>
       )}
 
       {/* Orchestrator tab */}
       {activeTab === "orchestrator" && (
-        <div className="flex-1 overflow-hidden bg-gray-50">
-          <OrchestratorView />
-        </div>
+        <ErrorBoundary label="Orchestrator">
+          <div className="flex-1 overflow-hidden bg-gray-50">
+            <OrchestratorView />
+          </div>
+        </ErrorBoundary>
       )}
 
-      {/* Preview tab — studio-mode component preview panel */}
+      {/* Preview tab */}
       {activeTab === "preview" && (
-        <div className="flex-1 overflow-hidden bg-white">
-          <ComponentPreviewPanel />
-        </div>
+        <ErrorBoundary label="Preview">
+          <div className="flex-1 overflow-hidden bg-white">
+            <ComponentPreviewPanel />
+          </div>
+        </ErrorBoundary>
       )}
+
+      {/* Deploy tab */}
+      {activeTab === "deploy" && (
+        <ErrorBoundary label="Deploy">
+          <div className="flex-1 overflow-hidden">
+            <DeployView />
+          </div>
+        </ErrorBoundary>
+      )}
+
+      {/* Debug tab */}
+      {activeTab === "debug" && (
+        <ErrorBoundary label="Debug">
+          <div className="flex-1 overflow-hidden">
+            <DebugView />
+          </div>
+        </ErrorBoundary>
+      )}
+
+      <Toaster />
     </div>
+  );
+}
+
+// ── NavTab ───────────────────────────────────────────────────────────────────
+// Operator-grade tab button. ALL CAPS mono label with widest tracking. Active
+// state shows a 2px cyan left-accent border and brightens the label to fg-1.
+// Sharp corners — no rounding. (Per docs/colors_and_type.css and the
+// MissionCtrl design system spec.)
+
+function NavTab({
+  testid,
+  label,
+  active,
+  onClick,
+}: {
+  testid: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      data-testid={testid}
+      data-nav-label="true"
+      data-active={active ? "true" : "false"}
+      onClick={onClick}
+      style={{
+        padding: "8px 16px",
+        background: "transparent",
+        border: "none",
+        borderLeft: active
+          ? "2px solid var(--accent-cyan)"
+          : "2px solid transparent",
+        borderBottom: active
+          ? "1px solid var(--accent-cyan)"
+          : "1px solid transparent",
+        cursor: "pointer",
+        transition: "color var(--duration-base) var(--ease-out)",
+      }}
+    >
+      {label.toUpperCase()}
+    </button>
   );
 }

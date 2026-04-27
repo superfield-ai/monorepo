@@ -5,3 +5,9 @@ packages/cli/build-info.ts
 packages/studio/playwright-report/
 packages/studio/test-results/
 packages/studio/apps/dist/
+
+# Demo seed output (scripts/seed-demo.ts)
+.studio/
+
+# Vitest browser test screenshots — captured per-run by @vitest/browser, not source.
+packages/control/apps/tests/**/__screenshots__/

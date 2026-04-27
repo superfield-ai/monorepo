@@ -68,6 +68,11 @@ import { handleControlRequest } from "./api";
 import { clusterStatusSseResponse } from "./cluster-status-sse";
 import { type WsData } from "./control-ws";
 import { handleOrchestratorRequest } from "./orchestrator";
+import { handleDeployRequest } from "./deploy";
+import { handleDemoRequest } from "./demo";
+import { handleTurnsRequest } from "./turns";
+import { debugEventsSseResponse, logBackendError } from "./debug-events";
+import { errorResponse } from "../lib/error-envelope";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -115,14 +120,12 @@ export async function proxyRequest(
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    console.error(`[studio] proxy error → ${upstreamUrl}: ${message}`);
-    return new Response(
-      JSON.stringify({ error: "Bad Gateway", upstream: upstreamUrl }),
-      {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
-      },
-    );
+    logBackendError(err, `proxy ${upstreamUrl}`);
+    return errorResponse({
+      code: "upstream",
+      message: `Upstream unreachable: ${upstreamUrl}`,
+      hint: `Check the target service is running. Cause: ${message}`,
+    });
   }
 }
 
@@ -208,7 +211,11 @@ export async function route(
   // WebSocket upgrade — browser chat via WS instead of SSE.
   if (req.method === "GET" && pathname === "/studio/ws") {
     if (!server) {
-      return new Response("WebSocket not available", { status: 501 });
+      return errorResponse({
+        code: "unsupported",
+        message: "WebSocket not available",
+        hint: "The studio server was started without a Bun server reference.",
+      });
     }
     const upgraded = server.upgrade(req, {
       data: {
@@ -217,7 +224,11 @@ export async function route(
       } satisfies WsData,
     });
     if (!upgraded) {
-      return new Response("WebSocket upgrade failed", { status: 400 });
+      return errorResponse({
+        code: "validation",
+        message: "WebSocket upgrade failed",
+        hint: "The client did not send a valid WebSocket upgrade request.",
+      });
     }
     // Bun consumes the request after upgrade; return undefined cast to Response.
     return undefined as unknown as Response;
@@ -227,9 +238,10 @@ export async function route(
   if (req.method === "POST" && pathname === "/studio/steer") {
     const body = (await req.json().catch(() => ({}))) as { context?: string };
     if (!body.context) {
-      return new Response(JSON.stringify({ error: "context is required" }), {
-        status: 400,
-        headers: { "Content-Type": "application/json" },
+      return errorResponse({
+        code: "validation",
+        message: "context is required",
+        hint: "POST { context: string } to /studio/steer.",
       });
     }
     try {
@@ -245,9 +257,11 @@ export async function route(
       });
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return new Response(JSON.stringify({ error: message }), {
-        status: 502,
-        headers: { "Content-Type": "application/json" },
+      logBackendError(err, "POST /studio/steer");
+      return errorResponse({
+        code: "upstream",
+        message: `Steering API unreachable at ${config.superfieldApiUrl}`,
+        hint: `Cause: ${message}. Start the dev loop with POST /orchestrator/start.`,
       });
     }
   }
@@ -274,9 +288,11 @@ export async function route(
       );
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      return new Response(JSON.stringify({ ok: false, message }), {
-        status: 500,
-        headers: { "Content-Type": "application/json" },
+      logBackendError(err, "POST /studio/rebuild");
+      return errorResponse({
+        code: "server",
+        message: `Rebuild failed: ${message}`,
+        hint: "Check the studio debug view for the rebuild stack trace.",
       });
     }
   }
@@ -287,8 +303,10 @@ export async function route(
     const { streamTurn, SESSION_KEY } = await import("./claude-session");
     const message = url.searchParams.get("message") ?? "";
     if (!message.trim()) {
-      return new Response("message query parameter is required", {
-        status: 400,
+      return errorResponse({
+        code: "validation",
+        message: "message query parameter is required",
+        hint: "Pass ?message=<text> to /studio/chat/stream.",
       });
     }
     const modeParam = url.searchParams.get("mode");
@@ -305,11 +323,30 @@ export async function route(
     });
   }
 
+  // SSE stream for backend debug events (errors + warnings).
+  // Consumed by the browser DebugStore (apps/src/lib/backend-debug-stream.ts)
+  // so a unified browser + backend timeline is available in /studio/debug.
+  if (req.method === "GET" && pathname === "/studio/debug/events") {
+    return debugEventsSseResponse();
+  }
+
   // SSE stream for aggregate cluster health status.
   // Canonical: apps/server/src/cluster-status-sse.ts
   if (req.method === "GET" && pathname === "/studio/cluster/events") {
     return clusterStatusSseResponse(config.clusterContext);
   }
+
+  // Deploy endpoints — D1 / C-9.5 deployment health view.
+  const deployResponse = await handleDeployRequest(req, url);
+  if (deployResponse) return deployResponse;
+
+  // Demo content endpoints — D2 / D3 / D6 fixtures from .studio/demo/*.
+  const demoResponse = handleDemoRequest(req, url);
+  if (demoResponse) return demoResponse;
+
+  // Turn timeline — D6 / C-9.6.
+  const turnsResponse = handleTurnsRequest(req, url);
+  if (turnsResponse) return turnsResponse;
 
   // Orchestrator endpoints — manage the dev loop child process.
   const orchResponse = await handleOrchestratorRequest(

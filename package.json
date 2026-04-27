@@ -26,6 +26,7 @@
     "blueprint:compile": "bun run scripts/compile-blueprint.ts"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.2",
     "@eslint/js": "^9.0.0",
     "@playwright/test": "^1.58.2",
     "eslint": "^9.0.0",
