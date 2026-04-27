@@ -3,6 +3,7 @@ import * as fs from "node:fs";
 import * as crypto from "node:crypto";
 import * as path from "node:path";
 import { SshClient } from "../ssh/client.ts";
+import { resolveEnvCredentials } from "./env-credentials.ts";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -277,8 +278,9 @@ export async function exportDb(opts: ExportDbOptions): Promise<ExportDbResult> {
   if (deps.getRepoSecret) {
     databaseUrl = await deps.getRepoSecret(repo, secretName);
   } else {
-    // Fallback: read from environment variable (useful for local usage)
-    databaseUrl = process.env[secretName] ?? process.env["DATABASE_URL"];
+    // Fallback: read from environment variable (useful for local usage).
+    // resolveEnvCredentials handles both DATABASE_URL_<ENV> and DATABASE_URL.
+    databaseUrl = resolveEnvCredentials(env).databaseUrl;
   }
 
   if (!databaseUrl) {
@@ -333,10 +335,11 @@ async function runLocalDump(args: {
 }): Promise<void> {
   const { opts: _opts, deps, env, outPath, onLog } = args;
 
-  const host = deps.sshHost ?? process.env["DEPLOY_HOST"];
+  const creds = resolveEnvCredentials(env);
+  const host = deps.sshHost ?? creds.deployHost;
   if (!host) {
     throw new Error(
-      "Local DB mode requires DEPLOY_HOST environment variable (or deps.sshHost)",
+      `Local DB mode requires DEPLOY_HOST_${env.toUpperCase()} (or DEPLOY_HOST) environment variable (or deps.sshHost)`,
     );
   }
 
@@ -346,9 +349,9 @@ async function runLocalDump(args: {
     process.env["DEPLOY_KNOWN_HOSTS"] ??
     `${process.env["HOME"] ?? ""}/.ssh/known_hosts.superfield`;
 
-  let sshPrivateKeyPem = deps.sshPrivateKeyPem ?? process.env["DEPLOY_KEY"];
+  let sshPrivateKeyPem = deps.sshPrivateKeyPem ?? creds.deployKey;
   if (!sshPrivateKeyPem) {
-    const keyFile = process.env["DEPLOY_KEY_FILE"];
+    const keyFile = creds.deployKeyFile;
     if (keyFile) {
       sshPrivateKeyPem = fs.readFileSync(keyFile, "utf8");
     }
@@ -356,7 +359,7 @@ async function runLocalDump(args: {
 
   if (!sshPrivateKeyPem) {
     throw new Error(
-      "Local DB mode requires DEPLOY_KEY, DEPLOY_KEY_FILE, or deps.sshPrivateKeyPem",
+      `Local DB mode requires DEPLOY_KEY_${env.toUpperCase()} (or DEPLOY_KEY), DEPLOY_KEY_FILE_${env.toUpperCase()} (or DEPLOY_KEY_FILE), or deps.sshPrivateKeyPem`,
     );
   }
 

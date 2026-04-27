@@ -16,6 +16,7 @@ import { deriveEd25519Key, readMnemonic } from "../secrets/index.ts";
 import { registerEnvDeployKey, pushEnvSecrets } from "./setup-github.ts";
 import { syncWorkflows } from "./sync-workflows.ts";
 import { deployEnv } from "./deploy-env.ts";
+import { resolveEnvCredentials } from "./env-credentials.ts";
 
 // Type used as the common shape across all providers.
 export interface ProvisionResult {
@@ -256,13 +257,14 @@ export async function init(opts: InitOpts): Promise<InitResult> {
     printStep(6, "deploy");
     try {
       const deployFn = opts.deps?.deployEnv ?? deployEnv;
-      // The SSH private key is read from DEPLOY_KEY / DEPLOY_KEY_FILE in
-      // production. Tests always inject deps.deployEnv so this path is not
-      // exercised in unit tests.
+      // The SSH private key is read from DEPLOY_KEY_<ENV> / DEPLOY_KEY /
+      // DEPLOY_KEY_FILE_<ENV> / DEPLOY_KEY_FILE in production.
+      // Tests always inject deps.deployEnv so this path is not exercised in unit tests.
       const { readFileSync } = await import("node:fs");
-      let sshPrivateKeyPem = process.env.DEPLOY_KEY ?? "";
+      const initCreds = resolveEnvCredentials(opts.env);
+      let sshPrivateKeyPem = initCreds.deployKey ?? "";
       if (!sshPrivateKeyPem) {
-        const keyFile = process.env.DEPLOY_KEY_FILE;
+        const keyFile = initCreds.deployKeyFile;
         if (keyFile) {
           sshPrivateKeyPem = readFileSync(keyFile, "utf8");
         }
@@ -318,7 +320,7 @@ function stepHint(name: StepName): string {
     case "sync":
       return "Verify GITHUB_TOKEN has contents write access. Re-run with --from-step 5.";
     case "deploy":
-      return "Check DEPLOY_KEY / DEPLOY_KEY_FILE and GITHUB_TOKEN. Re-run with --from-step 6.";
+      return "Check DEPLOY_KEY_<ENV> (or DEPLOY_KEY) / DEPLOY_KEY_FILE_<ENV> (or DEPLOY_KEY_FILE) and GITHUB_TOKEN. Re-run with --from-step 6.";
   }
 }
 
