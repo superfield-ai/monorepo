@@ -3,11 +3,19 @@
  *
  * Installs `window.onerror` and `window.onunhandledrejection` so that uncaught
  * exceptions and unhandled promise rejections are captured into the DebugStore
- * instead of bubbling silently into the browser console.
+ * IN ADDITION TO the browser's default console output. The default behaviour
+ * is preserved on purpose — operators reading DevTools should still see the
+ * raw stack, and Playwright's `pageerror` listener should still fire so a
+ * stray unhandled error in app code fails the test (the right outcome).
  *
  * These handlers are paired with the React `ErrorBoundary` (see
- * components/ErrorBoundary.tsx) which catches render-time errors. Together they
- * close every escape hatch the runtime offers.
+ * components/ErrorBoundary.tsx) which catches render-time errors. Together
+ * they close every escape hatch the runtime offers — but they are a safety
+ * net, not a silencer. The real contract is "no error is unhandled at the
+ * source": every fetch/EventSource/WebSocket call returns a typed
+ * `Result<T, AppError>`, every component is inside an ErrorBoundary, and
+ * any operation that can fail is awaited inside a Result-aware path. If the
+ * net catches anything it is a bug to fix, not a state to ignore.
  */
 
 import { debugStore } from "./debug-store";
@@ -31,9 +39,9 @@ export function installGlobalErrorHandlers(): void {
         colno: event.colno,
       },
     });
-    // Suppress the default browser console output — the DebugView is the
-    // canonical surface. Returning true cancels the event.
-    event.preventDefault();
+    // Do NOT call event.preventDefault(). The browser default (logging the
+    // error to the JS console) is preserved so DevTools and Playwright still
+    // see it — the DebugView is an additional surface, not a replacement.
   });
 
   window.addEventListener(
@@ -53,7 +61,7 @@ export function installGlobalErrorHandlers(): void {
         stack: reason instanceof Error ? reason.stack : undefined,
         context: { kind: "unhandledrejection" },
       });
-      event.preventDefault();
+      // Default behaviour preserved — see comment above.
     },
   );
 }

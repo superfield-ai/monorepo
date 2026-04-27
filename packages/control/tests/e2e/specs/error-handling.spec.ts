@@ -6,13 +6,12 @@
  *   - Page crash from a render-time exception → ErrorBoundary card with Retry.
  *   - Network drop → toast or banner with reconnect action.
  *
- * The fixtures.ts auto-fail-on-console gate is bypassed here because the
- * runtime DELIBERATELY produces some console output (the dev-mode forwarder
- * still fires when forwardToConsole=true). The shipped production build mutes
- * the native console and only the DebugView records.
+ * Uses the auto-fail-on-console fixture: any leak of console.error / .warn
+ * is itself a test failure. The webapp does not intercept the JS console;
+ * the operating principle is that no error path ends in a raw console call.
  */
 
-import { test, expect } from "@playwright/test";
+import { test, expect } from "../fixtures";
 
 test("debug badge renders with a numeric count on session load", async ({
   page,
@@ -21,23 +20,52 @@ test("debug badge renders with a numeric count on session load", async ({
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
   const badge = page.locator('[data-testid="debug-badge"]');
   await expect(badge).toBeVisible();
-  // The count starts at zero in pure-JS isolation, but in the CI fixture the
-  // studio proxy returns 502s for /app/* (no cluster) and the dev-loop SSE
-  // may take a tick to come up — both are recorded by the foundation as
-  // captured failures, so the count is positive on first paint. The shape
-  // we assert is "the attribute exists and is a base-10 integer", not a
-  // specific value.
+  // The count is a small non-negative integer. In the CI fixture the studio
+  // proxy returns 502s for /app/* (no cluster) and the dev-loop SSE may not
+  // come up immediately — both are recorded by the foundation as typed
+  // failures via the Result<T, AppError> wrappers, so the count is often
+  // positive on first paint. The shape we assert is "the attribute exists
+  // and is a base-10 integer", not a specific value.
   await expect(badge).toHaveAttribute("data-count", /^\d+$/);
 });
 
 test("a triggered error increments the badge count", async ({ page }) => {
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-  await page.evaluate(() => console.error("counted"));
-  const countAttr = await page
-    .locator('[data-testid="debug-badge"]')
-    .getAttribute("data-count");
-  expect(Number(countAttr)).toBeGreaterThan(0);
+
+  // Read the count BEFORE we record, so the assertion is "increment", not
+  // "non-zero" (the count may already be positive due to startup probes).
+  const before = Number(
+    (await page
+      .locator('[data-testid="debug-badge"]')
+      .getAttribute("data-count")) ?? "0",
+  );
+
+  // Use the __superfieldDebug test seam to record an entry without going
+  // through the JS console (the auto-fixture would correctly fail on that)
+  // and without triggering a pageerror.
+  await page.evaluate(() => {
+    const store = (
+      globalThis as unknown as {
+        __superfieldDebug?: {
+          record(entry: {
+            level: "error" | "warn" | "info" | "debug";
+            source: string;
+            message: string;
+          }): void;
+        };
+      }
+    ).__superfieldDebug;
+    if (!store) throw new Error("__superfieldDebug not exposed on globalThis");
+    store.record({ level: "error", source: "app", message: "counted" });
+  });
+
+  const after = Number(
+    (await page
+      .locator('[data-testid="debug-badge"]')
+      .getAttribute("data-count")) ?? "0",
+  );
+  expect(after).toBeGreaterThan(before);
 });
 
 // ── Deeper failure simulations (T3) ───────────────────────────────────────────

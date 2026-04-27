@@ -3,11 +3,23 @@
  *
  * Process-wide ring-buffer store of structured debug events captured from:
  *
- *   - `console.error` / `console.warn` interception (see console-intercept.ts)
- *   - `window.onerror` and `window.onunhandledrejection` handlers (see global-handlers.ts)
- *   - Failed `fetch` / `EventSource` / `WebSocket` calls (see net.ts)
- *   - Backend `level: "error" | "warn"` events streamed over GET /studio/debug/events
- *   - Manual breadcrumbs (route changes, successful fetches, WS messages)
+ *   - `window.onerror` and `window.onunhandledrejection` handlers
+ *     (see global-handlers.ts) — the safety net for truly unhandled errors.
+ *   - Failed `fetch` / `EventSource` / `WebSocket` calls (see net.ts) — every
+ *     I/O call returns a typed `Result<T, AppError>` and records its failure
+ *     here as a side effect.
+ *   - Explicit `debugStore.record(...)` calls from app code in error paths
+ *     (replaces ad-hoc `console.error` calls — those would fail the
+ *     `expectCleanConsole` E2E gate).
+ *   - Backend `level: "error" | "warn"` events streamed over
+ *     GET /studio/debug/events.
+ *   - Manual breadcrumbs (route changes, successful fetches, WS messages).
+ *
+ * Notably the store does NOT intercept the JS `console` object. The browser
+ * console remains a useful operator diagnostic surface; the
+ * `expectCleanConsole` Playwright fixture enforces that no app code path
+ * emits `console.error` / `console.warn` (the right fix is to handle the
+ * error at its source, not silence it).
  *
  * The DebugView component (DebugView.tsx) subscribes to this store and renders a
  * unified, filterable timeline. The "Bug" badge in the top nav reads the unread
@@ -17,7 +29,7 @@
  * sessionStorage so a page refresh does not lose context.
  *
  * No framework dependency: this module is plain TypeScript so it can be imported
- * by both React components and non-React modules (net.ts, console-intercept.ts).
+ * by both React components and non-React modules.
  */
 
 export type DebugLevel = "error" | "warn" | "info" | "debug";

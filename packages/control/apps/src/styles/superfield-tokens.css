@@ -1,0 +1,282 @@
+/* ============================================================
+   MissionCtrl Design System — Colors & Typography Tokens
+   ============================================================ */
+
+@import url('https://fonts.googleapis.com/css2?family=Barlow:wght@300;400;500;600;700&family=Barlow+Condensed:wght@300;400;500;600;700&family=Fira+Mono:wght@400;500;700&display=swap');
+
+/* ── Base Resets ─────────────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+
+/* ── Color Tokens ────────────────────────────────────────── */
+:root {
+  /* Backgrounds */
+  --bg-void:           #060809;
+  --bg-base:           #0D1117;
+  --bg-raised:         #131B22;
+  --bg-elevated:       #192330;
+  --bg-overlay:        rgba(6, 8, 9, 0.88);
+
+  /* Borders */
+  --border-subtle:     #1C2A36;
+  --border-default:    #273D50;
+  --border-strong:     #3A5568;
+  --border-focus:      #5A8EE8;
+
+  /* Foreground / Text */
+  --fg-1:              #DCE8F2;   /* primary text */
+  --fg-2:              #6A8498;   /* secondary / labels */
+  --fg-3:              #3A5268;   /* muted / disabled */
+  --fg-inv:            #060809;   /* text on light surfaces */
+
+  /* Status / Accent — Semantic */
+  --status-nominal:    #39D98A;   /* green  — all systems go */
+  --status-caution:    #D4962A;   /* amber  — degraded / warning */
+  --status-critical:   #D4547A;   /* red    — fault / alert */
+  --status-offline:    #3A5268;   /* muted  — offline / unknown */
+  --status-info:       #5A8EE8;   /* blue   — informational */
+  --status-highlight:  #00C8CC;   /* cyan   — selected / active */
+
+  /* Accent aliases */
+  --accent-green:      var(--status-nominal);
+  --accent-amber:      var(--status-caution);
+  --accent-red:        var(--status-critical);
+  --accent-blue:       var(--status-info);
+  --accent-cyan:       var(--status-highlight);
+
+  /* Glow / Shadow */
+  --glow-green:        0 0 10px rgba(57, 217, 138, 0.18);
+  --glow-red:          0 0 10px rgba(212, 84, 122, 0.20);
+  --glow-blue:         0 0 10px rgba(90, 142, 232, 0.18);
+  --glow-amber:        0 0 10px rgba(212, 150, 42, 0.18);
+
+  /* ── Typography ──────────────────────────────────────── */
+
+  /* Font Families */
+  --font-display:     'Barlow Condensed', 'Helvetica Neue', sans-serif;
+  --font-mono:        'Fira Mono', 'Courier New', monospace;
+  --font-sans:        'Barlow', 'Helvetica Neue', sans-serif;
+
+  /* Font Weights */
+  --fw-light:   300;
+  --fw-regular: 400;
+  --fw-medium:  500;
+  --fw-semi:    600;
+  --fw-bold:    700;
+
+  /* Font Scale */
+  --text-2xs:   10px;
+  --text-xs:    11px;
+  --text-sm:    12px;
+  --text-base:  14px;
+  --text-md:    16px;
+  --text-lg:    18px;
+  --text-xl:    22px;
+  --text-2xl:   28px;
+  --text-3xl:   36px;
+  --text-4xl:   48px;
+  --text-5xl:   64px;
+
+  /* Letter spacing */
+  --ls-tight:   -0.02em;
+  --ls-normal:   0;
+  --ls-wide:     0.06em;
+  --ls-wider:    0.10em;
+  --ls-widest:   0.16em;
+
+  /* Line heights */
+  --lh-tight:   1.1;
+  --lh-snug:    1.3;
+  --lh-normal:  1.5;
+  --lh-relaxed: 1.7;
+
+  /* ── Spacing ─────────────────────────────────────────── */
+  --sp-0:   0px;
+  --sp-1:   4px;
+  --sp-2:   8px;
+  --sp-3:   12px;
+  --sp-4:   16px;
+  --sp-5:   20px;
+  --sp-6:   24px;
+  --sp-8:   32px;
+  --sp-10:  40px;
+  --sp-12:  48px;
+  --sp-16:  64px;
+  --sp-20:  80px;
+  --sp-24:  96px;
+
+  /* ── Borders & Radii ─────────────────────────────────── */
+  --radius-none:   0px;
+  --radius-sm:     2px;
+  --radius-badge:  2px;
+
+  /* ── Z-index ─────────────────────────────────────────── */
+  --z-base:     0;
+  --z-raised:   10;
+  --z-overlay:  100;
+  --z-modal:    200;
+  --z-top:      999;
+
+  /* ── Transitions ─────────────────────────────────────── */
+  --ease-out:        cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-in:         cubic-bezier(0.7, 0, 0.84, 0);
+  --duration-fast:   80ms;
+  --duration-base:   120ms;
+  --duration-slow:   200ms;
+}
+
+/* ── Semantic Typography Elements ────────────────────────── */
+
+/* System name / hero metric */
+.display-xl {
+  font-family: var(--font-display);
+  font-size: var(--text-5xl);
+  font-weight: var(--fw-bold);
+  letter-spacing: var(--ls-tight);
+  line-height: var(--lh-tight);
+  color: var(--fg-1);
+}
+
+/* Dashboard section title */
+.display-lg {
+  font-family: var(--font-display);
+  font-size: var(--text-4xl);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--ls-tight);
+  line-height: var(--lh-tight);
+  color: var(--fg-1);
+}
+
+/* Panel title */
+h1, .h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-3xl);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--ls-tight);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+
+h2, .h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-2xl);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-tight);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+
+h3, .h3 {
+  font-family: var(--font-display);
+  font-size: var(--text-xl);
+  font-weight: var(--fw-medium);
+  line-height: var(--lh-snug);
+  color: var(--fg-1);
+}
+
+/* Section / panel labels — ALL CAPS mono */
+.label, .label-sm {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-widest);
+  text-transform: uppercase;
+  color: var(--fg-2);
+  line-height: var(--lh-normal);
+}
+
+.label-lg {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-wider);
+  text-transform: uppercase;
+  color: var(--fg-2);
+  line-height: var(--lh-normal);
+}
+
+/* Data values — monospace, prominent */
+.value, .mono {
+  font-family: var(--font-mono);
+  font-size: var(--text-base);
+  font-weight: var(--fw-medium);
+  color: var(--fg-1);
+  line-height: var(--lh-tight);
+}
+
+.value-lg {
+  font-family: var(--font-mono);
+  font-size: var(--text-xl);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--ls-tight);
+  color: var(--fg-1);
+  line-height: 1;
+}
+
+.value-xl {
+  font-family: var(--font-mono);
+  font-size: var(--text-3xl);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--ls-tight);
+  color: var(--fg-1);
+  line-height: 1;
+}
+
+/* Body text */
+p, .body {
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  font-weight: var(--fw-regular);
+  color: var(--fg-2);
+  line-height: var(--lh-relaxed);
+}
+
+.body-sm {
+  font-family: var(--font-sans);
+  font-size: var(--text-sm);
+  color: var(--fg-2);
+  line-height: var(--lh-normal);
+}
+
+/* Code / terminal */
+code, .code {
+  font-family: var(--font-mono);
+  font-size: var(--text-sm);
+  color: var(--accent-cyan);
+  background: var(--bg-void);
+  padding: 1px 4px;
+}
+
+/* ── Status Badge ─────────────────────────────────────────── */
+.badge {
+  font-family: var(--font-mono);
+  font-size: var(--text-2xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-widest);
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: var(--radius-badge);
+  border: 1px solid currentColor;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.badge-nominal  { color: var(--status-nominal);  background: rgba(57,217,138,0.06); }
+.badge-caution  { color: var(--status-caution);  background: rgba(212,150,42,0.06); }
+.badge-critical { color: var(--status-critical); background: rgba(212,84,122,0.06); }
+.badge-offline  { color: var(--status-offline);  background: transparent; }
+.badge-info     { color: var(--status-info);     background: rgba(90,142,232,0.06); }
+
+/* ── Dividers ─────────────────────────────────────────────── */
+hr, .divider {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: 0;
+}
+
+/* ── Scrollbar ────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: var(--bg-void); }
+::-webkit-scrollbar-thumb { background: var(--border-default); }
+::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }

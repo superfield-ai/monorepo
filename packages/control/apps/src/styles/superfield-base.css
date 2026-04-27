@@ -1,0 +1,51 @@
+/* ============================================================
+   Superfield Control Room — base document styles
+   ============================================================
+   Wires the design tokens from superfield-tokens.css into the
+   document root so every page picks up the operator-grade
+   typography and near-void background by default.
+
+   Component-level overrides should reach for the tokens directly
+   (e.g. `var(--bg-raised)`, `.label`, `.value-lg`) rather than
+   adding new ad-hoc colours. */
+
+html, body, #root {
+  background: var(--bg-base);
+  color: var(--fg-1);
+  font-family: var(--font-sans);
+  font-size: var(--text-base);
+  line-height: var(--lh-normal);
+  min-height: 100vh;
+}
+
+body {
+  /* Defensive: prevent the cluster proxy's 502 from showing through if React
+     has not mounted yet — the void background is always there. */
+  background: var(--bg-base);
+}
+
+/* Sharp corners by default — undo any stray Tailwind rounded utilities. */
+button, input, textarea, select, .rounded, .rounded-md, .rounded-lg,
+.rounded-full, .rounded-sm {
+  border-radius: 0;
+}
+
+/* Pill-only exception: anything explicitly marked as a badge or pill keeps
+   the 2px max defined in the token sheet. */
+.badge, [data-pill="true"] {
+  border-radius: var(--radius-badge);
+}
+
+/* Operator nav labels: ALL CAPS mono, widest tracking. */
+[data-nav-label="true"] {
+  font-family: var(--font-mono);
+  font-size: var(--text-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-widest);
+  text-transform: uppercase;
+  color: var(--fg-2);
+}
+
+[data-nav-label="true"][data-active="true"] {
+  color: var(--fg-1);
+}

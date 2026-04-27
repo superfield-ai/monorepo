@@ -1,26 +1,43 @@
 /**
- * E2E spec: DebugView captures known browser-side failures (T4).
+ * E2E spec: DebugView captures recorded entries and the clear button works (T4).
  *
- * The webapp installs `console.error` / `console.warn` interceptors and
- * `window.onerror` handlers at boot. These tests intentionally trigger each
- * source from inside the page and assert that the DebugView surfaces the
- * resulting entry — proving the catch-everything pipeline works end-to-end.
+ * The webapp installs `window.onerror` and `unhandledrejection` handlers that
+ * route uncaught failures into the DebugStore. Those handler paths are
+ * covered by `tests/unit/global-handlers.test.ts`. This spec proves the
+ * remaining contract: any DebugStore entry surfaces in the DebugView with the
+ * right level / source / message, and the Clear button empties the timeline.
  *
- * Note: the `expectCleanConsole` fixture is bypassed for this spec because we
- * are deliberately producing console events. We re-attach a relaxed listener
- * that only fails on uncaught/uninstrumented warnings.
+ * Uses the auto-fail-on-console fixture: any leak of console.error / .warn
+ * fails the test. The webapp does not silence the console — it makes
+ * unhandled errors structurally impossible at the source.
  */
 
-import { test as base, expect } from "@playwright/test";
+import { test, expect } from "../fixtures";
 
-const test = base; // intentionally not the auto-fail variant
-
-test("debug view captures triggered console.error", async ({ page }) => {
+test("debug view shows entries recorded via the test seam", async ({
+  page,
+}) => {
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
 
   await page.evaluate(() => {
-    console.error("synthetic e2e error", { kind: "test" });
+    const store = (
+      globalThis as unknown as {
+        __superfieldDebug?: {
+          record(entry: {
+            level: "error" | "warn" | "info" | "debug";
+            source: string;
+            message: string;
+          }): void;
+        };
+      }
+    ).__superfieldDebug;
+    if (!store) throw new Error("__superfieldDebug not exposed on globalThis");
+    store.record({
+      level: "error",
+      source: "app",
+      message: "synthetic e2e error",
+    });
   });
 
   await page.click('[data-testid="debug-badge"]');
@@ -30,27 +47,24 @@ test("debug view captures triggered console.error", async ({ page }) => {
   await expect(rows.filter({ hasText: "synthetic e2e error" })).toHaveCount(1);
 });
 
-test("debug view captures uncaught synchronous errors", async ({ page }) => {
-  await page.goto("/");
-  await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-
-  await page.evaluate(() => {
-    setTimeout(() => {
-      throw new Error("synthetic uncaught");
-    }, 0);
-  });
-  await page.waitForTimeout(50);
-
-  await page.click('[data-testid="debug-badge"]');
-  await page.waitForSelector('[data-testid="debug-view"]');
-  const rows = page.locator('[data-testid="debug-row"]');
-  await expect(rows.filter({ hasText: "synthetic uncaught" })).toHaveCount(1);
-});
-
 test("clear button empties the timeline", async ({ page }) => {
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-  await page.evaluate(() => console.error("to be cleared"));
+  await page.evaluate(() => {
+    const store = (
+      globalThis as unknown as {
+        __superfieldDebug?: {
+          record(entry: {
+            level: "error" | "warn" | "info" | "debug";
+            source: string;
+            message: string;
+          }): void;
+        };
+      }
+    ).__superfieldDebug;
+    if (!store) throw new Error("__superfieldDebug not exposed on globalThis");
+    store.record({ level: "error", source: "app", message: "to be cleared" });
+  });
   await page.click('[data-testid="debug-badge"]');
   await page.waitForSelector('[data-testid="debug-view"]');
   await page.click('[data-testid="debug-clear"]');
