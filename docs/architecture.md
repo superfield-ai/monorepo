@@ -17,18 +17,18 @@ All orchestration state lives in the forge. The only local state is `~/.superfie
 
 Superfield is stateless at the process level. Any instance can resume from the forge alone. Killing and restarting the process loses nothing. The sole local exception is `~/.superfield/config.yaml` (credentials and repo assignments). All orchestration state — including active agent sessions — lives in the forge.
 
-## Calypso Mapping
+## Superfield Mapping
 
-Superfield is a direct replacement for the calypso-agents + shell script stack:
+Superfield is a direct replacement for the superfield-agents + shell script stack:
 
-| calypso-agents concept                 | Superfield equivalent                                                                   |
-| -------------------------------------- | --------------------------------------------------------------------------------------- |
-| Markdown skill (`SKILL.md`)            | TypeScript skill module with typed I/O                                                  |
-| Shell script (`.agents/scripts/`)      | TypeScript function; agent vendor CLIs (e.g. `claude`, `codex`) spawned as subprocesses |
-| `calypso-auto` orchestrator loop       | `superfield start`                                                                      |
-| `calypso-feature` + `feature-evaluate` | `superfield feature`                                                                    |
-| Plan rebuild / replan                  | `superfield plan`                                                                       |
-| Plan issue (GitHub)                    | Plan issue (GitHub, same format)                                                        |
+| superfield-agents concept                 | Superfield equivalent                                                                   |
+| ----------------------------------------- | --------------------------------------------------------------------------------------- |
+| Markdown skill (`SKILL.md`)               | TypeScript skill module with typed I/O                                                  |
+| Shell script (`.agents/scripts/`)         | TypeScript function; agent vendor CLIs (e.g. `claude`, `codex`) spawned as subprocesses |
+| `superfield-auto` orchestrator loop       | `superfield start`                                                                      |
+| `superfield-feature` + `feature-evaluate` | `superfield feature`                                                                    |
+| Plan rebuild / replan                     | `superfield plan`                                                                       |
+| Plan issue (GitHub)                       | Plan issue (GitHub, same format)                                                        |
 
 ## Libraries
 
@@ -42,7 +42,7 @@ Superfield is a direct replacement for the calypso-agents + shell script stack:
 
 ## Superfield Blueprint
 
-The Superfield Blueprint is a compiled knowledge graph of design rules — architectural constraints, security principles, design patterns, checklists, and antipatterns — sourced from `dot-matrix-labs/calypso-blueprint` and tracked as a git subtree at `blueprint/`. The compiled graph lives at `blueprint/rules/graph.yaml` (1 231 nodes across ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, WORKER), with domain bodies under `blueprint/rules/blueprints/*.yaml` and TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
+The Superfield Blueprint is a compiled knowledge graph of design rules — architectural constraints, security principles, design patterns, checklists, and antipatterns — sourced from `dot-matrix-labs/superfield-blueprint` and tracked as a git subtree at `blueprint/`. The compiled graph lives at `blueprint/rules/graph.yaml` (1 231 nodes across ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, WORKER), with domain bodies under `blueprint/rules/blueprints/*.yaml` and TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
 
 **Current integration state:**
 
@@ -369,7 +369,7 @@ Rendered issue body:
 
 ## Prompt Templates
 
-Every LLM interaction in Superfield runs through a typed prompt builder, never a free-form string assembled at the call site. Prompts live in source code at `packages/core/prompts/`, are unit-tested like any other module, and ship inside the `superfield` executable. There are no external markdown skill files at runtime — the calypso-agents `SKILL.md` files are reference material, not loaded artifacts.
+Every LLM interaction in Superfield runs through a typed prompt builder, never a free-form string assembled at the call site. Prompts live in source code at `packages/core/prompts/`, are unit-tested like any other module, and ship inside the `superfield` executable. There are no external markdown skill files at runtime — the superfield-agents `SKILL.md` files are reference material, not loaded artifacts.
 
 ### Why prompts as code
 
@@ -488,6 +488,144 @@ repositories:
 ```
 
 Multiple users and repositories are supported. Each repository is assigned to one user; that user's token is used for all API calls against that repository.
+
+---
+
+## Control Webapp
+
+The `superfield control` subcommand starts a browser UI on `:7000` that drives a single Superfield project. Product scope is in [`product.md` § Control Webapp](./product.md#control-webapp); this section is the implementation contract.
+
+### Process model
+
+```
+superfield control  (:7000)
+  │
+  ├── HTTP server + WebSocket  (browser UI, studio turns)
+  │
+  ├── DevLoopProcess           (child: superfield start <repo>)
+  │     plan / dev / doc loops
+  │     API server on :7837
+  │           │
+  │           └── HTTP (analytics read, steer write) ←── orchestrator view
+  │
+  └── Routes:
+        /                      — ControlPanel (chat + iframe)
+        /studio/orchestrator   — OrchestratorView
+        /studio/preview        — ComponentPreviewPanel + tokens + mocks
+        /studio/deploy         — DeployView (Phase 9)
+```
+
+`superfield start` is spawned as a child of `superfield control` when the user clicks Start in the orchestrator. Control holds the `ChildProcess`, monitors it, and terminates it on Stop or shutdown. If a dev loop is already reachable at `--api-url` (default `http://127.0.0.1:7837`), control attaches to it without spawning.
+
+### Shared-state contract
+
+`ApiState` is in-memory in the dev-loop process. With control as a separate process:
+
+- **Reads** — control polls `GET /analytics/*` on `:7837`.
+- **Writes** — control proxies steers to `POST /steer/context` and `POST /steer/escalate` on `:7837`. Control never holds steering state.
+
+If the dev loop is not running, control queues steers locally and retries when the API becomes reachable. Steers are not persisted across control restarts — they are a live-session concept. `bun:sqlite` is explicitly banned by `IMPL-DATA-038`; durable steer queues are deferred until they become a real requirement.
+
+### HTTP routes (control server, :7000)
+
+| Method | Path                           | Purpose                                                                 |
+| ------ | ------------------------------ | ----------------------------------------------------------------------- |
+| GET    | `/studio/ws`                   | WebSocket upgrade for chat turns + steer frames                         |
+| POST   | `/studio/steer`                | REST fallback — proxies to `POST <api-url>/steer/context`               |
+| POST   | `/studio/rebuild`              | Rebuild + rollout restart                                               |
+| GET    | `/studio/chat/stream`          | SSE legacy chat stream (kept for tests; WS is canonical)                |
+| GET    | `/studio/cluster/events`       | SSE — aggregate cluster health                                          |
+| GET    | `/studio/status`               | Studio mode + auth                                                      |
+| GET    | `/studio/commits`              | Session commit log                                                      |
+| GET    | `/studio/timeline`             | Checkpoint timeline                                                     |
+| POST   | `/studio/rollback`             | Reset HEAD to prior commit                                              |
+| POST   | `/studio/reset`                | Clear in-memory session messages                                        |
+| POST   | `/studio/chat`                 | Send message, run agent, return reply                                   |
+| GET    | `/orchestrator/status`         | `{ process, pid, apiReachable, uptimeMs }`                              |
+| POST   | `/orchestrator/start`          | Spawn `superfield start <repo>` — body `{ repo, slotCount }`            |
+| POST   | `/orchestrator/stop`           | SIGTERM the managed process; SIGKILL after 5 s                          |
+| GET    | `/orchestrator/logs`           | SSE — combined stdout/stderr ring buffer + live tail                    |
+| GET    | `/studio/turns/:sessionId`     | Per-session turn timeline (Phase 9 — reads `<CONTROL_LOG_DIR>/*.jsonl`) |
+| GET    | `/studio/blueprint/recent`     | Last 50 issues with `<!-- superfield-blueprint -->` comments (Phase 9)  |
+| GET    | `/studio/deploy/envs`          | Envs known from forge variables (Phase 9)                               |
+| GET    | `/studio/deploy/doctor/:env`   | Calls `runDoctor(env)`; returns checks array (Phase 9)                  |
+| GET    | `/studio/deploy/secrets/:env`  | Presence-only audit of three required secrets (Phase 9)                 |
+| GET    | `/studio/deploy/ci`            | Latest workflow run on `main` + deploy run (Phase 9)                    |
+| POST   | `/studio/deploy/rollback/:env` | Calls `rollbackEnv(env)` with `{ confirm: true }`; SSE log (Phase 9)    |
+| GET    | `/app/*`                       | Reverse-proxy to web ClusterIP service (strips `/app`)                  |
+| GET    | `/api/*`                       | Reverse-proxy to api ClusterIP service                                  |
+
+Routes under `/studio/*` (except `/studio/chat/stream`, `/studio/cluster/events`) and `/api/auth/*` skip the auth check; everything else requires the studio JWT cookie.
+
+### Modules
+
+| File                                          | Role                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------- |
+| `packages/control/src/index.ts`               | `startControl(opts?)` — server entry                                |
+| `packages/control/src/router.ts`              | HTTP route dispatch                                                 |
+| `packages/control/src/control-ws.ts`          | Bun WebSocket handler (chat turns, steers)                          |
+| `packages/control/src/agent.ts`               | `runAgent()` — calls `POST <api-url>/studio/run`                    |
+| `packages/control/src/claude-session.ts`      | `streamTurn()` — pipes SSE from `/studio/run` to the browser        |
+| `packages/control/src/orchestrator.ts`        | `/orchestrator/*` endpoints                                         |
+| `packages/control/src/dev-loop-process.ts`    | Child process lifecycle for `superfield start`                      |
+| `packages/control/src/cluster-status-sse.ts`  | `/studio/cluster/events` aggregator                                 |
+| `packages/control/src/hot-swap.ts`            | Component hot-reload                                                |
+| `packages/control/src/design-mode-context.ts` | Studio-mode feature flag                                            |
+| `packages/control/apps/src/components/`       | React UI (ControlPanel, OrchestratorView, ComponentPreviewPanel, …) |
+| `packages/control/apps/src/controllers/`      | Browser-side controllers (Chat, ClusterStatus, Orchestrator, …)     |
+
+### Superfield core extension
+
+`POST /studio/run` lives on the dev-loop API server (`packages/core/api-server.ts`).
+
+```
+POST /studio/run
+
+Request body:
+  message       string   — the user turn
+  repoRoot      string   — absolute path the agent works in
+  sessionKey    string?  — resume an existing session (optional)
+  allowedTools  string   — comma-separated tool list
+  mode          string   — 'design' | 'question'
+
+Response: SSE
+  event: session   data: { sessionId }        — once, before first chunk
+  (default)        data: <stdout chunk>        — one per chunk
+  event: done      data: { filesChanged: [] } — turn complete
+  event: error     data: <message>            — spawn failure or non-zero exit
+```
+
+It spawns `claude` with the same args as `spawnAgentBackend` but streams `stdout` chunk-by-chunk via `res.write()`. The subprocess is registered in `ApiState` slot tracking so analytics, steers, and escalations work the same as for autonomous-loop agents.
+
+### Filesystem isolation
+
+`SUPERFIELD_DEV=1` is set only on the dev loop process.
+
+| Path                           | Dev loop (`SUPERFIELD_DEV=1`)         | Control     |
+| ------------------------------ | ------------------------------------- | ----------- |
+| `~/.superfield/config.yaml`    | read (GitHub tokens needed for loops) | not read    |
+| `~/.superfield/logs/`          | NOT written — uses `mkdtemp` tmpdir   | not written |
+| `/tmp/superfield-worktrees/`   | used for issue clones                 | not used    |
+| `<repo>/.studio`               | read (sessionId / branch)             | read        |
+| `<repo>/docs/studio-sessions/` | not touched                           | written     |
+
+Control's only filesystem writes are JSONL turn logs at `<CONTROL_LOG_DIR>/YYYY-MM-DD.jsonl` (defaults to a tmpdir or `../studio-logs` relative to repo root).
+
+### Running standalone
+
+Control runs without the dev loop — agent turns return `503 Superfield API unavailable`, but status, commits, rollback, chat history, and the design-mode panels work. Useful for UI development.
+
+### Testing
+
+| Layer       | Location                                       | Strategy                                                 |
+| ----------- | ---------------------------------------------- | -------------------------------------------------------- |
+| Unit        | `cli/packages/control/tests/unit/`             | `agent.ts`, `claude-session.ts` stub `fetch` (not spawn) |
+| Integration | `cli/packages/control/tests/integration/`      | `superfield-server.ts` fixture starts API in-process     |
+| E2E         | `cli/packages/control/tests/e2e/` (Playwright) | Two k3d images: `superfield-studio` + `superfield-agent` |
+
+The claude stub at `tests/fixtures/claude` lives on the agent image only; the studio image has no claude dependency.
+
+---
 
 ### Agent session storage
 
