@@ -73,6 +73,7 @@ import { handleDemoRequest } from "./demo";
 import { handleTurnsRequest } from "./turns";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
+import { embeddedAssets } from "./embedded-assets.gen";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -143,25 +144,35 @@ export async function serveStaticAsset(
   pathname: string,
   assetsDir: string | undefined,
 ): Promise<Response> {
-  if (!assetsDir) {
-    return new Response(
-      "<!doctype html><html><body><h1>Studio Server</h1><p>Browser UI assets not configured (CONTROL_ASSETS_DIR is unset).</p></body></html>",
-      { status: 200, headers: { "Content-Type": "text/html" } },
-    );
+  // Dev override: serve directly from the filesystem when CONTROL_ASSETS_DIR is set.
+  if (assetsDir) {
+    const relativePath =
+      pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
+    const filePath = join(assetsDir, relativePath);
+
+    if (existsSync(filePath)) {
+      return new Response(Bun.file(filePath));
+    }
+
+    // SPA fallback.
+    const indexPath = join(assetsDir, "index.html");
+    if (existsSync(indexPath)) {
+      return new Response(Bun.file(indexPath));
+    }
+
+    return new Response("Not Found", { status: 404 });
   }
 
-  const relativePath =
-    pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  const filePath = join(assetsDir, relativePath);
-
-  if (existsSync(filePath)) {
-    const file = Bun.file(filePath);
-    return new Response(file);
+  // Production path: serve from assets embedded in the binary at compile time.
+  const key = pathname === "/" ? "/index.html" : pathname;
+  const embeddedPath = embeddedAssets.get(key);
+  if (embeddedPath) {
+    return new Response(Bun.file(embeddedPath));
   }
 
-  // Fallback to index.html for client-side routing.
-  const indexPath = join(assetsDir, "index.html");
-  if (existsSync(indexPath)) {
+  // SPA fallback for client-side routes not in the asset map.
+  const indexPath = embeddedAssets.get("/index.html");
+  if (indexPath) {
     return new Response(Bun.file(indexPath));
   }
 
