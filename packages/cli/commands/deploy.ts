@@ -6,6 +6,10 @@ import {
   handleLoginLogout,
   makeDefaultLoginDeps,
 } from "@superfield/core";
+import {
+  deployLocalCluster,
+  teardownLocalCluster,
+} from "@superfield/control-core";
 
 const USAGE = `Usage: superfield deploy [--provision] [target]
        superfield deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
@@ -116,6 +120,28 @@ export async function deployCommand(
   if (parsed.unknown.length > 0) {
     console.error(USAGE);
     process.exit(1);
+    return;
+  }
+
+  // When --path is provided, use the unified control-core deploy path which
+  // does not require per-app scripts/local-demo.ts.
+  if (parsed.path) {
+    const appRoot = parsed.path;
+    await deployLocalCluster({ appRoot, verbose: true });
+
+    if (parsed.provisionOnly) return;
+
+    console.log("\nDeploy complete. Press Ctrl+C to tear down.");
+    await (deps.waitForExit ?? waitForSigint)();
+
+    process.stdout.write("\n");
+    console.log("Tearing down cluster...");
+    process.once("SIGINT", () => process.exit(1));
+    try {
+      teardownLocalCluster({ appRoot });
+    } finally {
+      process.exit(0);
+    }
     return;
   }
 
