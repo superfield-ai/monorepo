@@ -266,24 +266,22 @@ export async function route(
     }
   }
 
-  // Rebuild endpoint — triggers rebuildAndRestart() for the cluster.
+  // Rebuild endpoint — full provision using the unified deployLocalCluster path.
   // See: docs/cluster-definition.md — "On a code change"
   if (req.method === "POST" && pathname === "/studio/rebuild") {
     try {
-      const { rebuildAndRestart } =
-        await import("../../control-core/image-builder");
-      const sourceDir = process.env.CONTROL_SOURCE_DIR ?? process.cwd();
-      const namespace = config.clusterContext;
+      const { deployLocalCluster } =
+        await import("../../control-core/local-deploy");
+      const appRoot = process.env.CONTROL_SOURCE_DIR ?? process.cwd();
 
-      rebuildAndRestart({
-        sourceDir,
-        k8sDir: "k8s",
-        namespace,
+      await deployLocalCluster({
+        appRoot,
+        namespace: config.clusterContext,
         verbose: config.verbose ?? false,
       });
 
       return new Response(
-        JSON.stringify({ ok: true, message: "Rebuild and restart completed" }),
+        JSON.stringify({ ok: true, message: "Deploy completed" }),
         { status: 200, headers: { "Content-Type": "application/json" } },
       );
     } catch (err) {
@@ -291,8 +289,8 @@ export async function route(
       logBackendError(err, "POST /studio/rebuild");
       return errorResponse({
         code: "server",
-        message: `Rebuild failed: ${message}`,
-        hint: "Check the studio debug view for the rebuild stack trace.",
+        message: `Deploy failed: ${message}`,
+        hint: "Check the studio debug view for the stack trace.",
       });
     }
   }

@@ -19,7 +19,8 @@
     "@superfield/core": "workspace:*",
     "@superfield/github": "workspace:*",
     "@superfield/git": "workspace:*",
-    "@superfield/control": "workspace:*"
+    "@superfield/control": "workspace:*",
+    "@superfield/control-core": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"

@@ -38,6 +38,8 @@ export {
   verifyStudioCluster,
   verifyAtStartup,
 } from "./verify-cluster";
+export { deployLocalCluster, teardownLocalCluster } from "./local-deploy";
+export type { LocalDeployOpts } from "./local-deploy";
 export {
   buildStudioBranchName,
   parseStudioBranchName,
