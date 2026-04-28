@@ -47,9 +47,9 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
       data-testid="docs-viewer"
       style={{
         display: "flex",
+        width: "100%",
         height: "100%",
         background: "var(--bg-base)",
-        borderRight: "1px solid var(--border-subtle)",
       }}
     >
       {/* Sidebar: file list */}
@@ -112,10 +112,11 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
         </ul>
       </div>
 
-      {/* Main content area */}
+      {/* Main content area — only this column grows */}
       <div
         style={{
           flex: 1,
+          minWidth: 0,
           display: "flex",
           flexDirection: "column",
           overflow: "hidden",
@@ -426,19 +427,21 @@ export function ProductTab({ docsController, chatController }: ProductTabProps) 
       style={{
         display: "flex",
         height: "100%",
+        width: "100%",
         background: "var(--bg-base)",
         overflow: "hidden",
       }}
     >
-      {/* Left: docs viewer ~65% */}
-      <div style={{ flex: "0 0 65%", overflow: "hidden", display: "flex" }}>
+      {/* Left: docs viewer — takes all remaining space */}
+      <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex" }}>
         <DocsViewer controller={docsController} />
       </div>
 
-      {/* Right: product chat ~35% */}
+      {/* Right: product chat — fixed 25% column */}
       <div
         style={{
-          flex: "0 0 35%",
+          width: "25%",
+          flexShrink: 0,
           overflow: "hidden",
           borderLeft: "1px solid var(--border-subtle)",
           display: "flex",
