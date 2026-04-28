@@ -171,6 +171,39 @@ Default: 1 primary + N-1 speculative. N defaults to 3.
 
 ---
 
+## Local Issue Store
+
+Superfield keeps feature issue state in an embedded local database first. The
+initial implementation uses `lowdb` with a JSON file adapter because it is
+small, typed, and easy for the Studio UI to read from directly. GitHub issues
+are materialized from these records and then synced outward.
+
+Local issue records include:
+
+```typescript
+interface LocalIssueRecord {
+  repo: string;
+  number: number;
+  title: string;
+  body: string;
+  status: "draft" | "open" | "in_progress" | "blocked" | "done";
+  acceptance: { title: string; done: boolean }[];
+  testPlan: { title: string; done: boolean }[];
+  githubIssueNumber?: number;
+  githubIssueUrl?: string;
+  prNumber?: number;
+  prUrl?: string;
+  syncedAt?: string;
+  updatedAt: string;
+}
+```
+
+The Studio UI reads from this store for issue lists, checklists, and progress
+state. GitHub remains the outward-facing projection used for review and merge
+tracking.
+
+---
+
 ## Command: `start` internals
 
 The continuous development loop. Runs indefinitely until killed (Ctrl-C).
@@ -317,10 +350,11 @@ Tickets a new feature issue and registers it in the Plan.
 
 1. Prompt the user for a feature description (stdin or argument).
 2. Load current Plan and open issues as context.
-3. Run the feature-evaluate skill (LLM call): assess PRD fit, detect duplicates, determine phase and dependencies, emit a typed `IssueBody` object.
-4. Render the issue body from the typed object.
-5. Create the GitHub issue.
-6. Append the new issue to the Plan in the correct phase position.
+3. Run the feature-evaluate skill (LLM call): assess PRD fit, detect duplicates, determine phase and dependencies, emit a typed local issue object.
+4. Persist the local issue object to the embedded issue store.
+5. Render the GitHub issue body from the stored object.
+6. Create or update the GitHub issue from the local record.
+7. Append the new issue to the Plan in the correct phase position.
 
 `feature` is safe to run while `start` is active — it writes a new issue and appends to the Plan; `start` will pick it up on the next dev loop cycle.
 
@@ -328,7 +362,7 @@ Tickets a new feature issue and registers it in the Plan.
 
 ## Issue Schema
 
-All issues created by Superfield are constructed from typed objects, never raw template strings. The schema follows the section names prescribed by the Superfield Blueprint (see `blueprint/rules/blueprints/process.yaml`): **Motivation, Features, Test Plan, Stage**.
+All issues created by Superfield are constructed from typed objects, never raw template strings. The embedded issue store is the source of truth. GitHub issues are generated from these records and keep the section names prescribed by the Superfield Blueprint (see `blueprint/rules/blueprints/process.yaml`): **Motivation, Features, Test Plan, Stage**.
 
 There is one unified `IssueBody` type for all issues — feature, scout, and ci-failure issues all share the same shape. Their classification lives on the issue's labels (and in the `PlanIssue.kind` Plan metadata), not in the body. "Feature" and "issue" are interchangeable terms.
 

@@ -4,7 +4,7 @@ This file is the product-facing scope: what Superfield is, who it's for, what it
 
 ## Overview
 
-Superfield is an opinionated GitOps AI orchestrator. Git and the forge (GitHub initially) are the control plane — not a side effect. Issues are the task queue. The Plan issue is orchestration state. PRs are change proposals. Superfield reads from and writes to this control plane to drive autonomous development loops.
+Superfield is an opinionated GitOps AI orchestrator. Git and the forge (GitHub initially) remain the delivery plane for change proposals, but Superfield keeps its own embedded local database as the source of truth for issue state, subtasks, and progress. GitHub issues are synced projections of that local record. The Plan issue is orchestration state. PRs are change proposals. Superfield reads from and writes to these systems to drive autonomous development loops.
 
 It replaces superfield-agents entirely, re-encoding every skill and workflow as TypeScript. Hard type contracts and deterministic code replace the soft guardrails of hand-authored markdown skill files and shell scripts. Prompts to the LLM still exist, but they are generated from typed TypeScript builders, not loose markdown on disk. The result is a self-contained, testable runtime that treats the forge as the single source of truth for all agent state.
 
@@ -14,7 +14,8 @@ The superfield-agents skill system requires a human (or LLM session) to interpre
 
 ## Guiding Principles
 
-- **Forge as control plane.** Git and GitHub are the source of truth for all agent state, task ordering, and communication.
+- **Local issue DB as source of truth.** Superfield keeps feature and issue progress in an embedded local database first, then syncs GitHub issues from that record.
+- **Forge as delivery plane.** Git and GitHub still carry merge state, Plan coordination, and human review, but they are no longer the only store of issue truth.
 - **Guardrails from a bundled knowledge graph.** Superfield ships with a compiled blueprint of design rules (architectural constraints, security threats, antipatterns, implementation rules). Dev-loop agents get narrow implementation rules + antipatterns on the first turn; principles and threats are layered in on later turns if the agent needs more context. Before opening a PR, the agent self-audits its work against the blueprint. Issues are also checked against the blueprint by the planning loop, which posts rule-cited advisory comments. See [`architecture.md`](./architecture.md#superfield-blueprint).
 - **No customization.** There are no workflow flags or configuration knobs. Superfield encodes one correct way to do things.
 - **No system binaries.** Never shell out to `git`, `gh`, `curl`, or any other system executable. All git operations go through a TypeScript git library; all GitHub operations go through a TypeScript GitHub API client. The sole exception is agent vendor CLIs (e.g. `claude`, `codex`) — these are spawned as subprocesses because they are the LLM execution layer, not system utilities.
@@ -124,7 +125,7 @@ The chat composer is a mode-driven command surface, not a generic chat box.
 - The adjacent panel shows the running developer agents for the current repository and groups them by issue.
 - Each issue row expands as an accordion to reveal the issue body and its checklist items.
 - Selecting an issue from the list switches the composer into `steer` for that issue and routes prompts to the Superfield API for that specific agent session.
-- `feature` is the interactive issue-scoping mode. It is used to turn an idea into a properly formatted feature issue and submit it to GitHub and the database.
+- `feature` is the interactive issue-scoping mode. It is used to turn an idea into a properly formatted local issue record, persist it to the embedded DB, and sync the corresponding GitHub issue and PR metadata.
 - `product` is the documentation and planning mode. It is used to read and explain `./docs`, update product and planning documents, and open PRs for those doc changes.
 
 #### 2. UX design (`/studio/preview`)
