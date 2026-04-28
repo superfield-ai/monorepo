@@ -59,7 +59,7 @@ export function DeployView({
     return unsub;
   }, [controller]);
 
-  const envs = state.envs.length > 0 ? state.envs : ["dev", "staging", "prod"];
+  const envs = state.envs;
   const checkNames = useMemo<string[]>(() => {
     const names = new Set<string>();
     for (const env of envs) {
@@ -120,287 +120,306 @@ export function DeployView({
         />
       ) : null}
 
-      <EnvSwitcher
-        envs={envs}
-        selected={state.selectedEnv}
-        onSelect={(e) => controller.selectEnv(e)}
-      />
+      {state.envsSource === "fallback" ? (
+        <EmptyState
+          title="No deployment environments configured"
+          hint="Set DEPLOY_HOST_DEV, DEPLOY_HOST_STAGING, or DEPLOY_HOST_PROD as GitHub Actions variables to enable the deploy matrix."
+          testId="deploy-unconfigured"
+        />
+      ) : envs.length > 0 ? (
+        <EnvSwitcher
+          envs={envs}
+          selected={state.selectedEnv}
+          onSelect={(e) => controller.selectEnv(e)}
+        />
+      ) : null}
 
-      <section data-testid="doctor-matrix" style={SECTION_STYLE}>
-        <div style={SECTION_HEADER_STYLE}>
-          <span className="label">DOCTOR CHECKS</span>
-        </div>
-        {checkNames.length === 0 ? (
-          <div style={{ padding: "var(--sp-3)" }}>
-            <EmptyState
-              title="Doctor results not loaded"
-              hint="Click Refresh, or check the studio debug view if this persists."
-              testId="doctor"
-            />
+      {envs.length > 0 && (
+        <section data-testid="doctor-matrix" style={SECTION_STYLE}>
+          <div style={SECTION_HEADER_STYLE}>
+            <span className="label">DOCTOR CHECKS</span>
           </div>
-        ) : (
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead style={{ background: "var(--bg-elevated)" }}>
-              <tr>
-                <th
-                  className="label"
-                  style={{
-                    textAlign: "left",
-                    padding: "var(--sp-2) var(--sp-3)",
-                  }}
-                >
-                  CHECK
-                </th>
-                {envs.map((env) => (
+          {checkNames.length === 0 ? (
+            <div style={{ padding: "var(--sp-3)" }}>
+              <EmptyState
+                title="Doctor results not loaded"
+                hint="Click Refresh, or check the studio debug view if this persists."
+                testId="doctor"
+              />
+            </div>
+          ) : (
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead style={{ background: "var(--bg-elevated)" }}>
+                <tr>
                   <th
-                    key={env}
                     className="label"
                     style={{
                       textAlign: "left",
                       padding: "var(--sp-2) var(--sp-3)",
                     }}
-                    data-testid={`doctor-col-${env}`}
                   >
-                    {env}
+                    CHECK
                   </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {checkNames.map((name) => (
-                <tr
-                  key={name}
-                  style={{
-                    borderTop: "1px solid var(--border-subtle)",
-                    verticalAlign: "top",
-                  }}
-                >
-                  <td
-                    style={{
-                      padding: "var(--sp-2) var(--sp-3)",
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "var(--text-xs)",
-                      color: "var(--fg-1)",
-                      letterSpacing: "var(--ls-wider)",
-                      textTransform: "uppercase",
-                    }}
-                  >
-                    {name}
-                  </td>
-                  {envs.map((env) => {
-                    const checks = state.doctorByEnv[env] ?? [];
-                    const c = checks.find((x) => x.name === name);
-                    return (
-                      <td
-                        key={env}
-                        style={{ padding: "var(--sp-2) var(--sp-3)" }}
-                        data-testid={`doctor-cell-${env}-${name}`}
-                      >
-                        {renderDoctorCell({
-                          check: c,
-                          envError: state.doctorErrors[env],
-                          loading: state.loadingDoctor.has(env),
-                          onRetry: () => void controller.loadDoctor(env),
-                        })}
-                      </td>
-                    );
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </section>
-
-      <section style={SECTION_STYLE}>
-        <div style={SECTION_HEADER_STYLE}>
-          <span className="label">SECRETS PRESENCE</span>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gap: "var(--sp-3)",
-            padding: "var(--sp-3)",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          }}
-        >
-          {envs.map((env) => (
-            <div
-              key={env}
-              data-testid={`secrets-card-${env}`}
-              style={{
-                background: "var(--bg-base)",
-                border: "1px solid var(--border-subtle)",
-                padding: "var(--sp-3)",
-              }}
-            >
-              <div className="label" style={{ marginBottom: "var(--sp-2)" }}>
-                {env}
-              </div>
-              <ul
-                style={{
-                  listStyle: "none",
-                  margin: 0,
-                  padding: 0,
-                  display: "flex",
-                  flexDirection: "column",
-                  gap: "var(--sp-1)",
-                }}
-              >
-                {(state.secretsByEnv[env] ?? []).map((s) => (
-                  <li
-                    key={s.name}
-                    data-testid={`secret-${env}-${s.name}`}
-                    style={{
-                      display: "flex",
-                      alignItems: "center",
-                      justifyContent: "space-between",
-                      gap: "var(--sp-2)",
-                    }}
-                  >
-                    <span
+                  {envs.map((env) => (
+                    <th
+                      key={env}
+                      className="label"
                       style={{
+                        textAlign: "left",
+                        padding: "var(--sp-2) var(--sp-3)",
+                      }}
+                      data-testid={`doctor-col-${env}`}
+                    >
+                      {env}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {checkNames.map((name) => (
+                  <tr
+                    key={name}
+                    style={{
+                      borderTop: "1px solid var(--border-subtle)",
+                      verticalAlign: "top",
+                    }}
+                  >
+                    <td
+                      style={{
+                        padding: "var(--sp-2) var(--sp-3)",
                         fontFamily: "var(--font-mono)",
                         fontSize: "var(--text-xs)",
                         color: "var(--fg-1)",
+                        letterSpacing: "var(--ls-wider)",
+                        textTransform: "uppercase",
                       }}
                     >
-                      {s.name}
-                    </span>
-                    <span
-                      data-pill="true"
-                      className={`badge ${s.present ? "badge-nominal" : "badge-critical"}`}
-                    >
-                      {s.present ? "present" : "missing"}
-                    </span>
-                  </li>
+                      {name}
+                    </td>
+                    {envs.map((env) => {
+                      const checks = state.doctorByEnv[env] ?? [];
+                      const c = checks.find((x) => x.name === name);
+                      return (
+                        <td
+                          key={env}
+                          style={{ padding: "var(--sp-2) var(--sp-3)" }}
+                          data-testid={`doctor-cell-${env}-${name}`}
+                        >
+                          {renderDoctorCell({
+                            check: c,
+                            envError: state.doctorErrors[env],
+                            loading: state.loadingDoctor.has(env),
+                            onRetry: () => void controller.loadDoctor(env),
+                          })}
+                        </td>
+                      );
+                    })}
+                  </tr>
                 ))}
-                {(state.secretsByEnv[env] ?? []).length === 0 ? (
-                  <li
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--fg-3)",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    NO TELEMETRY
-                  </li>
-                ) : null}
-              </ul>
-            </div>
-          ))}
-        </div>
-      </section>
+              </tbody>
+            </table>
+          )}
+        </section>
+      )}
 
-      <section data-testid="ci-strip" style={SECTION_STYLE}>
-        <div style={SECTION_HEADER_STYLE}>
-          <span className="label">LATEST CI RUNS</span>
-        </div>
-        <div
-          style={{
-            display: "grid",
-            gap: "var(--sp-3)",
-            padding: "var(--sp-3)",
-            gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
-          }}
-        >
-          {envs.map((env) => {
-            const run = runForEnv(env);
-            return (
+      {envs.length > 0 && (
+        <section style={SECTION_STYLE}>
+          <div style={SECTION_HEADER_STYLE}>
+            <span className="label">SECRETS PRESENCE</span>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gap: "var(--sp-3)",
+              padding: "var(--sp-3)",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+            }}
+          >
+            {envs.map((env) => (
               <div
                 key={env}
-                data-testid={`ci-card-${env}`}
+                data-testid={`secrets-card-${env}`}
                 style={{
                   background: "var(--bg-base)",
                   border: "1px solid var(--border-subtle)",
                   padding: "var(--sp-3)",
                 }}
               >
-                <div className="label" style={{ marginBottom: "var(--sp-1)" }}>
+                <div className="label" style={{ marginBottom: "var(--sp-2)" }}>
                   {env}
                 </div>
-                {run ? (
-                  <a
-                    href={run.url}
-                    target="_blank"
-                    rel="noreferrer"
-                    style={{
-                      fontFamily: "var(--font-mono)",
-                      fontSize: "var(--text-xs)",
-                      letterSpacing: "var(--ls-wider)",
-                      textTransform: "uppercase",
-                      color: run.ok
-                        ? "var(--status-nominal)"
-                        : "var(--status-critical)",
-                      textDecoration: "underline",
-                      textUnderlineOffset: 2,
-                    }}
-                  >
-                    {run.label}
-                  </a>
-                ) : (
-                  <div
-                    style={{
-                      fontSize: "var(--text-xs)",
-                      color: "var(--fg-3)",
-                      fontFamily: "var(--font-mono)",
-                    }}
-                  >
-                    No deploy-{env} workflow run found
-                  </div>
-                )}
+                <ul
+                  style={{
+                    listStyle: "none",
+                    margin: 0,
+                    padding: 0,
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "var(--sp-1)",
+                  }}
+                >
+                  {(state.secretsByEnv[env] ?? []).map((s) => (
+                    <li
+                      key={s.name}
+                      data-testid={`secret-${env}-${s.name}`}
+                      style={{
+                        display: "flex",
+                        alignItems: "center",
+                        justifyContent: "space-between",
+                        gap: "var(--sp-2)",
+                      }}
+                    >
+                      <span
+                        style={{
+                          fontFamily: "var(--font-mono)",
+                          fontSize: "var(--text-xs)",
+                          color: "var(--fg-1)",
+                        }}
+                      >
+                        {s.name}
+                      </span>
+                      <span
+                        data-pill="true"
+                        className={`badge ${s.present ? "badge-nominal" : "badge-critical"}`}
+                      >
+                        {s.present ? "present" : "missing"}
+                      </span>
+                    </li>
+                  ))}
+                  {(state.secretsByEnv[env] ?? []).length === 0 ? (
+                    <li
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--fg-3)",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      NO TELEMETRY
+                    </li>
+                  ) : null}
+                </ul>
               </div>
-            );
-          })}
-        </div>
-      </section>
+            ))}
+          </div>
+        </section>
+      )}
 
-      <section
-        data-testid="rollback-section"
-        style={{ ...SECTION_STYLE, padding: "var(--sp-3)" }}
-      >
-        <div
-          style={{
-            display: "flex",
-            alignItems: "center",
-            justifyContent: "space-between",
-            marginBottom: "var(--sp-2)",
-          }}
+      {envs.length > 0 && (
+        <section data-testid="ci-strip" style={SECTION_STYLE}>
+          <div style={SECTION_HEADER_STYLE}>
+            <span className="label">LATEST CI RUNS</span>
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gap: "var(--sp-3)",
+              padding: "var(--sp-3)",
+              gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))",
+            }}
+          >
+            {envs.map((env) => {
+              const run = runForEnv(env);
+              return (
+                <div
+                  key={env}
+                  data-testid={`ci-card-${env}`}
+                  style={{
+                    background: "var(--bg-base)",
+                    border: "1px solid var(--border-subtle)",
+                    padding: "var(--sp-3)",
+                  }}
+                >
+                  <div
+                    className="label"
+                    style={{ marginBottom: "var(--sp-1)" }}
+                  >
+                    {env}
+                  </div>
+                  {run ? (
+                    <a
+                      href={run.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "var(--text-xs)",
+                        letterSpacing: "var(--ls-wider)",
+                        textTransform: "uppercase",
+                        color: run.ok
+                          ? "var(--status-nominal)"
+                          : "var(--status-critical)",
+                        textDecoration: "underline",
+                        textUnderlineOffset: 2,
+                      }}
+                    >
+                      {run.label}
+                    </a>
+                  ) : (
+                    <div
+                      style={{
+                        fontSize: "var(--text-xs)",
+                        color: "var(--fg-3)",
+                        fontFamily: "var(--font-mono)",
+                      }}
+                    >
+                      No deploy-{env} workflow run found
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
+      {envs.length > 0 && (
+        <section
+          data-testid="rollback-section"
+          style={{ ...SECTION_STYLE, padding: "var(--sp-3)" }}
         >
-          <span className="label">ROLLBACK&nbsp;{state.selectedEnv}</span>
-          <button
-            type="button"
-            data-testid="rollback-trigger"
-            onClick={() => setConfirmOpen(true)}
-            disabled={state.rolloutActive}
+          <div
             style={{
-              ...dangerButton,
-              opacity: state.rolloutActive ? 0.5 : 1,
-              cursor: state.rolloutActive ? "not-allowed" : "pointer",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "space-between",
+              marginBottom: "var(--sp-2)",
             }}
           >
-            ROLL BACK THIS ENVIRONMENT
-          </button>
-        </div>
-        {state.rolloutLog.length > 0 ? (
-          <pre
-            data-testid="rollback-log"
-            style={{
-              maxHeight: 192,
-              overflowY: "auto",
-              background: "var(--bg-void)",
-              padding: "var(--sp-2)",
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-xs)",
-              color: "var(--accent-green)",
-              border: "1px solid var(--border-subtle)",
-              margin: 0,
-            }}
-          >
-            {state.rolloutLog.join("\n")}
-          </pre>
-        ) : null}
-      </section>
+            <span className="label">ROLLBACK&nbsp;{state.selectedEnv}</span>
+            <button
+              type="button"
+              data-testid="rollback-trigger"
+              onClick={() => setConfirmOpen(true)}
+              disabled={state.rolloutActive}
+              style={{
+                ...dangerButton,
+                opacity: state.rolloutActive ? 0.5 : 1,
+                cursor: state.rolloutActive ? "not-allowed" : "pointer",
+              }}
+            >
+              ROLL BACK THIS ENVIRONMENT
+            </button>
+          </div>
+          {state.rolloutLog.length > 0 ? (
+            <pre
+              data-testid="rollback-log"
+              style={{
+                maxHeight: 192,
+                overflowY: "auto",
+                background: "var(--bg-void)",
+                padding: "var(--sp-2)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-xs)",
+                color: "var(--accent-green)",
+                border: "1px solid var(--border-subtle)",
+                margin: 0,
+              }}
+            >
+              {state.rolloutLog.join("\n")}
+            </pre>
+          ) : null}
+        </section>
+      )}
 
       {confirmOpen ? (
         <ConfirmModal

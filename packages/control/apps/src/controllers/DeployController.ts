@@ -34,6 +34,7 @@ export interface CiRun {
 
 export interface DeployState {
   readonly envs: readonly string[];
+  readonly envsSource: "github" | "fallback" | "loading";
   readonly envsError: AppError | null;
   readonly selectedEnv: string;
   readonly doctorByEnv: Readonly<Record<string, readonly DoctorCheck[]>>;
@@ -48,6 +49,7 @@ export interface DeployState {
 
 const INITIAL: DeployState = {
   envs: [],
+  envsSource: "loading",
   envsError: null,
   selectedEnv: "dev",
   doctorByEnv: {},
@@ -64,7 +66,7 @@ export type DeployListener = (state: DeployState) => void;
 
 interface EnvsResponse {
   envs: string[];
-  source: string;
+  source: "github" | "fallback" | string;
 }
 interface DoctorResponse {
   env: string;
@@ -126,11 +128,15 @@ export class DeployController {
       this.set({ envsError: result.error });
       return;
     }
-    const envs = result.value.envs;
+    const envsSource: DeployState["envsSource"] =
+      result.value.source === "github" ? "github" : "fallback";
+    // Only use envs that were actually discovered from GitHub Actions variables.
+    // The fallback ["dev","staging","prod"] represents "not configured", not real envs.
+    const envs = envsSource === "github" ? result.value.envs : [];
     const selected = envs.includes(this.state.selectedEnv)
       ? this.state.selectedEnv
       : (envs[0] ?? this.state.selectedEnv);
-    this.set({ envs, envsError: null, selectedEnv: selected });
+    this.set({ envs, envsSource, envsError: null, selectedEnv: selected });
   }
 
   async loadDoctor(env: string): Promise<void> {
