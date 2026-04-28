@@ -73,9 +73,10 @@ export function IframePanel({
       }
     }
 
-    // E14: surface a cluster-down failure overlay when the cluster reports it
-    // is unhealthy or unknown for long enough that the iframe is unusable.
-    if (clusterStatus === "degraded" || clusterStatus === "unknown") {
+    // E14: surface a cluster-down failure overlay only when the cluster
+    // explicitly reports degraded. "unknown" means no SSE yet (e.g. direct
+    // localhost target) — don't block the iframe in that case.
+    if (clusterStatus === "degraded") {
       setFailureMode("cluster-down");
     } else if (clusterStatus === "healthy") {
       setFailureMode(null);
