@@ -252,7 +252,7 @@ test("cluster status indicator shows gray for unknown", async () => {
 // ControlPanel tests
 // ---------------------------------------------------------------------------
 
-test("studio panel renders ChatPanel and IframePanel at 1280x800", async () => {
+test("studio panel renders FeaturePane on the Studio tab at 1280x800", async () => {
   const screen = render(
     <div style={{ width: "1280px", height: "800px" }}>
       <ControlPanel
@@ -264,12 +264,14 @@ test("studio panel renders ChatPanel and IframePanel at 1280x800", async () => {
     </div>,
   );
   await expect.element(screen.getByTestId("studio-panel")).toBeVisible();
-  await expect.element(screen.getByTestId("chat-panel")).toBeVisible();
-  await expect.element(screen.getByTestId("iframe-panel")).toBeVisible();
-  await expect.element(screen.getByTestId("app-iframe")).toBeVisible();
+  await expect.element(screen.getByTestId("feature-pane")).toBeVisible();
+  // IframePanel is on the Viewport tab — not visible on load
+  expect(
+    screen.container.querySelector('[data-testid="iframe-panel"]'),
+  ).toBeNull();
 });
 
-test("cluster status from ClusterStatusController flows to ChatPanel ClusterStatusIndicator", async () => {
+test("studio panel has three tabs: Studio, Viewport, Product", async () => {
   const screen = render(
     <ControlPanel
       appSrc="/app/"
@@ -278,13 +280,12 @@ test("cluster status from ClusterStatusController flows to ChatPanel ClusterStat
       hideConnectionBanner
     />,
   );
-  await expect
-    .element(screen.getByTestId("cluster-status-indicator"))
-    .toBeVisible();
-  await expect.element(screen.getByText("CLUSTER NOMINAL")).toBeVisible();
+  await expect.element(screen.getByTestId("tab-studio")).toBeVisible();
+  await expect.element(screen.getByTestId("tab-viewport")).toBeVisible();
+  await expect.element(screen.getByTestId("tab-product")).toBeVisible();
 });
 
-test("cluster status from ClusterStatusController flows to IframePanel overlay", async () => {
+test("switching to Viewport tab shows IframePanel and hides FeaturePane", async () => {
   const screen = render(
     <ControlPanel
       appSrc="/app/"
@@ -293,10 +294,27 @@ test("cluster status from ClusterStatusController flows to IframePanel overlay",
       hideConnectionBanner
     />,
   );
+  await screen.getByTestId("tab-viewport").click();
   await expect.element(screen.getByTestId("reloading-overlay")).toBeVisible();
+  expect(
+    screen.container.querySelector('[data-testid="feature-pane"]'),
+  ).toBeNull();
 });
 
-test("studio panel propagates status update to both panels on prop change", async () => {
+test("switching to Product tab shows product-tab panel", async () => {
+  const screen = render(
+    <ControlPanel
+      appSrc="/app/"
+      initialClusterStatus="healthy"
+      chatEndpoint="/studio/chat"
+      hideConnectionBanner
+    />,
+  );
+  await screen.getByTestId("tab-product").click();
+  await expect.element(screen.getByTestId("product-tab")).toBeVisible();
+});
+
+test("studio panel propagates status update to IframePanel on Viewport tab", async () => {
   const { rerender, container } = render(
     <ControlPanel
       appSrc="/app/"
@@ -306,12 +324,12 @@ test("studio panel propagates status update to both panels on prop change", asyn
     />,
   );
 
-  // No overlay initially
-  expect(
-    container.querySelector('[data-testid="reloading-overlay"]'),
-  ).toBeNull();
+  // Switch to viewport tab first
+  const viewportTab = container.querySelector('[data-testid="tab-viewport"]') as HTMLElement;
+  viewportTab?.click();
 
-  // Drive clusterStatus change via prop update (bypasses SSE, drives both panels)
+  // No overlay initially
+  // Re-render with restarting status
   rerender(
     <ControlPanel
       appSrc="/app/"

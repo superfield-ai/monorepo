@@ -28,10 +28,11 @@ async function goToStudio(page: import("@playwright/test").Page) {
 // ---------------------------------------------------------------------------
 
 test.describe("tab bar", () => {
-  test("both tab buttons are visible", async ({ page }) => {
+  test("all three tab buttons are visible", async ({ page }) => {
     await goToStudio(page);
     await expect(page.getByTestId("tab-studio")).toBeVisible();
     await expect(page.getByTestId("tab-viewport")).toBeVisible();
+    await expect(page.getByTestId("tab-product")).toBeVisible();
   });
 
   test("Studio tab is active by default", async ({ page }) => {
@@ -47,6 +48,10 @@ test.describe("tab bar", () => {
       "data-active",
       "false",
     );
+    await expect(page.getByTestId("tab-product")).toHaveAttribute(
+      "data-active",
+      "false",
+    );
   });
 });
 
@@ -55,26 +60,14 @@ test.describe("tab bar", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("Studio tab", () => {
-  test("chat panel is visible on load", async ({ page }) => {
+  test("feature pane is visible on load", async ({ page }) => {
     await goToStudio(page);
-    await expect(page.getByTestId("chat-panel")).toBeVisible();
+    await expect(page.getByTestId("feature-pane")).toBeVisible();
   });
 
-  test("orchestrator view is visible on load", async ({ page }) => {
+  test("feature list is shown by default", async ({ page }) => {
     await goToStudio(page);
-    await expect(page.getByTestId("process-state-badge")).toBeVisible();
-  });
-
-  test("cluster status indicator is present", async ({ page }) => {
-    await goToStudio(page);
-    await expect(page.getByTestId("cluster-status-indicator")).toBeVisible();
-  });
-
-  test("chat input accepts text", async ({ page }) => {
-    await goToStudio(page);
-    const input = page.getByTestId("chat-input");
-    await input.fill("hello from e2e");
-    await expect(input).toHaveValue("hello from e2e");
+    await expect(page.getByTestId("feature-list")).toBeVisible();
   });
 });
 
@@ -92,8 +85,8 @@ test.describe("Viewport tab", () => {
     });
   });
 
-  test("Studio tab content disappears after switching", async ({ page }) => {
-    await expect(page.getByTestId("chat-panel")).not.toBeVisible();
+  test("Studio tab feature-pane disappears after switching", async ({ page }) => {
+    await expect(page.getByTestId("feature-pane")).not.toBeVisible();
   });
 
   test("iframe panel is visible", async ({ page }) => {
@@ -110,7 +103,7 @@ test.describe("Viewport tab", () => {
 // ---------------------------------------------------------------------------
 
 test.describe("tab switching", () => {
-  test("switching back to Studio tab restores the chat panel", async ({
+  test("switching back to Studio tab restores the feature pane", async ({
     page,
   }) => {
     await goToStudio(page);
@@ -118,20 +111,30 @@ test.describe("tab switching", () => {
     await page.waitForSelector('[data-testid="iframe-panel"]');
 
     await page.getByTestId("tab-studio").click();
-    await expect(page.getByTestId("chat-panel")).toBeVisible();
+    await expect(page.getByTestId("feature-pane")).toBeVisible();
   });
 
   test("only one tab content visible at a time", async ({ page }) => {
     await goToStudio(page);
 
-    // On Studio tab: chat visible, iframe not visible.
-    await expect(page.getByTestId("chat-panel")).toBeVisible();
+    // On Studio tab: feature-pane visible, iframe not visible.
+    await expect(page.getByTestId("feature-pane")).toBeVisible();
     await expect(page.getByTestId("iframe-panel")).not.toBeVisible();
 
-    // On Viewport tab: iframe visible, chat not visible.
+    // On Viewport tab: iframe visible, feature-pane not visible.
     await page.getByTestId("tab-viewport").click();
     await page.waitForSelector('[data-testid="iframe-panel"]');
-    await expect(page.getByTestId("chat-panel")).not.toBeVisible();
+    await expect(page.getByTestId("feature-pane")).not.toBeVisible();
     await expect(page.getByTestId("iframe-panel")).toBeVisible();
+  });
+
+  test("switching to Product tab shows docs viewer and product chat", async ({
+    page,
+  }) => {
+    await goToStudio(page);
+    await page.getByTestId("tab-product").click();
+    await expect(page.getByTestId("product-tab")).toBeVisible();
+    await expect(page.getByTestId("docs-viewer")).toBeVisible();
+    await expect(page.getByTestId("product-chat-panel")).toBeVisible();
   });
 });

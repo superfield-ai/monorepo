@@ -20,6 +20,8 @@ export { WikiRender } from "./WikiRender";
 export { CitationHoverPopover } from "./CitationHoverPopover";
 export { ComponentPreviewPanel } from "./ComponentPreviewPanel";
 export { OrchestratorView } from "./OrchestratorView";
+export { FeaturePane } from "./FeaturePane";
+export { ProductTab } from "./ProductTab";
 export { ErrorBoundary } from "./ErrorBoundary";
 export { Toaster } from "./Toaster";
 export { InlineError } from "./InlineError";

@@ -1,29 +1,22 @@
 /**
  * @file ControlPanel
  *
- * Root component for the Studio browser interface. Renders the two-panel
- * layout: Claude chat sidebar on the left, Superfield app iframe on the right.
+ * Root component for the Studio browser interface. Three top-level tabs:
+ *   - Studio: FeaturePane (feature list + detail + session log)
+ *   - Viewport: RouteMap + ViewportToolbar + IframePanel
+ *   - Product: DocsViewer + ProductChatPanel
  *
  * The SSE connection to GET /studio/cluster/events is owned by
  * ClusterStatusController — this component contains no EventSource
  * instantiation or fetch() calls.
  *
- * Layout (from docs/studio-mode.md — "Browser Interface"):
- *
- *   ┌──────────────────────────────────────────────────┐
- *   │  ┌─────────────────┐  ┌─────────────────────┐   │
- *   │  │  Claude Chat    │  │  Superfield App        │   │
- *   │  │  (sidebar)      │  │  (iframe)           │   │
- *   │  └─────────────────┘  └─────────────────────┘   │
- *   └──────────────────────────────────────────────────┘
- *
  * Canonical docs: docs/studio-mode.md
  */
 
 import React, { useEffect, useRef, useState } from "react";
-import { ChatPanel } from "./ChatPanel";
 import { IframePanel } from "./IframePanel";
-import { OrchestratorView } from "./OrchestratorView";
+import { FeaturePane } from "./FeaturePane";
+import { ProductTab } from "./ProductTab";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
 import { DebugView } from "./DebugView";
@@ -46,7 +39,7 @@ interface ControlPanelProps {
   appSrc?: string;
   /** SSE endpoint for cluster status events; defaults to /studio/cluster/events */
   clusterEventsUrl?: string;
-  /** POST endpoint for chat; defaults to /studio/chat */
+  /** POST endpoint for chat; defaults to /studio/chat (kept for compat, unused) */
   chatEndpoint?: string;
   /** Initial cluster status (used in tests to skip SSE) */
   initialClusterStatus?: ClusterStatus;
@@ -67,7 +60,7 @@ interface ControlPanelProps {
 export function ControlPanel({
   appSrc = "/app/",
   clusterEventsUrl = "/studio/cluster/events",
-  chatEndpoint = "/studio/chat",
+  chatEndpoint: _chatEndpoint = "/studio/chat",
   initialClusterStatus,
   clusterStatusController: controllerProp,
   hideConnectionBanner = false,
@@ -104,7 +97,7 @@ export function ControlPanel({
     }
   }, [initialClusterStatus]);
 
-  const [activeTab, setActiveTab] = useState<"studio" | "viewport" | "debug">(
+  const [activeTab, setActiveTab] = useState<"studio" | "viewport" | "product" | "debug">(
     "studio",
   );
 
@@ -162,26 +155,23 @@ export function ControlPanel({
           active={activeTab === "viewport"}
           onClick={() => setActiveTab("viewport")}
         />
+        <NavTab
+          testid="tab-product"
+          label="Product"
+          active={activeTab === "product"}
+          onClick={() => setActiveTab("product")}
+        />
         <DebugBadge
           active={activeTab === "debug"}
           onClick={() => setActiveTab("debug")}
         />
       </div>
 
-      {/* Studio tab — chat sidebar + running agents */}
+      {/* Studio tab — feature pane */}
       {activeTab === "studio" && (
         <ErrorBoundary label="Studio">
           <div className="flex flex-1 overflow-hidden">
-            <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
-              <ChatPanel
-                clusterStatus={clusterStatus}
-                chatEndpoint={chatEndpoint}
-                clusterEventsUrl={clusterEventsUrl}
-              />
-            </div>
-            <div className="flex-1 overflow-hidden bg-gray-50">
-              <OrchestratorView />
-            </div>
+            <FeaturePane />
           </div>
         </ErrorBoundary>
       )}
@@ -206,6 +196,15 @@ export function ControlPanel({
                 iframeWidth={VIEWPORT_WIDTHS[viewport]}
               />
             </div>
+          </div>
+        </ErrorBoundary>
+      )}
+
+      {/* Product tab — docs viewer + product chat */}
+      {activeTab === "product" && (
+        <ErrorBoundary label="Product">
+          <div className="flex flex-1 overflow-hidden">
+            <ProductTab />
           </div>
         </ErrorBoundary>
       )}

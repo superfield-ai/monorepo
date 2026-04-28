@@ -71,6 +71,7 @@ import { handleOrchestratorRequest } from "./orchestrator";
 import { handleDeployRequest } from "./deploy";
 import { handleDemoRequest } from "./demo";
 import { handleTurnsRequest } from "./turns";
+import { handleDocsRequest } from "./docs";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
 
@@ -347,6 +348,10 @@ export async function route(
   // Turn timeline — D6 / C-9.6.
   const turnsResponse = handleTurnsRequest(req, url);
   if (turnsResponse) return turnsResponse;
+
+  // Docs endpoints — Product tab markdown viewer.
+  const docsResponse = handleDocsRequest(req, url);
+  if (docsResponse) return docsResponse;
 
   // Orchestrator endpoints — manage the dev loop child process.
   const orchResponse = await handleOrchestratorRequest(
