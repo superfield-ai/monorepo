@@ -185,9 +185,15 @@ test("selecting an issue locks the composer into steer mode", async () => {
 
   await expect.element(screen.getByTestId("issue-rail")).toBeVisible();
   await screen.getByText("Add discount-code input on /checkout").click();
-  await expect.element(screen.getByTestId("selected-issue-banner")).toBeVisible();
-  await expect.element(screen.getByText(/Steering locked to issue #301/)).toBeVisible();
-  await expect.element(screen.getByPlaceholder(/STEER ISSUE #301/i)).toBeVisible();
+  await expect
+    .element(screen.getByTestId("selected-issue-banner"))
+    .toBeVisible();
+  await expect
+    .element(screen.getByText(/Steering locked to issue #301/))
+    .toBeVisible();
+  await expect
+    .element(screen.getByPlaceholder(/STEER ISSUE #301/i))
+    .toBeVisible();
 });
 
 test("streaming chunks appear in message area as controller state updates", async () => {

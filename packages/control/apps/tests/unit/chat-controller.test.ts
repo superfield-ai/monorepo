@@ -128,9 +128,7 @@ describe("ChatController", () => {
   it("surfaces a friendly error turn on a 401 response", async () => {
     // Scenario 5: non-200 surfaces an error turn
     vi.stubGlobal("fetch", () =>
-      Promise.resolve(
-        makeJsonResponse({ error: "Unauthorized" }, 401),
-      ),
+      Promise.resolve(makeJsonResponse({ error: "Unauthorized" }, 401)),
     );
 
     await ctrl.sendMessage("Fail");

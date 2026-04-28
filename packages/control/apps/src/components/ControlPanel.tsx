@@ -107,7 +107,9 @@ export function ControlPanel({
       .then((res) => res.json())
       .then((body) => {
         if (cancelled) return;
-        const issues = Array.isArray(body?.issues) ? (body.issues as DemoIssue[]) : [];
+        const issues = Array.isArray(body?.issues)
+          ? (body.issues as DemoIssue[])
+          : [];
         setDemoIssues(issues);
       })
       .catch(() => {
@@ -251,8 +253,9 @@ export function ControlPanel({
                 controller={chatController}
                 mode={chatMode}
                 selectedIssue={
-                  demoIssues.find((issue) => issue.number === selectedIssueNumber) ??
-                  null
+                  demoIssues.find(
+                    (issue) => issue.number === selectedIssueNumber,
+                  ) ?? null
                 }
                 onModeChange={(nextMode) => {
                   if (nextMode === "steer") {

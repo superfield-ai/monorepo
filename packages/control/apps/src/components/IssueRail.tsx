@@ -79,7 +79,9 @@ export function IssueRail({
         ) : (
           <div className="flex flex-col gap-2">
             {runningIssues.map((issue) => {
-              const slot = slots.find((candidate) => candidate.issueNumber === issue.number);
+              const slot = slots.find(
+                (candidate) => candidate.issueNumber === issue.number,
+              );
               const open = selectedIssueNumber === issue.number;
               return (
                 <details
@@ -165,7 +167,10 @@ export function IssueRail({
                     </div>
                     <div className="mt-4 flex items-center justify-between text-[11px] uppercase tracking-[0.18em] text-zinc-500">
                       <span>{issue.turnCount} turns</span>
-                      <span>{slot?.sessionId.slice(0, 10) ?? issue.sessionId.slice(0, 10)}</span>
+                      <span>
+                        {slot?.sessionId.slice(0, 10) ??
+                          issue.sessionId.slice(0, 10)}
+                      </span>
                     </div>
                   </div>
                 </details>

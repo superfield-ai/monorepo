@@ -23,7 +23,10 @@ import {
   ClusterStatusIndicator,
   type ClusterStatus,
 } from "./ClusterStatusIndicator";
-import { WsChatController, type ChatMessage } from "../controllers/ChatController";
+import {
+  WsChatController,
+  type ChatMessage,
+} from "../controllers/ChatController";
 import type { DemoIssue } from "./IssueRail";
 
 export type ChatMode = "steer" | "feature" | "product";
@@ -362,11 +365,15 @@ export function ChatPanel({
               border: "1px solid var(--accent-cyan)",
               color: "var(--accent-cyan)",
               cursor:
-                submitting || !input.trim() || (mode === "steer" && !steerLocked)
+                submitting ||
+                !input.trim() ||
+                (mode === "steer" && !steerLocked)
                   ? "not-allowed"
                   : "pointer",
               opacity:
-                submitting || !input.trim() || (mode === "steer" && !steerLocked)
+                submitting ||
+                !input.trim() ||
+                (mode === "steer" && !steerLocked)
                   ? 0.4
                   : 1,
               display: "inline-flex",
