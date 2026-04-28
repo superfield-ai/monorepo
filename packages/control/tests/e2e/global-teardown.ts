@@ -31,9 +31,7 @@ export default async function globalTeardown() {
           `[e2e] Full output captured at: ${studioLogPath}\n`,
       );
     } else {
-      process.stderr.write(
-        `[e2e] Studio server log: ${studioLogPath}\n`,
-      );
+      process.stderr.write(`[e2e] Studio server log: ${studioLogPath}\n`);
     }
   }
 }

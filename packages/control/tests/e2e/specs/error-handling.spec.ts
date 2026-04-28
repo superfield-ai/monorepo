@@ -103,6 +103,28 @@ test.describe("dev-loop API unreachable", () => {
 
 test.describe("Deploy view failures", () => {
   test("doctor failure renders InlineError with Retry", async ({ page }) => {
+    // Stub envs so the matrix renders without slow external network calls.
+    await page.route("**/studio/deploy/envs", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ envs: ["dev"], source: "github" }),
+      }),
+    );
+    await page.route("**/studio/deploy/secrets/**", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ env: "dev", checks: [] }),
+      }),
+    );
+    await page.route("**/studio/deploy/ci", (route) =>
+      route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ runs: [], source: "stub" }),
+      }),
+    );
     await page.route("**/studio/deploy/doctor/**", (route) =>
       route.fulfill({
         status: 500,

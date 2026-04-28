@@ -8,7 +8,6 @@
 
 import { test, expect } from "../fixtures";
 
-
 const SESSION_ID = "demo-session-1";
 
 test("turn timeline renders inside slot card and opens prompt modal", async ({

@@ -8,7 +8,6 @@
 
 import { test, expect } from "../fixtures";
 
-
 test("clicking mobile/tablet/desktop sets the iframe width", async ({
   page,
 }) => {

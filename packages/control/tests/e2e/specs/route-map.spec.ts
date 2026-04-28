@@ -8,7 +8,6 @@
 
 import { test, expect } from "../fixtures";
 
-
 test("clicking a route updates the iframe src", async ({ page }) => {
   await page.route("**/studio/demo/routes", async (route) => {
     await route.fulfill({

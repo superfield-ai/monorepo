@@ -8,7 +8,6 @@
 
 import { test, expect } from "../fixtures";
 
-
 test("deploy tab renders matrix and CI strip", async ({ page }) => {
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
