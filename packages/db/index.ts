@@ -111,7 +111,8 @@ export async function openIssueStore(
       await db.update((data) => {
         const index = data.issues.findIndex((issue) => issue.number === number);
         if (index === -1) return;
-        const current = data.issues[index]!;
+        const current = data.issues[index];
+        if (!current) return;
         nextIssue = { ...updater({ ...current }), updatedAt };
         data.issues[index] = nextIssue;
         data.updatedAt = updatedAt;
