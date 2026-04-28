@@ -78,7 +78,10 @@ export async function openIssueStore(
   filePath = resolveIssueDbPath(),
 ): Promise<LocalIssueStore> {
   await mkdir(dirname(filePath), { recursive: true });
-  const db = await JSONFilePreset<LocalIssueDb>(filePath, createDefaultIssueDb());
+  const db = await JSONFilePreset<LocalIssueDb>(
+    filePath,
+    createDefaultIssueDb(),
+  );
 
   return {
     async getAll() {
@@ -90,7 +93,9 @@ export async function openIssueStore(
     async upsert(issue) {
       const updatedAt = new Date().toISOString();
       await db.update((data) => {
-        const index = data.issues.findIndex((entry) => entry.number === issue.number);
+        const index = data.issues.findIndex(
+          (entry) => entry.number === issue.number,
+        );
         const next = { ...issue, updatedAt };
         if (index === -1) {
           data.issues.push(next);

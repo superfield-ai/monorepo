@@ -104,17 +104,17 @@ The same person is often all three. The webapp is laid out so a single demo can 
 
 What the page is _for_: writing a turn, watching the agent work, seeing the result in the iframe, committing or rolling back. This is the default landing view.
 
-| Capability                                                  | Status |
-| ----------------------------------------------------------- | ------ |
+| Capability                                                       | Status |
+| ---------------------------------------------------------------- | ------ |
 | Mode-driven chat panel ↔ agent (`steer` / `feature` / `product`) | ✅     |
-| App iframe with cluster-status-aware reload overlay         | ✅     |
-| Mid-turn steer (`POST /steer/context` via `/studio/steer`)  | ✅     |
-| Commit log + checkpoint timeline + rollback                 | ✅     |
-| Per-turn file diff inline in chat                           | ⬜     |
-| Per-route preview map (sidebar: app routes → click to load) | ⬜     |
-| Fixture switcher (per-route, persisted in `.studio/`)       | ⬜     |
-| Viewport toolbar (mobile / tablet / desktop) on iframe      | ⬜     |
-| Screenshot capture per turn (saved to `studio-sessions/`)   | ⬜     |
+| App iframe with cluster-status-aware reload overlay              | ✅     |
+| Mid-turn steer (`POST /steer/context` via `/studio/steer`)       | ✅     |
+| Commit log + checkpoint timeline + rollback                      | ✅     |
+| Per-turn file diff inline in chat                                | ⬜     |
+| Per-route preview map (sidebar: app routes → click to load)      | ⬜     |
+| Fixture switcher (per-route, persisted in `.studio/`)            | ⬜     |
+| Viewport toolbar (mobile / tablet / desktop) on iframe           | ⬜     |
+| Screenshot capture per turn (saved to `studio-sessions/`)        | ⬜     |
 
 ##### Chat workflow
 
