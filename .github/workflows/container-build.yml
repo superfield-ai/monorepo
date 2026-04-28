@@ -1,18 +1,9 @@
 name: Container build
 
+# THROTTLED on branch ci/debug-control-e2e: manual-only while we iterate on
+# the Control browser E2E job. Restore push/tags/pull_request before merging.
 on:
-  push:
-    branches: [main]
-    tags:
-      - "v*"
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+  workflow_dispatch:
 
 permissions:
   contents: read

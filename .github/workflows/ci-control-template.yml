@@ -1,24 +1,9 @@
 name: Control × Template Integration
 
+# THROTTLED on branch ci/debug-control-e2e: manual-only while we iterate on
+# the Control browser E2E job in ci-control.yml. Restore push/pull_request
+# triggers before merging back to main.
 on:
-  push:
-    branches: [main]
-    paths:
-      - "packages/control/**"
-      - "packages/control-core/**"
-      - "packages/cli/commands/control.ts"
-      - "packages/cli/tests/integration/template-server-boot.test.ts"
-      - "docs/control-template-integration.md"
-      - ".github/workflows/ci-control-template.yml"
-  pull_request:
-    branches: [main]
-    paths:
-      - "packages/control/**"
-      - "packages/control-core/**"
-      - "packages/cli/commands/control.ts"
-      - "packages/cli/tests/integration/template-server-boot.test.ts"
-      - "docs/control-template-integration.md"
-      - ".github/workflows/ci-control-template.yml"
   workflow_dispatch:
 
 concurrency:

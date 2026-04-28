@@ -1,16 +1,9 @@
 name: Integration Tests
 
+# THROTTLED on branch ci/debug-control-e2e: manual-only while we iterate on
+# the Control browser E2E job. Restore push/pull_request before merging.
 on:
-  push:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-  pull_request:
-    branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
+  workflow_dispatch:
 
 concurrency:
   group: test-integration-${{ github.ref }}
