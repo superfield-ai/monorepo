@@ -24,7 +24,6 @@ import React, { useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./ChatPanel";
 import { IframePanel } from "./IframePanel";
 import { OrchestratorView } from "./OrchestratorView";
-import { ComponentPreviewPanel } from "./ComponentPreviewPanel";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
 import { DebugView } from "./DebugView";
@@ -32,7 +31,6 @@ import { DebugBadge } from "./DebugBadge";
 import { Toaster } from "./Toaster";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ConnectionBanner } from "./ConnectionBanner";
-import { DeployView } from "./DeployView";
 import { RouteMap, loadSelectedRoute } from "./RouteMap";
 import {
   ViewportToolbar,
@@ -106,9 +104,9 @@ export function ControlPanel({
     }
   }, [initialClusterStatus]);
 
-  const [activeTab, setActiveTab] = useState<
-    "studio" | "orchestrator" | "preview" | "deploy" | "debug"
-  >("studio");
+  const [activeTab, setActiveTab] = useState<"studio" | "viewport" | "debug">(
+    "studio",
+  );
 
   const [viewport, setViewportState] = useState<Viewport>(() => loadViewport());
   const setViewport = (v: Viewport): void => {
@@ -159,22 +157,10 @@ export function ControlPanel({
           onClick={() => setActiveTab("studio")}
         />
         <NavTab
-          testid="tab-orchestrator"
-          label="Orchestrator"
-          active={activeTab === "orchestrator"}
-          onClick={() => setActiveTab("orchestrator")}
-        />
-        <NavTab
-          testid="tab-preview"
-          label="Preview"
-          active={activeTab === "preview"}
-          onClick={() => setActiveTab("preview")}
-        />
-        <NavTab
-          testid="tab-deploy"
-          label="Deploy"
-          active={activeTab === "deploy"}
-          onClick={() => setActiveTab("deploy")}
+          testid="tab-viewport"
+          label="Viewport"
+          active={activeTab === "viewport"}
+          onClick={() => setActiveTab("viewport")}
         />
         <DebugBadge
           active={activeTab === "debug"}
@@ -182,7 +168,7 @@ export function ControlPanel({
         />
       </div>
 
-      {/* Studio tab */}
+      {/* Studio tab — chat sidebar + running agents */}
       {activeTab === "studio" && (
         <ErrorBoundary label="Studio">
           <div className="flex flex-1 overflow-hidden">
@@ -193,6 +179,17 @@ export function ControlPanel({
                 clusterEventsUrl={clusterEventsUrl}
               />
             </div>
+            <div className="flex-1 overflow-hidden bg-gray-50">
+              <OrchestratorView />
+            </div>
+          </div>
+        </ErrorBoundary>
+      )}
+
+      {/* Viewport tab — route picker + resizable iframe */}
+      {activeTab === "viewport" && (
+        <ErrorBoundary label="Viewport">
+          <div className="flex flex-1 overflow-hidden">
             <div className="hidden lg:flex">
               <RouteMap
                 onSelect={(path) => {
@@ -209,33 +206,6 @@ export function ControlPanel({
                 iframeWidth={VIEWPORT_WIDTHS[viewport]}
               />
             </div>
-          </div>
-        </ErrorBoundary>
-      )}
-
-      {/* Orchestrator tab */}
-      {activeTab === "orchestrator" && (
-        <ErrorBoundary label="Orchestrator">
-          <div className="flex-1 overflow-hidden bg-gray-50">
-            <OrchestratorView />
-          </div>
-        </ErrorBoundary>
-      )}
-
-      {/* Preview tab */}
-      {activeTab === "preview" && (
-        <ErrorBoundary label="Preview">
-          <div className="flex-1 overflow-hidden bg-white">
-            <ComponentPreviewPanel />
-          </div>
-        </ErrorBoundary>
-      )}
-
-      {/* Deploy tab */}
-      {activeTab === "deploy" && (
-        <ErrorBoundary label="Deploy">
-          <div className="flex-1 overflow-hidden">
-            <DeployView />
           </div>
         </ErrorBoundary>
       )}

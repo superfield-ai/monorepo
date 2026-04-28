@@ -44,12 +44,12 @@ describe("RouteMap", () => {
     expect(loadSelectedRoute()).toBe("/dashboard");
   });
 
-  test("renders EmptyState when fixture is empty", async () => {
+  test("renders nothing when fixture is empty", async () => {
     const onSelect = vi.fn();
-    const screen = render(<RouteMap onSelect={onSelect} routesOverride={[]} />);
-    await expect
-      .element(screen.getByTestId("empty-state-route-map"))
-      .toBeVisible();
+    const { container } = render(
+      <RouteMap onSelect={onSelect} routesOverride={[]} />,
+    );
+    expect(container.firstChild).toBeNull();
   });
 
   test("saveSelectedRoute / loadSelectedRoute round-trip", () => {

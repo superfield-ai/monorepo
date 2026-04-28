@@ -69,7 +69,7 @@ test("turn timeline renders inside slot card and opens prompt modal", async ({
 
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-  await page.click('[data-testid="tab-orchestrator"]');
+  // OrchestratorView is now embedded in the Studio tab — no tab switch needed.
 
   const timeline = page.getByTestId(`turn-timeline-${SESSION_ID}`);
   await expect(timeline).toBeVisible();

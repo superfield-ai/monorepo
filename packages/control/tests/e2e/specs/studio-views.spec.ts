@@ -1,5 +1,5 @@
 /**
- * Studio webapp E2E tests — all three views.
+ * Studio webapp E2E tests — Studio and Viewport views.
  *
  * Runs against the real studio server serving the built Vite app. No mocks.
  * Both servers (studio + superfield API) are started by global-setup.ts.
@@ -28,11 +28,10 @@ async function goToStudio(page: import("@playwright/test").Page) {
 // ---------------------------------------------------------------------------
 
 test.describe("tab bar", () => {
-  test("all three tab buttons are visible", async ({ page }) => {
+  test("both tab buttons are visible", async ({ page }) => {
     await goToStudio(page);
     await expect(page.getByTestId("tab-studio")).toBeVisible();
-    await expect(page.getByTestId("tab-orchestrator")).toBeVisible();
-    await expect(page.getByTestId("tab-preview")).toBeVisible();
+    await expect(page.getByTestId("tab-viewport")).toBeVisible();
   });
 
   test("Studio tab is active by default", async ({ page }) => {
@@ -44,11 +43,7 @@ test.describe("tab bar", () => {
       "data-active",
       "true",
     );
-    await expect(page.getByTestId("tab-orchestrator")).toHaveAttribute(
-      "data-active",
-      "false",
-    );
-    await expect(page.getByTestId("tab-preview")).toHaveAttribute(
+    await expect(page.getByTestId("tab-viewport")).toHaveAttribute(
       "data-active",
       "false",
     );
@@ -65,9 +60,9 @@ test.describe("Studio tab", () => {
     await expect(page.getByTestId("chat-panel")).toBeVisible();
   });
 
-  test("iframe panel is visible on load", async ({ page }) => {
+  test("orchestrator view is visible on load", async ({ page }) => {
     await goToStudio(page);
-    await expect(page.getByTestId("iframe-panel")).toBeVisible();
+    await expect(page.getByTestId("process-state-badge")).toBeVisible();
   });
 
   test("cluster status indicator is present", async ({ page }) => {
@@ -84,138 +79,29 @@ test.describe("Studio tab", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Orchestrator tab
+// Viewport tab
 // ---------------------------------------------------------------------------
 
-test.describe("Orchestrator tab", () => {
+test.describe("Viewport tab", () => {
   test.beforeEach(async ({ page }) => {
     await goToStudio(page);
-    await page.getByTestId("tab-orchestrator").click();
-    // Wait for the OrchestratorView to mount — the process badge is always present.
-    await page.waitForSelector('[data-testid="process-state-badge"]', {
+    await page.getByTestId("tab-viewport").click();
+    // Wait for the IframePanel to mount.
+    await page.waitForSelector('[data-testid="iframe-panel"]', {
       timeout: 10_000,
     });
   });
 
   test("Studio tab content disappears after switching", async ({ page }) => {
     await expect(page.getByTestId("chat-panel")).not.toBeVisible();
-    await expect(page.getByTestId("iframe-panel")).not.toBeVisible();
   });
 
-  test("process state badge is visible and shows stopped", async ({ page }) => {
-    const badge = page.getByTestId("process-state-badge");
-    await expect(badge).toBeVisible();
-    await expect(badge).toHaveText("stopped");
+  test("iframe panel is visible", async ({ page }) => {
+    await expect(page.getByTestId("iframe-panel")).toBeVisible();
   });
 
-  test("Start button is present and disabled without a repo path", async ({
-    page,
-  }) => {
-    const startBtn = page.getByTestId("start-button");
-    await expect(startBtn).toBeVisible();
-    await expect(startBtn).toBeDisabled();
-  });
-
-  test("Start button enables once a repo path is entered", async ({ page }) => {
-    await page.getByTestId("repo-input").fill("/tmp/test-repo");
-    await expect(page.getByTestId("start-button")).toBeEnabled();
-  });
-
-  test("Stop button is disabled when process is stopped", async ({ page }) => {
-    await expect(page.getByTestId("stop-button")).toBeDisabled();
-  });
-
-  test("loop table is visible with plan, dev, doc rows", async ({ page }) => {
-    const table = page.getByTestId("loop-table");
-    await expect(table).toBeVisible();
-    await expect(table.getByText("plan")).toBeVisible();
-    await expect(table.getByText("dev")).toBeVisible();
-    await expect(table.getByText("doc")).toBeVisible();
-  });
-
-  test("loop rows show circuit state", async ({ page }) => {
-    const table = page.getByTestId("loop-table");
-    // All three loops should show "closed" circuit (default state).
-    const closedCells = table.getByText("closed");
-    await expect(closedCells.first()).toBeVisible();
-    await expect(closedCells).toHaveCount(3);
-  });
-
-  test('log pane is visible with "Dev loop logs" heading', async ({ page }) => {
-    const logPane = page.getByTestId("log-pane");
-    await expect(logPane).toBeVisible();
-    await expect(logPane.getByText("Dev loop logs")).toBeVisible();
-  });
-
-  test("API reachability indicator is visible", async ({ page }) => {
-    // The API indicator shows "reachable" or "unreachable" — either is valid here.
-    await expect(page.getByText(/API (reachable|unreachable)/)).toBeVisible();
-  });
-});
-
-// ---------------------------------------------------------------------------
-// Preview tab
-// ---------------------------------------------------------------------------
-
-test.describe("Preview tab", () => {
-  test.beforeEach(async ({ page }) => {
-    await goToStudio(page);
-    await page.getByTestId("tab-preview").click();
-    await page.waitForSelector('[data-testid="preview-view-selector"]', {
-      timeout: 10_000,
-    });
-  });
-
-  test("Studio and Orchestrator tab content disappears after switching", async ({
-    page,
-  }) => {
-    await expect(page.getByTestId("chat-panel")).not.toBeVisible();
-    await expect(page.getByTestId("process-state-badge")).not.toBeVisible();
-  });
-
-  test("all three view buttons are present", async ({ page }) => {
-    await expect(page.getByTestId("preview-view-wiki")).toBeVisible();
-    await expect(page.getByTestId("preview-view-citations")).toBeVisible();
-    await expect(page.getByTestId("preview-view-empty")).toBeVisible();
-  });
-
-  test("WikiRender view is active by default", async ({ page }) => {
-    const wikiBtn = page.getByTestId("preview-view-wiki");
-    await expect(wikiBtn).toHaveClass(/bg-blue-50/);
-  });
-
-  test("WikiRender content shows a heading", async ({ page }) => {
-    // The WikiPreview renders WIKI_FIXTURE which contains h1 "Component Preview".
-    await expect(
-      page
-        .getByTestId("preview-content")
-        .getByRole("heading", { name: "Component Preview" }),
-    ).toBeVisible();
-  });
-
-  test("WikiRender output escapes HTML — no live <script> in DOM", async ({
-    page,
-  }) => {
-    const scripts = await page
-      .getByTestId("preview-content")
-      .locator("script")
-      .count();
-    expect(scripts).toBe(0);
-  });
-
-  test("clicking Citations shows the citation marker", async ({ page }) => {
-    await page.getByTestId("preview-view-citations").click();
-    // The citation marker is [1] inside a <sup>.
-    await expect(
-      page.getByTestId("preview-content").getByText("[1]"),
-    ).toBeVisible();
-  });
-
-  test("clicking Empty Shell shows placeholder text", async ({ page }) => {
-    await page.getByTestId("preview-view-empty").click();
-    await expect(
-      page.getByTestId("preview-content").getByText(/Add a component here/),
-    ).toBeVisible();
+  test("viewport toolbar is visible", async ({ page }) => {
+    await expect(page.getByTestId("viewport-toolbar")).toBeVisible();
   });
 });
 
@@ -228,8 +114,8 @@ test.describe("tab switching", () => {
     page,
   }) => {
     await goToStudio(page);
-    await page.getByTestId("tab-orchestrator").click();
-    await page.waitForSelector('[data-testid="process-state-badge"]');
+    await page.getByTestId("tab-viewport").click();
+    await page.waitForSelector('[data-testid="iframe-panel"]');
 
     await page.getByTestId("tab-studio").click();
     await expect(page.getByTestId("chat-panel")).toBeVisible();
@@ -238,21 +124,14 @@ test.describe("tab switching", () => {
   test("only one tab content visible at a time", async ({ page }) => {
     await goToStudio(page);
 
-    // On Studio tab: chat visible, orchestrator badge not visible.
+    // On Studio tab: chat visible, iframe not visible.
     await expect(page.getByTestId("chat-panel")).toBeVisible();
-    await expect(page.getByTestId("process-state-badge")).not.toBeVisible();
-    await expect(page.getByTestId("preview-view-selector")).not.toBeVisible();
+    await expect(page.getByTestId("iframe-panel")).not.toBeVisible();
 
-    // On Orchestrator tab: badge visible, chat and preview not visible.
-    await page.getByTestId("tab-orchestrator").click();
-    await page.waitForSelector('[data-testid="process-state-badge"]');
+    // On Viewport tab: iframe visible, chat not visible.
+    await page.getByTestId("tab-viewport").click();
+    await page.waitForSelector('[data-testid="iframe-panel"]');
     await expect(page.getByTestId("chat-panel")).not.toBeVisible();
-    await expect(page.getByTestId("preview-view-selector")).not.toBeVisible();
-
-    // On Preview tab: preview visible, chat and badge not visible.
-    await page.getByTestId("tab-preview").click();
-    await page.waitForSelector('[data-testid="preview-view-selector"]');
-    await expect(page.getByTestId("chat-panel")).not.toBeVisible();
-    await expect(page.getByTestId("process-state-badge")).not.toBeVisible();
+    await expect(page.getByTestId("iframe-panel")).toBeVisible();
   });
 });
