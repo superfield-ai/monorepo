@@ -74,7 +74,7 @@ test("a triggered error increments the badge count", async ({ page }) => {
 // every failure mode reaches a labelled, recoverable UI affordance — not a
 // blank screen, not a thrown promise. The "no surprises" demo guarantee.
 
-test.describe.skip("dev-loop API unreachable", () => {
+test.describe("dev-loop API unreachable", () => {
   test("ConnectionBanner appears with Start dev loop button", async ({
     page,
   }) => {
@@ -101,7 +101,7 @@ test.describe.skip("dev-loop API unreachable", () => {
   });
 });
 
-test.describe.skip("Deploy view failures", () => {
+test.describe("Deploy view failures", () => {
   test("doctor failure renders InlineError with Retry", async ({ page }) => {
     await page.route("**/studio/deploy/doctor/**", (route) =>
       route.fulfill({
@@ -129,7 +129,7 @@ test.describe.skip("Deploy view failures", () => {
   });
 });
 
-test.describe.skip("Generic backend error envelope", () => {
+test.describe("Generic backend error envelope", () => {
   test("DebugView captures backend errors", async ({ page }) => {
     await page.route("**/studio/deploy/envs", (route) =>
       route.fulfill({
@@ -154,7 +154,7 @@ test.describe.skip("Generic backend error envelope", () => {
   });
 });
 
-test.describe.skip("iframe failure overlay", () => {
+test.describe("iframe failure overlay", () => {
   test("cluster-down status surfaces the IframeOverlay", async ({ page }) => {
     // Mock cluster events SSE so the controller marks status degraded.
     await page.route("**/studio/cluster/events", (route) =>

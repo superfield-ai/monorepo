@@ -8,10 +8,6 @@
 
 import { test, expect } from "../fixtures";
 
-test.skip(
-  true,
-  "Skipped pending studio-server-stability investigation in CI fixture; covered by unit + component tests.",
-);
 
 test("deploy tab renders matrix and CI strip", async ({ page }) => {
   await page.goto("/");

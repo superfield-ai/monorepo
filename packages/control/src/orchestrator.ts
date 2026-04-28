@@ -91,6 +91,7 @@ export async function handleOrchestratorRequest(
   // GET /orchestrator/logs — SSE stream of ring buffer + live tail
   if (method === "GET" && pathname === "/orchestrator/logs") {
     const encoder = new TextEncoder();
+    let cleanup: (() => void) | null = null;
 
     const stream = new ReadableStream<Uint8Array>({
       start(controller) {
@@ -101,15 +102,20 @@ export async function handleOrchestratorRequest(
 
         // Subscribe to new log lines.
         function onLine(line: string) {
-          controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+          try {
+            controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+          } catch {
+            logSubscribers.delete(onLine);
+            cleanup = null;
+          }
         }
 
         logSubscribers.add(onLine);
-
-        // Clean up on stream cancel (browser disconnect).
-        return () => {
-          logSubscribers.delete(onLine);
-        };
+        cleanup = () => logSubscribers.delete(onLine);
+      },
+      cancel() {
+        cleanup?.();
+        cleanup = null;
       },
     });
 
