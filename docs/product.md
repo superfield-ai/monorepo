@@ -105,7 +105,7 @@ What the page is _for_: writing a turn, watching the agent work, seeing the resu
 
 | Capability                                                  | Status |
 | ----------------------------------------------------------- | ------ |
-| Chat panel ↔ agent (`POST /studio/run` SSE → WS chunks)     | ✅     |
+| Mode-driven chat panel ↔ agent (`steer` / `feature` / `product`) | ✅     |
 | App iframe with cluster-status-aware reload overlay         | ✅     |
 | Mid-turn steer (`POST /steer/context` via `/studio/steer`)  | ✅     |
 | Commit log + checkpoint timeline + rollback                 | ✅     |
@@ -114,6 +114,18 @@ What the page is _for_: writing a turn, watching the agent work, seeing the resu
 | Fixture switcher (per-route, persisted in `.studio/`)       | ⬜     |
 | Viewport toolbar (mobile / tablet / desktop) on iframe      | ⬜     |
 | Screenshot capture per turn (saved to `studio-sessions/`)   | ⬜     |
+
+##### Chat workflow
+
+The chat composer is a mode-driven command surface, not a generic chat box.
+
+- The composer has a three-position toggle: `steer`, `feature`, `product`.
+- `steer` is issue-scoped. The user cannot switch into `steer` manually unless they first select an issue from the running-agent list.
+- The adjacent panel shows the running developer agents for the current repository and groups them by issue.
+- Each issue row expands as an accordion to reveal the issue body and its checklist items.
+- Selecting an issue from the list switches the composer into `steer` for that issue and routes prompts to the Superfield API for that specific agent session.
+- `feature` is the interactive issue-scoping mode. It is used to turn an idea into a properly formatted feature issue and submit it to GitHub and the database.
+- `product` is the documentation and planning mode. It is used to read and explain `./docs`, update product and planning documents, and open PRs for those doc changes.
 
 #### 2. UX design (`/studio/preview`)
 

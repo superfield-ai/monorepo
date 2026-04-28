@@ -24,9 +24,11 @@ import React, { useEffect, useRef, useState } from "react";
 import { ChatPanel } from "./ChatPanel";
 import { IframePanel } from "./IframePanel";
 import { OrchestratorView } from "./OrchestratorView";
+import { IssueRail, type DemoIssue } from "./IssueRail";
 import { ComponentPreviewPanel } from "./ComponentPreviewPanel";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
+import { OrchestratorController } from "../controllers/OrchestratorController";
 import { DebugView } from "./DebugView";
 import { DebugBadge } from "./DebugBadge";
 import { Toaster } from "./Toaster";
@@ -42,18 +44,21 @@ import {
   type Viewport,
 } from "./ViewportToolbar";
 import { debugStore } from "../lib/debug-store";
+import type { ChatMode, ChatSessionController } from "./ChatPanel";
 
 interface ControlPanelProps {
   /** URL loaded in the app iframe; defaults to /app/ */
   appSrc?: string;
   /** SSE endpoint for cluster status events; defaults to /studio/cluster/events */
   clusterEventsUrl?: string;
-  /** POST endpoint for chat; defaults to /studio/chat */
-  chatEndpoint?: string;
+  /** Optional pre-constructed chat controller instance (for testing). */
+  chatController?: ChatSessionController;
   /** Initial cluster status (used in tests to skip SSE) */
   initialClusterStatus?: ClusterStatus;
   /** Optional pre-constructed controller instance (for testing) */
   clusterStatusController?: ClusterStatusController;
+  /** Optional demo issue payloads; when omitted the rail fetches /studio/demo/issues. */
+  demoIssues?: DemoIssue[];
   /** When true, hide the dev-loop ConnectionBanner (tests / Storybook). */
   hideConnectionBanner?: boolean;
 }
@@ -69,9 +74,10 @@ interface ControlPanelProps {
 export function ControlPanel({
   appSrc = "/app/",
   clusterEventsUrl = "/studio/cluster/events",
-  chatEndpoint = "/studio/chat",
+  chatController,
   initialClusterStatus,
   clusterStatusController: controllerProp,
+  demoIssues: demoIssuesProp,
   hideConnectionBanner = false,
 }: ControlPanelProps) {
   const [clusterStatus, setClusterStatus] = useState<ClusterStatus>(
@@ -79,6 +85,38 @@ export function ControlPanel({
   );
 
   const controllerRef = useRef<ClusterStatusController | null>(null);
+  const orchestratorControllerRef = useRef(new OrchestratorController());
+  const [orchestratorState, setOrchestratorState] = useState(
+    null as ReturnType<OrchestratorController["getState"]> | null,
+  );
+  const [demoIssues, setDemoIssues] = useState<DemoIssue[]>(
+    demoIssuesProp ?? [],
+  );
+  const [chatMode, setChatMode] = useState<ChatMode>("feature");
+  const [selectedIssueNumber, setSelectedIssueNumber] = useState<number | null>(
+    null,
+  );
+
+  useEffect(() => {
+    if (demoIssuesProp !== undefined) {
+      setDemoIssues(demoIssuesProp);
+      return;
+    }
+    let cancelled = false;
+    void fetch("/studio/demo/issues")
+      .then((res) => res.json())
+      .then((body) => {
+        if (cancelled) return;
+        const issues = Array.isArray(body?.issues) ? (body.issues as DemoIssue[]) : [];
+        setDemoIssues(issues);
+      })
+      .catch(() => {
+        if (!cancelled) setDemoIssues([]);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [demoIssuesProp]);
 
   useEffect(() => {
     // Skip SSE when an initial status is injected (test / Storybook mode).
@@ -98,6 +136,16 @@ export function ControlPanel({
       }
     };
   }, [clusterEventsUrl, initialClusterStatus]);
+
+  useEffect(() => {
+    const ctrl = orchestratorControllerRef.current;
+    const unsub = ctrl.subscribe(setOrchestratorState);
+    ctrl.start();
+    return () => {
+      unsub();
+      ctrl.stop();
+    };
+  }, []);
 
   // Sync override changes after initial render
   useEffect(() => {
@@ -199,8 +247,35 @@ export function ControlPanel({
             <div className="w-80 shrink-0 flex flex-col border-r border-zinc-700">
               <ChatPanel
                 clusterStatus={clusterStatus}
-                chatEndpoint={chatEndpoint}
                 clusterEventsUrl={clusterEventsUrl}
+                controller={chatController}
+                mode={chatMode}
+                selectedIssue={
+                  demoIssues.find((issue) => issue.number === selectedIssueNumber) ??
+                  null
+                }
+                onModeChange={(nextMode) => {
+                  if (nextMode === "steer") {
+                    const issue = demoIssues.find(
+                      (candidate) => candidate.number === selectedIssueNumber,
+                    );
+                    if (!issue?.sessionId) return;
+                  }
+                  setChatMode(nextMode);
+                }}
+              />
+            </div>
+            <div className="hidden xl:flex w-96 shrink-0">
+              <IssueRail
+                issues={demoIssues}
+                slots={orchestratorState?.slots ?? []}
+                selectedIssueNumber={selectedIssueNumber}
+                onSelectIssue={(issue) => {
+                  setSelectedIssueNumber(issue.number);
+                  if (issue.sessionId) {
+                    setChatMode("steer");
+                  }
+                }}
               />
             </div>
             <div className="hidden lg:flex">
@@ -227,7 +302,10 @@ export function ControlPanel({
       {activeTab === "orchestrator" && (
         <ErrorBoundary label="Orchestrator">
           <div className="flex-1 overflow-hidden bg-gray-50">
-            <OrchestratorView />
+            <OrchestratorView
+              controller={orchestratorControllerRef.current}
+              manageLifecycle={false}
+            />
           </div>
         </ErrorBoundary>
       )}

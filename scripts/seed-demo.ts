@@ -128,6 +128,8 @@ interface DemoIssue {
   readonly slot: number;
   readonly sessionId: string;
   readonly turnCount: number;
+  readonly body: string;
+  readonly checklist: readonly { text: string; done: boolean }[];
 }
 
 const ISSUE_CHECKOUT: DemoIssue = {
@@ -137,6 +139,13 @@ const ISSUE_CHECKOUT: DemoIssue = {
   slot: 1,
   sessionId: "0196f4a2b3c1-a3f9d2e4b8c1f0a7",
   turnCount: 4,
+  body: "Steer the checkout flow so the user can apply a discount code before payment.",
+  checklist: [
+    { text: "Add a discount-code input above the Pay button", done: true },
+    { text: "Debounce validation by 300 ms", done: true },
+    { text: "Surface server rejections as InlineError", done: true },
+    { text: "Add Playwright coverage for the happy path", done: false },
+  ],
 };
 
 const ISSUE_DASHBOARD: DemoIssue = {
@@ -146,6 +155,12 @@ const ISSUE_DASHBOARD: DemoIssue = {
   slot: 2,
   sessionId: "0196f4a2b3c2-b1c8e7f3a9d4e2f8",
   turnCount: 2,
+  body: "Clean up the dashboard cards so screen readers can announce the key metrics without ambiguity.",
+  checklist: [
+    { text: "Add explicit aria-labels to KPI cards", done: true },
+    { text: "Verify axe-core smoke pass on the dashboard", done: true },
+    { text: "Adjust token contrast for the delta text", done: false },
+  ],
 };
 
 const ISSUE_SETTINGS: DemoIssue = {
@@ -155,6 +170,12 @@ const ISSUE_SETTINGS: DemoIssue = {
   slot: 0,
   sessionId: "0196f49d12a0-c4e7d3a1b2f5e8c1",
   turnCount: 7,
+  body: "The settings screen was stabilized and merged; keep it visible as a completed reference for the panel.",
+  checklist: [
+    { text: "Move settings fields to controlled form state", done: true },
+    { text: "Preserve saved notification preferences", done: true },
+    { text: "Keep the existing keyboard flow intact", done: true },
+  ],
 };
 
 const ISSUES: readonly DemoIssue[] = [

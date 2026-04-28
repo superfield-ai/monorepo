@@ -34,7 +34,7 @@ export interface WsData {
 
 type InboundFrame =
   | { type: "turn"; message: string; mode?: string }
-  | { type: "steer"; context: string };
+  | { type: "steer"; context: string; sessionId?: string };
 
 type OutboundFrame =
   | { type: "chunk"; text: string }
@@ -69,7 +69,9 @@ export const controlWsHandler: WebSocketHandler<WsData> = {
       ws.data.abortController = ac;
 
       const mode =
-        frame.mode === "question" ? ("question" as const) : ("design" as const);
+        frame.mode === "question" || frame.mode === "product"
+          ? ("question" as const)
+          : ("design" as const);
 
       // Create a custom fetch that respects the abort signal.
       const baseFetch = ws.data._fetch ?? globalThis.fetch;
@@ -146,6 +148,10 @@ export const controlWsHandler: WebSocketHandler<WsData> = {
       send(ws, { type: "done", sessionId: capturedSessionId, filesChanged });
     } else if (frame.type === "steer") {
       // Proxy steer to the dev-loop API.
+      if (!frame.sessionId) {
+        send(ws, { type: "error", message: "sessionId is required for steer" });
+        return;
+      }
       const steerFetch = ws.data._fetch ?? globalThis.fetch;
       try {
         const res = await steerFetch(
@@ -153,7 +159,10 @@ export const controlWsHandler: WebSocketHandler<WsData> = {
           {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ context: frame.context }),
+            body: JSON.stringify({
+              session_id: frame.sessionId,
+              context: frame.context,
+            }),
           },
         );
         const body = (await res.json()) as { requestId?: string };

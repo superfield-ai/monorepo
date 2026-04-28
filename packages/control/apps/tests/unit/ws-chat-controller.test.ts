@@ -316,7 +316,7 @@ describe("sendMessage", () => {
     await p;
   });
 
-  it('sends { type: "turn", message } frame', async () => {
+  it('sends { type: "turn", message, mode } frame', async () => {
     const { ctrl, openSocket } = makeHarness();
     ctrl.connect();
     openSocket.last!.fireOpen();
@@ -325,8 +325,51 @@ describe("sendMessage", () => {
     const frame = JSON.parse(openSocket.last!.sent[0]!) as {
       type: string;
       message: string;
+      mode: string;
     };
-    expect(frame).toEqual({ type: "turn", message: "make it blue" });
+    expect(frame).toEqual({
+      type: "turn",
+      message: "make it blue",
+      mode: "design",
+    });
+    openSocket.last!.fireMessage({ type: "done" });
+    await p;
+  });
+
+  it('sends { type: "turn", message, mode: "question" } for product mode', async () => {
+    const { ctrl, openSocket } = makeHarness();
+    ctrl.connect();
+    openSocket.last!.fireOpen();
+    const p = ctrl.sendMessage("summarize this", "question");
+    const frame = JSON.parse(openSocket.last!.sent[0]!) as {
+      type: string;
+      message: string;
+      mode: string;
+    };
+    expect(frame).toEqual({
+      type: "turn",
+      message: "summarize this",
+      mode: "question",
+    });
+    openSocket.last!.fireMessage({ type: "done" });
+    await p;
+  });
+
+  it('sends { type: "steer", context, sessionId } frame', async () => {
+    const { ctrl, openSocket } = makeHarness();
+    ctrl.connect();
+    openSocket.last!.fireOpen();
+    const p = ctrl.sendSteer("focus on the bug", "session-123");
+    const frame = JSON.parse(openSocket.last!.sent[0]!) as {
+      type: string;
+      context: string;
+      sessionId: string;
+    };
+    expect(frame).toEqual({
+      type: "steer",
+      context: "focus on the bug",
+      sessionId: "session-123",
+    });
     openSocket.last!.fireMessage({ type: "done" });
     await p;
   });

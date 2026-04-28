@@ -29,6 +29,7 @@ import type {
   ChatController,
   ChatControllerState,
 } from "../../src/controllers/ChatController";
+import type { DemoIssue } from "../../src/components/IssueRail";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -81,6 +82,10 @@ function makeChatControllerMock(
     sendMessage: vi.fn(async (_text: string) => {
       // No-op by default; tests assert it was called
     }),
+    sendSteer: vi.fn(async (_context: string, _sessionId: string) => {
+      // No-op by default; tests assert it was called
+    }),
+    clearError: vi.fn(() => {}),
   } as unknown as ChatController;
 
   return { controller, setState };
@@ -98,7 +103,7 @@ test("chat panel renders empty state initially", async () => {
   await expect.element(screen.getByTestId("chat-panel")).toBeVisible();
   await expect.element(screen.getByTestId("chat-messages")).toBeVisible();
   await expect
-    .element(screen.getByText(/SEND A MESSAGE TO BEGIN/))
+    .element(screen.getByText(/SEND A FEATURE PROMPT TO BEGIN/))
     .toBeVisible();
 });
 
@@ -147,7 +152,42 @@ test("submit calls controller.sendMessage with the message text", async () => {
   await screen.getByTestId("chat-input").fill("Fix the bug");
   await screen.getByTestId("chat-submit").click();
 
-  expect(controller.sendMessage).toHaveBeenCalledWith("Fix the bug");
+  expect(controller.sendMessage).toHaveBeenCalledWith("Fix the bug", "design");
+});
+
+test("selecting an issue locks the composer into steer mode", async () => {
+  const { controller } = makeChatControllerMock({ turnState: "idle" });
+  const issues: DemoIssue[] = [
+    {
+      number: 301,
+      title: "Add discount-code input on /checkout",
+      state: "in_progress",
+      slot: 1,
+      sessionId: "0196f4a2b3c1-a3f9d2e4b8c1f0a7",
+      turnCount: 4,
+      body: "Steer the checkout flow.",
+      checklist: [
+        { text: "Add a discount-code input", done: true },
+        { text: "Add a Playwright test", done: false },
+      ],
+    },
+  ];
+
+  const screen = render(
+    <ControlPanel
+      appSrc="/app/"
+      initialClusterStatus="healthy"
+      chatController={controller}
+      demoIssues={issues}
+      hideConnectionBanner
+    />,
+  );
+
+  await expect.element(screen.getByTestId("issue-rail")).toBeVisible();
+  await screen.getByText("Add discount-code input on /checkout").click();
+  await expect.element(screen.getByTestId("selected-issue-banner")).toBeVisible();
+  await expect.element(screen.getByText(/Steering locked to issue #301/)).toBeVisible();
+  await expect.element(screen.getByPlaceholder(/STEER ISSUE #301/i)).toBeVisible();
 });
 
 test("streaming chunks appear in message area as controller state updates", async () => {
@@ -253,12 +293,14 @@ test("cluster status indicator shows gray for unknown", async () => {
 // ---------------------------------------------------------------------------
 
 test("studio panel renders ChatPanel and IframePanel at 1280x800", async () => {
+  const { controller } = makeChatControllerMock();
   const screen = render(
     <div style={{ width: "1280px", height: "800px" }}>
       <ControlPanel
         appSrc="/app/"
         initialClusterStatus="healthy"
-        chatEndpoint="/studio/chat"
+        chatController={controller}
+        demoIssues={[]}
         hideConnectionBanner
       />
     </div>,
@@ -270,11 +312,13 @@ test("studio panel renders ChatPanel and IframePanel at 1280x800", async () => {
 });
 
 test("cluster status from ClusterStatusController flows to ChatPanel ClusterStatusIndicator", async () => {
+  const { controller } = makeChatControllerMock();
   const screen = render(
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="healthy"
-      chatEndpoint="/studio/chat"
+      chatController={controller}
+      demoIssues={[]}
       hideConnectionBanner
     />,
   );
@@ -285,11 +329,13 @@ test("cluster status from ClusterStatusController flows to ChatPanel ClusterStat
 });
 
 test("cluster status from ClusterStatusController flows to IframePanel overlay", async () => {
+  const { controller } = makeChatControllerMock();
   const screen = render(
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="restarting"
-      chatEndpoint="/studio/chat"
+      chatController={controller}
+      demoIssues={[]}
       hideConnectionBanner
     />,
   );
@@ -297,11 +343,13 @@ test("cluster status from ClusterStatusController flows to IframePanel overlay",
 });
 
 test("studio panel propagates status update to both panels on prop change", async () => {
+  const { controller } = makeChatControllerMock();
   const { rerender, container } = render(
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="healthy"
-      chatEndpoint="/studio/chat"
+      chatController={controller}
+      demoIssues={[]}
       hideConnectionBanner
     />,
   );
@@ -316,7 +364,8 @@ test("studio panel propagates status update to both panels on prop change", asyn
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="restarting"
-      chatEndpoint="/studio/chat"
+      chatController={controller}
+      demoIssues={[]}
       hideConnectionBanner
     />,
   );
