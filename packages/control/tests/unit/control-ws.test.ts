@@ -252,7 +252,7 @@ describe("steer frame", () => {
     });
     await controlWsHandler.message(
       asServerWs(ws),
-      JSON.stringify({ type: "steer", context: "focus on auth" }),
+      JSON.stringify({ type: "steer", context: "focus on auth", sessionId: "s1" }),
     );
     const ack = ws.frames().find((f) => f.type === "steer-ack") as
       | { requestId: string }
@@ -266,7 +266,7 @@ describe("steer frame", () => {
     });
     await controlWsHandler.message(
       asServerWs(ws),
-      JSON.stringify({ type: "steer", context: "x" }),
+      JSON.stringify({ type: "steer", context: "x", sessionId: "s1" }),
     );
     const err = ws.frames().find((f) => f.type === "error") as
       | { message: string }
@@ -285,7 +285,7 @@ describe("steer frame", () => {
     });
     await controlWsHandler.message(
       asServerWs(ws),
-      JSON.stringify({ type: "steer", context: "focus" }),
+      JSON.stringify({ type: "steer", context: "focus", sessionId: "s1" }),
     );
     expect(fetchSpy).toHaveBeenCalledWith(
       "http://custom:9999/steer/context",

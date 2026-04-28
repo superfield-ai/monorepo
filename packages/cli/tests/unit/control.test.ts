@@ -42,9 +42,9 @@ describe("parseControlArgs", () => {
     expect(r.unknown).toContain("--port");
   });
 
-  it("--path /path/to/app → path set", () => {
-    expect(parseControlArgs(["--path", "/path/to/app"]).path).toBe(
-      "/path/to/app",
+  it("--path /path/to/project → path set", () => {
+    expect(parseControlArgs(["--path", "/path/to/project"]).path).toBe(
+      "/path/to/project",
     );
   });
 
@@ -107,6 +107,7 @@ function makeDeps(
       ok: true,
       status: 200,
     } as Response) as unknown as typeof fetch,
+    _buildControlWeb: vi.fn().mockResolvedValue(undefined),
     _startControl: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -117,7 +118,9 @@ describe("controlCommand", () => {
     // Clean up any env vars set during tests.
     delete process.env.CONTROL_PORT;
     delete process.env.SUPERFIELD_REPO_ROOT;
+    delete process.env.CONTROL_SOURCE_DIR;
     delete process.env.SUPERFIELD_API_URL;
+    delete process.env.CONTROL_ASSETS_DIR;
   });
 
   it("--help → logs usage, does not call _startControl or _fetch", async () => {
@@ -126,6 +129,7 @@ describe("controlCommand", () => {
     expect(deps.log).toHaveBeenCalledWith(
       expect.stringContaining("superfield control"),
     );
+    expect(deps._buildControlWeb).not.toHaveBeenCalled();
     expect(deps._startControl).not.toHaveBeenCalled();
     expect(deps._fetch).not.toHaveBeenCalled();
   });
@@ -150,30 +154,40 @@ describe("controlCommand", () => {
       expect.stringContaining("Unknown arguments"),
     );
     expect(deps.exit).toHaveBeenCalledWith(1);
+    expect(deps._buildControlWeb).not.toHaveBeenCalled();
     expect(deps._startControl).not.toHaveBeenCalled();
   });
 
   it("--port sets CONTROL_PORT env var", async () => {
     const deps = makeDeps();
     await controlCommand(["--port", "9000"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(process.env.CONTROL_PORT).toBe("9000");
+    expect(process.env.CONTROL_ASSETS_DIR).toContain(
+      "packages/control/apps/dist",
+    );
   });
 
   it("--path sets SUPERFIELD_REPO_ROOT env var", async () => {
     const deps = makeDeps();
-    await controlCommand(["--path", "/my/app"], deps);
-    expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/app");
+    await controlCommand(["--path", "/my/project"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/project");
+    expect(process.env.CONTROL_SOURCE_DIR).toBe("/my/project");
   });
+
 
   it("--api-url sets SUPERFIELD_API_URL env var", async () => {
     const deps = makeDeps();
     await controlCommand(["--api-url", "http://remote:7837"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(process.env.SUPERFIELD_API_URL).toBe("http://remote:7837");
   });
 
   it("health check 200 → no warning, calls _startControl", async () => {
     const deps = makeDeps();
     await controlCommand([], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps.warn).not.toHaveBeenCalled();
     expect(deps._startControl).toHaveBeenCalledOnce();
   });
@@ -186,6 +200,7 @@ describe("controlCommand", () => {
       } as Response) as unknown as typeof fetch,
     });
     await controlCommand([], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("503"));
     expect(deps._startControl).toHaveBeenCalledOnce();
   });
@@ -199,6 +214,7 @@ describe("controlCommand", () => {
         ) as unknown as typeof fetch,
     });
     await controlCommand([], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps.warn).toHaveBeenCalledWith(
       expect.stringContaining("unreachable"),
     );
@@ -208,6 +224,7 @@ describe("controlCommand", () => {
   it("health check uses --api-url value", async () => {
     const deps = makeDeps();
     await controlCommand(["--api-url", "http://custom:9999"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps._fetch).toHaveBeenCalledWith(
       expect.stringContaining("http://custom:9999"),
       expect.anything(),

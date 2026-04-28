@@ -20,7 +20,7 @@
  * | CONTROL_WEB_SERVICE_NAME  | web              | Service name to discover in k8s YAML   |
  * | CONTROL_API_SERVICE_HOST  | 127.0.0.1        | ClusterIP host for the api service     |
  * | CONTROL_API_SERVICE_PORT  | 31415            | ClusterIP port for the api service     |
- * | CONTROL_ASSETS_DIR        | (unset)          | Directory of pre-built browser UI      |
+ * | CONTROL_ASSETS_DIR        | (unset)          | Optional pre-built browser UI for debug|
  * | CONTROL_VERBOSE           | (unset)          | Set to 1 for verbose startup logging   |
  * | SUPERFIELD_API_URL       | http://127.0.0.1:7837 | Dev loop API base URL             |
  */

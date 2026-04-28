@@ -45,8 +45,8 @@
  *
  * When CONTROL_ASSETS_DIR is set, GET /* serves files from that directory. Any path
  * that does not map to a physical file falls back to index.html (SPA routing). When
- * CONTROL_ASSETS_DIR is unset, a minimal placeholder HTML is returned so the server
- * starts without the browser UI built.
+ * CONTROL_ASSETS_DIR is unset, a minimal placeholder HTML is returned so debug runs
+ * can start without the browser UI built.
  *
  * ## Integration points
  *

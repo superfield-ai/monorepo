@@ -26,6 +26,7 @@ function makeDeps(
     exit: vi.fn() as unknown as ControlCommandDeps["exit"],
     // Real fetch — we want the actual TCP probe against 127.0.0.1:1 to fail.
     _fetch: globalThis.fetch,
+    _buildControlWeb: vi.fn().mockResolvedValue(undefined),
     _startControl: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -35,6 +36,7 @@ d("controlCommand integration: template + closed API port", () => {
   const TEMPLATE_REPO = findTemplatePath()!;
   afterEach(() => {
     delete process.env.SUPERFIELD_REPO_ROOT;
+    delete process.env.CONTROL_SOURCE_DIR;
     delete process.env.SUPERFIELD_API_URL;
     delete process.env.CONTROL_PORT;
   });
@@ -50,10 +52,15 @@ d("controlCommand integration: template + closed API port", () => {
     const calls = warnMock.mock.calls.map((c) => String(c[0]));
     expect(calls.some((m) => m.includes("unreachable"))).toBe(true);
 
+    expect(deps._buildControlWeb).toHaveBeenCalledTimes(1);
     expect(deps._startControl).toHaveBeenCalledTimes(1);
 
     expect(process.env.SUPERFIELD_REPO_ROOT).toBe(TEMPLATE_REPO);
+    expect(process.env.CONTROL_SOURCE_DIR).toBe(TEMPLATE_REPO);
     expect(process.env.SUPERFIELD_API_URL).toBe("http://127.0.0.1:1");
+    expect(process.env.CONTROL_ASSETS_DIR).toContain(
+      "packages/control/apps/dist",
+    );
   });
 
   it("--port 7123 sets CONTROL_PORT env var to '7123'", async () => {
@@ -70,6 +77,7 @@ d("controlCommand integration: template + closed API port", () => {
       deps,
     );
 
+    expect(deps._buildControlWeb).toHaveBeenCalledTimes(1);
     expect(process.env.CONTROL_PORT).toBe("7123");
   });
 });
