@@ -58,9 +58,7 @@ function makeConfig(opts: LocalDeployOpts): StudioClusterConfig {
  *   6. Apply k8s manifests with the built image tag
  *   7. Wait for all workloads to become healthy
  */
-export async function deployLocalCluster(
-  opts: LocalDeployOpts,
-): Promise<void> {
+export async function deployLocalCluster(opts: LocalDeployOpts): Promise<void> {
   const config = makeConfig(opts);
   const k8sDir = join(opts.appRoot, "k8s");
 

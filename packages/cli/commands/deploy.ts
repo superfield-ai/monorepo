@@ -18,6 +18,7 @@ const USAGE = `Usage: superfield deploy [--provision] [target]
 
 export interface ParsedDeployArgs {
   provisionOnly: boolean;
+  path?: string;
   target?: string;
   // GCP flags
   login?: boolean;
@@ -32,6 +33,7 @@ export interface ParsedDeployArgs {
 
 export function parseDeployArgs(args: string[]): ParsedDeployArgs {
   let provisionOnly = false;
+  let path: string | undefined;
   let target: string | undefined;
   let login: boolean | undefined;
   let logout: boolean | undefined;
@@ -51,6 +53,10 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
     }
     if (arg === "--provision") {
       provisionOnly = true;
+    } else if (arg === "--path") {
+      path = args[++i];
+    } else if (arg.startsWith("--path=")) {
+      path = arg.slice("--path=".length);
     } else if (arg === "--login") {
       login = true;
     } else if (arg === "--logout") {
@@ -87,6 +93,7 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
 
   return {
     provisionOnly,
+    path,
     target,
     login,
     logout,
