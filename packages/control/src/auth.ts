@@ -316,5 +316,40 @@ export async function handleAuthRequest(
     );
   }
 
+  // OAuth stub endpoints — the control server does not implement OAuth itself;
+  // these return deterministic JSON so the frontend never hits a 502 proxy
+  // error when no upstream API service is running.
+
+  if (url.pathname === "/api/auth/oauth/status") {
+    return new Response(JSON.stringify({ connected: false }), {
+      status: 200,
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
+    });
+  }
+
+  if (url.pathname === "/api/auth/oauth/init") {
+    return new Response(
+      JSON.stringify({
+        error: "OAuth is not configured on this control server.",
+      }),
+      {
+        status: 501,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
+  if (url.pathname === "/api/auth/oauth/complete") {
+    return new Response(
+      JSON.stringify({
+        error: "OAuth is not configured on this control server.",
+      }),
+      {
+        status: 501,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      },
+    );
+  }
+
   return null;
 }
