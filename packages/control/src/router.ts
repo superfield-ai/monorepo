@@ -359,6 +359,15 @@ export async function route(
   );
   if (orchResponse) return orchResponse;
 
+  // Analytics endpoints — proxy to the superfield API server (dev loop).
+  // The frontend controllers use /analytics/* directly; the control server
+  // must forward them to superfieldApiUrl where the core api-server handles them.
+  if (pathname.startsWith("/analytics/")) {
+    const apiUrl = config.superfieldApiUrl ?? "http://127.0.0.1:7837";
+    vlog(config, `Proxying ${pathname} → ${apiUrl} (analytics)`);
+    return proxyRequest(req, url, apiUrl, "");
+  }
+
   // Auth endpoints — handled locally, not proxied upstream.
   const authResponse = await handleAuthRequest(req, url);
   if (authResponse) return authResponse;
