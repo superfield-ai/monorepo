@@ -2,19 +2,19 @@
  * @file ChatPanel
  *
  * Left panel of the Studio browser interface. Renders:
- *  - Chat message history (user messages + streamed Claude responses)
- *  - A chat input field for submitting new messages
+ *  - Chat message history
+ *  - A three-position composer mode toggle: steer / feature / product
+ *  - A chat input field for submitting prompts or steer commands
  *  - A persistent ClusterStatusIndicator at the top
  *
- * All API calls and SSE streaming are delegated to ChatController.
- * This component contains no fetch() calls or EventSource instances.
+ * The panel speaks to the studio WebSocket controller so the mode toggle can
+ * reach the superfield API with the correct transport:
+ *  - feature/product → turn frames with mode metadata
+ *  - steer → issue-scoped steer frames bound to a selected session
  *
  * Visuals follow the Superfield Control Room design system: near-void
  * backgrounds, sharp 1px borders, mono ALL-CAPS header label, role-coloured
- * message rows (cyan for user, green for assistant). All `data-testid`
- * values and event handlers are preserved.
- *
- * Canonical docs: docs/studio-mode.md — "Browser Interface", "Claude CLI Integration"
+ * message rows (cyan for user, green for assistant).
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -23,55 +23,105 @@ import {
   ClusterStatusIndicator,
   type ClusterStatus,
 } from "./ClusterStatusIndicator";
-import { OAuthPanel } from "./OAuthPanel";
 import {
-  ChatController,
-  type ChatControllerState,
+  WsChatController,
+  type ChatMessage,
 } from "../controllers/ChatController";
+import type { DemoIssue } from "./IssueRail";
+
+export type ChatMode = "steer" | "feature" | "product";
+
+export interface ChatState {
+  messages: ChatMessage[];
+  turnState: "idle" | "streaming" | "error";
+}
+
+export interface ChatSessionController {
+  subscribe(listener: (state: ChatState) => void): () => void;
+  getState(): ChatState;
+  sendMessage(text: string, mode?: "design" | "question"): Promise<void>;
+  sendSteer(context: string, sessionId: string): Promise<void>;
+  clearError(): void;
+  connect?: () => void;
+  disconnect?: () => void;
+}
 
 interface ChatPanelProps {
   /** Current cluster status forwarded from parent SSE consumer */
   clusterStatus?: ClusterStatus;
   /** Override for the cluster events URL (for testing) */
   clusterEventsUrl?: string;
-  /** POST endpoint for chat messages; defaults to /studio/chat */
-  chatEndpoint?: string;
   /** Optional pre-constructed controller instance (for testing) */
-  controller?: ChatController;
+  controller?: ChatSessionController;
+  /** Controlled composer mode. When omitted, the component manages its own mode. */
+  mode?: ChatMode;
+  /** Issue currently selected in the adjacent agent rail. */
+  selectedIssue?: DemoIssue | null;
+  /** Called when the user changes mode via the toggle. */
+  onModeChange?: (mode: ChatMode) => void;
+  /** Called when the user submits a steer prompt. */
+  onSteerSubmit?: (issue: DemoIssue, prompt: string) => void;
 }
 
-/**
- * ChatPanel renders the Claude chat sidebar.
- *
- * Behaviour:
- * - User submits a message → delegated to ChatController → POST to chatEndpoint
- * - ChatController detects Content-Type: text/event-stream and appends chunks
- * - ChatController notifies this component via subscribe() on every state change
- */
+function modeLabel(mode: ChatMode): string {
+  switch (mode) {
+    case "steer":
+      return "STEER";
+    case "feature":
+      return "FEATURE";
+    case "product":
+      return "PRODUCT";
+  }
+}
+
+function mapMode(mode: ChatMode): "design" | "question" {
+  return mode === "product" ? "question" : "design";
+}
+
 export function ChatPanel({
   clusterStatus,
   clusterEventsUrl,
-  chatEndpoint = "/studio/chat",
   controller: controllerProp,
+  mode: modeProp,
+  selectedIssue,
+  onModeChange,
+  onSteerSubmit,
 }: ChatPanelProps) {
-  const controllerRef = useRef<ChatController>(
-    controllerProp ?? new ChatController({ chatEndpoint }),
+  const controllerRef = useRef<ChatSessionController>(
+    controllerProp ??
+      new WsChatController({
+        wsEndpoint: "/studio/ws",
+      }),
   );
 
-  const [chatState, setChatState] = useState<ChatControllerState>(
+  const [chatState, setChatState] = useState<ChatState>(
     controllerRef.current.getState(),
   );
   const [input, setInput] = useState("");
+  const [localMode, setLocalMode] = useState<ChatMode>("feature");
   const bottomRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Subscribe to controller state changes
+  const mode = modeProp ?? localMode;
+  const setMode = onModeChange ?? setLocalMode;
+  const steerLocked = Boolean(selectedIssue?.sessionId);
+
   useEffect(() => {
-    const unsub = controllerRef.current.subscribe(setChatState);
-    return unsub;
+    const ctrl = controllerRef.current;
+    const unsub = ctrl.subscribe(setChatState);
+    ctrl.connect?.();
+    return () => {
+      unsub();
+      ctrl.disconnect?.();
+    };
   }, []);
 
-  // Auto-scroll to bottom when messages change.
+  useEffect(() => {
+    if (mode === "steer" && !steerLocked) {
+      setMode("feature");
+    }
+  }, [mode, steerLocked, setMode]);
+
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatState.messages]);
@@ -84,16 +134,44 @@ export function ChatPanel({
     const text = input.trim();
     if (!text || submitting) return;
     setInput("");
-    await controllerRef.current.sendMessage(text);
+    if (mode === "steer") {
+      if (!selectedIssue?.sessionId) return;
+      onSteerSubmit?.(selectedIssue, text);
+      await controllerRef.current.sendSteer(text, selectedIssue.sessionId);
+    } else {
+      await controllerRef.current.sendMessage(text, mapMode(mode));
+    }
     textareaRef.current?.focus();
   }
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    // Submit on Enter without Shift; allow Shift+Enter for newlines.
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       void handleSubmit(e as unknown as React.FormEvent);
     }
+  }
+
+  function renderModeButton(next: ChatMode) {
+    const active = mode === next;
+    const disabled = next === "steer" && !steerLocked;
+    return (
+      <button
+        key={next}
+        type="button"
+        onClick={() => {
+          if (disabled) return;
+          setMode(next);
+        }}
+        disabled={disabled}
+        className={`rounded-full border px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] transition-colors ${
+          active
+            ? "border-emerald-400 bg-emerald-400/15 text-emerald-200"
+            : "border-zinc-700 bg-zinc-900 text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+        } ${disabled ? "opacity-40" : ""}`}
+      >
+        {modeLabel(next)}
+      </button>
+    );
   }
 
   return (
@@ -107,31 +185,39 @@ export function ChatPanel({
         color: "var(--fg-1)",
       }}
     >
-      {/* Header */}
       <div
         style={{
           display: "flex",
           alignItems: "center",
           justifyContent: "space-between",
+          gap: "var(--sp-3)",
           padding: "var(--sp-3) var(--sp-4)",
           borderBottom: "1px solid var(--border-subtle)",
           flexShrink: 0,
           background: "var(--bg-raised)",
         }}
       >
-        <span className="label" style={{ color: "var(--fg-1)" }}>
-          AGENT — STUDIO
-        </span>
+        <div className="flex min-w-0 flex-col gap-2">
+          <span className="label" style={{ color: "var(--fg-1)" }}>
+            AGENT — STUDIO
+          </span>
+          <div className="flex flex-wrap items-center gap-2">
+            {renderModeButton("steer")}
+            {renderModeButton("feature")}
+            {renderModeButton("product")}
+          </div>
+          <div className="text-[11px] uppercase tracking-[0.18em] text-zinc-500">
+            {mode === "steer" && selectedIssue
+              ? `Steering issue #${selectedIssue.number}`
+              : `Mode ${modeLabel(mode)}`}
+          </div>
+        </div>
         <ClusterStatusIndicator
           statusOverride={clusterStatus}
           eventsUrl={clusterEventsUrl}
         />
       </div>
 
-      {/* OAuth Connection Panel */}
-      <OAuthPanel />
-
-      {/* Message list */}
       <div
         data-testid="chat-messages"
         aria-live="polite"
@@ -145,6 +231,15 @@ export function ChatPanel({
           gap: "var(--sp-2)",
         }}
       >
+        {mode === "steer" && selectedIssue && (
+          <div
+            data-testid="selected-issue-banner"
+            className="rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs text-emerald-200"
+          >
+            Steering locked to issue #{selectedIssue.number} on session{" "}
+            {selectedIssue.sessionId.slice(0, 10)}.
+          </div>
+        )}
         {messages.length === 0 && (
           <p
             style={{
@@ -157,7 +252,7 @@ export function ChatPanel({
               marginTop: "var(--sp-8)",
             }}
           >
-            SEND A MESSAGE TO BEGIN.
+            SEND A {modeLabel(mode)} PROMPT TO BEGIN.
           </p>
         )}
         {messages.map((msg) => {
@@ -213,7 +308,6 @@ export function ChatPanel({
         <div ref={bottomRef} />
       </div>
 
-      {/* Input form */}
       <form
         onSubmit={(e) => void handleSubmit(e)}
         data-testid="chat-form"
@@ -236,9 +330,13 @@ export function ChatPanel({
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={handleKeyDown}
-            placeholder="ENTER COMMAND…"
+            placeholder={
+              mode === "steer" && selectedIssue
+                ? `STEER ISSUE #${selectedIssue.number}…`
+                : `${modeLabel(mode)} PROMPT…`
+            }
             rows={1}
-            disabled={submitting}
+            disabled={submitting || (mode === "steer" && !steerLocked)}
             aria-label="Chat input"
             data-testid="chat-input"
             style={{
@@ -256,7 +354,9 @@ export function ChatPanel({
           />
           <button
             type="submit"
-            disabled={submitting || !input.trim()}
+            disabled={
+              submitting || !input.trim() || (mode === "steer" && !steerLocked)
+            }
             aria-label="Send message"
             data-testid="chat-submit"
             style={{
@@ -264,8 +364,18 @@ export function ChatPanel({
               background: "transparent",
               border: "1px solid var(--accent-cyan)",
               color: "var(--accent-cyan)",
-              cursor: submitting || !input.trim() ? "not-allowed" : "pointer",
-              opacity: submitting || !input.trim() ? 0.4 : 1,
+              cursor:
+                submitting ||
+                !input.trim() ||
+                (mode === "steer" && !steerLocked)
+                  ? "not-allowed"
+                  : "pointer",
+              opacity:
+                submitting ||
+                !input.trim() ||
+                (mode === "steer" && !steerLocked)
+                  ? 0.4
+                  : 1,
               display: "inline-flex",
               alignItems: "center",
             }}

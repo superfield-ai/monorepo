@@ -12,7 +12,7 @@
  *  2. send() sets streaming turn state
  *  3. SSE chunks accumulate in order
  *  4. event:done (stream closes) returns to idle
- *  5. Non-200 response sets error state
+ *  5. Non-200 response surfaces an error turn
  *  6. send() while streaming is a no-op
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -125,29 +125,21 @@ describe("ChatController", () => {
     expect(assistant?.streaming).toBe(false);
   });
 
-  it("sets turnState to error on a non-200 response", async () => {
-    // Scenario 5: non-200 sets error
+  it("surfaces a friendly error turn on a 401 response", async () => {
+    // Scenario 5: non-200 surfaces an error turn
     vi.stubGlobal("fetch", () =>
-      Promise.resolve(makeJsonResponse({ error: "bad" }, 500)),
+      Promise.resolve(makeJsonResponse({ error: "Unauthorized" }, 401)),
     );
-
-    // ChatController throws on non-ok (fetch resolves but body parsing may fail
-    // or the controller catches and sets error). The controller catches the thrown
-    // json parse error (500 response body may not have 'reply') and falls into the
-    // catch block that sets turnState = 'error'.
-    // Simulate the real error path: fetch resolves with a rejected body.
-    // Actually, the controller does NOT check res.ok — it reads res.headers.
-    // A 500 JSON response still has Content-Type application/json, so it
-    // will try res.json() and read body.reply. That's fine — no error thrown.
-    // The turnState will actually be 'idle' in that path.
-    //
-    // To reliably trigger 'error' we cause fetch itself to reject.
-    vi.restoreAllMocks();
-    vi.stubGlobal("fetch", () => Promise.reject(new Error("network failure")));
 
     await ctrl.sendMessage("Fail");
 
     expect(ctrl.getState().turnState).toBe("error");
+    const assistant = ctrl
+      .getState()
+      .messages.find((m) => m.role === "assistant");
+    expect(assistant?.content).toBe(
+      "(Error: Not authenticated — please log in first.)",
+    );
   });
 
   it("ignores send() while a turn is already in progress (no-op)", async () => {

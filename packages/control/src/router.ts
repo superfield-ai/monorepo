@@ -45,8 +45,8 @@
  *
  * When CONTROL_ASSETS_DIR is set, GET /* serves files from that directory. Any path
  * that does not map to a physical file falls back to index.html (SPA routing). When
- * CONTROL_ASSETS_DIR is unset, a minimal placeholder HTML is returned so the server
- * starts without the browser UI built.
+ * CONTROL_ASSETS_DIR is unset, a minimal placeholder HTML is returned so debug runs
+ * can start without the browser UI built.
  *
  * ## Integration points
  *
@@ -73,7 +73,7 @@ import { handleDemoRequest } from "./demo";
 import { handleTurnsRequest } from "./turns";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
-import { embeddedAssets } from "./embedded-assets.gen";
+
 import { handleRebuildStart, handleRebuildLog } from "./rebuild";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
@@ -144,6 +144,7 @@ export async function proxyRequest(
 export async function serveStaticAsset(
   pathname: string,
   assetsDir: string | undefined,
+  embeddedAssets?: ReadonlyMap<string, string>,
 ): Promise<Response> {
   // Dev override: serve directly from the filesystem when CONTROL_ASSETS_DIR is set.
   if (assetsDir) {
@@ -165,14 +166,15 @@ export async function serveStaticAsset(
   }
 
   // Production path: serve from assets embedded in the binary at compile time.
+  const map = embeddedAssets ?? new Map<string, string>();
   const key = pathname === "/" ? "/index.html" : pathname;
-  const embeddedPath = embeddedAssets.get(key);
+  const embeddedPath = map.get(key);
   if (embeddedPath) {
     return new Response(Bun.file(embeddedPath));
   }
 
   // SPA fallback for client-side routes not in the asset map.
-  const indexPath = embeddedAssets.get("/index.html");
+  const indexPath = map.get("/index.html");
   if (indexPath) {
     return new Response(Bun.file(indexPath));
   }
@@ -374,5 +376,5 @@ export async function route(
     config,
     `Serving static asset: ${pathname} from ${config.assetsDir ?? "(unset)"}`,
   );
-  return serveStaticAsset(pathname, config.assetsDir);
+  return serveStaticAsset(pathname, config.assetsDir, config.embeddedAssets);
 }

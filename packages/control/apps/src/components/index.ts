@@ -30,5 +30,6 @@ export { ConnectionBanner } from "./ConnectionBanner";
 export { DeployView } from "./DeployView";
 export { ViewportToolbar } from "./ViewportToolbar";
 export { RouteMap } from "./RouteMap";
+export { IssueRail } from "./IssueRail";
 export { DesignTokensPanel } from "./DesignTokensPanel";
 export { TurnTimeline } from "./TurnTimeline";

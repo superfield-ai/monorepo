@@ -4,7 +4,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --host",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && vite build && bun ../scripts/embed-assets.ts",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {

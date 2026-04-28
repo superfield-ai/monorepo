@@ -200,6 +200,7 @@ function SlotCard({ slot }: { slot: OrchestratorState["slots"][number] }) {
 interface OrchestratorViewProps {
   controller?: OrchestratorController;
   repo?: string;
+  manageLifecycle?: boolean;
 }
 
 const SECTION_STYLE: React.CSSProperties = {
@@ -236,6 +237,7 @@ const DANGER_BTN: React.CSSProperties = {
 export function OrchestratorView({
   controller: controllerProp,
   repo = "",
+  manageLifecycle = true,
 }: OrchestratorViewProps) {
   const controllerRef = useRef<OrchestratorController>(
     controllerProp ?? new OrchestratorController(),
@@ -249,12 +251,16 @@ export function OrchestratorView({
   useEffect(() => {
     const ctrl = controllerRef.current;
     const unsub = ctrl.subscribe(setState);
-    ctrl.start();
+    if (manageLifecycle) {
+      ctrl.start();
+    }
     return () => {
       unsub();
-      ctrl.stop();
+      if (manageLifecycle) {
+        ctrl.stop();
+      }
     };
-  }, []);
+  }, [manageLifecycle]);
 
   // Auto-scroll log pane.
   useEffect(() => {
