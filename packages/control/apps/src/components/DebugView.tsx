@@ -183,11 +183,16 @@ export function DebugView(): JSX.Element {
               fontFamily: "var(--font-mono)",
               fontSize: "var(--text-xs)",
               letterSpacing: "var(--ls-wider)",
-              textTransform: "uppercase",
               color: "var(--fg-3)",
             }}
           >
-            NO MATCHING EVENTS — APPLICATION CLEAN.
+            {state.entries.length === 0 ? (
+              "No events recorded yet. Errors, warnings, and debug events from the browser and server will appear here."
+            ) : (
+              <span style={{ textTransform: "uppercase" }}>
+                NO MATCHING EVENTS — APPLICATION CLEAN.
+              </span>
+            )}
           </div>
         ) : (
           <ul

@@ -59,7 +59,7 @@ export function DeployView({
     return unsub;
   }, [controller]);
 
-  const envs = state.envs.length > 0 ? state.envs : ["dev", "staging", "prod"];
+  const envs = state.envs;
   const checkNames = useMemo<string[]>(() => {
     const names = new Set<string>();
     for (const env of envs) {
@@ -120,13 +120,21 @@ export function DeployView({
         />
       ) : null}
 
-      <EnvSwitcher
-        envs={envs}
-        selected={state.selectedEnv}
-        onSelect={(e) => controller.selectEnv(e)}
-      />
+      {state.envsSource === "fallback" ? (
+        <EmptyState
+          title="No deployment environments configured"
+          hint="Set DEPLOY_HOST_DEV, DEPLOY_HOST_STAGING, or DEPLOY_HOST_PROD as GitHub Actions variables to enable the deploy matrix."
+          testId="deploy-unconfigured"
+        />
+      ) : envs.length > 0 ? (
+        <EnvSwitcher
+          envs={envs}
+          selected={state.selectedEnv}
+          onSelect={(e) => controller.selectEnv(e)}
+        />
+      ) : null}
 
-      <section data-testid="doctor-matrix" style={SECTION_STYLE}>
+      {envs.length > 0 && <section data-testid="doctor-matrix" style={SECTION_STYLE}>
         <div style={SECTION_HEADER_STYLE}>
           <span className="label">DOCTOR CHECKS</span>
         </div>
@@ -210,9 +218,9 @@ export function DeployView({
             </tbody>
           </table>
         )}
-      </section>
+      </section>}
 
-      <section style={SECTION_STYLE}>
+      {envs.length > 0 && <section style={SECTION_STYLE}>
         <div style={SECTION_HEADER_STYLE}>
           <span className="label">SECRETS PRESENCE</span>
         </div>
@@ -290,9 +298,9 @@ export function DeployView({
             </div>
           ))}
         </div>
-      </section>
+      </section>}
 
-      <section data-testid="ci-strip" style={SECTION_STYLE}>
+      {envs.length > 0 && <section data-testid="ci-strip" style={SECTION_STYLE}>
         <div style={SECTION_HEADER_STYLE}>
           <span className="label">LATEST CI RUNS</span>
         </div>
@@ -353,9 +361,9 @@ export function DeployView({
             );
           })}
         </div>
-      </section>
+      </section>}
 
-      <section
+      {envs.length > 0 && <section
         data-testid="rollback-section"
         style={{ ...SECTION_STYLE, padding: "var(--sp-3)" }}
       >
@@ -400,7 +408,7 @@ export function DeployView({
             {state.rolloutLog.join("\n")}
           </pre>
         ) : null}
-      </section>
+      </section>}
 
       {confirmOpen ? (
         <ConfirmModal

@@ -107,7 +107,7 @@ export function ControlPanel({
   }, [initialClusterStatus]);
 
   const [activeTab, setActiveTab] = useState<
-    "studio" | "orchestrator" | "preview" | "deploy" | "debug"
+    "studio" | "orchestrator" | "workshop" | "deploy" | "debug"
   >("studio");
 
   const [viewport, setViewportState] = useState<Viewport>(() => loadViewport());
@@ -158,17 +158,27 @@ export function ControlPanel({
           active={activeTab === "studio"}
           onClick={() => setActiveTab("studio")}
         />
+        {/* Visual separator between primary (Studio) and operational tabs */}
+        <div
+          style={{
+            width: "1px",
+            margin: "6px 4px",
+            background: "var(--border-subtle)",
+            alignSelf: "stretch",
+          }}
+          aria-hidden="true"
+        />
         <NavTab
           testid="tab-orchestrator"
-          label="Orchestrator"
+          label="Background Agent"
           active={activeTab === "orchestrator"}
           onClick={() => setActiveTab("orchestrator")}
         />
         <NavTab
           testid="tab-preview"
-          label="Preview"
-          active={activeTab === "preview"}
-          onClick={() => setActiveTab("preview")}
+          label="Workshop"
+          active={activeTab === "workshop"}
+          onClick={() => setActiveTab("workshop")}
         />
         <NavTab
           testid="tab-deploy"
@@ -222,11 +232,26 @@ export function ControlPanel({
         </ErrorBoundary>
       )}
 
-      {/* Preview tab */}
-      {activeTab === "preview" && (
-        <ErrorBoundary label="Preview">
-          <div className="flex-1 overflow-hidden bg-white">
-            <ComponentPreviewPanel />
+      {/* Workshop tab */}
+      {activeTab === "workshop" && (
+        <ErrorBoundary label="Workshop">
+          <div className="flex-1 overflow-hidden bg-white flex flex-col">
+            <div
+              style={{
+                padding: "var(--sp-2) var(--sp-4)",
+                borderBottom: "1px solid var(--border-subtle)",
+                background: "var(--bg-raised)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-xs)",
+                color: "var(--fg-3)",
+                letterSpacing: "var(--ls-wider)",
+              }}
+            >
+              Render individual components with fixture data — no running app required.
+            </div>
+            <div className="flex-1 overflow-hidden">
+              <ComponentPreviewPanel />
+            </div>
           </div>
         </ErrorBoundary>
       )}
