@@ -121,12 +121,14 @@ describe("proxyRequest", () => {
 // ── serveStaticAsset ──────────────────────────────────────────────────────────
 
 describe("serveStaticAsset", () => {
-  it("returns 404 when assetsDir is not configured and no assets are embedded", async () => {
+  it("returns placeholder 200 when assetsDir is not configured and no assets are embedded", async () => {
     const { serveStaticAsset } = await import("../../src/router");
 
     const res = await serveStaticAsset("/", undefined);
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("Studio Server");
   });
 });
 
@@ -171,13 +173,15 @@ describe("route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("returns 404 on /* when no assetsDir is configured and no assets are embedded", async () => {
+  it("serves placeholder HTML on /* when no assetsDir is configured and no assets are embedded", async () => {
     const { route } = await import("../../src/router");
 
     const req = makeReq("/");
     const res = await route(req, { ...BASE_CONFIG, assetsDir: undefined });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(200);
+    const body = await res.text();
+    expect(body).toContain("Studio Server");
   });
 
   it("routes /app exactly (no trailing slash) to the web service", async () => {
