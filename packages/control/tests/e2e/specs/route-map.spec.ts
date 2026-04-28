@@ -8,11 +8,6 @@
 
 import { test, expect } from "../fixtures";
 
-test.skip(
-  true,
-  "Skipped pending studio-server-stability investigation in CI fixture; covered by unit + component tests.",
-);
-
 test("clicking a route updates the iframe src", async ({ page }) => {
   await page.route("**/studio/demo/routes", async (route) => {
     await route.fulfill({

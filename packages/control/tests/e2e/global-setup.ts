@@ -11,6 +11,7 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { join, delimiter, resolve } from "node:path";
+import { createWriteStream } from "node:fs";
 import type { AddressInfo } from "node:net";
 
 const E2E_ROOT = resolve(import.meta.dirname);
@@ -82,9 +83,24 @@ export default async function globalSetup() {
     },
   );
 
-  studioProc.stderr?.on("data", (d: Buffer) => {
-    // Forward studio server stderr so test failures are diagnosable.
-    process.stderr.write(`[studio] ${d}`);
+  // Capture all studio output to a file so crashes are diagnosable from CI
+  // artifacts. The file path is stashed in globalThis so global-teardown can
+  // surface it on failure.
+  const studioLogPath = resolve(REPO_ROOT, "studio-e2e.log");
+  const studioLogStream = createWriteStream(studioLogPath, { flags: "w" });
+  const writeLog = (prefix: string, d: Buffer): void => {
+    const line = `${prefix} ${d}`;
+    studioLogStream.write(line);
+    // Also forward to the test runner so failures are visible inline.
+    process.stderr.write(line);
+  };
+  studioProc.stdout?.on("data", (d: Buffer) => writeLog("[studio out]", d));
+  studioProc.stderr?.on("data", (d: Buffer) => writeLog("[studio err]", d));
+  studioProc.on("exit", (code, signal) => {
+    studioLogStream.write(
+      `[studio exit] code=${String(code)} signal=${String(signal)}\n`,
+    );
+    studioLogStream.end();
   });
 
   await waitFor(`http://127.0.0.1:${CONTROL_PORT}/health`).catch(() => {
@@ -96,4 +112,5 @@ export default async function globalSetup() {
   (globalThis as Record<string, unknown>).__studioProc = studioProc;
   (globalThis as Record<string, unknown>).__apiServer = apiServer;
   (globalThis as Record<string, unknown>).__origPath = origPath;
+  (globalThis as Record<string, unknown>).__studioLogPath = studioLogPath;
 }

@@ -32,6 +32,10 @@ export default defineConfig({
         find: "@superfield/github",
         replacement: path.resolve(__dirname, "../github/index.ts"),
       },
+      {
+        find: "@superfield/control-core",
+        replacement: path.resolve(__dirname, "../control-core/index.ts"),
+      },
     ],
   },
   test: {

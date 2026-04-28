@@ -4,12 +4,19 @@ import { deployCommand, parseDeployArgs } from "../../commands/deploy.ts";
 const mocks = vi.hoisted(() => ({
   runDeployCommand: vi.fn(),
   runDemoTeardown: vi.fn(),
+  deployLocalCluster: vi.fn().mockResolvedValue(undefined),
+  teardownLocalCluster: vi.fn(),
 }));
 
 vi.mock("@superfield/core", () => ({
   runDeployCommand: mocks.runDeployCommand,
   runDemoTeardown: mocks.runDemoTeardown,
   DEFAULT_DEMO_PORT: 58080,
+}));
+
+vi.mock("@superfield/control-core", () => ({
+  deployLocalCluster: mocks.deployLocalCluster,
+  teardownLocalCluster: mocks.teardownLocalCluster,
 }));
 
 const NO_WAIT_DEPS = {
@@ -95,7 +102,7 @@ describe("deployCommand", () => {
 
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining(
-        "Usage: superfield deploy [--provision] [target]",
+        "Usage: superfield deploy [--path <dir>] [--provision] [target]",
       ),
     );
     expect(mockExit).toHaveBeenCalledWith(1);

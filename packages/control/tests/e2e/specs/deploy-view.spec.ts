@@ -8,10 +8,41 @@
 
 import { test, expect } from "../fixtures";
 
-test.skip(
-  true,
-  "Skipped pending studio-server-stability investigation in CI fixture; covered by unit + component tests.",
-);
+// Stub deploy endpoints so the matrix renders without slow external calls.
+// The UX layer shows an empty state when envsSource === "fallback" (no GitHub
+// credentials), so we always inject source:"github" here.
+test.beforeEach(async ({ page }) => {
+  await page.route("**/studio/deploy/envs", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ envs: ["dev"], source: "github" }),
+    }),
+  );
+  await page.route("**/studio/deploy/secrets/**", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ env: "dev", checks: [] }),
+    }),
+  );
+  await page.route("**/studio/deploy/ci", (route) =>
+    route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ runs: [], source: "stub" }),
+    }),
+  );
+  await page.route("**/studio/deploy/doctor/**", async (route) => {
+    const url = new URL(route.request().url());
+    const env = url.pathname.split("/").pop() ?? "dev";
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ env, checks: [], allOk: true }),
+    });
+  });
+});
 
 test("deploy tab renders matrix and CI strip", async ({ page }) => {
   await page.goto("/");
@@ -37,8 +68,7 @@ test("rollback confirm modal opens and cancels cleanly", async ({ page }) => {
 test("a forced doctor failure renders InlineError with retry", async ({
   page,
 }) => {
-  // Stub the doctor endpoint to return a failed check before navigating so the
-  // DeployView's first refreshAll() picks up the forced failure.
+  // Override the default doctor stub to return a failed check.
   await page.route("**/studio/deploy/doctor/**", async (route) => {
     const url = new URL(route.request().url());
     const env = url.pathname.split("/").pop() ?? "dev";

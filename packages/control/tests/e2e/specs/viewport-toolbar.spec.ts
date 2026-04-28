@@ -8,11 +8,6 @@
 
 import { test, expect } from "../fixtures";
 
-test.skip(
-  true,
-  "Skipped pending studio-server-stability investigation in CI fixture; covered by unit + component tests.",
-);
-
 test("clicking mobile/tablet/desktop sets the iframe width", async ({
   page,
 }) => {

@@ -8,12 +8,10 @@
  *    on healthy, overlay clears on restarting→healthy transition
  *  - ClusterStatusIndicator: green/healthy, amber-pulsing/restarting,
  *    red/degraded, gray/unknown
- *  - ControlPanel: renders ChatPanel and IframePanel, cluster status flows to
- *    both, layout at 1280x800
+ *  - ControlPanel: three-tab structure (Studio/Viewport/Product), FeaturePane
+ *    on Studio, IframePanel on Viewport, ProductTab on Product
  *
  * All tests inject mock controllers as props — no real fetch calls are made.
- * The mock objects satisfy the controller's subscribe/getState/action interface
- * without connecting to any network endpoint.
  *
  * Canonical docs: test-plan.md §Layer 2.
  */
@@ -38,11 +36,6 @@ afterEach(() => {
 // Mock controller factories
 // ---------------------------------------------------------------------------
 
-/**
- * Build a minimal ChatController double for ChatPanel tests.
- * The mock exposes subscribe/getState/sendMessage with no real fetch calls.
- * Returns both the mock and a setState helper to drive state transitions.
- */
 function makeChatControllerMock(
   initialState: Partial<ChatControllerState> = {},
 ): {
@@ -78,9 +71,9 @@ function makeChatControllerMock(
       ...currentState,
       messages: [...currentState.messages],
     })),
-    sendMessage: vi.fn(async (_text: string) => {
-      // No-op by default; tests assert it was called
-    }),
+    sendMessage: vi.fn(async (_text: string) => {}),
+    sendSteer: vi.fn(async (_context: string, _sessionId: string) => {}),
+    clearError: vi.fn(() => {}),
   } as unknown as ChatController;
 
   return { controller, setState };
@@ -98,7 +91,7 @@ test("chat panel renders empty state initially", async () => {
   await expect.element(screen.getByTestId("chat-panel")).toBeVisible();
   await expect.element(screen.getByTestId("chat-messages")).toBeVisible();
   await expect
-    .element(screen.getByText(/SEND A MESSAGE TO BEGIN/))
+    .element(screen.getByText(/SEND A FEATURE PROMPT TO BEGIN/))
     .toBeVisible();
 });
 
@@ -147,7 +140,7 @@ test("submit calls controller.sendMessage with the message text", async () => {
   await screen.getByTestId("chat-input").fill("Fix the bug");
   await screen.getByTestId("chat-submit").click();
 
-  expect(controller.sendMessage).toHaveBeenCalledWith("Fix the bug");
+  expect(controller.sendMessage).toHaveBeenCalledWith("Fix the bug", "design");
 });
 
 test("streaming chunks appear in message area as controller state updates", async () => {
@@ -159,7 +152,6 @@ test("streaming chunks appear in message area as controller state updates", asyn
     <ChatPanel controller={controller} clusterStatus="healthy" />,
   );
 
-  // Simulate controller emitting a streaming chunk
   setState({
     messages: [
       { id: "1", role: "user", content: "Hello", streaming: false },
@@ -258,14 +250,12 @@ test("studio panel renders FeaturePane on the Studio tab at 1280x800", async () 
       <ControlPanel
         appSrc="/app/"
         initialClusterStatus="healthy"
-        chatEndpoint="/studio/chat"
         hideConnectionBanner
       />
     </div>,
   );
   await expect.element(screen.getByTestId("studio-panel")).toBeVisible();
   await expect.element(screen.getByTestId("feature-pane")).toBeVisible();
-  // IframePanel is on the Viewport tab — not visible on load
   expect(
     screen.container.querySelector('[data-testid="iframe-panel"]'),
   ).toBeNull();
@@ -276,7 +266,6 @@ test("studio panel has three tabs: Studio, Viewport, Product", async () => {
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="healthy"
-      chatEndpoint="/studio/chat"
       hideConnectionBanner
     />,
   );
@@ -290,7 +279,6 @@ test("switching to Viewport tab shows IframePanel and hides FeaturePane", async 
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="restarting"
-      chatEndpoint="/studio/chat"
       hideConnectionBanner
     />,
   );
@@ -306,7 +294,6 @@ test("switching to Product tab shows product-tab panel", async () => {
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="healthy"
-      chatEndpoint="/studio/chat"
       hideConnectionBanner
     />,
   );
@@ -319,22 +306,19 @@ test("studio panel propagates status update to IframePanel on Viewport tab", asy
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="healthy"
-      chatEndpoint="/studio/chat"
       hideConnectionBanner
     />,
   );
 
-  // Switch to viewport tab first
-  const viewportTab = container.querySelector('[data-testid="tab-viewport"]') as HTMLElement;
+  const viewportTab = container.querySelector(
+    '[data-testid="tab-viewport"]',
+  ) as HTMLElement;
   viewportTab?.click();
 
-  // No overlay initially
-  // Re-render with restarting status
   rerender(
     <ControlPanel
       appSrc="/app/"
       initialClusterStatus="restarting"
-      chatEndpoint="/studio/chat"
       hideConnectionBanner
     />,
   );

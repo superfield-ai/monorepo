@@ -6,14 +6,19 @@ import {
   handleLoginLogout,
   makeDefaultLoginDeps,
 } from "@superfield/core";
+import {
+  deployLocalCluster,
+  teardownLocalCluster,
+} from "@superfield/control-core";
 
-const USAGE = `Usage: superfield deploy [--provision] [target]
+const USAGE = `Usage: superfield deploy [--path <dir>] [--provision] [target]
        superfield deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
        superfield deploy gcp --login [--client-id <id>]
        superfield deploy gcp --logout`;
 
 export interface ParsedDeployArgs {
   provisionOnly: boolean;
+  path?: string;
   target?: string;
   // GCP flags
   login?: boolean;
@@ -28,6 +33,7 @@ export interface ParsedDeployArgs {
 
 export function parseDeployArgs(args: string[]): ParsedDeployArgs {
   let provisionOnly = false;
+  let path: string | undefined;
   let target: string | undefined;
   let login: boolean | undefined;
   let logout: boolean | undefined;
@@ -47,6 +53,10 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
     }
     if (arg === "--provision") {
       provisionOnly = true;
+    } else if (arg === "--path") {
+      path = args[++i];
+    } else if (arg.startsWith("--path=")) {
+      path = arg.slice("--path=".length);
     } else if (arg === "--login") {
       login = true;
     } else if (arg === "--logout") {
@@ -83,6 +93,7 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
 
   return {
     provisionOnly,
+    path,
     target,
     login,
     logout,
@@ -119,8 +130,31 @@ export async function deployCommand(
     return;
   }
 
+  // When --path is provided, use the unified control-core deploy path which
+  // does not require per-app scripts/local-demo.ts.
+  if (parsed.path) {
+    const appRoot = parsed.path;
+    await deployLocalCluster({ appRoot, verbose: true });
+
+    if (parsed.provisionOnly) return;
+
+    console.log("\nDeploy complete. Press Ctrl+C to tear down.");
+    await (deps.waitForExit ?? waitForSigint)();
+
+    process.stdout.write("\n");
+    console.log("Tearing down cluster...");
+    process.once("SIGINT", () => process.exit(1));
+    try {
+      teardownLocalCluster({ appRoot });
+    } finally {
+      process.exit(0);
+    }
+    return;
+  }
+
   await runDeployCommand({
     provisionOnly: parsed.provisionOnly,
+    ...(parsed.path ? { demoRoot: parsed.path } : {}),
     ...(parsed.target ? { target: parsed.target } : {}),
   });
 
@@ -143,7 +177,7 @@ export async function deployCommand(
   process.once("SIGINT", () => process.exit(1));
 
   try {
-    await runDemoTeardown();
+    await runDemoTeardown({ demoRoot: parsed.path });
   } finally {
     process.exit(0);
   }

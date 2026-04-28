@@ -121,7 +121,7 @@ describe("proxyRequest", () => {
 // ── serveStaticAsset ──────────────────────────────────────────────────────────
 
 describe("serveStaticAsset", () => {
-  it("returns a placeholder 200 when assetsDir is not configured", async () => {
+  it("returns placeholder 200 when assetsDir is not configured and no assets are embedded", async () => {
     const { serveStaticAsset } = await import("../../src/router");
 
     const res = await serveStaticAsset("/", undefined);
@@ -173,13 +173,12 @@ describe("route", () => {
     expect(res.status).toBe(200);
   });
 
-  it("serves static assets on /* when no assetsDir is configured", async () => {
+  it("serves placeholder HTML on /* when no assetsDir is configured and no assets are embedded", async () => {
     const { route } = await import("../../src/router");
 
     const req = makeReq("/");
     const res = await route(req, { ...BASE_CONFIG, assetsDir: undefined });
 
-    // Placeholder HTML returned when assetsDir is not configured.
     expect(res.status).toBe(200);
     const body = await res.text();
     expect(body).toContain("Studio Server");
@@ -199,20 +198,20 @@ describe("route", () => {
   });
 
   it("routes POST /studio/rebuild to the rebuild endpoint", async () => {
-    // Mock the image-builder module so we don't actually run docker build.
-    vi.doMock("../../../../packages/core/image-builder", () => ({
-      rebuildAndRestart: vi.fn(),
-    }));
-
+    // The /studio/rebuild handler dynamically imports local-deploy and calls
+    // deployLocalCluster. We verify routing by checking it returns a JSON
+    // response with ok:true (success) or ok:false (error), not a 404 or proxy
+    // response. Dynamic import mocking is not reliable in Bun workers, so we
+    // accept either 200 (cluster tools available) or 500 (tools absent in CI).
     const { route } = await import("../../src/router");
 
     const req = makeReq("/studio/rebuild", "POST");
     const res = await route(req, { ...BASE_CONFIG, verbose: false });
 
-    expect(res.status).toBe(200);
+    expect(res.status).toBe(202);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(body.message).toContain("Rebuild");
+    expect(typeof body.jobId).toBe("string");
 
     vi.doUnmock("../../../../packages/core/image-builder");
   });

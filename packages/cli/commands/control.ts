@@ -1,13 +1,15 @@
+import { resolve } from "node:path";
+
 /**
  * @file control.ts
  *
  * `superfield control` — start the studio HTTP server.
  *
  * Usage:
- *   superfield control [--port <n>] [--repo <path>] [--api-url <url>]
+ *   superfield control [--port <n>] [--path <path>] [--api-url <url>]
  *
  *   --port      Studio server port. Default: 7000.
- *   --repo      Repo root (SUPERFIELD_REPO_ROOT). Default: cwd.
+ *   --path      Superfield project root (SUPERFIELD_REPO_ROOT). Default: cwd.
  *   --api-url   Superfield API base URL. Default: http://127.0.0.1:7837.
  *
  * Starts the studio HTTP server from @superfield/control. Does not start
@@ -15,7 +17,16 @@
  * dependency is the superfield API server at --api-url (used for agent turns
  * and steering). If the API is unreachable at startup a warning is logged and
  * the server starts anyway.
+ *
+ * The browser UI bundle is rebuilt before startup so `CONTROL_ASSETS_DIR`
+ * can remain optional in debug flows.
  */
+
+const CONTROL_WEB_APP_DIR = resolve(import.meta.dirname, "../../control/apps");
+const CONTROL_WEB_DIST_DIR = resolve(
+  import.meta.dirname,
+  "../../control/apps/dist",
+);
 
 export interface ControlCommandDeps {
   log?: (msg: string) => void;
@@ -23,19 +34,21 @@ export interface ControlCommandDeps {
   exit?: (code: number) => never;
   /** Injected fetch for health-check (tests). */
   _fetch?: typeof fetch;
+  /** Injected browser bundle builder (tests). */
+  _buildControlWeb?: () => Promise<void>;
   /** Injected control starter (tests — avoids dynamic import). */
   _startControl?: () => Promise<void>;
 }
 
 export function parseControlArgs(args: string[]): {
   port?: number;
-  repo?: string;
+  path?: string;
   apiUrl?: string;
   help: boolean;
   unknown: string[];
 } {
   let port: number | undefined;
-  let repo: string | undefined;
+  let path: string | undefined;
   let apiUrl: string | undefined;
   let help = false;
   const unknown: string[] = [];
@@ -54,10 +67,10 @@ export function parseControlArgs(args: string[]): {
       const parsed = parseInt(arg.slice("--port=".length), 10);
       if (Number.isNaN(parsed)) unknown.push(arg);
       else port = parsed;
-    } else if (arg === "--repo") {
-      repo = args[++i];
-    } else if (arg.startsWith("--repo=")) {
-      repo = arg.slice("--repo=".length);
+    } else if (arg === "--path") {
+      path = args[++i];
+    } else if (arg.startsWith("--path=")) {
+      path = arg.slice("--path=".length);
     } else if (arg === "--api-url") {
       apiUrl = args[++i];
     } else if (arg.startsWith("--api-url=")) {
@@ -67,22 +80,22 @@ export function parseControlArgs(args: string[]): {
     }
   }
 
-  return { port, repo, apiUrl, help, unknown };
+  return { port, path, apiUrl, help, unknown };
 }
 
 export function controlUsage(): string {
   return `
-superfield control [--port <n>] [--repo <path>] [--api-url <url>]
+superfield control [--port <n>] [--path <path>] [--api-url <url>]
 
   Start the studio HTTP server.
 
   --port      Studio server port. Default: 7000.
-  --repo      Repo root (SUPERFIELD_REPO_ROOT). Default: cwd.
+  --path      Superfield project root (SUPERFIELD_REPO_ROOT). Default: cwd.
   --api-url   Superfield dev-loop API base URL. Default: http://127.0.0.1:7837.
 
   The dev-loop API is used for agent turns and steering. If it is unreachable
   at startup, a warning is logged and the server starts anyway. Start a dev
-  loop separately with 'superfield start <repo>' or via the orchestrator view.
+  loop separately with 'superfield start <path>' or via the background agent view.
 `.trim();
 }
 
@@ -94,6 +107,21 @@ export async function controlCommand(
   const warn = deps.warn ?? ((m: string) => console.warn(m));
   const exit = deps.exit ?? ((code: number) => process.exit(code) as never);
   const _fetch = deps._fetch ?? globalThis.fetch;
+  const _buildControlWeb =
+    deps._buildControlWeb ??
+    (async () => {
+      const proc = Bun.spawn(["bun", "run", "build"], {
+        cwd: CONTROL_WEB_APP_DIR,
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        throw new Error(
+          `Browser UI build failed in ${CONTROL_WEB_APP_DIR} (exit ${exitCode})`,
+        );
+      }
+    });
   const _startControl =
     deps._startControl ??
     (async () => {
@@ -115,16 +143,23 @@ export async function controlCommand(
     return;
   }
 
+  await _buildControlWeb();
+
   // Apply CLI overrides to env vars before importing @superfield/control so
   // that loadConfig() picks them up.
   if (parsed.port !== undefined) {
     process.env.CONTROL_PORT = String(parsed.port);
   }
-  if (parsed.repo !== undefined) {
-    process.env.SUPERFIELD_REPO_ROOT = parsed.repo;
+  if (parsed.path !== undefined) {
+    process.env.SUPERFIELD_REPO_ROOT = parsed.path;
+    process.env.CONTROL_SOURCE_DIR = parsed.path;
   }
   if (parsed.apiUrl !== undefined) {
     process.env.SUPERFIELD_API_URL = parsed.apiUrl;
+  }
+
+  if (!process.env.CONTROL_ASSETS_DIR) {
+    process.env.CONTROL_ASSETS_DIR = CONTROL_WEB_DIST_DIR;
   }
 
   const apiUrl =

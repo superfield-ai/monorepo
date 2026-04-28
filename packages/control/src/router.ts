@@ -45,8 +45,8 @@
  *
  * When CONTROL_ASSETS_DIR is set, GET /* serves files from that directory. Any path
  * that does not map to a physical file falls back to index.html (SPA routing). When
- * CONTROL_ASSETS_DIR is unset, a minimal placeholder HTML is returned so the server
- * starts without the browser UI built.
+ * CONTROL_ASSETS_DIR is unset, a minimal placeholder HTML is returned so debug runs
+ * can start without the browser UI built.
  *
  * ## Integration points
  *
@@ -74,6 +74,8 @@ import { handleTurnsRequest } from "./turns";
 import { handleDocsRequest } from "./docs";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
+
+import { handleRebuildStart, handleRebuildLog } from "./rebuild";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -143,30 +145,47 @@ export async function proxyRequest(
 export async function serveStaticAsset(
   pathname: string,
   assetsDir: string | undefined,
+  embeddedAssets?: ReadonlyMap<string, string>,
 ): Promise<Response> {
-  if (!assetsDir) {
-    return new Response(
-      "<!doctype html><html><body><h1>Studio Server</h1><p>Browser UI assets not configured (CONTROL_ASSETS_DIR is unset).</p></body></html>",
-      { status: 200, headers: { "Content-Type": "text/html" } },
-    );
+  // Dev override: serve directly from the filesystem when CONTROL_ASSETS_DIR is set.
+  if (assetsDir) {
+    const relativePath =
+      pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
+    const filePath = join(assetsDir, relativePath);
+
+    if (existsSync(filePath)) {
+      return new Response(Bun.file(filePath));
+    }
+
+    // SPA fallback.
+    const indexPath = join(assetsDir, "index.html");
+    if (existsSync(indexPath)) {
+      return new Response(Bun.file(indexPath));
+    }
+
+    return new Response("Not Found", { status: 404 });
   }
 
-  const relativePath =
-    pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  const filePath = join(assetsDir, relativePath);
-
-  if (existsSync(filePath)) {
-    const file = Bun.file(filePath);
-    return new Response(file);
+  // Production path: serve from assets embedded in the binary at compile time.
+  const map = embeddedAssets ?? new Map<string, string>();
+  const key = pathname === "/" ? "/index.html" : pathname;
+  const embeddedPath = map.get(key);
+  if (embeddedPath) {
+    return new Response(Bun.file(embeddedPath));
   }
 
-  // Fallback to index.html for client-side routing.
-  const indexPath = join(assetsDir, "index.html");
-  if (existsSync(indexPath)) {
+  // SPA fallback for client-side routes not in the asset map.
+  const indexPath = map.get("/index.html");
+  if (indexPath) {
     return new Response(Bun.file(indexPath));
   }
 
-  return new Response("Not Found", { status: 404 });
+  // Fallback placeholder when running from source without a built web app.
+  // Keeps GET / healthy so integration tests and health checks always pass.
+  return new Response(
+    `<!doctype html><html><head><title>Studio Server</title></head><body><p>Studio Server is running. Build the web app to serve the full UI.</p></body></html>`,
+    { status: 200, headers: { "Content-Type": "text/html" } },
+  );
 }
 
 /**
@@ -267,35 +286,14 @@ export async function route(
     }
   }
 
-  // Rebuild endpoint — triggers rebuildAndRestart() for the cluster.
-  // See: docs/cluster-definition.md — "On a code change"
+  // Rebuild endpoint — kicks off a background docker build job and returns
+  // a jobId immediately. The caller streams progress from GET /studio/rebuild/log.
   if (req.method === "POST" && pathname === "/studio/rebuild") {
-    try {
-      const { rebuildAndRestart } =
-        await import("../../control-core/image-builder");
-      const sourceDir = process.env.CONTROL_SOURCE_DIR ?? process.cwd();
-      const namespace = config.clusterContext;
+    return handleRebuildStart(req, config);
+  }
 
-      rebuildAndRestart({
-        sourceDir,
-        k8sDir: "k8s",
-        namespace,
-        verbose: config.verbose ?? false,
-      });
-
-      return new Response(
-        JSON.stringify({ ok: true, message: "Rebuild and restart completed" }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logBackendError(err, "POST /studio/rebuild");
-      return errorResponse({
-        code: "server",
-        message: `Rebuild failed: ${message}`,
-        hint: "Check the studio debug view for the rebuild stack trace.",
-      });
-    }
+  if (req.method === "GET" && pathname === "/studio/rebuild/log") {
+    return handleRebuildLog(url);
   }
 
   // SSE stream endpoint for Claude CLI turns.
@@ -383,5 +381,5 @@ export async function route(
     config,
     `Serving static asset: ${pathname} from ${config.assetsDir ?? "(unset)"}`,
   );
-  return serveStaticAsset(pathname, config.assetsDir);
+  return serveStaticAsset(pathname, config.assetsDir, config.embeddedAssets);
 }

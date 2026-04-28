@@ -16,7 +16,7 @@ describe("runCLI help", () => {
     expect(String(log.mock.calls[0]?.[0])).toMatch(/Commit: .+/);
     expect(String(log.mock.calls[0]?.[0])).toMatch(/Build date: .+/);
     expect(String(log.mock.calls[0]?.[0])).toContain(
-      "deploy [--provision] [target]",
+      "deploy [--path <dir>] [--provision] [target]",
     );
   });
 });

@@ -97,6 +97,35 @@ export class ChatController {
 
       const contentType = res.headers.get("Content-Type") ?? "";
 
+      if (!res.ok) {
+        let message =
+          res.status === 401
+            ? "Not authenticated — please log in first."
+            : `Request failed with status ${res.status}`;
+
+        if (res.status !== 401 && contentType.includes("application/json")) {
+          try {
+            const body = (await res.json()) as {
+              error?: string;
+              message?: string;
+              detail?: string;
+            };
+            message = body.error ?? body.message ?? body.detail ?? message;
+          } catch {
+            // Keep the fallback message if the body cannot be parsed.
+          }
+        } else if (res.status !== 401 && contentType.length > 0) {
+          try {
+            const text = (await res.text()).trim();
+            if (text) message = text;
+          } catch {
+            // Keep the fallback message if the body cannot be read.
+          }
+        }
+
+        throw new Error(message);
+      }
+
       if (contentType.includes("text/event-stream")) {
         // Streaming SSE response — append chunks as they arrive.
         this.messages = [
@@ -133,6 +162,16 @@ export class ChatController {
         }
       } else {
         // JSON response (fixture server / non-streaming fallback)
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          const message =
+            res.status === 401
+              ? "Not authenticated — please log in first."
+              : (body.error ?? `Server error (HTTP ${res.status})`);
+          throw new Error(message);
+        }
         const body = (await res.json()) as { reply?: string };
         const reply = body.reply ?? "";
         this.messages = [
@@ -142,13 +181,14 @@ export class ChatController {
       }
 
       this.turnState = "idle";
-    } catch {
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
       this.messages = [
         ...this.messages,
         {
           id: assistantId,
           role: "assistant",
-          content: "(Error: could not reach studio server)",
+          content: `(Error: ${message})`,
         },
       ];
       this.turnState = "error";
@@ -223,6 +263,7 @@ interface WsFrame {
   sessionId?: string;
   filesChanged?: string[];
   message?: string;
+  mode?: string;
 }
 
 export class WsChatController {
@@ -321,7 +362,10 @@ export class WsChatController {
     this.notify();
   }
 
-  async sendMessage(text: string): Promise<void> {
+  async sendMessage(
+    text: string,
+    mode: "design" | "question" = "design",
+  ): Promise<void> {
     if (this.turnState !== "idle" || !text.trim()) return;
 
     if (this.connState === "idle" || this.connState === "failed") {
@@ -353,7 +397,46 @@ export class WsChatController {
     ];
     this.notify();
 
-    this.handle?.send(JSON.stringify({ type: "turn", message: text.trim() }));
+    this.handle?.send(
+      JSON.stringify({ type: "turn", message: text.trim(), mode }),
+    );
+  }
+
+  async sendSteer(context: string, sessionId: string): Promise<void> {
+    if (this.turnState !== "idle" || !context.trim() || !sessionId.trim()) {
+      return;
+    }
+
+    if (this.connState === "idle" || this.connState === "failed") {
+      this.connect();
+    }
+
+    if (this.connState !== "open") {
+      const opened = await this.waitForOpen();
+      if (!opened) {
+        this.turnState = "error";
+        this.notify();
+        return;
+      }
+    }
+
+    this.messages = [
+      ...this.messages,
+      {
+        id: crypto.randomUUID(),
+        role: "user",
+        content: context.trim(),
+      },
+    ];
+    this.notify();
+
+    this.handle?.send(
+      JSON.stringify({
+        type: "steer",
+        context: context.trim(),
+        sessionId: sessionId.trim(),
+      }),
+    );
   }
 
   clearError(): void {

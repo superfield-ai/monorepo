@@ -13,7 +13,7 @@ describe("parseControlArgs", () => {
     const r = parseControlArgs([]);
     expect(r).toEqual({
       port: undefined,
-      repo: undefined,
+      path: undefined,
       apiUrl: undefined,
       help: false,
       unknown: [],
@@ -42,14 +42,14 @@ describe("parseControlArgs", () => {
     expect(r.unknown).toContain("--port");
   });
 
-  it("--repo /path/to/repo → repo set", () => {
-    expect(parseControlArgs(["--repo", "/path/to/repo"]).repo).toBe(
-      "/path/to/repo",
+  it("--path /path/to/project → path set", () => {
+    expect(parseControlArgs(["--path", "/path/to/project"]).path).toBe(
+      "/path/to/project",
     );
   });
 
-  it("--repo=/path → repo set via equals syntax", () => {
-    expect(parseControlArgs(["--repo=/path"]).repo).toBe("/path");
+  it("--path=/path → path set via equals syntax", () => {
+    expect(parseControlArgs(["--path=/path"]).path).toBe("/path");
   });
 
   it("--api-url http://localhost:7837 → apiUrl set", () => {
@@ -79,14 +79,14 @@ describe("parseControlArgs", () => {
     const r = parseControlArgs([
       "--port",
       "8000",
-      "--repo",
+      "--path",
       "/app",
       "--api-url",
       "http://x:7837",
     ]);
     expect(r).toMatchObject({
       port: 8000,
-      repo: "/app",
+      path: "/app",
       apiUrl: "http://x:7837",
       help: false,
       unknown: [],
@@ -107,6 +107,7 @@ function makeDeps(
       ok: true,
       status: 200,
     } as Response) as unknown as typeof fetch,
+    _buildControlWeb: vi.fn().mockResolvedValue(undefined),
     _startControl: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -117,7 +118,9 @@ describe("controlCommand", () => {
     // Clean up any env vars set during tests.
     delete process.env.CONTROL_PORT;
     delete process.env.SUPERFIELD_REPO_ROOT;
+    delete process.env.CONTROL_SOURCE_DIR;
     delete process.env.SUPERFIELD_API_URL;
+    delete process.env.CONTROL_ASSETS_DIR;
   });
 
   it("--help → logs usage, does not call _startControl or _fetch", async () => {
@@ -126,6 +129,7 @@ describe("controlCommand", () => {
     expect(deps.log).toHaveBeenCalledWith(
       expect.stringContaining("superfield control"),
     );
+    expect(deps._buildControlWeb).not.toHaveBeenCalled();
     expect(deps._startControl).not.toHaveBeenCalled();
     expect(deps._fetch).not.toHaveBeenCalled();
   });
@@ -139,7 +143,7 @@ describe("controlCommand", () => {
     });
     await controlCommand(["--help"], deps);
     expect(output).toContain("--port");
-    expect(output).toContain("--repo");
+    expect(output).toContain("--path");
     expect(output).toContain("--api-url");
   });
 
@@ -150,30 +154,39 @@ describe("controlCommand", () => {
       expect.stringContaining("Unknown arguments"),
     );
     expect(deps.exit).toHaveBeenCalledWith(1);
+    expect(deps._buildControlWeb).not.toHaveBeenCalled();
     expect(deps._startControl).not.toHaveBeenCalled();
   });
 
   it("--port sets CONTROL_PORT env var", async () => {
     const deps = makeDeps();
     await controlCommand(["--port", "9000"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(process.env.CONTROL_PORT).toBe("9000");
+    expect(process.env.CONTROL_ASSETS_DIR).toContain(
+      "packages/control/apps/dist",
+    );
   });
 
-  it("--repo sets SUPERFIELD_REPO_ROOT env var", async () => {
+  it("--path sets SUPERFIELD_REPO_ROOT env var", async () => {
     const deps = makeDeps();
-    await controlCommand(["--repo", "/my/repo"], deps);
-    expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/repo");
+    await controlCommand(["--path", "/my/project"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/project");
+    expect(process.env.CONTROL_SOURCE_DIR).toBe("/my/project");
   });
 
   it("--api-url sets SUPERFIELD_API_URL env var", async () => {
     const deps = makeDeps();
     await controlCommand(["--api-url", "http://remote:7837"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(process.env.SUPERFIELD_API_URL).toBe("http://remote:7837");
   });
 
   it("health check 200 → no warning, calls _startControl", async () => {
     const deps = makeDeps();
     await controlCommand([], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps.warn).not.toHaveBeenCalled();
     expect(deps._startControl).toHaveBeenCalledOnce();
   });
@@ -186,6 +199,7 @@ describe("controlCommand", () => {
       } as Response) as unknown as typeof fetch,
     });
     await controlCommand([], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("503"));
     expect(deps._startControl).toHaveBeenCalledOnce();
   });
@@ -199,6 +213,7 @@ describe("controlCommand", () => {
         ) as unknown as typeof fetch,
     });
     await controlCommand([], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps.warn).toHaveBeenCalledWith(
       expect.stringContaining("unreachable"),
     );
@@ -208,6 +223,7 @@ describe("controlCommand", () => {
   it("health check uses --api-url value", async () => {
     const deps = makeDeps();
     await controlCommand(["--api-url", "http://custom:9999"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps._fetch).toHaveBeenCalledWith(
       expect.stringContaining("http://custom:9999"),
       expect.anything(),
@@ -221,7 +237,7 @@ describe("controlUsage", () => {
   it("includes all three flags", () => {
     const usage = controlUsage();
     expect(usage).toContain("--port");
-    expect(usage).toContain("--repo");
+    expect(usage).toContain("--path");
     expect(usage).toContain("--api-url");
   });
 
