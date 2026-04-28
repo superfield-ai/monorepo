@@ -176,7 +176,6 @@ describe("controlCommand", () => {
     expect(process.env.CONTROL_SOURCE_DIR).toBe("/my/project");
   });
 
-
   it("--api-url sets SUPERFIELD_API_URL env var", async () => {
     const deps = makeDeps();
     await controlCommand(["--api-url", "http://remote:7837"], deps);

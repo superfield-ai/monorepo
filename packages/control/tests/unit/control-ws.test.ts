@@ -252,7 +252,11 @@ describe("steer frame", () => {
     });
     await controlWsHandler.message(
       asServerWs(ws),
-      JSON.stringify({ type: "steer", context: "focus on auth", sessionId: "s1" }),
+      JSON.stringify({
+        type: "steer",
+        context: "focus on auth",
+        sessionId: "s1",
+      }),
     );
     const ack = ws.frames().find((f) => f.type === "steer-ack") as
       | { requestId: string }

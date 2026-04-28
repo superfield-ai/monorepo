@@ -25,7 +25,11 @@ export async function startControl(opts: StartControlOpts = {}): Promise<{
   config: ControlConfig;
 }> {
   const baseConfig = loadConfig();
-  const config: ControlConfig = { ...baseConfig, embeddedAssets, ...opts.config };
+  const config: ControlConfig = {
+    ...baseConfig,
+    embeddedAssets,
+    ...opts.config,
+  };
   const pm = new ProcessManager();
 
   vlog(
@@ -52,6 +56,7 @@ export async function startControl(opts: StartControlOpts = {}): Promise<{
   const server = Bun.serve<WsData>({
     hostname: "0.0.0.0",
     port: config.port,
+    idleTimeout: 0,
 
     async fetch(req: Request, srv): Promise<Response> {
       if (shuttingDown) {
