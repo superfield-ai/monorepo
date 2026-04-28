@@ -4,10 +4,10 @@
  * `superfield control` — start the studio HTTP server.
  *
  * Usage:
- *   superfield control [--port <n>] [--repo <path>] [--api-url <url>]
+ *   superfield control [--port <n>] [--path <dir>] [--api-url <url>]
  *
  *   --port      Studio server port. Default: 7000.
- *   --repo      Repo root (SUPERFIELD_REPO_ROOT). Default: cwd.
+ *   --path      App root directory (SUPERFIELD_REPO_ROOT). Default: cwd.
  *   --api-url   Superfield API base URL. Default: http://127.0.0.1:7837.
  *
  * Starts the studio HTTP server from @superfield/control. Does not start
@@ -29,13 +29,13 @@ export interface ControlCommandDeps {
 
 export function parseControlArgs(args: string[]): {
   port?: number;
-  repo?: string;
+  path?: string;
   apiUrl?: string;
   help: boolean;
   unknown: string[];
 } {
   let port: number | undefined;
-  let repo: string | undefined;
+  let path: string | undefined;
   let apiUrl: string | undefined;
   let help = false;
   const unknown: string[] = [];
@@ -54,10 +54,10 @@ export function parseControlArgs(args: string[]): {
       const parsed = parseInt(arg.slice("--port=".length), 10);
       if (Number.isNaN(parsed)) unknown.push(arg);
       else port = parsed;
-    } else if (arg === "--repo") {
-      repo = args[++i];
-    } else if (arg.startsWith("--repo=")) {
-      repo = arg.slice("--repo=".length);
+    } else if (arg === "--path") {
+      path = args[++i];
+    } else if (arg.startsWith("--path=")) {
+      path = arg.slice("--path=".length);
     } else if (arg === "--api-url") {
       apiUrl = args[++i];
     } else if (arg.startsWith("--api-url=")) {
@@ -67,22 +67,22 @@ export function parseControlArgs(args: string[]): {
     }
   }
 
-  return { port, repo, apiUrl, help, unknown };
+  return { port, path, apiUrl, help, unknown };
 }
 
 export function controlUsage(): string {
   return `
-superfield control [--port <n>] [--repo <path>] [--api-url <url>]
+superfield control [--port <n>] [--path <dir>] [--api-url <url>]
 
   Start the studio HTTP server.
 
   --port      Studio server port. Default: 7000.
-  --repo      Repo root (SUPERFIELD_REPO_ROOT). Default: cwd.
+  --path      App root directory (SUPERFIELD_REPO_ROOT). Default: cwd.
   --api-url   Superfield dev-loop API base URL. Default: http://127.0.0.1:7837.
 
   The dev-loop API is used for agent turns and steering. If it is unreachable
   at startup, a warning is logged and the server starts anyway. Start a dev
-  loop separately with 'superfield start <repo>' or via the orchestrator view.
+  loop separately with 'superfield start <path>' or via the background agent view.
 `.trim();
 }
 
@@ -120,8 +120,8 @@ export async function controlCommand(
   if (parsed.port !== undefined) {
     process.env.CONTROL_PORT = String(parsed.port);
   }
-  if (parsed.repo !== undefined) {
-    process.env.SUPERFIELD_REPO_ROOT = parsed.repo;
+  if (parsed.path !== undefined) {
+    process.env.SUPERFIELD_REPO_ROOT = parsed.path;
   }
   if (parsed.apiUrl !== undefined) {
     process.env.SUPERFIELD_API_URL = parsed.apiUrl;

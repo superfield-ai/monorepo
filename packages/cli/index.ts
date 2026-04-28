@@ -31,7 +31,7 @@ Build date: ${BUILD_DATE}
 Commands:
   github add    Authenticate and register a repository
   github forget Remove credentials and print app uninstall link
-  control [--port <n>] [--repo <path>] [--api-url <url>]
+  control [--port <n>] [--path <dir>] [--api-url <url>]
                 Start the studio HTTP server.
   start <path> [slotCount]
                 Begin all three loops (plan, dev, doc).
@@ -41,7 +41,7 @@ Commands:
          [--output-dir <dir>] [--no-issues]
                 Audit an app repo against expected blueprint capabilities.
                 Saves per-capability findings to JSON; opens issues for gaps.
-  deploy [--provision] [target]
+  deploy [--path <dir>] [--provision] [target]
                 Provision the demo target, then deploy it. Use --provision to run setup only.
   deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
                 Provision and/or deploy to GCP. --provision runs infra setup only.
