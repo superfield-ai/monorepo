@@ -57,12 +57,20 @@ function makeSseEvent(status: ClusterStatus): Uint8Array {
 }
 
 async function checkClusterStatus(context: string): Promise<ClusterStatus> {
-  const proc = Bun.spawn(
-    ["kubectl", "--context", context, "cluster-info", "--request-timeout=3s"],
-    { stdout: "ignore", stderr: "ignore" },
-  );
-  const exitCode = await proc.exited;
-  return exitCode === 0 ? "healthy" : "unknown";
+  // Bun.spawn throws synchronously (ENOENT) when kubectl is not on PATH —
+  // e.g. CI runners without the cluster CLI. Treat any spawn failure or
+  // non-zero exit as "unknown" so the SSE stream still emits a status event
+  // rather than terminating mid-stream.
+  try {
+    const proc = Bun.spawn(
+      ["kubectl", "--context", context, "cluster-info", "--request-timeout=3s"],
+      { stdout: "ignore", stderr: "ignore" },
+    );
+    const exitCode = await proc.exited;
+    return exitCode === 0 ? "healthy" : "unknown";
+  } catch {
+    return "unknown";
+  }
 }
 
 /**

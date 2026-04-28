@@ -2,9 +2,9 @@ node_modules/
 dist/
 *.js.map
 packages/cli/build-info.ts
-packages/studio/playwright-report/
-packages/studio/test-results/
-packages/studio/apps/dist/
+packages/control/playwright-report/
+packages/control/test-results/
+packages/control/apps/dist/
 
 # Demo seed output (scripts/seed-demo.ts)
 .studio/

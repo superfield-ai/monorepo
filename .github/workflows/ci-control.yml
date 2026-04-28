@@ -1,3 +1,36 @@
+# =============================================================================
+# Control CI
+# -----------------------------------------------------------------------------
+# Guards the Studio Control Plane on every PR that touches its source.
+#
+# Scope: code under `packages/control` (the studio HTTP server + React
+# webapp), `packages/control-core` (shared protocol + types consumed by both),
+# and `packages/db` (schema/migrations the control plane depends on).
+#
+# Three independent jobs run in parallel; all must pass:
+#
+#   1. control-build-typecheck — `tsc --noEmit` over packages/control plus the
+#      Vitest unit suite under packages/control/tests/unit. Catches type
+#      regressions and pure-logic bugs without spinning up a server.
+#
+#   2. control-browser-e2e — Builds the studio webapp, spawns the real
+#      `superfield control` CLI server pointed at an in-process
+#      superfield-API fixture, then drives it with Playwright/Chromium.
+#      Verifies the wire contract between the React app and the server: tab
+#      navigation, debug view, deploy view, error envelopes, a11y smoke,
+#      console cleanliness (see tests/e2e/fixtures.ts — no console.error /
+#      .warn is allowed). Does NOT require a real cluster (no k3d/kubectl);
+#      cluster-status SSE poller failures are expected and harmless.
+#
+#   3. control-integration — Runs every spec in
+#      packages/control/tests/integration/*.test.ts against a fresh Postgres
+#      service. Each spec is run in its own Vitest invocation so they can't
+#      pollute each other's process state (env vars, in-memory caches, etc.).
+#      Covers route-level behaviour that needs a real DB but not a browser.
+#
+# The template-side counterpart (pinned superfield-starter-ts repo, runs the
+# studio against a real template fixture) lives in ci-control-template.yml.
+# =============================================================================
 name: Control CI
 
 on:
@@ -20,6 +53,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # Job 1: Static checks + unit tests.
+  # Fast (~30s). Catches type errors and pure-logic regressions before we pay
+  # the cost of spinning up the webapp + server in the e2e job.
+  # ---------------------------------------------------------------------------
   control-build-typecheck:
     name: Control build + typecheck
     runs-on: [self-hosted, Linux, X64]
@@ -39,6 +77,19 @@ jobs:
       - name: Unit tests
         run: bun --bun vitest run packages/control/tests/unit
 
+  # ---------------------------------------------------------------------------
+  # Job 2: Browser E2E.
+  # Builds the studio React app, boots the real CLI control server against an
+  # in-process superfield API fixture, then runs Playwright/Chromium specs
+  # under packages/control/tests/e2e/specs.
+  #
+  # The auto-fixture in tests/e2e/fixtures.ts fails any spec that emits a
+  # console.error / .warn from app code — the operating principle is "no
+  # surprises in the browser console". When adding specs that simulate debug
+  # entries via the __superfieldDebug seam, the `source` field MUST be a
+  # valid `DebugSource` (console | window | fetch | eventsource | websocket |
+  # react | backend | breadcrumb) or DebugView will silently filter it out.
+  # ---------------------------------------------------------------------------
   control-browser-e2e:
     name: Control browser E2E tests
     runs-on: [self-hosted, Linux, X64]
@@ -62,6 +113,12 @@ jobs:
       - name: E2E tests (real control server + superfield fixture, no k3d)
         run: bun run test:e2e:control
 
+  # ---------------------------------------------------------------------------
+  # Job 3: Integration tests against a real Postgres.
+  # Each *.test.ts file is invoked in its own Vitest process so module-level
+  # state (env vars, singleton caches, timers) cannot leak between files. The
+  # superfield API runs in-process inside each test; no cluster is involved.
+  # ---------------------------------------------------------------------------
   control-integration:
     name: Control integration tests
     runs-on: [self-hosted, Linux, X64]
