@@ -153,7 +153,8 @@ test.describe("Deploy view failures", () => {
     await page.click('[data-testid="tab-deploy"]');
     const view = page.locator('[data-testid="deploy-view"]');
     await expect(view).toBeVisible();
-    await expect(view.getByRole("button", { name: /retry/i })).toBeVisible({
+    // The doctor InlineError uses retryLabel="Re-run" — match that or "Retry".
+    await expect(view.getByTestId("inline-error-retry")).toBeVisible({
       timeout: 10_000,
     });
   });
