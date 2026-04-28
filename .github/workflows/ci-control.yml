@@ -72,6 +72,8 @@ jobs:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
+      - name: Generate embedded-assets stub
+        run: bun packages/control/scripts/embed-assets.ts
       - name: Typecheck
         run: bunx tsc --noEmit --project packages/control/tsconfig.json
       - name: Unit tests
@@ -110,6 +112,8 @@ jobs:
         run: bun x playwright install chromium
       - name: Build control web app
         run: bun run build:control-web
+      - name: Generate embedded assets
+        run: bun packages/control/scripts/embed-assets.ts
       - name: E2E tests (real control server + superfield fixture, no k3d)
         run: bun run test:e2e:control
 
@@ -145,6 +149,8 @@ jobs:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
+      - name: Generate embedded-assets stub
+        run: bun packages/control/scripts/embed-assets.ts
       - name: Integration tests (in-process superfield fixture, no k3d)
         run: |
           for f in packages/control/tests/integration/*.test.ts; do
