@@ -88,7 +88,8 @@ export async function runPlanCoverage(
   const alreadyCovered: number[] = [];
 
   for (let index = 0; index < trackable.length; index++) {
-    const issue = trackable[index]!;
+    const issue = trackable[index];
+    if (!issue) continue;
     if (planContainsIssue(plan, issue.number)) {
       alreadyCovered.push(issue.number);
       continue;
@@ -480,10 +481,10 @@ function orderEntries(
   return entries.slice().sort((left, right) => {
     const leftPhaseRank =
       phaseIndex.get(left.phase) ??
-      plan.phases.length + newPhaseOrder.get(left.phase)!;
+      plan.phases.length + (newPhaseOrder.get(left.phase) ?? 0);
     const rightPhaseRank =
       phaseIndex.get(right.phase) ??
-      plan.phases.length + newPhaseOrder.get(right.phase)!;
+      plan.phases.length + (newPhaseOrder.get(right.phase) ?? 0);
     if (leftPhaseRank !== rightPhaseRank) {
       return leftPhaseRank - rightPhaseRank;
     }

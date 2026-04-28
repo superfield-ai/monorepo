@@ -28,25 +28,29 @@ export function parseRollbackEnvArgs(args: string[]): ParsedRollbackEnvArgs {
   const out: ParsedRollbackEnvArgs = { json: false, unknown: [] };
   let i = 0;
   while (i < args.length) {
-    const a = args[i]!;
-    const take = () => args[++i];
-    const eq = (prefix: string) =>
-      a.startsWith(prefix) ? a.slice(prefix.length) : null;
+    const a = args[i];
+    if (a === undefined) {
+      i++;
+      continue;
+    }
+    const take = (): string | undefined => args[++i];
+    const eq = (prefix: string): string | undefined =>
+      a.startsWith(prefix) ? a.slice(prefix.length) : undefined;
+    let v: string | undefined;
     if (a === "--repo") out.repo = take();
-    else if (eq("--repo=") !== null) out.repo = eq("--repo=")!;
+    else if ((v = eq("--repo=")) !== undefined) out.repo = v;
     else if (a === "--env") out.env = take();
-    else if (eq("--env=") !== null) out.env = eq("--env=")!;
+    else if ((v = eq("--env=")) !== undefined) out.env = v;
     else if (a === "--app-name") out.appName = take();
-    else if (eq("--app-name=") !== null) out.appName = eq("--app-name=")!;
+    else if ((v = eq("--app-name=")) !== undefined) out.appName = v;
     else if (a === "--workers") {
       out.workers = (take() ?? "").split(",").filter(Boolean);
-    } else if (eq("--workers=") !== null) {
-      out.workers = eq("--workers=")!.split(",").filter(Boolean);
+    } else if ((v = eq("--workers=")) !== undefined) {
+      out.workers = v.split(",").filter(Boolean);
     } else if (a === "--health-path") out.healthPath = take();
-    else if (eq("--health-path=") !== null) {
-      out.healthPath = eq("--health-path=")!;
-    } else if (a === "--namespace") out.namespace = take();
-    else if (eq("--namespace=") !== null) out.namespace = eq("--namespace=")!;
+    else if ((v = eq("--health-path=")) !== undefined) out.healthPath = v;
+    else if (a === "--namespace") out.namespace = take();
+    else if ((v = eq("--namespace=")) !== undefined) out.namespace = v;
     else if (a === "--json") out.json = true;
     else out.unknown.push(a);
     i++;
@@ -66,12 +70,13 @@ export async function rollbackEnvCommand(args: string[]): Promise<void> {
   if (!parsed.repo) missing.push("--repo");
   if (!parsed.env) missing.push("--env");
   if (!parsed.appName) missing.push("--app-name");
-  if (missing.length) {
+  if (missing.length || !parsed.repo || !parsed.env || !parsed.appName) {
     console.error(`error: missing required flag(s): ${missing.join(", ")}`);
     console.error(USAGE);
     process.exit(1);
     return;
   }
+  const { repo, env, appName } = parsed;
 
   const host = process.env.DEPLOY_HOST;
   if (!host) {
@@ -106,9 +111,9 @@ export async function rollbackEnvCommand(args: string[]): Promise<void> {
 
   try {
     const result = await rollbackEnv({
-      repo: parsed.repo!,
-      env: parsed.env!,
-      appName: parsed.appName!,
+      repo,
+      env,
+      appName,
       workerNames: parsed.workers ?? [],
       ...(parsed.healthPath ? { healthPath: parsed.healthPath } : {}),
       ...(parsed.namespace ? { appNamespace: parsed.namespace } : {}),

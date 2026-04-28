@@ -41,6 +41,10 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
   let i = 0;
   while (i < args.length) {
     const arg = args[i];
+    if (arg === undefined) {
+      i++;
+      continue;
+    }
     if (arg === "--provision") {
       provisionOnly = true;
     } else if (arg === "--login") {

@@ -74,7 +74,6 @@ function makeClient() {
     deleteIssueComment: vi.fn().mockResolvedValue(undefined),
     createIssueComment: vi.fn().mockResolvedValue({ id: 1 }),
     updateIssueComment: vi.fn().mockResolvedValue(undefined),
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
   } as any;
 }
 

@@ -107,8 +107,8 @@ export async function runLLMTask<T>(
 export function extractJson(text: string): string | null {
   // 1. Try code-fence extraction first — fences are the trusted path
   const fenceMatch = /```(?:json)?\s*\n([\s\S]*?)\n```/.exec(text);
-  if (fenceMatch) {
-    return fenceMatch[1]!.trim();
+  if (fenceMatch?.[1] !== undefined) {
+    return fenceMatch[1].trim();
   }
 
   // 2. Outside a fence, the trimmed text MUST be a single top-level object
@@ -122,7 +122,8 @@ export function extractJson(text: string): string | null {
   let endIdx = -1;
 
   for (let i = 0; i < trimmed.length; i++) {
-    const c = trimmed[i]!;
+    const c = trimmed[i];
+    if (c === undefined) break;
     if (escape) {
       escape = false;
       continue;

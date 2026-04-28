@@ -74,7 +74,8 @@ export function generateSessionId(randomBytes?: Uint8Array): string {
     randomBytes ?? crypto.getRandomValues(new Uint8Array(SESSION_ID_LENGTH));
   let sessionId = "";
   for (let i = 0; i < SESSION_ID_LENGTH; i += 1) {
-    sessionId += SESSION_ID_ALPHABET[bytes[i] % SESSION_ID_ALPHABET.length];
+    const b = bytes[i] ?? 0;
+    sessionId += SESSION_ID_ALPHABET[b % SESSION_ID_ALPHABET.length] ?? "";
   }
   return sessionId;
 }

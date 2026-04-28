@@ -42,6 +42,7 @@ export function parseControlArgs(args: string[]): {
 
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
+    if (arg === undefined) continue;
     if (arg === "--help" || arg === "-h") {
       help = true;
     } else if (arg === "--port") {

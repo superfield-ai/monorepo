@@ -119,12 +119,12 @@ describe("chat-metadata-sync integration — round-trip", () => {
     expect(readBack!.turns).toHaveLength(1);
 
     const turn = readBack!.turns[0];
-    expect(turn.index).toBe(0);
-    expect(turn.mode).toBe("design");
-    expect(turn.userMessage).toBe("Change the button color to blue");
-    expect(turn.assistantMessage).toBe("Done — I updated the button to blue.");
-    expect(turn.timestamp).toBe("2026-03-25T10:01:00.000Z");
-    expect(turn.checkpointCommit).toBe("def5678");
+    expect(turn!.index).toBe(0);
+    expect(turn!.mode).toBe("design");
+    expect(turn!.userMessage).toBe("Change the button color to blue");
+    expect(turn!.assistantMessage).toBe("Done — I updated the button to blue.");
+    expect(turn!.timestamp).toBe("2026-03-25T10:01:00.000Z");
+    expect(turn!.checkpointCommit).toBe("def5678");
   });
 });
 

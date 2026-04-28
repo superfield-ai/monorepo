@@ -301,7 +301,7 @@ describe("providers/gcp.provision", () => {
     expect(postPaths[3]).toContain(`/zones/${ZONE}/instances`);
 
     // Created VM body has labels and SSH key metadata
-    const vmCreate = posts[3].body as {
+    const vmCreate = posts[3]!.body as {
       labels?: Record<string, string>;
       machineType?: string;
       metadata?: { items?: Array<{ key: string; value: string }> };

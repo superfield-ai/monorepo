@@ -58,13 +58,13 @@ export function parsePlan(body: string): Plan {
   let currentPhase: PlanPhase | null = null;
 
   for (let i = 0; i < lines.length; i++) {
-    const line = lines[i]!;
+    const line = lines[i] ?? "";
 
     const phaseMatch = PHASE_HEADER_RE.exec(line);
     if (phaseMatch) {
       if (currentPhase) phases.push(currentPhase);
       currentPhase = {
-        name: phaseMatch[1]!,
+        name: phaseMatch[1] ?? "",
         goal: "",
         dependsOn: [],
         scoutGate: null,
@@ -76,19 +76,19 @@ export function parsePlan(body: string): Plan {
     if (currentPhase) {
       const goalMatch = GOAL_RE.exec(line);
       if (goalMatch) {
-        currentPhase.goal = goalMatch[1]!;
+        currentPhase.goal = goalMatch[1] ?? "";
         continue;
       }
       const depsMatch = DEPENDS_ON_RE.exec(line);
       if (depsMatch) {
-        const v = depsMatch[1]!.trim();
+        const v = (depsMatch[1] ?? "").trim();
         currentPhase.dependsOn =
           v && v !== "None." ? v.split(",").map((s) => s.trim()) : [];
         continue;
       }
       const scoutMatch = SCOUT_GATE_RE.exec(line);
-      if (scoutMatch) {
-        currentPhase.scoutGate = Number(scoutMatch[1]!);
+      if (scoutMatch && scoutMatch[1] !== undefined) {
+        currentPhase.scoutGate = Number(scoutMatch[1]);
         continue;
       }
     }
@@ -96,23 +96,21 @@ export function parsePlan(body: string): Plan {
     const entryMatch = ENTRY_RE.exec(line);
     if (entryMatch) {
       const nextLine = lines[i + 1] ?? "";
-      const metadataMatch =
-        SUPERFIELD_METADATA_RE.exec(nextLine) ??
-        SUPERFIELD_METADATA_RE.exec(nextLine);
-      if (!metadataMatch) {
+      const metadataMatch = SUPERFIELD_METADATA_RE.exec(nextLine);
+      if (!metadataMatch || metadataMatch[1] === undefined) {
         // Orphan entry line without metadata — skip silently
         continue;
       }
 
       let metadata: Partial<PlanIssueMetadata>;
       try {
-        metadata = JSON.parse(metadataMatch[1]!) as Partial<PlanIssueMetadata>;
+        metadata = JSON.parse(metadataMatch[1]) as Partial<PlanIssueMetadata>;
       } catch {
         continue;
       }
 
-      const issueNumber = Number(entryMatch[1]!);
-      const lineTitle = entryMatch[2]!.trim();
+      const issueNumber = Number(entryMatch[1] ?? "0");
+      const lineTitle = (entryMatch[2] ?? "").trim();
       const riskFromLine = Number(entryMatch[3] ?? 3);
       const normalized: PlanIssueMetadata = {
         number:
@@ -223,8 +221,10 @@ export function appendToPhase(
       issues: [entry],
     });
   } else {
-    const existing = phases[idx]!;
-    phases[idx] = { ...existing, issues: [...existing.issues, entry] };
+    const existing = phases[idx];
+    if (existing) {
+      phases[idx] = { ...existing, issues: [...existing.issues, entry] };
+    }
   }
   return { ...plan, phases };
 }
@@ -269,7 +269,9 @@ export function validatePlan(plan: Plan): ValidationError[] {
 
   const firstSeenAt = new Map<number, number>();
   for (let index = 0; index < flatIssues.length; index++) {
-    const { issue, phaseName } = flatIssues[index]!;
+    const entry = flatIssues[index];
+    if (!entry) continue;
+    const { issue, phaseName } = entry;
     if (firstSeenAt.has(issue.number)) {
       errors.push({
         message: `duplicate issue #${issue.number} appears multiple times in the Plan`,
@@ -282,7 +284,9 @@ export function validatePlan(plan: Plan): ValidationError[] {
   }
 
   for (let index = 0; index < flatIssues.length; index++) {
-    const { issue, phaseName } = flatIssues[index]!;
+    const entry = flatIssues[index];
+    if (!entry) continue;
+    const { issue, phaseName } = entry;
     for (const dependency of issue.dependencies) {
       const dependencyIndex = firstSeenAt.get(dependency);
       if (dependencyIndex === undefined || dependencyIndex >= index) {

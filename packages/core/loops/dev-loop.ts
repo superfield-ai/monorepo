@@ -1276,7 +1276,8 @@ export async function predecessorsClosed(
   const targetIndex = order.indexOf(issueNumber);
   if (targetIndex < 0) return false;
   for (let i = 0; i < targetIndex; i++) {
-    const prev = order[i]!;
+    const prev = order[i];
+    if (prev === undefined) continue;
     const issue = await client.getIssue(owner, repo, prev);
     if (issue.state !== "closed") return false;
   }
@@ -1317,7 +1318,8 @@ async function collectBlockingPredecessors(
   if (targetIndex < 0) return blocked;
 
   for (let i = 0; i < targetIndex; i++) {
-    const predecessor = order[i]!;
+    const predecessor = order[i];
+    if (predecessor === undefined) continue;
     const issue = await client.getIssue(owner, repo, predecessor);
     if (issue.state !== "closed") blocked.push(predecessor);
   }
@@ -1338,7 +1340,8 @@ async function collectMergeGateBlocked(
   if (selectedIndex < 0) return blocked;
 
   for (let i = selectedIndex + 1; i < order.length; i++) {
-    const issueNumber = order[i]!;
+    const issueNumber = order[i];
+    if (issueNumber === undefined) continue;
     const issue = await client.getIssue(owner, repo, issueNumber);
     if (issue.state !== "closed") {
       const eligible = await predecessorsClosed(

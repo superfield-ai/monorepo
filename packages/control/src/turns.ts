@@ -116,6 +116,6 @@ export function handleTurnsRequest(req: Request, url: URL): Response | null {
   const { pathname } = url;
   if (req.method !== "GET") return null;
   const m = pathname.match(/^\/studio\/turns\/([^/]+)$/);
-  if (!m) return null;
-  return handleTurns(decodeURIComponent(m[1]!));
+  if (!m?.[1]) return null;
+  return handleTurns(decodeURIComponent(m[1]));
 }

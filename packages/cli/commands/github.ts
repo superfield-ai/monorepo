@@ -144,14 +144,15 @@ export async function runGithubAdd(
 
   if (!user) {
     const result = await runDeviceFlow(clientId, deps);
-    user = result.user;
+    const newUser = result.user;
+    user = newUser;
     const existingIndex = config.users.findIndex(
-      (u) => u.handle === user!.handle,
+      (u) => u.handle === newUser.handle,
     );
     if (existingIndex >= 0) {
-      config.users[existingIndex] = user;
+      config.users[existingIndex] = newUser;
     } else {
-      config.users.push(user);
+      config.users.push(newUser);
     }
   }
 

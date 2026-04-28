@@ -6,6 +6,7 @@ import {
   type CandidateEntry,
 } from "./job-registry.ts";
 import { availabilityStore } from "./backend-availability.ts";
+import { AgentError } from "./errors.ts";
 export {
   type AgentBackend,
   type AgentMode,
@@ -93,23 +94,23 @@ export interface AgentResult {
   needsBlueprintEscalation?: boolean;
 }
 
-class AgentRateLimitError extends Error {
+class AgentRateLimitError extends AgentError {
   constructor(
     readonly backend: AgentBackend,
     message: string,
   ) {
-    super(message);
-    this.name = "AgentRateLimitError";
+    super(message, { context: { backend } });
   }
 }
 
-export class StaleSessionError extends Error {
+export class StaleSessionError extends AgentError {
   constructor(
     readonly sessionId: string,
     readonly backend: AgentBackend,
   ) {
-    super(`Session ${sessionId} not found on ${backend} — session is stale`);
-    this.name = "StaleSessionError";
+    super(`Session ${sessionId} not found on ${backend} — session is stale`, {
+      context: { sessionId, backend },
+    });
   }
 }
 
@@ -472,9 +473,9 @@ function parseClaudeRun(run: CliRunResult, logger: AgentLogger): AgentResult {
       /No conversation found with session ID:\s*([0-9a-f-]{36})/i.exec(
         run.stderr || run.stdout,
       );
-    if (staleMatch) {
+    if (staleMatch?.[1]) {
       logger.emit("warn", `stale session detected: ${staleMatch[0]}`);
-      throw new StaleSessionError(staleMatch[1]!, "claude");
+      throw new StaleSessionError(staleMatch[1], "claude");
     }
     const detail = toSingleLine((run.stderr || run.stdout).slice(0, 200));
     logger.emit(
@@ -771,8 +772,8 @@ function toSingleLine(value: string): string {
 
 function extractTaskType(prompt: string): string {
   const match = /^\s*##\s*Task:\s*(.+)\s*$/m.exec(prompt);
-  if (!match) return "unknown";
-  return match[1]!.trim().toLowerCase();
+  if (!match?.[1]) return "unknown";
+  return match[1].trim().toLowerCase();
 }
 
 function extractIssueNumber(prompt: string): number | null {

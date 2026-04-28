@@ -231,7 +231,7 @@ describe("vlog", () => {
     try {
       vlog({ verbose: true }, "hello", "world");
       expect(calls).toHaveLength(1);
-      const [prefix, ...rest] = calls[0];
+      const [prefix, ...rest] = calls[0]!;
       expect(String(prefix)).toMatch(/^\[studio:verbose/);
       expect(rest).toEqual(["hello", "world"]);
     } finally {

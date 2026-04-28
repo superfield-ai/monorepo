@@ -56,17 +56,17 @@ describe("startCommand", () => {
     await startCommand("/home/user/project", deps);
 
     const planArg = (deps.runPlanningLoop as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
+      .calls[0]![0];
     expect(planArg).toMatchObject({
       repositories: [expect.objectContaining({ owner: "org", repo: "myrepo" })],
     });
 
     const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
+      .calls[0]![0];
     expect(devArg).toMatchObject({ owner: "org", repo: "myrepo" });
 
     const docArg = (deps.runDocLoop as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
+      .calls[0]![0];
     expect(docArg).toMatchObject({ owner: "org", repo: "myrepo" });
   });
 
@@ -75,7 +75,7 @@ describe("startCommand", () => {
     await startCommand("/home/user/project", deps);
 
     const docArg = (deps.runDocLoop as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
+      .calls[0]![0];
     expect(docArg.repoPath).toBe("/home/user/project");
   });
 
@@ -84,7 +84,7 @@ describe("startCommand", () => {
     await startCommand("/home/user/project", deps);
 
     const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
+      .calls[0]![0];
     expect(devArg.slotCount).toBe(2);
   });
 
@@ -93,7 +93,7 @@ describe("startCommand", () => {
     await startCommand("/home/user/project", deps);
 
     const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
+      .calls[0]![0];
     expect(devArg.slotCount).toBe(2);
   });
 
@@ -107,7 +107,7 @@ describe("startCommand", () => {
         `[warn] Ignoring invalid SUPERFIELD_SLOT_COUNT=${JSON.stringify(raw)}; using the default slot count`,
       );
       const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
-        .calls[0][0];
+        .calls[0]![0];
       expect(devArg.slotCount).toBeUndefined();
     },
   );
@@ -117,7 +117,7 @@ describe("startCommand", () => {
     await startCommand("/home/user/project", deps);
 
     const devArg = (deps.runDevLoop as ReturnType<typeof vi.fn>).mock
-      .calls[0][0];
+      .calls[0]![0];
     expect(devArg.slotCount).toBeUndefined();
   });
 

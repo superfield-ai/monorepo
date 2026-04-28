@@ -30,7 +30,7 @@ const webRoot = dirname(fileURLToPath(import.meta.url));
 // Load @vitejs/plugin-react from apps/web/node_modules via createRequire so the
 // version compatible with vite@5 is used (apps/web has @vitejs/plugin-react@4.x).
 const require = createRequire(import.meta.url);
-// eslint-disable-next-line @typescript-eslint/no-var-requires
+
 const reactPluginModule = require("@vitejs/plugin-react") as
   | { default?: () => unknown }
   | (() => unknown);

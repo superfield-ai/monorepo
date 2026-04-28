@@ -211,7 +211,7 @@ export class WorktreeManager {
     const result: IssueWorktree[] = [];
     for (const entry of entries) {
       const match = /^issue-(\d+)-(.+)$/.exec(entry);
-      if (!match) continue;
+      if (!match || match[1] === undefined) continue;
       const dir = path.join(fullRepoDir, entry);
       let branch = "";
       try {
@@ -220,7 +220,7 @@ export class WorktreeManager {
         // Not a valid git repo — still count it as a worktree dir
       }
       result.push({
-        issueNumber: Number(match[1]!),
+        issueNumber: Number(match[1]),
         branch,
         path: dir,
       });

@@ -9,6 +9,7 @@ import {
   validatePlan,
   type Plan,
   type PlanIssueMetadata,
+  type PlanPhase,
 } from "../../plan.ts";
 
 const scoutEntry: PlanIssueMetadata = {
@@ -587,17 +588,128 @@ describe("validatePlan", () => {
     expect(validatePlan(plan)).toEqual([]);
   });
 
-  it.todo("detects duplicate issue numbers");
+  it("detects duplicate issue numbers", () => {
+    const dupeFeature: PlanIssueMetadata = {
+      ...featureEntry,
+      number: 196,
+      kind: "feature",
+    };
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "g.",
+          dependsOn: [],
+          scoutGate: 196,
+          issues: [scoutEntry, dupeFeature],
+        },
+      ],
+    };
+    const errors = validatePlan(plan);
+    expect(errors.some((e) => /duplicate issue #196/.test(e.message))).toBe(
+      true,
+    );
+  });
 
-  it.todo("detects a forward dependency edge (dep references a later issue)");
+  it("detects a forward dependency edge (dep references a later issue)", () => {
+    const forwardDepScout: PlanIssueMetadata = {
+      ...scoutEntry,
+      dependencies: [201], // depends on the *later* feature
+    };
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "g.",
+          dependsOn: [],
+          scoutGate: 196,
+          issues: [forwardDepScout, featureEntry],
+        },
+      ],
+    };
+    const errors = validatePlan(plan);
+    expect(
+      errors.some((e) =>
+        /#196 depends on #201, which does not appear earlier/.test(e.message),
+      ),
+    ).toBe(true);
+  });
 
-  it.todo("detects a phase with no dev-scout");
+  it("detects a phase with no dev-scout", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "g.",
+          dependsOn: [],
+          scoutGate: null,
+          issues: [featureEntry],
+        },
+      ],
+    };
+    const errors = validatePlan(plan);
+    expect(errors.some((e) => /has no dev-scout/.test(e.message))).toBe(true);
+  });
 
-  it.todo("detects a phase with scout not in first position");
+  it("detects a phase with scout not in first position", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "g.",
+          dependsOn: [],
+          scoutGate: 196,
+          issues: [featureEntry, scoutEntry],
+        },
+      ],
+    };
+    const errors = validatePlan(plan);
+    expect(errors.some((e) => /scout is not first/.test(e.message))).toBe(true);
+  });
 
-  it.todo("detects a cyclic phase dependency (A dependsOn B, B dependsOn A)");
+  it("detects a cyclic phase dependency (A dependsOn B, B dependsOn A)", () => {
+    const phaseA: PlanPhase = {
+      name: "A",
+      goal: "",
+      dependsOn: ["B"],
+      scoutGate: 196,
+      issues: [scoutEntry, featureEntry],
+    };
+    const phaseB: PlanPhase = {
+      name: "B",
+      goal: "",
+      dependsOn: ["A"],
+      scoutGate: 197,
+      issues: [
+        { ...scoutEntry, number: 197, dependencies: [] },
+        { ...featureEntry, number: 202, dependencies: [197] },
+      ],
+    };
+    const plan: Plan = { ciFailures: [], phases: [phaseA, phaseB] };
+    const errors = validatePlan(plan);
+    expect(
+      errors.some((e) => /phase dependency graph has a cycle/.test(e.message)),
+    ).toBe(true);
+  });
 
-  it.todo(
-    "returns errors that include the offending issue number or phase name",
-  );
+  it("returns errors that include the offending issue number or phase name", () => {
+    const plan: Plan = {
+      ciFailures: [],
+      phases: [
+        {
+          name: "P",
+          goal: "g.",
+          dependsOn: [],
+          scoutGate: null,
+          issues: [featureEntry], // missing scout — phase-scoped error
+        },
+      ],
+    };
+    const errors = validatePlan(plan);
+    expect(errors[0]?.phaseName).toBe("P");
+  });
 });

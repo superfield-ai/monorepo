@@ -4,7 +4,7 @@ import {
   _resetDevLoop,
   _setDevLoop,
 } from "../../src/orchestrator";
-import { DevLoopProcess } from "../../src/dev-loop-process";
+import { type DevLoopProcess } from "../../src/dev-loop-process";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 

@@ -62,7 +62,7 @@ export function discoverResources(k8sDir: string): K8sResource[] {
         // Top-level kind field (no leading whitespace).
         const kindMatch = line.match(/^kind:\s*(.+)/);
         if (kindMatch) {
-          kind = kindMatch[1].trim();
+          kind = (kindMatch[1] ?? "").trim();
           continue;
         }
 
@@ -76,7 +76,7 @@ export function discoverResources(k8sDir: string): K8sResource[] {
         if (inMetadata) {
           const nameMatch = line.match(/^\s+name:\s*(.+)/);
           if (nameMatch) {
-            name = nameMatch[1].trim();
+            name = (nameMatch[1] ?? "").trim();
             inMetadata = false;
             continue;
           }
@@ -116,22 +116,29 @@ export function discoverSecretRefs(k8sDir: string): SecretSpec[] {
     const lines = content.split("\n");
 
     for (let i = 0; i < lines.length; i++) {
-      if (!/secretKeyRef:/.test(lines[i])) continue;
+      const line = lines[i];
+      if (line === undefined || !/secretKeyRef:/.test(line)) continue;
 
       // Look ahead up to 5 lines for name: and key: fields.
-      let secretName: string | null = null;
-      let secretKey: string | null = null;
+      let secretName: string | undefined;
+      let secretKey: string | undefined;
 
       for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
-        const nameMatch = lines[j].match(/^\s+name:\s*(\S+)/);
-        const keyMatch = lines[j].match(/^\s+key:\s*(\S+)/);
-        if (nameMatch && !secretName) secretName = nameMatch[1];
-        if (keyMatch && !secretKey) secretKey = keyMatch[1];
+        const lookahead = lines[j];
+        if (lookahead === undefined) continue;
+        const nameMatch = lookahead.match(/^\s+name:\s*(\S+)/);
+        const keyMatch = lookahead.match(/^\s+key:\s*(\S+)/);
+        if (nameMatch?.[1] && !secretName) secretName = nameMatch[1];
+        if (keyMatch?.[1] && !secretKey) secretKey = keyMatch[1];
       }
 
       if (secretName && secretKey) {
-        if (!secretMap.has(secretName)) secretMap.set(secretName, new Set());
-        secretMap.get(secretName)!.add(secretKey);
+        let entry = secretMap.get(secretName);
+        if (!entry) {
+          entry = new Set();
+          secretMap.set(secretName, entry);
+        }
+        entry.add(secretKey);
       }
     }
   }
@@ -168,7 +175,7 @@ export function discoverServicePort(
         // Top-level kind field.
         const kindMatch = line.match(/^kind:\s*(.+)/);
         if (kindMatch) {
-          kind = kindMatch[1].trim();
+          kind = (kindMatch[1] ?? "").trim();
           inMetadata = false;
           inSpec = false;
           inPorts = false;
@@ -197,7 +204,7 @@ export function discoverServicePort(
 
         if (inMetadata) {
           const nameMatch = line.match(/^\s{2}name:\s*(.+)/);
-          if (nameMatch) name = nameMatch[1].trim();
+          if (nameMatch?.[1]) name = nameMatch[1].trim();
         }
 
         if (inSpec && kind === "Service" && name === serviceName) {
@@ -207,7 +214,7 @@ export function discoverServicePort(
           }
           if (inPorts) {
             const portMatch = line.match(/^\s+port:\s*(\d+)/);
-            if (portMatch) return parseInt(portMatch[1], 10);
+            if (portMatch?.[1]) return parseInt(portMatch[1], 10);
             // Another spec key at the ports level ends the section.
             if (/^\s{2}\w/.test(line)) inPorts = false;
           }
@@ -235,7 +242,7 @@ export function discoverImages(k8sDir: string): string[] {
       if (line.trimStart().startsWith("#")) continue;
       // Match `image: <ref>` with any leading whitespace (container spec).
       const match = line.match(/^\s+image:\s*(\S+)/);
-      if (match) images.add(match[1]);
+      if (match?.[1]) images.add(match[1]);
     }
   }
 

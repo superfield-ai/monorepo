@@ -64,7 +64,7 @@ async function register(
 function parseAuthCookie(setCookie: string | null): string | null {
   if (!setCookie) return null;
   const match = /superfield_auth=([^;]+)/.exec(setCookie);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 // Requires SUPERFIELD_REPO_ROOT to point at a real template checkout. The

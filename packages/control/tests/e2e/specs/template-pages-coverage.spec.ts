@@ -38,7 +38,7 @@ function freshUsername(suffix: string): string {
 function parseAuthCookie(setCookie: string | null): string | null {
   if (!setCookie) return null;
   const match = /superfield_auth=([^;]+)/.exec(setCookie);
-  return match ? match[1] : null;
+  return match?.[1] ?? null;
 }
 
 async function authenticate(

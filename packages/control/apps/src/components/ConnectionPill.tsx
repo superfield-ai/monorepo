@@ -14,7 +14,7 @@
 
 import React, { useEffect, useState } from "react";
 import {
-  WsChatController,
+  type WsChatController,
   type WsChatControllerState,
 } from "../controllers/ChatController";
 

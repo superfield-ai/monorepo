@@ -22,7 +22,8 @@ export function parseSyncArgs(args: string[]): ParsedSyncArgs {
   const unknown: string[] = [];
 
   for (let i = 0; i < args.length; i++) {
-    const arg = args[i]!;
+    const arg = args[i];
+    if (arg === undefined) continue;
     const [k, vInline] = splitFlag(arg);
     const take = (): string | undefined =>
       vInline !== undefined ? vInline : args[++i];

@@ -27,7 +27,6 @@ vi.mock("child_process", async (importOriginal) => {
 });
 
 describe("checkPrerequisites", () => {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let processExitSpy: ReturnType<typeof vi.spyOn<any, any>>;
   let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
 
@@ -143,7 +142,7 @@ describe("checkPrerequisites", () => {
       _cmd: string,
       args: string[],
     ) => {
-      toolsChecked.push((args as string[])[0]);
+      toolsChecked.push((args as string[])[0]!);
       return {
         status: 0,
         stdout: Buffer.from("/usr/bin/tool"),

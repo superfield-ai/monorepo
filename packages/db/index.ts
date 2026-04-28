@@ -22,7 +22,7 @@ export interface MigrateOptions {
  * error. If the studio server is extended with persistent storage, implement
  * schema migrations here.
  */
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 export async function migrate(_opts?: MigrateOptions): Promise<void> {
   // No-op: studio server uses in-memory state; no schema migration required.
 }

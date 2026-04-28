@@ -101,7 +101,7 @@ async function handleEnvs(): Promise<Response> {
     const envs = new Set<string>();
     for (const v of data?.variables ?? []) {
       const m = v.name.match(/^DEPLOY_HOST_(.+)$/);
-      if (m) envs.add(m[1]!.toLowerCase());
+      if (m?.[1]) envs.add(m[1].toLowerCase());
     }
     if (envs.size === 0) {
       return jsonOk({ envs: [...DEFAULT_ENVS], source: "fallback" });
@@ -223,9 +223,9 @@ async function handleCi(): Promise<Response> {
     for (const r of data?.workflow_runs ?? []) {
       const path = r.path ?? "";
       const m = path.match(/deploy-([a-z0-9_-]+)\.ya?ml/i);
-      if (!m) continue;
+      if (!m?.[1]) continue;
       runs.push({
-        env: m[1]!.toLowerCase(),
+        env: m[1].toLowerCase(),
         workflow: r.name ?? path,
         status: r.status ?? "unknown",
         conclusion: r.conclusion ?? null,
@@ -432,18 +432,18 @@ export async function handleDeployRequest(
   }
 
   const doctorMatch = pathname.match(/^\/studio\/deploy\/doctor\/([^/]+)$/);
-  if (method === "GET" && doctorMatch) {
-    return handleDoctor(decodeURIComponent(doctorMatch[1]!));
+  if (method === "GET" && doctorMatch?.[1]) {
+    return handleDoctor(decodeURIComponent(doctorMatch[1]));
   }
 
   const secretsMatch = pathname.match(/^\/studio\/deploy\/secrets\/([^/]+)$/);
-  if (method === "GET" && secretsMatch) {
-    return handleSecrets(decodeURIComponent(secretsMatch[1]!));
+  if (method === "GET" && secretsMatch?.[1]) {
+    return handleSecrets(decodeURIComponent(secretsMatch[1]));
   }
 
   const rollbackMatch = pathname.match(/^\/studio\/deploy\/rollback\/([^/]+)$/);
-  if (method === "POST" && rollbackMatch) {
-    return handleRollback(req, decodeURIComponent(rollbackMatch[1]!));
+  if (method === "POST" && rollbackMatch?.[1]) {
+    return handleRollback(req, decodeURIComponent(rollbackMatch[1]));
   }
 
   return errorResponse({

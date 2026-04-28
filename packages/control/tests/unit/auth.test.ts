@@ -270,7 +270,7 @@ describe("getAuthenticatedUser", () => {
     const regRes = await handleAuthRequest(regReq, new URL(regReq.url));
     const cookie = regRes!.headers.get("Set-Cookie")!;
     // Extract token value: "superfield_auth=<token>; ..."
-    const token = cookie.split(";")[0].replace("superfield_auth=", "");
+    const token = cookie.split(";")[0]!.replace("superfield_auth=", "");
 
     const req = new Request("http://localhost:7000/studio/status", {
       headers: { Cookie: `superfield_auth=${token}` },

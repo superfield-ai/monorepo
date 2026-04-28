@@ -18,7 +18,7 @@ const NO_WAIT_DEPS = {
 };
 
 // process.exit is called after teardown in the full deploy path
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+
 let mockExit: any;
 beforeEach(() => {
   mockExit = vi

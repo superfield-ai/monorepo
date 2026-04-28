@@ -36,26 +36,30 @@ export function parseExportDbArgs(args: string[]): ParsedExportDbArgs {
   const out: ParsedExportDbArgs = { unknown: [] };
   let i = 0;
   while (i < args.length) {
-    const a = args[i]!;
-    const take = () => args[++i];
-    const eq = (prefix: string) =>
-      a.startsWith(prefix) ? a.slice(prefix.length) : null;
+    const a = args[i];
+    if (a === undefined) {
+      i++;
+      continue;
+    }
+    const take = (): string | undefined => args[++i];
+    const eq = (prefix: string): string | undefined =>
+      a.startsWith(prefix) ? a.slice(prefix.length) : undefined;
+    let v: string | undefined;
 
     if (a === "--env") out.env = take();
-    else if (eq("--env=") !== null) out.env = eq("--env=")!;
+    else if ((v = eq("--env=")) !== undefined) out.env = v;
     else if (a === "--out") out.out = take();
-    else if (eq("--out=") !== null) out.out = eq("--out=")!;
+    else if ((v = eq("--out=")) !== undefined) out.out = v;
     else if (a === "--repo") out.repo = take();
-    else if (eq("--repo=") !== null) out.repo = eq("--repo=")!;
+    else if ((v = eq("--repo=")) !== undefined) out.repo = v;
     else if (a === "--provider") {
-      const v = take();
-      if (v && VALID_PROVIDERS.includes(v as DbProvider)) {
-        out.provider = v as DbProvider;
+      const p = take();
+      if (p && VALID_PROVIDERS.includes(p as DbProvider)) {
+        out.provider = p as DbProvider;
       } else {
-        out.unknown.push(`--provider=${v ?? ""}`);
+        out.unknown.push(`--provider=${p ?? ""}`);
       }
-    } else if (eq("--provider=") !== null) {
-      const v = eq("--provider=")!;
+    } else if ((v = eq("--provider=")) !== undefined) {
       if (VALID_PROVIDERS.includes(v as DbProvider)) {
         out.provider = v as DbProvider;
       } else {
@@ -81,7 +85,7 @@ export async function exportDbCommand(args: string[]): Promise<void> {
   const missing: string[] = [];
   if (!parsed.env) missing.push("--env");
   if (!parsed.out) missing.push("--out");
-  if (missing.length) {
+  if (missing.length || !parsed.env || !parsed.out) {
     console.error(`error: missing required flag(s): ${missing.join(", ")}`);
     console.error(USAGE);
     process.exit(1);
@@ -94,8 +98,8 @@ export async function exportDbCommand(args: string[]): Promise<void> {
   try {
     const result = await exportDb({
       repo,
-      env: parsed.env!,
-      out: parsed.out!,
+      env: parsed.env,
+      out: parsed.out,
       provider: parsed.provider,
       deps: {
         onLog: (line: string) => process.stdout.write(line + "\n"),

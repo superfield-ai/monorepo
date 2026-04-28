@@ -31,27 +31,31 @@ export function parseAuditArgs(args: string[]): ParsedAuditArgs {
 
   let i = 0;
   while (i < args.length) {
-    const a = args[i]!;
+    const a = args[i];
+    if (a === undefined) {
+      i++;
+      continue;
+    }
     const take = (): string | undefined => args[++i];
-    const eq = (prefix: string): string | null =>
-      a.startsWith(prefix) ? a.slice(prefix.length) : null;
+    const eq = (prefix: string): string | undefined =>
+      a.startsWith(prefix) ? a.slice(prefix.length) : undefined;
+    let v: string | undefined;
 
     if (a === "--path") out.repoPath = take();
-    else if (eq("--path=") !== null) out.repoPath = eq("--path=")!;
+    else if ((v = eq("--path=")) !== undefined) out.repoPath = v;
     else if (a === "--repo") out.repo = take();
-    else if (eq("--repo=") !== null) out.repo = eq("--repo=")!;
+    else if ((v = eq("--repo=")) !== undefined) out.repo = v;
     else if (a === "--output-dir") out.outputDir = take();
-    else if (eq("--output-dir=") !== null) out.outputDir = eq("--output-dir=")!;
+    else if ((v = eq("--output-dir=")) !== undefined) out.outputDir = v;
     else if (a === "--capabilities") {
-      const v = take();
-      out.capabilities = v
-        ? v
+      const cv = take();
+      out.capabilities = cv
+        ? cv
             .split(",")
             .map((s) => s.trim())
             .filter(Boolean)
         : [];
-    } else if (eq("--capabilities=") !== null) {
-      const v = eq("--capabilities=")!;
+    } else if ((v = eq("--capabilities=")) !== undefined) {
       out.capabilities = v
         .split(",")
         .map((s) => s.trim())

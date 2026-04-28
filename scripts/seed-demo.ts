@@ -130,31 +130,37 @@ interface DemoIssue {
   readonly turnCount: number;
 }
 
+const ISSUE_CHECKOUT: DemoIssue = {
+  number: 301,
+  title: "Add discount-code input on /checkout",
+  state: "in_progress",
+  slot: 1,
+  sessionId: "0196f4a2b3c1-a3f9d2e4b8c1f0a7",
+  turnCount: 4,
+};
+
+const ISSUE_DASHBOARD: DemoIssue = {
+  number: 302,
+  title: "Tighten KPI card a11y labels on /dashboard",
+  state: "in_progress",
+  slot: 2,
+  sessionId: "0196f4a2b3c2-b1c8e7f3a9d4e2f8",
+  turnCount: 2,
+};
+
+const ISSUE_SETTINGS: DemoIssue = {
+  number: 297,
+  title: "Refactor settings form to use react-hook-form",
+  state: "merged",
+  slot: 0,
+  sessionId: "0196f49d12a0-c4e7d3a1b2f5e8c1",
+  turnCount: 7,
+};
+
 const ISSUES: readonly DemoIssue[] = [
-  {
-    number: 301,
-    title: "Add discount-code input on /checkout",
-    state: "in_progress",
-    slot: 1,
-    sessionId: "0196f4a2b3c1-a3f9d2e4b8c1f0a7",
-    turnCount: 4,
-  },
-  {
-    number: 302,
-    title: "Tighten KPI card a11y labels on /dashboard",
-    state: "in_progress",
-    slot: 2,
-    sessionId: "0196f4a2b3c2-b1c8e7f3a9d4e2f8",
-    turnCount: 2,
-  },
-  {
-    number: 297,
-    title: "Refactor settings form to use react-hook-form",
-    state: "merged",
-    slot: 0,
-    sessionId: "0196f49d12a0-c4e7d3a1b2f5e8c1",
-    turnCount: 7,
-  },
+  ISSUE_CHECKOUT,
+  ISSUE_DASHBOARD,
+  ISSUE_SETTINGS,
 ];
 
 interface TurnLogEntry {
@@ -180,8 +186,8 @@ function makeTurns(now: Date): TurnLogEntry[] {
       filesChanged: ["app/checkout/page.tsx", "app/checkout/discount.tsx"],
       servicesRestarted: ["web"],
       restartDurationMs: 4200,
-      sessionId: ISSUES[0].sessionId,
-      issueNumber: ISSUES[0].number,
+      sessionId: ISSUE_CHECKOUT.sessionId,
+      issueNumber: ISSUE_CHECKOUT.number,
     },
     {
       timestamp: minutesAgo(72),
@@ -190,8 +196,8 @@ function makeTurns(now: Date): TurnLogEntry[] {
       filesChanged: ["app/checkout/discount.tsx"],
       servicesRestarted: ["web"],
       restartDurationMs: 3950,
-      sessionId: ISSUES[0].sessionId,
-      issueNumber: ISSUES[0].number,
+      sessionId: ISSUE_CHECKOUT.sessionId,
+      issueNumber: ISSUE_CHECKOUT.number,
     },
     {
       timestamp: minutesAgo(58),
@@ -200,8 +206,8 @@ function makeTurns(now: Date): TurnLogEntry[] {
       filesChanged: ["app/checkout/discount.tsx"],
       servicesRestarted: ["web"],
       restartDurationMs: 3800,
-      sessionId: ISSUES[0].sessionId,
-      issueNumber: ISSUES[0].number,
+      sessionId: ISSUE_CHECKOUT.sessionId,
+      issueNumber: ISSUE_CHECKOUT.number,
     },
     {
       timestamp: minutesAgo(40),
@@ -210,8 +216,8 @@ function makeTurns(now: Date): TurnLogEntry[] {
       filesChanged: ["app/dashboard/kpi-card.tsx"],
       servicesRestarted: ["web"],
       restartDurationMs: 4100,
-      sessionId: ISSUES[1].sessionId,
-      issueNumber: ISSUES[1].number,
+      sessionId: ISSUE_DASHBOARD.sessionId,
+      issueNumber: ISSUE_DASHBOARD.number,
     },
     {
       timestamp: minutesAgo(22),
@@ -220,8 +226,8 @@ function makeTurns(now: Date): TurnLogEntry[] {
       filesChanged: ["app/dashboard/kpi-card.tsx", "app/styles/tokens.css"],
       servicesRestarted: ["web"],
       restartDurationMs: 4350,
-      sessionId: ISSUES[1].sessionId,
-      issueNumber: ISSUES[1].number,
+      sessionId: ISSUE_DASHBOARD.sessionId,
+      issueNumber: ISSUE_DASHBOARD.number,
     },
     {
       timestamp: minutesAgo(8),
@@ -230,8 +236,8 @@ function makeTurns(now: Date): TurnLogEntry[] {
       filesChanged: [],
       servicesRestarted: [],
       restartDurationMs: 0,
-      sessionId: ISSUES[0].sessionId,
-      issueNumber: ISSUES[0].number,
+      sessionId: ISSUE_CHECKOUT.sessionId,
+      issueNumber: ISSUE_CHECKOUT.number,
     },
   ];
 }

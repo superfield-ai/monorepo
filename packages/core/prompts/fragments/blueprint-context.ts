@@ -78,7 +78,8 @@ export function buildBlueprintContextFragment(opts: {
     Buffer.byteLength(rendered, "utf8") > budgetBytes &&
     di < dropOrder.length
   ) {
-    dropped.add(dropOrder[di]!);
+    const next = dropOrder[di];
+    if (next !== undefined) dropped.add(next);
     di++;
     rendered = render(entries, dropped, ruleTypes, dropped.size, header);
   }

@@ -422,7 +422,8 @@ async function ghClientFor(args: RecorderArgs) {
 function parseArgs(argv: string[]): RecorderArgs & { list: boolean } {
   const args: RecorderArgs & { list: boolean } = { task: "", list: false };
   for (let i = 0; i < argv.length; i++) {
-    const a = argv[i]!;
+    const a = argv[i];
+    if (a === undefined) continue;
     if (a === "--list") {
       args.list = true;
     } else if (a === "--repo") {
@@ -493,9 +494,7 @@ async function main(): Promise<void> {
   console.log(`  Cost: $${(result.costUsd ?? 0).toFixed(4)}`);
 }
 
-if (
-  process.argv[1] &&
-  import.meta.url.endsWith(process.argv[1].split("/").pop()!)
-) {
+const entry = process.argv[1]?.split("/").pop();
+if (entry && import.meta.url.endsWith(entry)) {
   await main();
 }

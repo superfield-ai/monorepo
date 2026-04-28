@@ -48,9 +48,7 @@ export async function startControl(opts: StartControlOpts = {}): Promise<{
 
   let shuttingDown = false;
 
-  const server = Bun.serve<
-    typeof controlWsHandler & { data: import("./control-ws").WsData }
-  >({
+  const server = Bun.serve<WsData>({
     hostname: "0.0.0.0",
     port: config.port,
 
@@ -76,8 +74,7 @@ export async function startControl(opts: StartControlOpts = {}): Promise<{
       return res;
     },
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    websocket: controlWsHandler as any,
+    websocket: controlWsHandler,
 
     error(err: Error): Response {
       console.error("[studio] Unhandled server error:", err.message);

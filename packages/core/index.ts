@@ -70,6 +70,20 @@ export type {
 } from "./commands/feature.ts";
 
 export {
+  SuperfieldError,
+  ConfigError,
+  UserInputError,
+  ProviderError,
+  GitError,
+  AgentError,
+  InternalError,
+  errorCode,
+  formatErrorChain,
+  type ErrorCode,
+  type SuperfieldErrorOpts,
+} from "./errors.ts";
+
+export {
   DEPLOY_PHASES,
   DEMO_DEPLOY_TARGET,
   DeployPhaseExecutionError,

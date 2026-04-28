@@ -108,7 +108,10 @@ export async function handleControlRequest(
     return json({ error: "Studio mode is not active" }, 403);
   }
 
-  const info = getControlInfo()!;
+  const info = getControlInfo();
+  if (!info) {
+    return json({ error: "Studio mode active but control info missing" }, 500);
+  }
 
   // GET /studio/commits — session commit log
   if (req.method === "GET" && url.pathname === "/studio/commits") {

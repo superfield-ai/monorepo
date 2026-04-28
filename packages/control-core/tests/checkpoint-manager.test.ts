@@ -166,7 +166,7 @@ describe("parseTimelineOutput", () => {
       "abc1234|2025-03-15T10:30:00+00:00|Updated colors | blue to red\n";
     const entries = parseTimelineOutput(output);
     expect(entries).toHaveLength(1);
-    expect(entries[0].summary).toBe("Updated colors | blue to red");
+    expect(entries[0]!.summary).toBe("Updated colors | blue to red");
   });
 
   it("returns empty array for empty output", () => {
@@ -182,7 +182,7 @@ describe("parseTimelineOutput", () => {
       "abc1234 no pipes here\ndef5678|2025-03-15T10:30:00+00:00|Valid entry\n";
     const entries = parseTimelineOutput(output);
     expect(entries).toHaveLength(1);
-    expect(entries[0].hash).toBe("def5678");
+    expect(entries[0]!.hash).toBe("def5678");
   });
 
   it("handles single entry", () => {
@@ -207,9 +207,9 @@ describe("getTimeline", () => {
       baseRef: "abc000",
     });
     expect(entries).toHaveLength(1);
-    expect(entries[0].hash).toBe("abc1234");
-    expect(entries[0].timestamp).toBe("2025-03-15T10:30:00+00:00");
-    expect(entries[0].summary).toBe("Updated login form");
+    expect(entries[0]!.hash).toBe("abc1234");
+    expect(entries[0]!.timestamp).toBe("2025-03-15T10:30:00+00:00");
+    expect(entries[0]!.summary).toBe("Updated login form");
   });
 
   it("returns empty array when git log fails", () => {

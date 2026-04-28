@@ -83,6 +83,9 @@ async function verifyJwt(
   const parts = token.split(".");
   if (parts.length !== 3) return null;
   const [header, body, sig] = parts;
+  if (header === undefined || body === undefined || sig === undefined) {
+    return null;
+  }
   const key = await getHmacKey();
   const valid = await crypto.subtle.verify(
     "HMAC",
@@ -157,7 +160,7 @@ function parseCookies(cookieHeader: string | null): Record<string, string> {
   if (!cookieHeader) return cookies;
   for (const cookie of cookieHeader.split(";")) {
     const parts = cookie.split("=");
-    if (parts.length >= 2) {
+    if (parts.length >= 2 && parts[0] !== undefined) {
       cookies[parts[0].trim()] = parts.slice(1).join("=").trim();
     }
   }

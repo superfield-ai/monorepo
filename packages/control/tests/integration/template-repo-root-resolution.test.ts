@@ -159,7 +159,7 @@ d("template repo-root resolution — SUPERFIELD_REPO_ROOT vs cwd", () => {
     expect(registerRes.status).toBe(201);
     const setCookie = registerRes.headers.get("set-cookie");
     expect(setCookie).not.toBeNull();
-    authCookie = setCookie!.split(";")[0].trim();
+    authCookie = setCookie!.split(";")[0]!.trim();
     expect(authCookie).toContain("superfield_auth=");
   });
 

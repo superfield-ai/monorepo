@@ -17,6 +17,7 @@
  *   { type: 'steer-ack', requestId: string }
  */
 
+import type { WebSocketHandler, ServerWebSocket } from "bun";
 import { SESSION_KEY } from "./claude-session";
 import { streamTurn } from "./claude-session";
 
@@ -41,22 +42,16 @@ type OutboundFrame =
   | { type: "error"; message: string }
   | { type: "steer-ack"; requestId: string };
 
-function send(
-  ws: { send: (data: string) => void },
-  frame: OutboundFrame,
-): void {
+function send(ws: ServerWebSocket<WsData>, frame: OutboundFrame): void {
   ws.send(JSON.stringify(frame));
 }
 
-export const controlWsHandler = {
-  open(_ws: { data: WsData }) {
+export const controlWsHandler: WebSocketHandler<WsData> = {
+  open(_ws) {
     // Connection established — nothing to do.
   },
 
-  async message(
-    ws: { data: WsData; send: (data: string) => void },
-    raw: string | Buffer,
-  ) {
+  async message(ws, raw) {
     let frame: InboundFrame;
     try {
       frame = JSON.parse(
@@ -170,7 +165,7 @@ export const controlWsHandler = {
     }
   },
 
-  close(ws: { data: WsData }) {
+  close(ws) {
     // Cancel any in-flight fetch when the browser disconnects.
     ws.data.abortController?.abort();
   },

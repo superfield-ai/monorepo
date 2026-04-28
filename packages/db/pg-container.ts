@@ -115,7 +115,7 @@ export function parseDockerPortOutput(output: string): number {
   if (!output.trim()) {
     throw new Error('Could not parse port from docker port output: ""');
   }
-  const firstLine = output.split("\n")[0].trim();
+  const firstLine = (output.split("\n")[0] ?? "").trim();
   const port = parseInt(firstLine.split(":").at(-1) ?? "", 10);
   if (!Number.isFinite(port)) {
     throw new Error(

@@ -138,11 +138,22 @@ export async function getGoogleAccessToken(deps: AuthDeps): Promise<string> {
   const now = deps.now();
 
   if (descriptor.type === "access-token") {
-    return deps.env("GCP_ACCESS_TOKEN")!;
+    const token = deps.env("GCP_ACCESS_TOKEN");
+    if (!token) {
+      throw new Error(
+        "GCP_ACCESS_TOKEN env var is empty (descriptor said it was set)",
+      );
+    }
+    return token;
   }
 
   if (descriptor.type === "oauth-token-file") {
-    const oauth = descriptor.oauth!;
+    if (!descriptor.oauth) {
+      throw new Error(
+        `oauth-token-file descriptor (${descriptor.source}) is missing parsed credential`,
+      );
+    }
+    const oauth = descriptor.oauth;
 
     // Still valid (with 60s buffer)
     if (
@@ -208,7 +219,12 @@ export async function getGoogleAccessToken(deps: AuthDeps): Promise<string> {
   }
 
   // Service account JWT flow
-  const key = descriptor.key!;
+  if (!descriptor.key) {
+    throw new Error(
+      `service-account descriptor (${descriptor.source}) is missing parsed key`,
+    );
+  }
+  const key = descriptor.key;
   const tokenUri = key.token_uri ?? DEFAULT_TOKEN_URI;
   const assertion = createSignedJwt(key, tokenUri);
 
