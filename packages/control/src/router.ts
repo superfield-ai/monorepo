@@ -74,6 +74,7 @@ import { handleTurnsRequest } from "./turns";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
 import { embeddedAssets } from "./embedded-assets.gen";
+import { handleRebuildStart, handleRebuildLog } from "./rebuild";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -277,33 +278,14 @@ export async function route(
     }
   }
 
-  // Rebuild endpoint — full provision using the unified deployLocalCluster path.
-  // See: docs/cluster-definition.md — "On a code change"
+  // Rebuild endpoint — kicks off a background docker build job and returns
+  // a jobId immediately. The caller streams progress from GET /studio/rebuild/log.
   if (req.method === "POST" && pathname === "/studio/rebuild") {
-    try {
-      const { deployLocalCluster } =
-        await import("../../control-core/local-deploy");
-      const appRoot = process.env.CONTROL_SOURCE_DIR ?? process.cwd();
+    return handleRebuildStart(req, config);
+  }
 
-      await deployLocalCluster({
-        appRoot,
-        namespace: config.clusterContext,
-        verbose: config.verbose ?? false,
-      });
-
-      return new Response(
-        JSON.stringify({ ok: true, message: "Deploy completed" }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logBackendError(err, "POST /studio/rebuild");
-      return errorResponse({
-        code: "server",
-        message: `Deploy failed: ${message}`,
-        hint: "Check the studio debug view for the stack trace.",
-      });
-    }
+  if (req.method === "GET" && pathname === "/studio/rebuild/log") {
+    return handleRebuildLog(url);
   }
 
   // SSE stream endpoint for Claude CLI turns.

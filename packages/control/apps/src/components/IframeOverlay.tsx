@@ -76,27 +76,79 @@ export function IframeOverlay({
   rebuildEndpoint = "/studio/rebuild",
 }: IframeOverlayProps) {
   const [rebuilding, setRebuilding] = React.useState(false);
+  const [buildLog, setBuildLog] = React.useState<string[]>([]);
+  const logRef = React.useRef<HTMLPreElement>(null);
+
+  // Auto-scroll the log panel as lines arrive.
+  React.useEffect(() => {
+    if (logRef.current) {
+      logRef.current.scrollTop = logRef.current.scrollHeight;
+    }
+  }, [buildLog]);
 
   async function handleRebuild() {
     setRebuilding(true);
-    const result = await fetchJson<{ ok: boolean }>(rebuildEndpoint, {
-      method: "POST",
-    });
-    setRebuilding(false);
+    setBuildLog([]);
+
+    const result = await fetchJson<{ ok: boolean; jobId: string }>(
+      rebuildEndpoint,
+      { method: "POST" },
+    );
+
     if (!result.ok) {
+      setRebuilding(false);
       toastStore.show({
         severity: "error",
         title: "RESOURCE FAULT — REBUILD",
         message: result.error.message,
       });
-    } else {
-      toastStore.show({
-        severity: "success",
-        title: "REBUILD — DISPATCHED",
-        message:
-          "Cluster is rebuilding the app — the iframe will reload when it's healthy.",
-      });
+      return;
     }
+
+    // Stream build logs from the SSE endpoint.
+    const logUrl = `${rebuildEndpoint}/log?job=${encodeURIComponent(result.value.jobId)}`;
+    const es = new EventSource(logUrl);
+
+    es.onmessage = (e: MessageEvent<string>) => {
+      try {
+        const line = JSON.parse(e.data) as string;
+        setBuildLog((prev) => [...prev, line]);
+      } catch {
+        setBuildLog((prev) => [...prev, e.data]);
+      }
+    };
+
+    es.addEventListener("done", (e: Event) => {
+      es.close();
+      setRebuilding(false);
+      try {
+        const msg = JSON.parse((e as MessageEvent<string>).data) as string;
+        toastStore.show({
+          severity: "success",
+          title: "REBUILD — COMPLETE",
+          message: msg,
+        });
+      } catch {
+        /* ignore */
+      }
+      if (onRetry) onRetry();
+    });
+
+    es.addEventListener("error", (e: Event) => {
+      es.close();
+      setRebuilding(false);
+      let msg = "Build failed — check the log above.";
+      try {
+        msg = JSON.parse((e as MessageEvent<string>).data) as string;
+      } catch {
+        /* use default */
+      }
+      toastStore.show({
+        severity: "error",
+        title: "REBUILD FAILED",
+        message: msg,
+      });
+    });
   }
 
   const badge = MODE_BADGE[mode];
@@ -175,6 +227,28 @@ export function IframeOverlay({
                 RETRY
               </button>
             </div>
+            {buildLog.length > 0 && (
+              <pre
+                ref={logRef}
+                data-testid="iframe-overlay-build-log"
+                style={{
+                  maxHeight: 240,
+                  overflow: "auto",
+                  background: "var(--bg-void)",
+                  border: "1px solid var(--border-subtle)",
+                  padding: "var(--sp-3)",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  lineHeight: "var(--lh-normal)",
+                  color: "var(--fg-2)",
+                  margin: 0,
+                  whiteSpace: "pre-wrap",
+                  wordBreak: "break-all",
+                }}
+              >
+                {buildLog.join("\n")}
+              </pre>
+            )}
           </>
         )}
 
