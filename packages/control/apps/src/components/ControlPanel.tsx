@@ -35,7 +35,7 @@ import {
 import { debugStore } from "../lib/debug-store";
 
 interface ControlPanelProps {
-  /** URL loaded in the app iframe; defaults to /app/ */
+  /** Base URL loaded in the app iframe; defaults to http://localhost:4444 */
   appSrc?: string;
   /** SSE endpoint for cluster status events; defaults to /studio/cluster/events */
   clusterEventsUrl?: string;
@@ -48,7 +48,7 @@ interface ControlPanelProps {
 }
 
 export function ControlPanel({
-  appSrc = "/app/",
+  appSrc = "http://localhost:4444",
   clusterEventsUrl = "/studio/cluster/events",
   initialClusterStatus,
   clusterStatusController: controllerProp,
@@ -93,8 +93,9 @@ export function ControlPanel({
   const [iframeSrc, setIframeSrc] = useState<string>(() => {
     const stored = loadSelectedRoute();
     if (stored) {
-      const tail = stored.startsWith("/") ? stored.slice(1) : stored;
-      return `/app/${tail}`;
+      const base = appSrc.replace(/\/$/, "");
+      const tail = stored.startsWith("/") ? stored : `/${stored}`;
+      return `${base}${tail}`;
     }
     return appSrc;
   });
@@ -171,8 +172,9 @@ export function ControlPanel({
             <div className="hidden lg:flex">
               <RouteMap
                 onSelect={(path) => {
-                  const tail = path.startsWith("/") ? path.slice(1) : path;
-                  setIframeSrc(`/app/${tail}`);
+                  const base = appSrc.replace(/\/$/, "");
+                  const tail = path.startsWith("/") ? path : `/${path}`;
+                  setIframeSrc(`${base}${tail}`);
                 }}
               />
             </div>
