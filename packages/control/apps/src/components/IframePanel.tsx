@@ -83,17 +83,6 @@ export function IframePanel({
     }
   }, [clusterStatus, src]);
 
-  function handleIframeError() {
-    // The iframe's `error` event fires for cross-origin or full-document load
-    // failures. Without cluster context we fall back to "build-error" — the
-    // operator gets a Retry button either way.
-    if (clusterStatus === "healthy") {
-      setFailureMode("build-error");
-    } else {
-      setFailureMode("cluster-down");
-    }
-  }
-
   function handleRetry() {
     setFailureMode(null);
     if (iframeRef.current) iframeRef.current.src = src;
@@ -131,7 +120,6 @@ export function IframePanel({
         }
         style={iframeStyle}
         data-testid="app-iframe"
-        onError={handleIframeError}
       />
 
       {effectiveFailureMode && !overlayVisible && (
