@@ -16,15 +16,15 @@ import { readdirSync, readFileSync, existsSync } from "fs";
 import { join, resolve } from "path";
 import { errorResponse } from "../lib/error-envelope";
 
-function getDocsDir(): string {
-  return resolve(process.cwd(), "docs");
+function getDocsDir(projectRoot?: string): string {
+  return resolve(projectRoot ?? process.cwd(), "docs");
 }
 
 /**
  * Handle GET /studio/docs — returns list of .md filenames.
  */
-export function handleDocsListRequest(): Response {
-  const docsDir = getDocsDir();
+export function handleDocsListRequest(projectRoot?: string): Response {
+  const docsDir = getDocsDir(projectRoot);
 
   if (!existsSync(docsDir)) {
     return new Response(JSON.stringify({ files: [] }), {
@@ -57,8 +57,11 @@ export function handleDocsListRequest(): Response {
 /**
  * Handle GET /studio/docs/:filename — returns raw markdown content.
  */
-export function handleDocsFileRequest(filename: string): Response {
-  const docsDir = getDocsDir();
+export function handleDocsFileRequest(
+  filename: string,
+  projectRoot?: string,
+): Response {
+  const docsDir = getDocsDir(projectRoot);
 
   // Path traversal guard: only allow simple filenames with no directory separators.
   if (
@@ -114,16 +117,20 @@ export function handleDocsFileRequest(filename: string): Response {
  * Route handler — returns a Response if the request matches a docs endpoint,
  * otherwise returns null.
  */
-export function handleDocsRequest(req: Request, url: URL): Response | null {
+export function handleDocsRequest(
+  req: Request,
+  url: URL,
+  projectRoot?: string,
+): Response | null {
   const { pathname } = url;
 
   if (req.method === "GET" && pathname === "/studio/docs") {
-    return handleDocsListRequest();
+    return handleDocsListRequest(projectRoot);
   }
 
   if (req.method === "GET" && pathname.startsWith("/studio/docs/")) {
     const filename = decodeURIComponent(pathname.slice("/studio/docs/".length));
-    return handleDocsFileRequest(filename);
+    return handleDocsFileRequest(filename, projectRoot);
   }
 
   return null;

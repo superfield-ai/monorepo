@@ -348,7 +348,7 @@ export async function route(
   if (turnsResponse) return turnsResponse;
 
   // Docs endpoints — Product tab markdown viewer.
-  const docsResponse = handleDocsRequest(req, url);
+  const docsResponse = handleDocsRequest(req, url, config.projectRoot);
   if (docsResponse) return docsResponse;
 
   // Orchestrator endpoints — manage the dev loop child process.
