@@ -247,7 +247,8 @@ export function ControlPanel({
                 letterSpacing: "var(--ls-wider)",
               }}
             >
-              Render individual components with fixture data — no running app required.
+              Render individual components with fixture data — no running app
+              required.
             </div>
             <div className="flex-1 overflow-hidden">
               <ComponentPreviewPanel />
