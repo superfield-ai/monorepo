@@ -42,7 +42,7 @@ d("controlCommand integration: template + closed API port", () => {
   it("warns 'unreachable', calls _startControl once, applies env vars", async () => {
     const deps = makeDeps();
     await controlCommand(
-      ["--repo", TEMPLATE_REPO, "--api-url", "http://127.0.0.1:1"],
+      ["--path", TEMPLATE_REPO, "--api-url", "http://127.0.0.1:1"],
       deps,
     );
 
@@ -62,7 +62,7 @@ d("controlCommand integration: template + closed API port", () => {
       [
         "--port",
         "7123",
-        "--repo",
+        "--path",
         TEMPLATE_REPO,
         "--api-url",
         "http://127.0.0.1:1",

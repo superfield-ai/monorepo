@@ -32,4 +32,6 @@ jobs:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
+      - name: Generate embedded-assets stub
+        run: bun packages/control/scripts/embed-assets.ts
       - run: bun --bun vitest run packages/*/tests/unit

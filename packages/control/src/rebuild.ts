@@ -140,11 +140,7 @@ async function runRebuild(
 
     // ── k3d image import ────────────────────────────────────────────────────
     append(`[rebuild] importing ${tag} into k3d cluster…`);
-    const k3dExit = await runCommand(
-      "k3d",
-      ["image", "import", tag],
-      append,
-    );
+    const k3dExit = await runCommand("k3d", ["image", "import", tag], append);
     if (k3dExit !== 0) {
       const msg = `k3d image import exited ${k3dExit}`;
       append(`[rebuild] ✗ ${msg}`);
