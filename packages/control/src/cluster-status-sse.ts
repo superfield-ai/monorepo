@@ -80,6 +80,7 @@ async function checkClusterStatus(context: string): Promise<ClusterStatus> {
  */
 export function clusterStatusSseResponse(context: string): Response {
   let pollTimer: ReturnType<typeof setInterval> | null = null;
+  let cancelled = false;
 
   const body = new ReadableStream<Uint8Array>({
     async start(controller) {
@@ -87,11 +88,14 @@ export function clusterStatusSseResponse(context: string): Response {
       controller.enqueue(new TextEncoder().encode(": connected\n\n"));
 
       const emit = async () => {
+        if (cancelled) return;
         const status = await checkClusterStatus(context);
+        if (cancelled) return;
         try {
           controller.enqueue(makeSseEvent(status));
         } catch {
           // Controller closed — stop polling.
+          cancelled = true;
           if (pollTimer !== null) {
             clearInterval(pollTimer);
             pollTimer = null;
@@ -101,10 +105,13 @@ export function clusterStatusSseResponse(context: string): Response {
 
       // Emit immediately, then on interval.
       await emit();
-      pollTimer = setInterval(emit, POLL_INTERVAL_MS);
+      if (!cancelled) {
+        pollTimer = setInterval(emit, POLL_INTERVAL_MS);
+      }
     },
 
     cancel() {
+      cancelled = true;
       if (pollTimer !== null) {
         clearInterval(pollTimer);
         pollTimer = null;

@@ -8,11 +8,6 @@
 
 import { test, expect } from "../fixtures";
 
-test.skip(
-  true,
-  "Skipped pending studio-server-stability investigation in CI fixture; covered by unit + component tests.",
-);
-
 const SESSION_ID = "demo-session-1";
 
 test("turn timeline renders inside slot card and opens prompt modal", async ({
@@ -41,7 +36,7 @@ test("turn timeline renders inside slot card and opens prompt modal", async ({
     });
   });
 
-  // Stub orchestrator status so OrchestratorView shows a slot with our session.
+  // Stub orchestrator status so OrchestratorView shows a running process.
   await page.route("**/orchestrator/status", async (route) => {
     await route.fulfill({
       status: 200,
@@ -51,6 +46,16 @@ test("turn timeline renders inside slot card and opens prompt modal", async ({
         pid: 1,
         apiReachable: true,
         uptimeMs: 1000,
+      }),
+    });
+  });
+
+  // Slots come from /analytics/slots, not from /orchestrator/status.
+  await page.route("**/analytics/slots", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({
         slots: [
           {
             slot: 0,
@@ -61,9 +66,18 @@ test("turn timeline renders inside slot card and opens prompt modal", async ({
             elapsedMs: 12000,
             heartbeatAt: Date.now(),
             sessionId: SESSION_ID,
+            startedAt: new Date().toISOString(),
           },
         ],
       }),
+    });
+  });
+
+  await page.route("**/analytics/loops", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ loops: {} }),
     });
   });
 
