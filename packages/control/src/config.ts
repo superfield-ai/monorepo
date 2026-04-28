@@ -43,6 +43,8 @@ export interface ControlConfig {
   apiServiceUrl: string;
   /** Absolute path to the compiled browser UI static assets. */
   assetsDir: string | undefined;
+  /** Embedded asset map for compiled-binary mode (Bun `with { type: "file" }` imports). */
+  embeddedAssets?: ReadonlyMap<string, string>;
   /** When true, emit detailed diagnostic logs during startup and routing. */
   verbose?: boolean;
   /** Base URL of the superfield dev-loop API server (for agent turns and steering). */

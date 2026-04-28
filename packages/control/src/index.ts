@@ -9,6 +9,7 @@
  */
 
 import { loadConfig, vlog, type ControlConfig } from "./config";
+import { embeddedAssets } from "./embedded-assets.gen";
 import { ProcessManager } from "./process-manager";
 import { route } from "./router";
 import { controlWsHandler, type WsData } from "./control-ws";
@@ -24,7 +25,7 @@ export async function startControl(opts: StartControlOpts = {}): Promise<{
   config: ControlConfig;
 }> {
   const baseConfig = loadConfig();
-  const config: ControlConfig = { ...baseConfig, ...opts.config };
+  const config: ControlConfig = { ...baseConfig, embeddedAssets, ...opts.config };
   const pm = new ProcessManager();
 
   vlog(
