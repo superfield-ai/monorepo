@@ -63,7 +63,7 @@ export function RouteMap({
   onSelect,
   routesOverride,
   selected,
-}: RouteMapProps): JSX.Element {
+}: RouteMapProps): JSX.Element | null {
   const [routes, setRoutes] = useState<readonly DemoRoute[]>(
     routesOverride ?? [],
   );
