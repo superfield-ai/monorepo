@@ -13,7 +13,7 @@
  *
  * Spec: cli/docs/control-template-integration.md §2.3.
  */
-import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
+import type { BrowserContext } from "@playwright/test";
 import { test, expect } from "../fixtures";
 
 const PASSWORD = "pages-password-123";
@@ -24,40 +24,49 @@ const TAB_TESTIDS: readonly string[] = [
   "tab-deploy",
 ];
 
-// Playwright's APIRequestContext doesn't always pick up `use.baseURL` for
-// relative request URLs in this test setup, so resolve the base from the
-// same env contract the playwright config uses.
+// We hit the studio server with plain `fetch` rather than Playwright's
+// APIRequestContext: the latter races against the `capturedConsole`
+// auto-fixture teardown in this test (the response arrives, but the
+// pw:api span never resolves before the page closes, surfacing a
+// confusing "Target page, context or browser has been closed" error).
 const BASE_URL = `http://127.0.0.1:${process.env.CONTROL_E2E_PORT ?? "7009"}`;
 
 function freshUsername(suffix: string): string {
   return `e2e-pages-${suffix}-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+function parseAuthCookie(setCookie: string | null): string | null {
+  if (!setCookie) return null;
+  const match = /superfield_auth=([^;]+)/.exec(setCookie);
+  return match ? match[1] : null;
+}
+
 async function authenticate(
-  page: Page,
-  request: APIRequestContext,
   context: BrowserContext,
   username: string,
 ): Promise<void> {
-  const reg = await request.post(`${BASE_URL}/api/auth/register`, {
-    data: { username, password: PASSWORD },
+  const res = await fetch(`${BASE_URL}/api/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password: PASSWORD }),
   });
-  expect(reg.status(), await reg.text()).toBe(201);
-
-  const state = await request.storageState();
-  const authCookie = state.cookies.find((c) => c.name === "superfield_auth");
-  if (!authCookie)
+  const body = await res.text();
+  if (res.status !== 201) {
+    throw new Error(`register failed (status ${res.status}): ${body}`);
+  }
+  const cookieValue = parseAuthCookie(res.headers.get("set-cookie"));
+  if (!cookieValue) {
     throw new Error("missing superfield_auth cookie after register");
+  }
   await context.addCookies([
     {
-      name: authCookie.name,
-      value: authCookie.value,
-      domain: authCookie.domain,
-      path: authCookie.path,
-      httpOnly: authCookie.httpOnly,
-      secure: authCookie.secure,
-      sameSite: authCookie.sameSite,
-      expires: authCookie.expires,
+      name: "superfield_auth",
+      value: cookieValue,
+      domain: "127.0.0.1",
+      path: "/",
+      httpOnly: true,
+      secure: false,
+      sameSite: "Lax",
     },
   ]);
 }
@@ -72,9 +81,8 @@ describeFn("template pages coverage", () => {
   test("every top-level tab activates and renders without ErrorBoundary fallback", async ({
     page,
     context,
-    request,
   }) => {
-    await authenticate(page, request, context, freshUsername("walk"));
+    await authenticate(context, freshUsername("walk"));
     await page.goto("/");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
     // The cluster-down IframeOverlay (E14) renders absolutely-positioned over
@@ -99,8 +107,8 @@ describeFn("template pages coverage", () => {
     }
   });
 
-  test("debug tab opens the debug view", async ({ page, context, request }) => {
-    await authenticate(page, request, context, freshUsername("debug"));
+  test("debug tab opens the debug view", async ({ page, context }) => {
+    await authenticate(context, freshUsername("debug"));
     await page.goto("/");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
     await page.addStyleTag({

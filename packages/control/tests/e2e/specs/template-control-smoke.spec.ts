@@ -23,10 +23,49 @@ const RAND = Math.random().toString(36).slice(2, 10);
 const USERNAME = `e2e-smoke-${RAND}`;
 const PASSWORD = "smoke-password-123";
 
-// Playwright's APIRequestContext doesn't always pick up `use.baseURL` for
-// relative request URLs in this test setup, so resolve the base from the
-// same env contract the playwright config uses.
+// We hit the studio server with plain `fetch` rather than Playwright's
+// APIRequestContext: the latter races against the `capturedConsole`
+// auto-fixture teardown in this test (the response arrives, but the
+// pw:api span never resolves before the page closes, surfacing a
+// confusing "Target page, context or browser has been closed" error).
 const BASE_URL = `http://127.0.0.1:${process.env.CONTROL_E2E_PORT ?? "7009"}`;
+
+interface RegisterResult {
+  status: number;
+  body: { id: string; username: string };
+  setCookie: string | null;
+}
+
+async function register(
+  username: string,
+  password: string,
+): Promise<RegisterResult> {
+  const res = await fetch(`${BASE_URL}/api/auth/register`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ username, password }),
+  });
+  const text = await res.text();
+  let body: { id: string; username: string };
+  try {
+    body = JSON.parse(text) as { id: string; username: string };
+  } catch {
+    throw new Error(
+      `register: non-JSON response (status ${res.status}): ${text}`,
+    );
+  }
+  return {
+    status: res.status,
+    body,
+    setCookie: res.headers.get("set-cookie"),
+  };
+}
+
+function parseAuthCookie(setCookie: string | null): string | null {
+  if (!setCookie) return null;
+  const match = /superfield_auth=([^;]+)/.exec(setCookie);
+  return match ? match[1] : null;
+}
 
 // Requires SUPERFIELD_REPO_ROOT to point at a real template checkout. The
 // dedicated ci-control-template workflow sets this; the default control
@@ -44,48 +83,38 @@ describeFn("template control smoke", () => {
     // `capturedConsole` fixture during teardown.
   });
 
-  test("registration succeeds via /api/auth/register", async ({ request }) => {
-    const res = await request.post(`${BASE_URL}/api/auth/register`, {
-      data: { username: USERNAME, password: PASSWORD },
-    });
-    expect(res.status(), await res.text()).toBe(201);
-    const body = (await res.json()) as { id: string; username: string };
-    expect(body.username).toBe(USERNAME);
-    expect(body.id).toMatch(/^user_/);
-    // The Set-Cookie header is HttpOnly so we cannot inspect it via JS, but
-    // Playwright's APIRequestContext stores it in a shared cookie jar.
-    const cookies = await request.storageState();
-    const auth = cookies.cookies.find((c) => c.name === "superfield_auth");
-    expect(auth, "expected superfield_auth cookie after register").toBeTruthy();
+  test("registration succeeds via /api/auth/register", async () => {
+    const reg = await register(USERNAME, PASSWORD);
+    expect(reg.status, JSON.stringify(reg.body)).toBe(201);
+    expect(reg.body.username).toBe(USERNAME);
+    expect(reg.body.id).toMatch(/^user_/);
+    expect(
+      parseAuthCookie(reg.setCookie),
+      "expected superfield_auth cookie in Set-Cookie header",
+    ).toBeTruthy();
   });
 
   test("authed studio view renders after registration", async ({
     page,
     context,
-    request,
   }) => {
-    // Register through the request fixture, then transfer the cookie into the
-    // browser context so the page navigation is authenticated.
-    const reg = await request.post(`${BASE_URL}/api/auth/register`, {
-      data: { username: `${USERNAME}-page`, password: PASSWORD },
-    });
-    expect(reg.status(), await reg.text()).toBe(201);
+    // Register over plain HTTP, then plant the auth cookie in the browser
+    // context so the page navigation is authenticated.
+    const reg = await register(`${USERNAME}-page`, PASSWORD);
+    expect(reg.status, JSON.stringify(reg.body)).toBe(201);
 
-    const apiState = await request.storageState();
-    const authCookie = apiState.cookies.find(
-      (c) => c.name === "superfield_auth",
-    );
-    if (authCookie) {
+    const cookieValue = parseAuthCookie(reg.setCookie);
+    expect(cookieValue, "missing superfield_auth cookie").toBeTruthy();
+    if (cookieValue) {
       await context.addCookies([
         {
-          name: authCookie.name,
-          value: authCookie.value,
-          domain: authCookie.domain,
-          path: authCookie.path,
-          httpOnly: authCookie.httpOnly,
-          secure: authCookie.secure,
-          sameSite: authCookie.sameSite,
-          expires: authCookie.expires,
+          name: "superfield_auth",
+          value: cookieValue,
+          domain: "127.0.0.1",
+          path: "/",
+          httpOnly: true,
+          secure: false,
+          sameSite: "Lax",
         },
       ]);
     }
