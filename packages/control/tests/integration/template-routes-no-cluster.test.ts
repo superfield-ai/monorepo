@@ -36,6 +36,10 @@ function makeConfig(overrides: Partial<ControlConfig> = {}): ControlConfig {
 }
 
 function stopServer(server: Server): Promise<void> {
+  // Force-close lingering connections (the cluster-status SSE stream stays
+  // open until the poll interval ends), otherwise server.close() waits
+  // forever and trips the afterAll timeout.
+  server.closeAllConnections();
   return new Promise((resolve) => server.close(() => resolve()));
 }
 
@@ -149,11 +153,21 @@ d("template routes — no cluster", () => {
       "text/event-stream",
     );
 
+    // The stream emits a `: connected\n\n` heartbeat first, then the cluster
+    // poller's `event: cluster-status\ndata: {"status":"..."}` event. Read up
+    // to a small chunk budget until we see the status payload — asserting on
+    // only the first chunk would race against the heartbeat.
     const reader = res.body!.getReader();
+    const decoder = new TextDecoder();
+    let acc = "";
     try {
-      const { value } = await reader.read();
-      const text = new TextDecoder().decode(value ?? new Uint8Array());
-      expect(text.includes("unknown") || text.includes("healthy")).toBe(true);
+      for (let i = 0; i < 8; i++) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        acc += decoder.decode(value ?? new Uint8Array(), { stream: true });
+        if (acc.includes("unknown") || acc.includes("healthy")) break;
+      }
+      expect(acc.includes("unknown") || acc.includes("healthy")).toBe(true);
     } finally {
       await reader.cancel();
     }

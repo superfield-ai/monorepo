@@ -23,6 +23,11 @@ const RAND = Math.random().toString(36).slice(2, 10);
 const USERNAME = `e2e-smoke-${RAND}`;
 const PASSWORD = "smoke-password-123";
 
+// Playwright's APIRequestContext doesn't always pick up `use.baseURL` for
+// relative request URLs in this test setup, so resolve the base from the
+// same env contract the playwright config uses.
+const BASE_URL = `http://127.0.0.1:${process.env.CONTROL_E2E_PORT ?? "7009"}`;
+
 // Requires SUPERFIELD_REPO_ROOT to point at a real template checkout. The
 // dedicated ci-control-template workflow sets this; the default control
 // e2e job does not, so skip there.
@@ -40,7 +45,7 @@ describeFn("template control smoke", () => {
   });
 
   test("registration succeeds via /api/auth/register", async ({ request }) => {
-    const res = await request.post("/api/auth/register", {
+    const res = await request.post(`${BASE_URL}/api/auth/register`, {
       data: { username: USERNAME, password: PASSWORD },
     });
     expect(res.status(), await res.text()).toBe(201);
@@ -61,7 +66,7 @@ describeFn("template control smoke", () => {
   }) => {
     // Register through the request fixture, then transfer the cookie into the
     // browser context so the page navigation is authenticated.
-    const reg = await request.post("/api/auth/register", {
+    const reg = await request.post(`${BASE_URL}/api/auth/register`, {
       data: { username: `${USERNAME}-page`, password: PASSWORD },
     });
     expect(reg.status(), await reg.text()).toBe(201);

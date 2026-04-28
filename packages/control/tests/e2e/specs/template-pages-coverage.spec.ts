@@ -13,11 +13,7 @@
  *
  * Spec: cli/docs/control-template-integration.md §2.3.
  */
-import type {
-  APIRequestContext,
-  BrowserContext,
-  Page,
-} from "@playwright/test";
+import type { APIRequestContext, BrowserContext, Page } from "@playwright/test";
 import { test, expect } from "../fixtures";
 
 const PASSWORD = "pages-password-123";
@@ -27,6 +23,11 @@ const TAB_TESTIDS: readonly string[] = [
   "tab-preview",
   "tab-deploy",
 ];
+
+// Playwright's APIRequestContext doesn't always pick up `use.baseURL` for
+// relative request URLs in this test setup, so resolve the base from the
+// same env contract the playwright config uses.
+const BASE_URL = `http://127.0.0.1:${process.env.CONTROL_E2E_PORT ?? "7009"}`;
 
 function freshUsername(suffix: string): string {
   return `e2e-pages-${suffix}-${Math.random().toString(36).slice(2, 10)}`;
@@ -38,7 +39,7 @@ async function authenticate(
   context: BrowserContext,
   username: string,
 ): Promise<void> {
-  const reg = await request.post("/api/auth/register", {
+  const reg = await request.post(`${BASE_URL}/api/auth/register`, {
     data: { username, password: PASSWORD },
   });
   expect(reg.status(), await reg.text()).toBe(201);
@@ -98,11 +99,7 @@ describeFn("template pages coverage", () => {
     }
   });
 
-  test("debug tab opens the debug view", async ({
-    page,
-    context,
-    request,
-  }) => {
+  test("debug tab opens the debug view", async ({ page, context, request }) => {
     await authenticate(page, request, context, freshUsername("debug"));
     await page.goto("/");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });

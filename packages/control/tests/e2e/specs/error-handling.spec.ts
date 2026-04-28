@@ -57,7 +57,7 @@ test("a triggered error increments the badge count", async ({ page }) => {
       }
     ).__superfieldDebug;
     if (!store) throw new Error("__superfieldDebug not exposed on globalThis");
-    store.record({ level: "error", source: "app", message: "counted" });
+    store.record({ level: "error", source: "window", message: "counted" });
   });
 
   const after = Number(
