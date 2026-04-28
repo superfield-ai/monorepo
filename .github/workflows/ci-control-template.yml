@@ -62,6 +62,10 @@ jobs:
         working-directory: cli
         run: bun install --frozen-lockfile
 
+      - name: Generate embedded-assets stub
+        working-directory: cli
+        run: bun packages/control/scripts/embed-assets.ts
+
       - name: Run template integration tests
         working-directory: cli
         env:
@@ -112,6 +116,10 @@ jobs:
       - name: Build control web app
         working-directory: cli
         run: bun run --cwd packages/control/apps build
+
+      - name: Generate embedded assets
+        working-directory: cli
+        run: bun packages/control/scripts/embed-assets.ts
 
       - name: Run template Playwright specs
         working-directory: cli

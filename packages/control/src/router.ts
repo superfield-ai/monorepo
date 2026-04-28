@@ -73,6 +73,8 @@ import { handleDemoRequest } from "./demo";
 import { handleTurnsRequest } from "./turns";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
+import { embeddedAssets } from "./embedded-assets.gen";
+import { handleRebuildStart, handleRebuildLog } from "./rebuild";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -143,29 +145,44 @@ export async function serveStaticAsset(
   pathname: string,
   assetsDir: string | undefined,
 ): Promise<Response> {
-  if (!assetsDir) {
-    return new Response(
-      "<!doctype html><html><body><h1>Studio Server</h1><p>Browser UI assets not configured (CONTROL_ASSETS_DIR is unset).</p></body></html>",
-      { status: 200, headers: { "Content-Type": "text/html" } },
-    );
+  // Dev override: serve directly from the filesystem when CONTROL_ASSETS_DIR is set.
+  if (assetsDir) {
+    const relativePath =
+      pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
+    const filePath = join(assetsDir, relativePath);
+
+    if (existsSync(filePath)) {
+      return new Response(Bun.file(filePath));
+    }
+
+    // SPA fallback.
+    const indexPath = join(assetsDir, "index.html");
+    if (existsSync(indexPath)) {
+      return new Response(Bun.file(indexPath));
+    }
+
+    return new Response("Not Found", { status: 404 });
   }
 
-  const relativePath =
-    pathname === "/" ? "index.html" : pathname.replace(/^\//, "");
-  const filePath = join(assetsDir, relativePath);
-
-  if (existsSync(filePath)) {
-    const file = Bun.file(filePath);
-    return new Response(file);
+  // Production path: serve from assets embedded in the binary at compile time.
+  const key = pathname === "/" ? "/index.html" : pathname;
+  const embeddedPath = embeddedAssets.get(key);
+  if (embeddedPath) {
+    return new Response(Bun.file(embeddedPath));
   }
 
-  // Fallback to index.html for client-side routing.
-  const indexPath = join(assetsDir, "index.html");
-  if (existsSync(indexPath)) {
+  // SPA fallback for client-side routes not in the asset map.
+  const indexPath = embeddedAssets.get("/index.html");
+  if (indexPath) {
     return new Response(Bun.file(indexPath));
   }
 
-  return new Response("Not Found", { status: 404 });
+  // Fallback placeholder when running from source without a built web app.
+  // Keeps GET / healthy so integration tests and health checks always pass.
+  return new Response(
+    `<!doctype html><html><head><title>Studio Server</title></head><body><p>Studio Server is running. Build the web app to serve the full UI.</p></body></html>`,
+    { status: 200, headers: { "Content-Type": "text/html" } },
+  );
 }
 
 /**
@@ -266,33 +283,14 @@ export async function route(
     }
   }
 
-  // Rebuild endpoint — full provision using the unified deployLocalCluster path.
-  // See: docs/cluster-definition.md — "On a code change"
+  // Rebuild endpoint — kicks off a background docker build job and returns
+  // a jobId immediately. The caller streams progress from GET /studio/rebuild/log.
   if (req.method === "POST" && pathname === "/studio/rebuild") {
-    try {
-      const { deployLocalCluster } =
-        await import("../../control-core/local-deploy");
-      const appRoot = process.env.CONTROL_SOURCE_DIR ?? process.cwd();
+    return handleRebuildStart(req, config);
+  }
 
-      await deployLocalCluster({
-        appRoot,
-        namespace: config.clusterContext,
-        verbose: config.verbose ?? false,
-      });
-
-      return new Response(
-        JSON.stringify({ ok: true, message: "Deploy completed" }),
-        { status: 200, headers: { "Content-Type": "application/json" } },
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : String(err);
-      logBackendError(err, "POST /studio/rebuild");
-      return errorResponse({
-        code: "server",
-        message: `Deploy failed: ${message}`,
-        hint: "Check the studio debug view for the stack trace.",
-      });
-    }
+  if (req.method === "GET" && pathname === "/studio/rebuild/log") {
+    return handleRebuildLog(url);
   }
 
   // SSE stream endpoint for Claude CLI turns.

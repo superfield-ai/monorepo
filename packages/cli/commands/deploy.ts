@@ -11,7 +11,7 @@ import {
   teardownLocalCluster,
 } from "@superfield/control-core";
 
-const USAGE = `Usage: superfield deploy [--provision] [target]
+const USAGE = `Usage: superfield deploy [--path <dir>] [--provision] [target]
        superfield deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
        superfield deploy gcp --login [--client-id <id>]
        superfield deploy gcp --logout`;
@@ -154,6 +154,7 @@ export async function deployCommand(
 
   await runDeployCommand({
     provisionOnly: parsed.provisionOnly,
+    ...(parsed.path ? { demoRoot: parsed.path } : {}),
     ...(parsed.target ? { target: parsed.target } : {}),
   });
 
@@ -176,7 +177,7 @@ export async function deployCommand(
   process.once("SIGINT", () => process.exit(1));
 
   try {
-    await runDemoTeardown();
+    await runDemoTeardown({ demoRoot: parsed.path });
   } finally {
     process.exit(0);
   }

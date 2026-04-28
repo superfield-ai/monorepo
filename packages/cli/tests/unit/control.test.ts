@@ -13,7 +13,7 @@ describe("parseControlArgs", () => {
     const r = parseControlArgs([]);
     expect(r).toEqual({
       port: undefined,
-      repo: undefined,
+      path: undefined,
       apiUrl: undefined,
       help: false,
       unknown: [],
@@ -42,14 +42,14 @@ describe("parseControlArgs", () => {
     expect(r.unknown).toContain("--port");
   });
 
-  it("--repo /path/to/repo → repo set", () => {
-    expect(parseControlArgs(["--repo", "/path/to/repo"]).repo).toBe(
-      "/path/to/repo",
+  it("--path /path/to/app → path set", () => {
+    expect(parseControlArgs(["--path", "/path/to/app"]).path).toBe(
+      "/path/to/app",
     );
   });
 
-  it("--repo=/path → repo set via equals syntax", () => {
-    expect(parseControlArgs(["--repo=/path"]).repo).toBe("/path");
+  it("--path=/path → path set via equals syntax", () => {
+    expect(parseControlArgs(["--path=/path"]).path).toBe("/path");
   });
 
   it("--api-url http://localhost:7837 → apiUrl set", () => {
@@ -79,14 +79,14 @@ describe("parseControlArgs", () => {
     const r = parseControlArgs([
       "--port",
       "8000",
-      "--repo",
+      "--path",
       "/app",
       "--api-url",
       "http://x:7837",
     ]);
     expect(r).toMatchObject({
       port: 8000,
-      repo: "/app",
+      path: "/app",
       apiUrl: "http://x:7837",
       help: false,
       unknown: [],
@@ -139,7 +139,7 @@ describe("controlCommand", () => {
     });
     await controlCommand(["--help"], deps);
     expect(output).toContain("--port");
-    expect(output).toContain("--repo");
+    expect(output).toContain("--path");
     expect(output).toContain("--api-url");
   });
 
@@ -159,10 +159,10 @@ describe("controlCommand", () => {
     expect(process.env.CONTROL_PORT).toBe("9000");
   });
 
-  it("--repo sets SUPERFIELD_REPO_ROOT env var", async () => {
+  it("--path sets SUPERFIELD_REPO_ROOT env var", async () => {
     const deps = makeDeps();
-    await controlCommand(["--repo", "/my/repo"], deps);
-    expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/repo");
+    await controlCommand(["--path", "/my/app"], deps);
+    expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/app");
   });
 
   it("--api-url sets SUPERFIELD_API_URL env var", async () => {
@@ -221,7 +221,7 @@ describe("controlUsage", () => {
   it("includes all three flags", () => {
     const usage = controlUsage();
     expect(usage).toContain("--port");
-    expect(usage).toContain("--repo");
+    expect(usage).toContain("--path");
     expect(usage).toContain("--api-url");
   });
 

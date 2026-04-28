@@ -5,6 +5,7 @@ packages/cli/build-info.ts
 packages/control/playwright-report/
 packages/control/test-results/
 packages/control/apps/dist/
+packages/control/src/embedded-assets.gen.ts
 
 # Demo seed output (scripts/seed-demo.ts)
 .studio/

@@ -133,6 +133,16 @@ export class ChatController {
         }
       } else {
         // JSON response (fixture server / non-streaming fallback)
+        if (!res.ok) {
+          const body = (await res.json().catch(() => ({}))) as {
+            error?: string;
+          };
+          const message =
+            res.status === 401
+              ? "Not authenticated — please log in first."
+              : (body.error ?? `Server error (HTTP ${res.status})`);
+          throw new Error(message);
+        }
         const body = (await res.json()) as { reply?: string };
         const reply = body.reply ?? "";
         this.messages = [
