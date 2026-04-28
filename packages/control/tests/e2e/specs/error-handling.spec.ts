@@ -125,20 +125,28 @@ test.describe("Deploy view failures", () => {
         body: JSON.stringify({ runs: [], source: "stub" }),
       }),
     );
-    await page.route("**/studio/deploy/doctor/**", (route) =>
-      route.fulfill({
-        status: 500,
+    // Return a 200 with a failed check so DeployView renders the matrix row
+    // with an InlineError (a 500 would set doctorErrors but leave doctorByEnv
+    // empty, meaning checkNames is empty and the table never renders).
+    await page.route("**/studio/deploy/doctor/**", async (route) => {
+      const url = new URL(route.request().url());
+      const env = url.pathname.split("/").pop() ?? "dev";
+      await route.fulfill({
+        status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          ok: false,
-          error: {
-            code: "internal",
-            message: "doctor failed: missing DEPLOY_HOST_DEV",
-            hint: "Run setup-github before deploy.",
-          },
+          env,
+          checks: [
+            {
+              name: "ssh-reachable",
+              ok: false,
+              detail: "DEPLOY_HOST_DEV not configured",
+            },
+          ],
+          allOk: false,
         }),
-      }),
-    );
+      });
+    });
 
     await page.goto("/");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
