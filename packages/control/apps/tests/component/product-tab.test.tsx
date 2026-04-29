@@ -21,50 +21,60 @@ import { loadClaudeOutput } from "../helpers/claude-fixtures";
 
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
 });
 
-class FakeWebSocket {
-  static readonly CONNECTING = 0;
-  static readonly OPEN = 1;
-  static readonly CLOSING = 2;
-  static readonly CLOSED = 3;
+function makeFakeWebSocket(
+  framesBySend: readonly {
+    type: "chunk" | "done" | "error";
+    text?: string;
+    message?: string;
+  }[][],
+) {
+  return class FakeWebSocket {
+    static readonly CONNECTING = 0;
+    static readonly OPEN = 1;
+    static readonly CLOSING = 2;
+    static readonly CLOSED = 3;
 
-  readonly sent: string[] = [];
-  readyState = FakeWebSocket.CONNECTING;
-  private readonly listeners = new Map<string, Set<(ev: unknown) => void>>();
+    readonly sent: string[] = [];
+    readyState = FakeWebSocket.CONNECTING;
+    private readonly listeners = new Map<string, Set<(ev: unknown) => void>>();
+    private sendCount = 0;
 
-  constructor(readonly url: string) {
-    queueMicrotask(() => {
-      this.readyState = FakeWebSocket.OPEN;
-      this.dispatch("open", {});
-    });
-  }
+    constructor(readonly url: string) {
+      queueMicrotask(() => {
+        this.readyState = FakeWebSocket.OPEN;
+        this.dispatch("open", {});
+      });
+    }
 
-  addEventListener(type: string, listener: (ev: unknown) => void) {
-    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
-    this.listeners.get(type)?.add(listener);
-  }
+    addEventListener(type: string, listener: (ev: unknown) => void) {
+      if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+      this.listeners.get(type)?.add(listener);
+    }
 
-  removeEventListener(type: string, listener: (ev: unknown) => void) {
-    this.listeners.get(type)?.delete(listener);
-  }
+    removeEventListener(type: string, listener: (ev: unknown) => void) {
+      this.listeners.get(type)?.delete(listener);
+    }
 
-  send(data: string) {
-    this.sent.push(data);
-    this.dispatch("message", {
-      data: JSON.stringify({ type: "chunk", text: " browser-safe" }),
-    });
-    this.dispatch("message", { data: JSON.stringify({ type: "done" }) });
-  }
+    send(data: string) {
+      this.sent.push(data);
+      const frames = framesBySend[this.sendCount++] ?? [];
+      for (const frame of frames) {
+        this.dispatch("message", { data: JSON.stringify(frame) });
+      }
+    }
 
-  close() {
-    this.readyState = FakeWebSocket.CLOSED;
-    this.dispatch("close", { wasClean: true, code: 1000, reason: "" });
-  }
+    close() {
+      this.readyState = FakeWebSocket.CLOSED;
+      this.dispatch("close", { wasClean: true, code: 1000, reason: "" });
+    }
 
-  private dispatch(type: string, ev: unknown) {
-    this.listeners.get(type)?.forEach((listener) => listener(ev));
-  }
+    private dispatch(type: string, ev: unknown) {
+      this.listeners.get(type)?.forEach((listener) => listener(ev));
+    }
+  };
 }
 
 function makeDocsControllerMock(initialState: Partial<DocsState> = {}): {
@@ -229,15 +239,21 @@ test("product chat submit calls sendMessage on the injected controller", async (
   );
 });
 
-test("product chat still submits when crypto.randomUUID is unavailable", async () => {
+test("product chat supports a browser multi-turn conversation without crypto.randomUUID", async () => {
   let call = 0;
   vi.stubGlobal("crypto", {
     getRandomValues: (array: Uint8Array) => {
-      array.fill(call++ === 0 ? 5 : 6);
+      array.fill(5 + call++);
       return array;
     },
   } as unknown as Crypto);
-  vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
+  vi.stubGlobal(
+    "WebSocket",
+    makeFakeWebSocket([
+      [{ type: "chunk", text: " first browser turn" }, { type: "done" }],
+      [{ type: "chunk", text: " second browser turn" }, { type: "done" }],
+    ]) as unknown as typeof WebSocket,
+  );
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
@@ -263,8 +279,58 @@ test("product chat still submits when crypto.randomUUID is unavailable", async (
   await expect.element(screen.getByTestId("product-tab")).toBeVisible();
   await screen.getByTestId("product-chat-input").fill("Tell me more");
   await screen.getByTestId("product-chat-submit").click();
+  await expect
+    .element(screen.getByText("Tell me more first browser turn"))
+    .toBeVisible();
+
+  await screen.getByTestId("product-chat-input").fill("And again");
+  await screen.getByTestId("product-chat-submit").click();
 
   await expect
-    .element(screen.getByText("Tell me more browser-safe"))
+    .element(screen.getByText("And again second browser turn"))
+    .toBeVisible();
+});
+
+test("product chat can retry after an assistant error response", async () => {
+  vi.stubGlobal(
+    "WebSocket",
+    makeFakeWebSocket([
+      [{ type: "error", message: "claude exited with code 1" }],
+      [{ type: "chunk", text: " retry succeeded" }, { type: "done" }],
+    ]) as unknown as typeof WebSocket,
+  );
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/studio/docs")) {
+        return new Response(JSON.stringify({ files: ["README.md"] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/studio/docs/README.md")) {
+        return new Response("# Demo docs", {
+          status: 200,
+          headers: { "Content-Type": "text/markdown" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }),
+  );
+
+  const screen = render(<ProductTab />);
+
+  await screen.getByTestId("product-chat-input").fill("Why did it fail?");
+  await screen.getByTestId("product-chat-submit").click();
+  await expect
+    .element(screen.getByText(/Error: claude exited with code 1/))
+    .toBeVisible();
+
+  await expect.element(screen.getByTestId("product-chat-input")).toBeEnabled();
+  await screen.getByTestId("product-chat-input").fill("Try again");
+  await screen.getByTestId("product-chat-submit").click();
+  await expect
+    .element(screen.getByText("Try again retry succeeded"))
     .toBeVisible();
 });

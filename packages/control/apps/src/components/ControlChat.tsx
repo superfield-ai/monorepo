@@ -146,7 +146,10 @@ export function ControlChat({
 
   async function send() {
     const text = input.trim();
-    if (!text || chatState.turnState !== "idle") return;
+    if (!text || chatState.turnState === "streaming") return;
+    if (chatState.turnState === "error") {
+      chatControllerRef.current.clearError();
+    }
     setInput("");
     await chatControllerRef.current.sendMessage(text);
   }
@@ -161,7 +164,7 @@ export function ControlChat({
     await commitControllerRef.current.rollback(hash);
   }
 
-  const loading = chatState.turnState !== "idle";
+  const loading = chatState.turnState === "streaming";
   const { messages } = chatState;
   const { commits, timeline, error } = commitState;
 

@@ -225,7 +225,7 @@ function ProductChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatState.messages]);
 
-  const submitting = chatState.turnState !== "idle";
+  const submitting = chatState.turnState === "streaming";
 
   function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -236,7 +236,10 @@ function ProductChatPanel({
 
   async function handleSubmit() {
     const text = input.trim();
-    if (!text || submitting) return;
+    if (!text || chatState.turnState === "streaming") return;
+    if (chatState.turnState === "error") {
+      controllerRef.current.clearError();
+    }
     setInput("");
     await controllerRef.current.sendMessage(text);
     textareaRef.current?.focus();

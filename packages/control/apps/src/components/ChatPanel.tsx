@@ -126,13 +126,16 @@ export function ChatPanel({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [chatState.messages]);
 
-  const submitting = chatState.turnState !== "idle";
+  const submitting = chatState.turnState === "streaming";
   const { messages } = chatState;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     const text = input.trim();
-    if (!text || submitting) return;
+    if (!text || chatState.turnState === "streaming") return;
+    if (chatState.turnState === "error") {
+      controllerRef.current.clearError();
+    }
     setInput("");
     if (mode === "steer") {
       if (!selectedIssue?.sessionId) return;
