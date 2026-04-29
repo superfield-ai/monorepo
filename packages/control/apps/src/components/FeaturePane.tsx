@@ -320,7 +320,12 @@ function FeatureDetailView({
           gap: "var(--sp-3)",
         }}
       >
-        <button type="button" onClick={onBack} style={BTN_GHOST}>
+        <button
+          type="button"
+          onClick={onBack}
+          data-testid="feature-back"
+          style={BTN_GHOST}
+        >
           ← BACK
         </button>
         <span className="label" style={{ color: "var(--accent-cyan)" }}>

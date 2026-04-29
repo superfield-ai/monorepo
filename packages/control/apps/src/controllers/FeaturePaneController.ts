@@ -8,6 +8,7 @@
  */
 
 import type { SlotInfo } from "./OrchestratorController";
+import { fetchJson } from "../lib/net";
 
 export interface FeatureItem {
   issueNumber: number;
@@ -133,9 +134,18 @@ export class FeaturePaneController {
     this.notify();
 
     try {
-      const [slotsRes] = await Promise.all([fetch(this.slotsUrl)]);
+      const result = await fetchJson<{ slots?: SlotInfo[] }>(this.slotsUrl);
+      if (!result.ok) {
+        this.state = {
+          ...this.state,
+          loading: false,
+          error: result.error.message,
+        };
+        this.notify();
+        return;
+      }
 
-      const slotsBody = (await slotsRes.json()) as { slots?: SlotInfo[] };
+      const slotsBody = result.value;
       const slots = slotsBody.slots ?? [];
 
       const features: FeatureItem[] = slots.map((slot) => ({

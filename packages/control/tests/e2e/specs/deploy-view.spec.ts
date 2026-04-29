@@ -1,104 +1,112 @@
 /**
- * E2E spec: DeployView (D1 / C-9.5).
+ * E2E spec: FeaturePane and turn timeline coverage.
  *
- * Asserts the headline demo screen renders the doctor matrix, the rollback
- * confirm modal flow, and surfaces a forced doctor-failure as an InlineError
- * with retry. Uses the auto-fail-on-console fixture from fixtures.ts.
+ * Asserts the Studio tab renders the current feature list, selecting a feature
+ * opens the detail view with the session timeline, and a failed timeline fetch
+ * surfaces an InlineError with retry. Uses the auto-fail-on-console fixture
+ * from fixtures.ts.
  */
 
 import { test, expect } from "../fixtures";
 
-// Stub deploy endpoints so the matrix renders without slow external calls.
-// The UX layer shows an empty state when envsSource === "fallback" (no GitHub
-// credentials), so we always inject source:"github" here.
+const SESSION_ID = "demo-session-1";
+
 test.beforeEach(async ({ page }) => {
-  await page.route("**/studio/deploy/envs", (route) =>
+  await page.route("**/analytics/slots", (route) =>
     route.fulfill({
       status: 200,
       contentType: "application/json",
-      body: JSON.stringify({ envs: ["dev"], source: "github" }),
+      body: JSON.stringify({
+        slots: [
+          {
+            slot: 1,
+            issueNumber: 301,
+            role: "dev",
+            backend: "claude",
+            model: "opus",
+            elapsedMs: 12_000,
+            heartbeatAt: Date.now(),
+            sessionId: SESSION_ID,
+            startedAt: new Date().toISOString(),
+          },
+        ],
+      }),
     }),
   );
-  await page.route("**/studio/deploy/secrets/**", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ env: "dev", checks: [] }),
-    }),
-  );
-  await page.route("**/studio/deploy/ci", (route) =>
-    route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ runs: [], source: "stub" }),
-    }),
-  );
-  await page.route("**/studio/deploy/doctor/**", async (route) => {
-    const url = new URL(route.request().url());
-    const env = url.pathname.split("/").pop() ?? "dev";
-    await route.fulfill({
-      status: 200,
-      contentType: "application/json",
-      body: JSON.stringify({ env, checks: [], allOk: true }),
-    });
-  });
-});
-
-test("deploy tab renders matrix and CI strip", async ({ page }) => {
-  await page.goto("/");
-  await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-  await page.click('[data-testid="tab-deploy"]');
-  await expect(page.getByTestId("deploy-view")).toBeVisible();
-  await expect(page.getByTestId("env-switcher")).toBeVisible();
-  await expect(page.getByTestId("doctor-matrix")).toBeVisible();
-  await expect(page.getByTestId("ci-strip")).toBeVisible();
-});
-
-test("rollback confirm modal opens and cancels cleanly", async ({ page }) => {
-  await page.goto("/");
-  await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-  await page.click('[data-testid="tab-deploy"]');
-  await expect(page.getByTestId("rollback-trigger")).toBeVisible();
-  await page.click('[data-testid="rollback-trigger"]');
-  await expect(page.getByTestId("rollback-confirm")).toBeVisible();
-  await page.click('[data-testid="rollback-cancel"]');
-  await expect(page.getByTestId("rollback-confirm")).toHaveCount(0);
-});
-
-test("a forced doctor failure renders InlineError with retry", async ({
-  page,
-}) => {
-  // Override the default doctor stub to return a failed check.
-  await page.route("**/studio/deploy/doctor/**", async (route) => {
-    const url = new URL(route.request().url());
-    const env = url.pathname.split("/").pop() ?? "dev";
+  await page.route("**/studio/turns/**", async (route) => {
     await route.fulfill({
       status: 200,
       contentType: "application/json",
       body: JSON.stringify({
-        env,
-        checks: [
+        sessionId: SESSION_ID,
+        turns: [
           {
-            name: "ssh-reachable",
-            ok: false,
-            detail: "DEPLOY_HOST_DEV not configured",
+            ts: "2026-04-26T01:00:00Z",
+            durationMs: 4_000,
+            tokens: 0,
+            costUsd: 0,
+            exitStatus: "ok",
+            prompt: "Add a discount-code input on /checkout.",
+            response: "Done.",
+            filesChanged: ["app/checkout/discount.tsx"],
+            servicesRestarted: ["web"],
           },
         ],
-        allOk: false,
+      }),
+    });
+  });
+});
+
+test("studio tab renders the feature list and opens the detail view", async ({
+  page,
+}) => {
+  await page.goto("/");
+  await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+  await page.click('[data-testid="tab-studio"]');
+  await expect(page.getByTestId("feature-pane")).toBeVisible();
+  await expect(page.getByTestId("feature-list")).toBeVisible();
+  await expect(page.getByTestId("feature-row-301")).toBeVisible();
+
+  await page.click('[data-testid="feature-row-301"]');
+  await expect(page.getByTestId("feature-detail")).toBeVisible();
+  await expect(page.getByTestId("turn-timeline-demo-session-1")).toBeVisible();
+  await expect(page.getByTestId("turn-row-demo-session-1-0")).toBeVisible();
+});
+
+test("feature detail back button returns to the list", async ({ page }) => {
+  await page.goto("/");
+  await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+  await page.click('[data-testid="tab-studio"]');
+  await page.click('[data-testid="feature-row-301"]');
+  await expect(page.getByTestId("feature-detail")).toBeVisible();
+  await page.click('[data-testid="feature-back"]');
+  await expect(page.getByTestId("feature-list")).toBeVisible();
+});
+
+test("a forced turn timeline failure renders InlineError with retry", async ({
+  page,
+}) => {
+  await page.route("**/studio/turns/**", async (route) => {
+    await route.fulfill({
+      status: 503,
+      contentType: "application/json",
+      body: JSON.stringify({
+        ok: false,
+        error: {
+          code: "unavailable",
+          message: "turn history unavailable",
+        },
       }),
     });
   });
 
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-  await page.click('[data-testid="tab-deploy"]');
+  await page.click('[data-testid="tab-studio"]');
+  await page.click('[data-testid="feature-row-301"]');
 
-  const cell = page.getByTestId("doctor-cell-dev-ssh-reachable");
-  await expect(cell).toBeVisible();
-  await expect(cell.getByTestId("inline-error")).toBeVisible();
-  await expect(cell.getByTestId("inline-error-retry")).toBeVisible();
-  await cell.getByTestId("inline-error-retry").click();
-  // The InlineError stays visible after retry because the stub still returns
-  // the same payload. The point is that retry is wired and clickable.
-  await expect(cell.getByTestId("inline-error")).toBeVisible();
+  const timeline = page.getByTestId("turn-timeline-demo-session-1");
+  await expect(timeline).toBeVisible();
+  await expect(timeline.getByTestId("inline-error")).toBeVisible();
+  await expect(timeline.getByTestId("inline-error-retry")).toBeVisible();
 });
