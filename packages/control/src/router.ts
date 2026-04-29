@@ -256,21 +256,33 @@ export async function route(
 
   // REST steer fallback (for tests, curl, and non-WS clients).
   if (req.method === "POST" && pathname === "/studio/steer") {
-    const body = (await req.json().catch(() => ({}))) as { context?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      context?: string;
+      sessionId?: string;
+      session_id?: string;
+    };
+    const sessionId = body.session_id ?? body.sessionId;
     if (!body.context) {
       return errorResponse({
         code: "validation",
         message: "context is required",
-        hint: "POST { context: string } to /studio/steer.",
+        hint: "POST { context: string, sessionId: string } to /studio/steer.",
+      });
+    }
+    if (!sessionId) {
+      return errorResponse({
+        code: "validation",
+        message: "sessionId is required",
+        hint: "Select a running issue before steering a live agent session.",
       });
     }
     try {
       const res = await fetch(`${config.superfieldApiUrl}/steer/context`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context: body.context }),
+        body: JSON.stringify({ context: body.context, session_id: sessionId }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       return new Response(JSON.stringify(json), {
         status: res.status,
         headers: { "Content-Type": "application/json" },

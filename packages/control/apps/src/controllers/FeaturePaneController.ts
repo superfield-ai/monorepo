@@ -85,14 +85,46 @@ export class FeaturePaneController {
   }
 
   async steer(context: string, sessionId?: string): Promise<void> {
+    if (!sessionId) {
+      this.state = {
+        ...this.state,
+        error: "SELECT A RUNNING ISSUE BEFORE STEERING",
+      };
+      this.notify();
+      return;
+    }
+
+    this.state = { ...this.state, error: null };
+    this.notify();
+
     try {
-      await fetch("/studio/steer", {
+      const res = await fetch("/studio/steer", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ context, sessionId }),
       });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          message?: string;
+          detail?: string;
+        };
+        this.state = {
+          ...this.state,
+          error:
+            body.error ??
+            body.message ??
+            body.detail ??
+            "STEER REQUEST REJECTED",
+        };
+        this.notify();
+        return;
+      }
+      this.state = { ...this.state, error: null };
+      this.notify();
     } catch {
-      // Non-fatal — the user can retry
+      this.state = { ...this.state, error: "STEER REQUEST FAILED" };
+      this.notify();
     }
   }
 

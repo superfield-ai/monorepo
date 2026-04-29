@@ -285,10 +285,12 @@ function FeatureDetailView({
   feature,
   onBack,
   onSteer,
+  error,
 }: {
   feature: FeatureItem;
   onBack: () => void;
   onSteer: (text: string, sessionId?: string) => void;
+  error: string | null;
 }) {
   const subtasks = parseSubtasks(feature.body);
 
@@ -336,6 +338,20 @@ function FeatureDetailView({
           gap: "var(--sp-4)",
         }}
       >
+        {error && (
+          <div
+            style={{
+              color: "var(--accent-red)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              padding: "var(--sp-2)",
+              border: "1px solid var(--accent-red)",
+            }}
+          >
+            {error}
+          </div>
+        )}
+
         {/* Subtasks */}
         <section style={SECTION}>
           <h2
@@ -494,6 +510,7 @@ export function FeaturePane({ controller: controllerProp }: FeaturePaneProps) {
           feature={selectedFeature}
           onBack={() => controllerRef.current.selectFeature(null)}
           onSteer={handleSteer}
+          error={state.error}
         />
       ) : (
         <FeatureListView

@@ -13,13 +13,35 @@ async function flush() {
 }
 
 let originalFetch: typeof globalThis.fetch | undefined;
+let originalEventSource: typeof globalThis.EventSource | undefined;
+
+class FakeEventSource {
+  readonly readyState = 1;
+  onmessage: ((ev: MessageEvent<string>) => void) | null = null;
+  private readonly listeners = new Map<string, Set<(ev: Event) => void>>();
+
+  constructor(readonly url: string) {}
+
+  addEventListener(name: string, fn: (ev: Event) => void): void {
+    const set = this.listeners.get(name) ?? new Set();
+    set.add(fn);
+    this.listeners.set(name, set);
+  }
+
+  close(): void {}
+}
 
 beforeEach(() => {
   originalFetch = globalThis.fetch;
+  originalEventSource = globalThis.EventSource;
+  toastStore.__resetForTest();
+  globalThis.EventSource = FakeEventSource as unknown as typeof EventSource;
 });
 
 afterEach(() => {
   if (originalFetch) globalThis.fetch = originalFetch;
+  if (originalEventSource) globalThis.EventSource = originalEventSource;
+  toastStore.__resetForTest();
 });
 
 describe("IframeOverlay", () => {

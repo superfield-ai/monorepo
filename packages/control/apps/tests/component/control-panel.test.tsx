@@ -18,7 +18,7 @@
 
 import React from "react";
 import { render } from "vitest-browser-react";
-import { afterEach, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, expect, test, vi } from "vitest";
 import { ChatPanel } from "../../src/components/ChatPanel";
 import { IframePanel } from "../../src/components/IframePanel";
 import { ClusterStatusIndicator } from "../../src/components/ClusterStatusIndicator";
@@ -27,6 +27,16 @@ import type {
   ChatController,
   ChatControllerState,
 } from "../../src/controllers/ChatController";
+import { debugStore } from "../../src/lib/debug-store";
+
+type ChatControllerMock = ChatController & {
+  sendSteer: (context: string, sessionId: string) => Promise<void>;
+  clearError: () => void;
+};
+
+beforeEach(() => {
+  debugStore.__resetForTest();
+});
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -39,7 +49,7 @@ afterEach(() => {
 function makeChatControllerMock(
   initialState: Partial<ChatControllerState> = {},
 ): {
-  controller: ChatController;
+  controller: ChatControllerMock;
   setState: (partial: Partial<ChatControllerState>) => void;
 } {
   const defaultState: ChatControllerState = {
@@ -74,7 +84,7 @@ function makeChatControllerMock(
     sendMessage: vi.fn(async (_text: string) => {}),
     sendSteer: vi.fn(async (_context: string, _sessionId: string) => {}),
     clearError: vi.fn(() => {}),
-  } as unknown as ChatController;
+  } as unknown as ChatControllerMock;
 
   return { controller, setState };
 }
@@ -299,6 +309,32 @@ test("switching to Product tab shows product-tab panel", async () => {
   );
   await screen.getByTestId("tab-product").click();
   await expect.element(screen.getByTestId("product-tab")).toBeVisible();
+});
+
+test("clicking the debug badge opens the DebugView and marks unread events read", async () => {
+  debugStore.record({
+    level: "warn",
+    source: "console",
+    message: "debug badge test",
+  });
+
+  const screen = render(
+    <ControlPanel
+      appSrc="/app/"
+      initialClusterStatus="healthy"
+      hideConnectionBanner
+    />,
+  );
+
+  await expect.element(screen.getByTestId("debug-badge-count")).toHaveTextContent(
+    "FAULT 1",
+  );
+
+  await screen.getByTestId("debug-badge").click();
+  await expect.element(screen.getByTestId("debug-view")).toBeVisible();
+  await expect.element(screen.getByTestId("debug-badge-count")).toHaveTextContent(
+    "FAULT 0",
+  );
 });
 
 test("studio panel propagates status update to IframePanel on Viewport tab", async () => {
