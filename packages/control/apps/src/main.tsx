@@ -21,6 +21,10 @@ import { debugStore } from "./lib/debug-store";
 import "./styles/superfield-tokens.css";
 import "./styles/superfield-base.css";
 
+(
+  globalThis as unknown as { __superfieldPersistDebugTraces?: boolean }
+).__superfieldPersistDebugTraces = true;
+
 bootstrapErrorHandling({ isDev: Boolean(import.meta.env.DEV) });
 
 // Test seam: expose the DebugStore on globalThis so Playwright specs can

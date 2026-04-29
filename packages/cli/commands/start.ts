@@ -164,7 +164,12 @@ export async function startCommand(
         message: string,
       ) => emit(level, message),
     };
-    startApiServer({ port: apiPort, state: apiState, logger: apiLogger });
+    startApiServer({
+      port: apiPort,
+      state: apiState,
+      logger: apiLogger,
+      logDir: currentLogFile() ? path.dirname(currentLogFile()) : config.logDir,
+    });
   }
 
   const tasks: Array<Promise<void>> = [];

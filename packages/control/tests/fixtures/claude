@@ -8,4 +8,9 @@ if [[ "${1:-}" == "-p" ]]; then
   printf "PROMPT: %s\n" "${2:-}" >> "$LOG_PATH"
 fi
 
+if [[ "${CLAUDE_E2E_EXIT_1:-}" == "1" ]]; then
+  printf "STDERR: simulated claude failure\n" >&2
+  exit 1
+fi
+
 echo "Mocked Claude response for studio tests."

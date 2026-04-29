@@ -8,6 +8,8 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer } from "node:http";
 import { delimiter } from "node:path";
 import type { AddressInfo } from "node:net";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { join } from "node:path";
 import { ApiState } from "../../api-state.js";
 import { startApiServer } from "../../api-server.js";
 import type { Logger } from "../../logger.js";
@@ -23,6 +25,7 @@ const noopLogger: Logger = { currentLevel: "info", emit: () => {} };
 let port: number;
 let savedPath: string;
 let savedLogPath: string | undefined;
+let traceDir: string;
 
 beforeAll(
   () =>
@@ -31,8 +34,15 @@ beforeAll(
       probe.listen(0, "127.0.0.1", () => {
         port = (probe.address() as AddressInfo).port;
         probe.close(() => {
+          traceDir = `/tmp/api-server-studio-run-traces-${Date.now()}`;
+          mkdirSync(traceDir, { recursive: true });
           const state = new ApiState();
-          const srv = startApiServer({ port, state, logger: noopLogger });
+          const srv = startApiServer({
+            port,
+            state,
+            logger: noopLogger,
+            logDir: traceDir,
+          });
           srv.once("listening", resolve);
         });
       });
@@ -52,6 +62,11 @@ afterAll(() => {
     delete process.env.CLAUDE_E2E_LOG_PATH;
   } else {
     process.env.CLAUDE_E2E_LOG_PATH = savedLogPath;
+  }
+  try {
+    rmSync(traceDir, { recursive: true, force: true });
+  } catch {
+    // Best effort cleanup.
   }
 });
 
@@ -145,5 +160,35 @@ describe("POST /studio/run", () => {
     });
     expect(res.headers.get("Content-Type")).toContain("text/event-stream");
     await res.body?.cancel();
+  });
+
+  it("writes a trace record when claude exits nonzero", async () => {
+    process.env.CLAUDE_E2E_EXIT_1 = "1";
+    try {
+      const res = await postRun({ message: "hello", repoRoot: "/tmp" });
+      const events = await collectSse(res);
+      const error = events.find((e) => e.event === "error");
+      expect(error?.data).toContain("simulated claude failure");
+
+      const today = new Date().toISOString().slice(0, 10);
+      const traceFile = join(traceDir, `${today}.traces.jsonl`);
+      expect(existsSync(traceFile)).toBe(true);
+
+      const lines = readFileSync(traceFile, "utf8")
+        .trim()
+        .split("\n")
+        .filter(Boolean);
+      const last = JSON.parse(lines.at(-1)!) as {
+        level: string;
+        message: string;
+        context?: { exitCode?: number; stderr?: string };
+      };
+      expect(last.level).toBe("error");
+      expect(last.message).toBe("POST /studio/run failed");
+      expect(last.context?.exitCode).toBe(1);
+      expect(last.context?.stderr).toContain("simulated claude failure");
+    } finally {
+      delete process.env.CLAUDE_E2E_EXIT_1;
+    }
   });
 });

@@ -4,14 +4,58 @@ import {
   type ServerResponse,
 } from "node:http";
 import { randomUUID } from "node:crypto";
+import { spawn as nodeSpawn } from "node:child_process";
+import { Readable } from "node:stream";
 import type { ApiState } from "./api-state.js";
 import type { Logger } from "./logger.js";
+import { appendTraceLog } from "./trace-log.js";
+
+type BunSpawnResult = {
+  stdout: ReadableStream<Uint8Array>;
+  stderr: ReadableStream<Uint8Array>;
+  exited: Promise<number>;
+};
+
+function spawnClaude(args: string[], cwd: string): BunSpawnResult {
+  const bun = (
+    globalThis as unknown as {
+      Bun?: { spawn: (...spawnArgs: unknown[]) => BunSpawnResult };
+    }
+  ).Bun;
+  if (bun) {
+    return bun.spawn(args, {
+      cwd,
+      stdout: "pipe",
+      stderr: "pipe",
+      env: { ...process.env },
+    });
+  }
+
+  const proc = nodeSpawn(args[0] ?? "", args.slice(1), {
+    cwd,
+    stdio: ["ignore", "pipe", "pipe"],
+    env: { ...process.env },
+  });
+  return {
+    stdout: Readable.toWeb(
+      proc.stdout,
+    ) as unknown as ReadableStream<Uint8Array>,
+    stderr: Readable.toWeb(
+      proc.stderr,
+    ) as unknown as ReadableStream<Uint8Array>,
+    exited: new Promise<number>((resolve, reject) => {
+      proc.once("error", reject);
+      proc.once("close", (code) => resolve(code ?? 1));
+    }),
+  };
+}
 
 export interface ApiServerOpts {
   host?: string; // default "127.0.0.1"
   port?: number; // default 7837
   state: ApiState;
   logger: Logger;
+  logDir?: string;
 }
 
 function json(res: ServerResponse, status: number, body: unknown): void {
@@ -40,7 +84,7 @@ async function readBody(req: IncomingMessage): Promise<unknown> {
 export function startApiServer(
   opts: ApiServerOpts,
 ): ReturnType<typeof createServer> {
-  const { host = "127.0.0.1", port = 7837, state, logger } = opts;
+  const { host = "127.0.0.1", port = 7837, state, logger, logDir } = opts;
 
   const server = createServer(async (req, res) => {
     const url = req.url ?? "/";
@@ -171,12 +215,33 @@ export function startApiServer(
         "-p",
         body.message,
         "--dangerously-skip-permissions",
-        "--allowedTools",
+        "--allowed-tools",
         allowedTools,
       ];
       if (body.sessionKey) {
         args.push("--session-key", body.sessionKey);
       }
+
+      const traceBase = {
+        ts: new Date().toISOString(),
+        origin: "backend" as const,
+        source: "api-server",
+      };
+      appendTraceLog(
+        {
+          ...traceBase,
+          level: "info",
+          message: "POST /studio/run started",
+          context: {
+            repoRoot,
+            mode: body.mode ?? "design",
+            allowedTools,
+            sessionKeyPresent: Boolean(body.sessionKey),
+            args,
+          },
+        },
+        logDir,
+      );
 
       res.writeHead(200, {
         "Content-Type": "text/event-stream",
@@ -187,17 +252,30 @@ export function startApiServer(
       // Emit session ID before any content chunks.
       res.write(`event: session\ndata: ${JSON.stringify({ sessionId })}\n\n`);
 
-      let proc: ReturnType<typeof Bun.spawn> | undefined;
+      let proc: BunSpawnResult | undefined;
+      let stdoutText = "";
+      let stderrText = "";
       try {
-        proc = Bun.spawn(args, {
-          cwd: repoRoot,
-          stdout: "pipe",
-          stderr: "pipe",
-          // Pass process.env at spawn time so PATH mutations in tests are respected.
-          env: { ...process.env },
-        });
+        proc = spawnClaude(args, repoRoot);
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
+        appendTraceLog(
+          {
+            ...traceBase,
+            level: "error",
+            message: "POST /studio/run spawn failed",
+            stack: err instanceof Error ? err.stack : undefined,
+            context: {
+              repoRoot,
+              mode: body.mode ?? "design",
+              allowedTools,
+              sessionKeyPresent: Boolean(body.sessionKey),
+              args,
+              error: msg,
+            },
+          },
+          logDir,
+        );
         res.write(`event: error\ndata: ${JSON.stringify(msg)}\n\n`);
         res.end();
         return;
@@ -211,6 +289,7 @@ export function startApiServer(
           const { done, value } = await reader.read();
           if (done) break;
           const chunk = decoder.decode(value, { stream: true });
+          stdoutText += chunk;
           // Prefix each line with "data: " for proper SSE formatting.
           for (const line of chunk.split("\n")) {
             res.write(`data: ${line}\n`);
@@ -224,12 +303,57 @@ export function startApiServer(
         return;
       }
 
+      try {
+        stderrText = await new Response(proc.stderr).text();
+      } catch {
+        stderrText = "";
+      }
+
       const exitCode = await proc.exited;
       if (exitCode !== 0) {
-        res.write(
-          `event: error\ndata: ${JSON.stringify(`claude exited with code ${exitCode}`)}\n\n`,
+        const stderrSummary = stderrText.trim();
+        const errorMessage = stderrSummary
+          ? (stderrSummary.split("\n").find(Boolean)?.trim() ??
+            `claude exited with code ${exitCode}`)
+          : `claude exited with code ${exitCode}`;
+        appendTraceLog(
+          {
+            ...traceBase,
+            level: "error",
+            message: "POST /studio/run failed",
+            context: {
+              repoRoot,
+              mode: body.mode ?? "design",
+              allowedTools,
+              sessionKeyPresent: Boolean(body.sessionKey),
+              args,
+              exitCode,
+              stderr: stderrText,
+              stdout: stdoutText,
+            },
+          },
+          logDir,
         );
+        res.write(`event: error\ndata: ${JSON.stringify(errorMessage)}\n\n`);
       } else {
+        appendTraceLog(
+          {
+            ...traceBase,
+            level: "info",
+            message: "POST /studio/run completed",
+            context: {
+              repoRoot,
+              mode: body.mode ?? "design",
+              allowedTools,
+              sessionKeyPresent: Boolean(body.sessionKey),
+              args,
+              exitCode,
+              stderr: stderrText,
+              stdout: stdoutText,
+            },
+          },
+          logDir,
+        );
         res.write(
           `event: done\ndata: ${JSON.stringify({ filesChanged: [] })}\n\n`,
         );

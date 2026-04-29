@@ -385,7 +385,7 @@ export async function route(
   if (authResponse) return authResponse;
 
   // Studio endpoints — handled locally, not proxied upstream.
-  const studioResponse = await handleControlRequest(req, url);
+  const studioResponse = await handleControlRequest(req, url, config.logDir);
   if (studioResponse) return studioResponse;
 
   if (pathname.startsWith("/app/") || pathname === "/app") {

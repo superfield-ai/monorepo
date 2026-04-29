@@ -41,6 +41,7 @@ import {
 } from "./helpers";
 import { getCorsHeaders, getAuthenticatedUser } from "./auth";
 import { makeJson } from "../lib/response";
+import { appendTraceLog } from "@superfield/core";
 
 // In-memory session context per studio session
 const sessionMessages: ControlMessage[] = [];
@@ -83,6 +84,7 @@ function getControlInfo(): { sessionId: string; branch: string } | null {
 export async function handleControlRequest(
   req: Request,
   url: URL,
+  logDir?: string,
 ): Promise<Response | null> {
   if (!url.pathname.startsWith("/studio")) return null;
 
@@ -102,6 +104,42 @@ export async function handleControlRequest(
     const commits = await getSessionCommits();
     const timeline = await getTimelineCommits();
     return json({ active: true, ...info, branch, commits, timeline });
+  }
+
+  if (req.method === "POST" && url.pathname === "/studio/debug/trace") {
+    const body = (await req.json().catch(() => ({}))) as {
+      kind?: "entry" | "breadcrumb";
+      ts?: number;
+      level?: "error" | "warn" | "info" | "debug" | "trace";
+      source?: string;
+      message?: string;
+      stack?: string;
+      context?: Record<string, unknown>;
+      category?: "route" | "fetch" | "ws" | "user" | "lifecycle";
+      data?: Record<string, unknown>;
+      breadcrumbs?: unknown;
+    };
+    if (!body.message || !body.source || !body.level) {
+      return json({ error: "trace payload is required" }, 400);
+    }
+    appendTraceLog(
+      {
+        ts: new Date(body.ts ?? Date.now()).toISOString(),
+        origin: "browser",
+        level: body.level,
+        source: body.source,
+        message: body.message,
+        stack: body.stack,
+        context: {
+          kind: body.kind ?? "entry",
+          category: body.category,
+          data: body.data,
+          ...(body.context ?? {}),
+        },
+      },
+      logDir,
+    );
+    return json({ ok: true });
   }
 
   if (!isControlMode()) {

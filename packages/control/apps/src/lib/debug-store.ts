@@ -89,6 +89,37 @@ let nextId = 1;
 
 const isBrowser =
   typeof window !== "undefined" && typeof sessionStorage !== "undefined";
+const shouldPersistTraces =
+  isBrowser &&
+  (globalThis as unknown as { __superfieldPersistDebugTraces?: boolean })
+    .__superfieldPersistDebugTraces === true;
+
+interface TracePayload {
+  readonly kind: "entry" | "breadcrumb";
+  readonly ts: number;
+  readonly level?: DebugLevel;
+  readonly source?: DebugSource;
+  readonly message: string;
+  readonly stack?: string;
+  readonly context?: DebugContext;
+  readonly category?: DebugBreadcrumb["category"];
+  readonly data?: Record<string, unknown>;
+  readonly breadcrumbs?: readonly DebugBreadcrumb[];
+}
+
+function transmitTrace(payload: TracePayload): void {
+  if (!shouldPersistTraces || typeof fetch !== "function") return;
+  queueMicrotask(() => {
+    void Promise.resolve(
+      fetch("/studio/debug/trace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+        keepalive: true,
+      }),
+    ).catch(() => {});
+  });
+}
 
 function snapshot(): DebugState {
   return { entries: entries.slice(), unreadCount };
@@ -157,6 +188,16 @@ export const debugStore = {
     entries.push(entry);
     if (entries.length > CAPACITY) entries.splice(0, entries.length - CAPACITY);
     if (entry.level === "error" || entry.level === "warn") unreadCount += 1;
+    transmitTrace({
+      kind: "entry",
+      ts: entry.ts,
+      level: entry.level,
+      source: entry.source,
+      message: entry.message,
+      stack: entry.stack,
+      context: entry.context,
+      breadcrumbs: entry.breadcrumbs,
+    });
     emit();
     return entry;
   },
@@ -172,6 +213,15 @@ export const debugStore = {
     if (breadcrumbs.length > BREADCRUMB_CAPACITY) {
       breadcrumbs.splice(0, breadcrumbs.length - BREADCRUMB_CAPACITY);
     }
+    transmitTrace({
+      kind: "breadcrumb",
+      ts: crumb.ts,
+      message: crumb.message,
+      category: crumb.category,
+      data: crumb.data,
+      source: "breadcrumb",
+      level: "debug",
+    });
     persist();
   },
 

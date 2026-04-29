@@ -238,6 +238,9 @@ export { withRetry, CircuitBreaker } from "./retry.ts";
 export { initFileLogger, currentLogFile } from "./file-logger.ts";
 export type { RetryOpts, CircuitBreakerOpts } from "./retry.ts";
 
+export { appendTraceLog } from "./trace-log.ts";
+export type { TraceLogEntry, TraceLevel, TraceOrigin } from "./trace-log.ts";
+
 export {
   getSession,
   upsertSession,
