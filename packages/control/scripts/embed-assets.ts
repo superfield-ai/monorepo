@@ -42,6 +42,7 @@ for (const abs of files) {
   const importPath = "../apps/dist" + urlPath;
   const varName = `_a${i}`;
   importLines.push(
+    `// @ts-ignore generated file import for Bun asset embedding`,
     `import ${varName} from ${JSON.stringify(importPath)} with { type: "file" };`,
   );
   mapEntries.push(`  [${JSON.stringify(urlPath)}, ${varName}]`);

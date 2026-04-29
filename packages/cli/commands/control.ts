@@ -1,4 +1,7 @@
 import { resolve } from "node:path";
+import { ApiState } from "@superfield/core/api-state";
+import { startApiServer } from "@superfield/core/api-server";
+import type { Logger } from "@superfield/core/logger";
 
 /**
  * @file control.ts
@@ -36,6 +39,13 @@ export interface ControlCommandDeps {
   _fetch?: typeof fetch;
   /** Injected browser bundle builder (tests). */
   _buildControlWeb?: () => Promise<void>;
+  /** Injected API server starter (tests). */
+  _startApiServer?: (opts: {
+    host?: string;
+    port?: number;
+    state: ApiState;
+    logger: Logger;
+  }) => ReturnType<typeof startApiServer>;
   /** Injected control starter (tests — avoids dynamic import). */
   _startControl?: () => Promise<void>;
 }
@@ -91,11 +101,11 @@ superfield control [--port <n>] [--path <path>] [--api-url <url>]
 
   --port      Studio server port. Default: 7000.
   --path      Superfield project root (SUPERFIELD_REPO_ROOT). Default: cwd.
-  --api-url   Superfield dev-loop API base URL. Default: http://127.0.0.1:7837.
+  --api-url   Superfield API base URL. Default: http://127.0.0.1:7837.
 
-  The dev-loop API is used for agent turns and steering. If it is unreachable
-  at startup, a warning is logged and the server starts anyway. Start a dev
-  loop separately with 'superfield start <path>' or via the background agent view.
+  By default the command starts the local API server so the webapp can receive
+  turns and steer requests immediately. If --api-url points at a non-local
+  server, that remote API is used instead.
 `.trim();
 }
 
@@ -128,6 +138,9 @@ export async function controlCommand(
       const { startControl } = await import("@superfield/control");
       await startControl();
     });
+  const _startApiServer =
+    deps._startApiServer ??
+    ((opts: Parameters<typeof startApiServer>[0]) => startApiServer(opts));
 
   const parsed = parseControlArgs(args);
 
@@ -162,23 +175,39 @@ export async function controlCommand(
     process.env.CONTROL_ASSETS_DIR = CONTROL_WEB_DIST_DIR;
   }
 
-  const apiUrl =
-    parsed.apiUrl ?? process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
+  const apiUrlOverride = parsed.apiUrl ?? process.env.SUPERFIELD_API_URL;
+  const apiUrl = apiUrlOverride ?? "http://127.0.0.1:7837";
 
-  // Health-check the dev-loop API. Warn if unreachable but proceed regardless.
-  try {
-    const res = await _fetch(`${apiUrl}/health`, {
-      signal: AbortSignal.timeout(2000),
+  if (apiUrlOverride === undefined) {
+    _startApiServer({
+      host: "127.0.0.1",
+      port: 7837,
+      state: new ApiState(),
+      logger: {
+        currentLevel: "info",
+        emit: (level, message) => {
+          if (level === "warn") warn(`[studio] ${message}`);
+          else console.log(`[studio] ${message}`);
+        },
+      },
     });
-    if (!res.ok) {
+  } else {
+    // Remote API or unparsable URL: keep the existing startup probe so we still
+    // warn operators if the target is unavailable.
+    try {
+      const res = await _fetch(`${apiUrl}/health`, {
+        signal: AbortSignal.timeout(2000),
+      });
+      if (!res.ok) {
+        warn(
+          `[studio] Warning: API at ${apiUrl}/health returned HTTP ${res.status}. Agent turns may fail.`,
+        );
+      }
+    } catch {
       warn(
-        `[studio] Warning: dev-loop API at ${apiUrl}/health returned HTTP ${res.status}. Agent turns may fail.`,
+        `[studio] Warning: API unreachable at ${apiUrl}. Agent turns may fail until it is running.`,
       );
     }
-  } catch {
-    warn(
-      `[studio] Warning: dev-loop API unreachable at ${apiUrl}. Agent turns will fail until a dev loop is running.`,
-    );
   }
 
   await _startControl();

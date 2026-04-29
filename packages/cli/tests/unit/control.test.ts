@@ -108,6 +108,7 @@ function makeDeps(
       status: 200,
     } as Response) as unknown as typeof fetch,
     _buildControlWeb: vi.fn().mockResolvedValue(undefined),
+    _startApiServer: vi.fn().mockReturnValue({} as never),
     _startControl: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
@@ -130,6 +131,7 @@ describe("controlCommand", () => {
       expect.stringContaining("superfield control"),
     );
     expect(deps._buildControlWeb).not.toHaveBeenCalled();
+    expect(deps._startApiServer).not.toHaveBeenCalled();
     expect(deps._startControl).not.toHaveBeenCalled();
     expect(deps._fetch).not.toHaveBeenCalled();
   });
@@ -155,56 +157,63 @@ describe("controlCommand", () => {
     );
     expect(deps.exit).toHaveBeenCalledWith(1);
     expect(deps._buildControlWeb).not.toHaveBeenCalled();
+    expect(deps._startApiServer).not.toHaveBeenCalled();
     expect(deps._startControl).not.toHaveBeenCalled();
   });
 
-  it("--port sets CONTROL_PORT env var", async () => {
+  it("--port sets CONTROL_PORT env var and starts the local API server", async () => {
     const deps = makeDeps();
     await controlCommand(["--port", "9000"], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(deps._startApiServer).toHaveBeenCalledOnce();
     expect(process.env.CONTROL_PORT).toBe("9000");
     expect(process.env.CONTROL_ASSETS_DIR).toContain(
       "packages/control/apps/dist",
     );
   });
 
-  it("--path sets SUPERFIELD_REPO_ROOT env var", async () => {
+  it("--path sets SUPERFIELD_REPO_ROOT env var and starts the local API server", async () => {
     const deps = makeDeps();
     await controlCommand(["--path", "/my/project"], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(deps._startApiServer).toHaveBeenCalledOnce();
     expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/project");
     expect(process.env.CONTROL_SOURCE_DIR).toBe("/my/project");
   });
 
-  it("--api-url sets SUPERFIELD_API_URL env var", async () => {
+  it("--api-url sets SUPERFIELD_API_URL env var and keeps the API remote", async () => {
     const deps = makeDeps();
     await controlCommand(["--api-url", "http://remote:7837"], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(deps._startApiServer).not.toHaveBeenCalled();
     expect(process.env.SUPERFIELD_API_URL).toBe("http://remote:7837");
   });
 
-  it("health check 200 → no warning, calls _startControl", async () => {
+  it("default startup launches the local API server and calls _startControl", async () => {
     const deps = makeDeps();
     await controlCommand([], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps.warn).not.toHaveBeenCalled();
+    expect(deps._startApiServer).toHaveBeenCalledOnce();
+    expect(deps._fetch).not.toHaveBeenCalled();
     expect(deps._startControl).toHaveBeenCalledOnce();
   });
 
-  it("health check non-200 → warns with HTTP status", async () => {
+  it("explicit remote api-url non-200 → warns with HTTP status", async () => {
     const deps = makeDeps({
       _fetch: vi.fn().mockResolvedValue({
         ok: false,
         status: 503,
       } as Response) as unknown as typeof fetch,
     });
-    await controlCommand([], deps);
+    await controlCommand(["--api-url", "http://remote:9999"], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(deps._startApiServer).not.toHaveBeenCalled();
     expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("503"));
     expect(deps._startControl).toHaveBeenCalledOnce();
   });
 
-  it("health check network error → warns unreachable, still calls _startControl", async () => {
+  it("explicit remote api-url network error → warns unreachable, still calls _startControl", async () => {
     const deps = makeDeps({
       _fetch: vi
         .fn()
@@ -212,8 +221,9 @@ describe("controlCommand", () => {
           new Error("ECONNREFUSED"),
         ) as unknown as typeof fetch,
     });
-    await controlCommand([], deps);
+    await controlCommand(["--api-url", "http://remote:9999"], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(deps._startApiServer).not.toHaveBeenCalled();
     expect(deps.warn).toHaveBeenCalledWith(
       expect.stringContaining("unreachable"),
     );
@@ -224,6 +234,7 @@ describe("controlCommand", () => {
     const deps = makeDeps();
     await controlCommand(["--api-url", "http://custom:9999"], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(deps._startApiServer).not.toHaveBeenCalled();
     expect(deps._fetch).toHaveBeenCalledWith(
       expect.stringContaining("http://custom:9999"),
       expect.anything(),
