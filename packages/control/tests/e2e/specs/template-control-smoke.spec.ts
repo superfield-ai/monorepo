@@ -8,7 +8,7 @@
  *   2. No JS console errors / warnings during the run — enforced by the
  *      `capturedConsole` fixture in `../fixtures.ts`.
  *   3. Registration via POST /api/auth/register succeeds and an authed studio
- *      view (the Studio tab chat panel) renders with the session cookie.
+ *      view (the Studio tab feature pane) renders with the session cookie.
  *
  * The studio server is spawned by `tests/e2e/global-setup.ts`. Its child env
  * inherits `process.env`, so passing `SUPERFIELD_REPO_ROOT=...` to the
@@ -121,7 +121,7 @@ describeFn("template control smoke", () => {
 
     await page.goto("/");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-    // Studio tab is the default authed view; chat panel proves it mounted.
-    await expect(page.getByTestId("chat-panel")).toBeVisible();
+    // Studio tab is the default authed view; feature pane proves it mounted.
+    await expect(page.getByTestId("feature-pane")).toBeVisible();
   });
 });
