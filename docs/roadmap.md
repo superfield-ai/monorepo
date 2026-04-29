@@ -39,30 +39,10 @@ Two parallel delivery tracks. Track A is the orchestrator; Track B is the ops/de
 | B-5   | `deploy-env` + `rollback-env`: rolling update, health gate, clean-room mode              | ✅ Done                       |
 | B-6   | Operator CLI: `doctor`, `init`, `destroy`, `export-db`                                   | 🟡 Partial — see known issues |
 
-### Track B — Known issues (Phase 6)
-
-These correctness gaps were identified in review and must be fixed before the operator CLI is production-usable.
-
-**Critical**
-
-- `doctor` hard-fails four checks when `opts.mnemonic` is missing, so `allOk` can never be `true` from the shipped CLI path. Four checks in `packages/core/commands/doctor.ts` (lines 288, 368, 429, 497) require the mnemonic, but the CLI never accepts or derives one.
-- `doctor` fetches `DEPLOY_HOST_<ENV>` as a repo _variable_, but `setup-github` stores it as a _secret_ (`packages/core/commands/setup-github.ts:200`), so SSH/k3s/DB checks will never find the host.
-
-**High**
-
-- `init` step 6 ignores the deploy key derived in steps 1–5 and instead reads `DEPLOY_KEY` / `DEPLOY_KEY_FILE` from the ambient environment (`packages/core/commands/init.ts:253`). A fresh operator cannot complete `init` end-to-end without manual setup.
-- `init --provider gcp` always throws unless an internal `provision` function is injected (`packages/core/commands/init.ts:335`). GCP support is not functional from the CLI.
-- `export-db` AWS branch: `buildAwsAuthHeader()` emits `Signature=placeholder` — RDS snapshot calls will fail authentication (`packages/core/commands/export-db.ts:210`).
-- `export-db` is not wired to the per-env secret/host conventions used by `setup-github`. It expects `DEPLOY_HOST` / `DEPLOY_KEY` (no env suffix); the rest of the system uses `DEPLOY_HOST_<ENV>` / `DEPLOY_KEY_<ENV>`.
-
-**Medium**
-
-- Environment/key/host resolution is reimplemented separately in `doctor`, `init`, `deploy-env`, `rollback-env`, and `export-db`. This duplication is the root cause of the contradictory host-name assumptions above.
-
 ### Track B — Remaining planned work
 
-- 🟡 Fix Phase 6 known issues — partial; `resolveEnvCredentials` extraction in flight as PR #208
-- 🟡 AWS RDS snapshot: real SigV4 signing — in flight as PR #202
+- ✅ Extract shared `resolveEnvCredentials(env)` — landed in PR #208
+- ✅ AWS RDS snapshot: real SigV4 signing — landed in PR #202
 - ⬜ Integration tests for ops commands using a self-hosted runner as the deployment target (see GitHub issue)
 - ⬜ GCP provision path wired through the CLI (currently requires injected deps)
 
@@ -82,10 +62,10 @@ These correctness gaps were identified in review and must be fixed before the op
 | C-8   | Retire standalone `control/` repo (deprecation banner, workflows disabled)                                           | ✅ Done                      |
 | C-9   | Demo-readiness extensions: route map, design tokens, viewport, deploy view, turn timeline, blueprint feed, seed-demo | ⬜ In progress (T-48h, demo) |
 
-PR #204 (`cli-migration`) is currently **OPEN** — landing it is task D1 in `TASKS.md`.
+PR #204 (`cli-migration`) merged 2026-04-26.
 
 ### Track C — Cross-cutting
 
-- ⬜ Merge PR #204 to main
+- ✅ Merge PR #204 to main
 - ⬜ Archive `superfield-studio` GitHub repo after PR #73 merges
-- See `TASKS.md` "Post-demo backlog" for v2 items (screenshots, visual diff, cost charts, log search, fixture switcher)
+- Post-demo backlog: screenshots, visual diff, cost charts, log search, fixture switcher

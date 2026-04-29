@@ -147,31 +147,18 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 - ✅ `destroy` — tear down deployment with prod safety gate
 - ✅ `export-db` — pg_dump for local postgres, snapshot for managed DB (has bugs — see below)
 
-#### Phase B-6 known issues
-
-| Severity | Location                                                             | Description                                                                                        |
-| -------- | -------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------- |
-| Critical | `core/commands/doctor.ts:288,368,429,497`                            | Four checks require `opts.mnemonic` which the CLI never provides; `allOk` is permanently false     |
-| Critical | `core/commands/doctor.ts:350` vs `core/commands/setup-github.ts:200` | `doctor` reads `DEPLOY_HOST_<ENV>` as a repo variable; `setup-github` writes it as a secret        |
-| High     | `core/commands/init.ts:253`                                          | Step 6 reads `DEPLOY_KEY`/`DEPLOY_KEY_FILE` from env instead of using the key derived in steps 1–5 |
-| High     | `core/commands/init.ts:335`                                          | `--provider gcp` always throws unless `deps.provision` is injected; not callable from the CLI      |
-| High     | `core/commands/export-db.ts:210,252`                                 | AWS branch: `buildAwsAuthHeader()` emits `Signature=placeholder`; RDS calls fail auth              |
-| High     | `cli/commands/export-db.ts:4,91`                                     | `export-db` does not follow per-env naming (`DEPLOY_HOST`/`DEPLOY_KEY` vs `_<ENV>` suffix)         |
-| Medium   | All ops commands                                                     | Host/key resolution reimplemented separately in each command — root cause of the above             |
-
 ### Cross-cutting B (remaining)
 
-- 🟡 Fix Phase B-6 known issues — partial; `resolveEnvCredentials` helper in flight as PR #208
-- 🟡 Extract shared `resolveEnvCredentials(env)` — PR #208 (open)
+- ✅ Extract shared `resolveEnvCredentials(env)` — landed in PR #208
+- ✅ AWS RDS: real SigV4 signing — landed in PR #202
 - ⬜ Self-hosted runner CI for ops integration tests (see GitHub issue)
-- 🟡 AWS RDS: real SigV4 signing — in flight as PR #202
 - ⬜ GCP provision path functional from the CLI
 
 ---
 
 ## Track C — Control Webapp
 
-Spec: [`product.md` § Control Webapp](./product.md#control-webapp). Implementation contract: [`architecture.md` § Control Webapp](./architecture.md#control-webapp). All Track C work lives on the `cli-migration` branch (PR #204, currently OPEN).
+Spec: [`product.md` § Control Webapp](./product.md#control-webapp). Implementation contract: [`architecture.md` § Control Webapp](./architecture.md#control-webapp). Track C landed in PR #204 (merged 2026-04-26).
 
 ### Phase C-1 — Move studio source into `cli/packages/control/` ✅
 
@@ -223,7 +210,7 @@ Spec: [`product.md` § Control Webapp](./product.md#control-webapp). Implementat
 
 ### Phase C-9 — Demo-readiness extensions ⬜
 
-Scoped for the 2026-04-28 client demo. Cut lines and per-task spec are in `TASKS.md` (P0/P1/P2). Source spec: `architecture.md § Control Webapp` (Phase 9 routes).
+Scoped for the 2026-04-28 client demo. Source spec: `architecture.md § Control Webapp` (Phase 9 routes).
 
 | Item                                            | Pillar             | Status |
 | ----------------------------------------------- | ------------------ | ------ |
@@ -238,7 +225,7 @@ Scoped for the 2026-04-28 client demo. Cut lines and per-task spec are in `TASKS
 
 ### Cross-cutting C (post-demo)
 
-- ⬜ Merge PR #204 to main (currently OPEN)
+- ✅ Merge PR #204 to main
 - ⬜ Archive `superfield-studio` GitHub repo after PR #73 merges
 - ⬜ Per-turn screenshot capture into `docs/studio-sessions/`
 - ⬜ Visual diff before / after a turn

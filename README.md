@@ -91,13 +91,16 @@ bun run test
 
 ```
 packages/
-  cli/      Commands: all CLI entry points
-  core/     Config, outer loop, CI watchdog, ops orchestration
-  github/   Octokit wrapper (GitHub API client)
-  git/      isomorphic-git wrapper (no git binary)
+  cli/           Commands: all CLI entry points
+  core/          Config, outer loop, CI watchdog, ops orchestration
+  control/       Control webapp (Bun HTTP server + React UI)
+  control-core/  Shared types and utilities for the control layer
+  db/            Database schema and migration helpers
+  github/        Octokit wrapper (GitHub API client)
+  git/           isomorphic-git wrapper (no git binary)
 docs/
-  product.md    Product requirements
+  product.md       Product requirements
   architecture.md  Technical design
-  plan.md       Implementation plan and known issues
-  roadmap.md    Build order
+  plan.md          Implementation plan and known issues
+  roadmap.md       Build order
 ```
