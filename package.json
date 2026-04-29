@@ -24,6 +24,7 @@
     "record-fixtures": "bun scripts/record-github-fixtures.ts",
     "record-codex-fixtures": "bun scripts/record-codex-fixtures.ts",
     "record-claude-fixtures": "bun scripts/record-claude-fixtures.ts",
+    "record-studio-chat-goldens": "bun scripts/record-studio-chat-goldens.ts",
     "blueprint:compile": "bun run scripts/compile-blueprint.ts"
   },
   "devDependencies": {

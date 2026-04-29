@@ -57,11 +57,14 @@ export class ChatController {
   private turnState: TurnState = "idle";
   private listeners: Set<ChatControllerListener> = new Set();
   private readonly chatEndpoint: string;
+  private readonly resetEndpoint: string;
 
   constructor({
     chatEndpoint = "/studio/chat",
-  }: { chatEndpoint?: string } = {}) {
+    resetEndpoint = "/studio/reset",
+  }: { chatEndpoint?: string; resetEndpoint?: string } = {}) {
     this.chatEndpoint = chatEndpoint;
+    this.resetEndpoint = resetEndpoint;
   }
 
   /** Register a listener that is called on every state change. */
@@ -215,6 +218,17 @@ export class ChatController {
     }
   }
 
+  async resetSession(): Promise<void> {
+    const res = await fetch(this.resetEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) {
+      throw new Error(`reset failed with status ${res.status}`);
+    }
+  }
+
   private notify(): void {
     const state = this.getState();
     for (const listener of this.listeners) {
@@ -257,6 +271,7 @@ export type WsChatListener = (state: WsChatControllerState) => void;
 
 export interface WsChatControllerOptions {
   readonly wsEndpoint?: string;
+  readonly resetEndpoint?: string;
   readonly maxReconnectAttempts?: number;
   /** Backoff schedule in ms; index clamped to last entry. */
   readonly backoffMs?: readonly number[];
@@ -288,6 +303,7 @@ export class WsChatController {
   private reconnectTimer: unknown = null;
   private manuallyClosed = false;
   private readonly wsEndpoint: string;
+  private readonly resetEndpoint: string;
   private readonly maxReconnectAttempts: number;
   private readonly backoffMs: readonly number[];
   private readonly openSocket: (url: string) => WebSocketHandle;
@@ -296,6 +312,7 @@ export class WsChatController {
 
   constructor({
     wsEndpoint = "/studio/ws",
+    resetEndpoint = "/studio/reset",
     maxReconnectAttempts = 5,
     backoffMs = [500, 1000, 2000, 4000, 8000],
     openSocket,
@@ -303,6 +320,7 @@ export class WsChatController {
     clearTimer,
   }: WsChatControllerOptions = {}) {
     this.wsEndpoint = wsEndpoint;
+    this.resetEndpoint = resetEndpoint;
     this.maxReconnectAttempts = maxReconnectAttempts;
     this.backoffMs = backoffMs;
     this.openSocket =
@@ -453,6 +471,17 @@ export class WsChatController {
     if (this.turnState === "error") {
       this.turnState = "idle";
       this.notify();
+    }
+  }
+
+  async resetSession(): Promise<void> {
+    const res = await fetch(this.resetEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({}),
+    });
+    if (!res.ok) {
+      throw new Error(`reset failed with status ${res.status}`);
     }
   }
 

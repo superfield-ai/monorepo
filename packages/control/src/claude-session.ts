@@ -8,9 +8,7 @@
  *
  * ## Responsibilities
  *
- *   • Generate a session key once at startup and reuse it across all turns.
- *   • Invoke Claude CLI headlessly per turn:
- *       claude --dangerously-skip-permissions --session-key <key> -p <message>
+ *   • Invoke Claude CLI headlessly per turn via the superfield API.
  *   • Stream Claude stdout to the browser in real time via an SSE
  *     ReadableStream (see streamTurn).
  *   • Run the post-turn hook after each turn completes:
@@ -19,16 +17,6 @@
  *       3. Trigger the hot-swap flow (stubbed; separate feature issue)
  *   • Append a JSONL log entry to CONTROL_LOG_DIR/YYYY-MM-DD.jsonl after
  *     each turn.
- *
- * ## Session key format
- *
- *   <timestamp-hex>-<random-hex-16>
- *
- *   e.g.  0196f4a2b3c1-a3f9d2e4b8c1f0a7
- *
- *   The timestamp component is the Unix epoch in milliseconds encoded as a
- *   zero-padded 12-character hex string, giving monotonically increasing keys
- *   that sort chronologically. The random component adds 64 bits of entropy.
  *
  * ## JSONL log entry schema
  *
@@ -45,8 +33,6 @@
  *
  * ## Integration points
  *
- *   - index.ts: call generateSessionKey() at startup and pass the key to
- *     ClaudeSession (or store it on the singleton ClaudeSession instance).
  *   - router.ts: wire GET /studio/chat/stream → streamTurn()
  *   - process-manager.ts: register the Claude subprocess with pm.register()
  *     so graceful shutdown sends SIGTERM to an in-flight Claude process.
@@ -63,7 +49,7 @@ import type { ControlMode } from "./helpers";
 
 // ── Configuration ─────────────────────────────────────────────────────────────
 
-import { REPO_ROOT } from "./agent";
+import { REPO_ROOT, resolveSuperfieldApiUrl } from "./agent";
 
 /**
  * Resolve the log directory from CONTROL_LOG_DIR (defaults to ../studio-logs
@@ -74,30 +60,6 @@ function resolveLogDir(): string {
   // If it is an absolute path, use it directly. Otherwise resolve relative to
   // REPO_ROOT so the default of "../studio-logs" lands outside the git tree.
   return resolve(REPO_ROOT, raw);
-}
-
-// ── Session key generation ────────────────────────────────────────────────────
-
-/**
- * Generate a stable, unique session key for a Claude CLI session.
- *
- * Format: <timestamp-hex-12>-<random-hex-16>
- *
- * The timestamp part is the Unix epoch in milliseconds encoded as a
- * zero-padded 12-character lowercase hex string (covers ~77 years from epoch).
- * The random part is 8 cryptographically random bytes encoded as hex.
- *
- * Example: "0196f4a2b3c1-a3f9d2e4b8c1f0a7"
- *
- * @returns A session key string suitable for the --session-key Claude CLI flag.
- */
-export function generateSessionKey(): string {
-  const nowHex = Date.now().toString(16).padStart(12, "0");
-  const randBytes = crypto.getRandomValues(new Uint8Array(8));
-  const randHex = Array.from(randBytes)
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-  return `${nowHex}-${randHex}`;
 }
 
 // ── JSONL logging ─────────────────────────────────────────────────────────────
@@ -309,13 +271,11 @@ export async function capturePreTurnRef(): Promise<string> {
  * before the "done" event is emitted.
  *
  * @param message     The user message for this turn.
- * @param sessionKey  The persistent session key (generated at startup).
  * @param logDir      Optional log directory override (for tests).
  * @returns           A ReadableStream of SSE-formatted bytes.
  */
 export function streamTurn(
   message: string,
-  sessionKey: string,
   logDir?: string,
   mode: ControlMode = "design",
   _fetch: typeof fetch = globalThis.fetch,
@@ -331,7 +291,7 @@ export function streamTurn(
     async start(controller) {
       let response = "";
       let preRef = "HEAD";
-      let capturedSessionId = sessionKey;
+      let capturedSessionId = "";
 
       try {
         preRef = await capturePreTurnRef();
@@ -340,8 +300,7 @@ export function streamTurn(
       }
 
       const repoRoot = process.env.SUPERFIELD_REPO_ROOT ?? REPO_ROOT;
-      const superfieldApiUrl =
-        process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
+      const superfieldApiUrl = resolveSuperfieldApiUrl();
       const allowedToolsFlag = buildAllowedToolsFlag(mode);
 
       let apiRes: Response;
@@ -352,7 +311,6 @@ export function streamTurn(
           body: JSON.stringify({
             message,
             repoRoot,
-            sessionKey,
             allowedTools: allowedToolsFlag,
             mode,
           }),
@@ -465,14 +423,3 @@ export function streamTurn(
     },
   });
 }
-
-// ── Singleton session ─────────────────────────────────────────────────────────
-
-/**
- * Module-level session key, generated once at import time.
- *
- * The studio server is single-user by design. One session key covers the
- * entire lifetime of the server process. When the server stops and restarts,
- * a new session key is generated — there is no cross-restart continuity.
- */
-export const SESSION_KEY: string = generateSessionKey();

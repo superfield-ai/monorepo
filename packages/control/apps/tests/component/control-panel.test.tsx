@@ -27,11 +27,13 @@ import type {
   ChatController,
   ChatControllerState,
 } from "../../src/controllers/ChatController";
+import type { DemoIssue } from "../../src/components/IssueRail";
 import { debugStore } from "../../src/lib/debug-store";
 
 type ChatControllerMock = ChatController & {
   sendSteer: (context: string, sessionId: string) => Promise<void>;
   clearError: () => void;
+  resetSession: () => Promise<void>;
 };
 
 beforeEach(() => {
@@ -84,6 +86,7 @@ function makeChatControllerMock(
     sendMessage: vi.fn(async (_text: string) => {}),
     sendSteer: vi.fn(async (_context: string, _sessionId: string) => {}),
     clearError: vi.fn(() => {}),
+    resetSession: vi.fn(async () => {}),
   } as unknown as ChatControllerMock;
 
   return { controller, setState };
@@ -153,6 +156,20 @@ test("submit calls controller.sendMessage with the message text", async () => {
   expect(controller.sendMessage).toHaveBeenCalledWith("Fix the bug", "design");
 });
 
+test("reset session button calls controller.resetSession", async () => {
+  const { controller } = makeChatControllerMock({ turnState: "idle" });
+
+  const screen = render(
+    <ChatPanel controller={controller} clusterStatus="healthy" />,
+  );
+
+  const resetButton = screen.getByRole("button", { name: "Reset session" });
+  await expect.element(resetButton).toBeVisible();
+  await resetButton.click();
+
+  expect(controller.resetSession).toHaveBeenCalledOnce();
+});
+
 test("streaming chunks appear in message area as controller state updates", async () => {
   const { controller, setState } = makeChatControllerMock({
     turnState: "idle",
@@ -171,6 +188,124 @@ test("streaming chunks appear in message area as controller state updates", asyn
   });
 
   await expect.element(screen.getByText("Hello back")).toBeVisible();
+});
+
+test("switching to PRODUCT mode sends 'question' mode to controller", async () => {
+  const { controller } = makeChatControllerMock({ turnState: "idle" });
+
+  const screen = render(
+    <ChatPanel controller={controller} clusterStatus="healthy" />,
+  );
+
+  // Click the PRODUCT mode toggle button.
+  await screen.getByRole("button", { name: "PRODUCT" }).click();
+
+  await screen.getByTestId("chat-input").fill("Summarise the architecture");
+  await screen.getByTestId("chat-submit").click();
+
+  expect(controller.sendMessage).toHaveBeenCalledWith(
+    "Summarise the architecture",
+    "question",
+  );
+});
+
+test("STEER mode button is disabled when no issue is selected", async () => {
+  const { controller } = makeChatControllerMock({ turnState: "idle" });
+
+  const screen = render(
+    <ChatPanel controller={controller} clusterStatus="healthy" />,
+  );
+
+  const steerButton = screen.getByRole("button", { name: "STEER" });
+  await expect.element(steerButton).toBeDisabled();
+});
+
+test("STEER mode sends sendSteer frame when a selectedIssue is provided", async () => {
+  const { controller } = makeChatControllerMock({ turnState: "idle" });
+
+  const selectedIssue: DemoIssue = {
+    number: 42,
+    title: "Fix the auth bug",
+    state: "in_progress",
+    slot: 1,
+    sessionId: "live-session-abc123",
+    turnCount: 0,
+    body: "",
+    checklist: [],
+  };
+
+  const screen = render(
+    <ChatPanel
+      controller={controller}
+      clusterStatus="healthy"
+      selectedIssue={selectedIssue}
+    />,
+  );
+
+  // Steer button should now be enabled.
+  const steerButton = screen.getByRole("button", { name: "STEER" });
+  await expect.element(steerButton).not.toBeDisabled();
+  await steerButton.click();
+
+  await screen.getByTestId("chat-input").fill("Focus on the token expiry");
+  await screen.getByTestId("chat-submit").click();
+
+  expect(controller.sendSteer).toHaveBeenCalledWith(
+    "Focus on the token expiry",
+    "live-session-abc123",
+  );
+  expect(controller.sendMessage).not.toHaveBeenCalled();
+});
+
+test("steer mode shows issue banner with issue number and session prefix", async () => {
+  const { controller } = makeChatControllerMock({ turnState: "idle" });
+
+  const selectedIssue: DemoIssue = {
+    number: 7,
+    title: "Add dark mode",
+    state: "in_progress",
+    slot: 1,
+    sessionId: "session-xyz-9876",
+    turnCount: 2,
+    body: "",
+    checklist: [],
+  };
+
+  const screen = render(
+    <ChatPanel
+      controller={controller}
+      clusterStatus="healthy"
+      mode="steer"
+      selectedIssue={selectedIssue}
+    />,
+  );
+
+  await expect
+    .element(screen.getByTestId("selected-issue-banner"))
+    .toBeVisible();
+  await expect
+    .element(screen.getByText(/Steering locked to issue #7/))
+    .toBeVisible();
+});
+
+test("error state clears before the next message is sent", async () => {
+  const { controller, setState } = makeChatControllerMock({
+    turnState: "error",
+  });
+
+  const screen = render(
+    <ChatPanel controller={controller} clusterStatus="healthy" />,
+  );
+
+  // Transition to error state so the controller is in the right state.
+  setState({ turnState: "error" });
+
+  await screen.getByTestId("chat-input").fill("Retry this");
+  await screen.getByTestId("chat-submit").click();
+
+  // clearError should have been called before sendMessage.
+  expect(controller.clearError).toHaveBeenCalledOnce();
+  expect(controller.sendMessage).toHaveBeenCalledWith("Retry this", "design");
 });
 
 // ---------------------------------------------------------------------------

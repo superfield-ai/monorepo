@@ -59,6 +59,25 @@ export function resolveIssueDbPath(repoRoot = process.cwd()): string {
   return resolve(repoRoot, ".superfield", "issues.json");
 }
 
+export interface ClaudeSessionDb {
+  version: 1;
+  updatedAt: string;
+  sessionId: string | null;
+}
+
+export interface ClaudeSessionStore {
+  getSessionId(): Promise<string | null>;
+  setSessionId(sessionId: string): Promise<void>;
+  clearSessionId(): Promise<void>;
+  snapshot(): Promise<ClaudeSessionDb>;
+}
+
+export function resolveClaudeSessionDbPath(
+  baseDir = process.env.CONTROL_LOG_DIR ?? "../studio-logs",
+): string {
+  return resolve(baseDir, "claude-session.json");
+}
+
 function createDefaultIssueDb(): LocalIssueDb {
   return {
     version: 1,
@@ -137,6 +156,58 @@ export async function openIssueStore(
         version: db.data.version,
         updatedAt: db.data.updatedAt,
         issues: [...db.data.issues],
+      };
+    },
+  };
+}
+
+function createDefaultClaudeSessionDb(): ClaudeSessionDb {
+  return {
+    version: 1,
+    updatedAt: new Date(0).toISOString(),
+    sessionId: null,
+  };
+}
+
+/**
+ * Open the embedded Claude session store.
+ *
+ * The server keeps the active Claude session id here so the first turn starts
+ * a fresh Claude conversation, subsequent turns can resume it, and reset can
+ * clear the stored id.
+ */
+export async function openClaudeSessionStore(
+  filePath = resolveClaudeSessionDbPath(),
+): Promise<ClaudeSessionStore> {
+  await mkdir(dirname(filePath), { recursive: true });
+  const db = await JSONFilePreset<ClaudeSessionDb>(
+    filePath,
+    createDefaultClaudeSessionDb(),
+  );
+
+  return {
+    async getSessionId() {
+      return db.data.sessionId;
+    },
+    async setSessionId(sessionId) {
+      const updatedAt = new Date().toISOString();
+      await db.update((data) => {
+        data.sessionId = sessionId;
+        data.updatedAt = updatedAt;
+      });
+    },
+    async clearSessionId() {
+      const updatedAt = new Date().toISOString();
+      await db.update((data) => {
+        data.sessionId = null;
+        data.updatedAt = updatedAt;
+      });
+    },
+    async snapshot() {
+      return {
+        version: db.data.version,
+        updatedAt: db.data.updatedAt,
+        sessionId: db.data.sessionId,
       };
     },
   };

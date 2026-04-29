@@ -164,6 +164,14 @@ export function ControlChat({
     await commitControllerRef.current.rollback(hash);
   }
 
+  async function resetSession() {
+    try {
+      await chatControllerRef.current.resetSession();
+    } catch (err) {
+      console.error("[control-chat] reset session failed:", err);
+    }
+  }
+
   const loading = chatState.turnState === "streaming";
   const { messages } = chatState;
   const { commits, timeline, error } = commitState;
@@ -259,6 +267,16 @@ export function ControlChat({
             {error}
           </div>
         )}
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={() => void resetSession()}
+            className="inline-flex items-center gap-1 rounded-full border border-zinc-200 px-3 py-1 text-[10px] font-mono uppercase tracking-[0.2em] text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+          >
+            <RotateCcw size={10} />
+            Reset session
+          </button>
+        </div>
         {messages.length === 0 && (
           <div className="flex-1 flex flex-col items-center justify-center text-center">
             <p className="text-xs text-zinc-400">

@@ -245,6 +245,14 @@ function ProductChatPanel({
     textareaRef.current?.focus();
   }
 
+  async function handleResetSession() {
+    try {
+      await controllerRef.current.resetSession();
+    } catch (err) {
+      console.error("[product-tab] reset session failed:", err);
+    }
+  }
+
   return (
     <div
       data-testid="product-chat-panel"
@@ -271,18 +279,27 @@ function ProductChatPanel({
         <span className="label" style={{ color: "var(--fg-1)" }}>
           AGENT — PRODUCT
         </span>
-        <span
-          style={{
-            fontFamily: "var(--font-mono)",
-            fontSize: "var(--text-xs)",
-            color:
-              chatState.connState === "open"
-                ? "var(--status-nominal)"
-                : "var(--fg-3)",
-          }}
-        >
-          {chatState.connState.toUpperCase()}
-        </span>
+        <div className="flex items-center gap-2">
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              color:
+                chatState.connState === "open"
+                  ? "var(--status-nominal)"
+                  : "var(--fg-3)",
+            }}
+          >
+            {chatState.connState.toUpperCase()}
+          </span>
+          <button
+            type="button"
+            onClick={() => void handleResetSession()}
+            className="rounded-full border border-zinc-200 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-500 hover:border-zinc-300 hover:text-zinc-700"
+          >
+            Reset session
+          </button>
+        </div>
       </div>
 
       {/* Message list */}

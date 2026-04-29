@@ -214,6 +214,24 @@ describe("connect", () => {
     expect(state.messages[0]?.id).toBe("03030303030303030303030303030303");
     expect(state.messages[1]?.id).toBe("04040404040404040404040404040404");
   });
+
+  it("resetSession posts to the reset endpoint", async () => {
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchSpy);
+
+    const { ctrl } = makeHarness();
+    await ctrl.resetSession();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/studio/reset",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 });
 
 // ── reconnect state machine ───────────────────────────────────────────────────

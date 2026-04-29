@@ -2,53 +2,14 @@
  * Unit tests for studio/apps/server/src/claude-session.ts
  *
  * Issue #166 test plan items covered:
- *   - Unit test: session key generation produces valid key format
  *   - Unit test: JSONL log entry contains all required fields
+ *   - Unit test: streamTurn posts the prompt without a synthetic session key
  */
 
-import { describe, it, expect, afterEach, beforeEach } from "vitest";
+import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { mkdirSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import { tmpdir } from "os";
-
-// ── generateSessionKey ────────────────────────────────────────────────────────
-
-describe("generateSessionKey", () => {
-  it("produces a key matching the expected format", async () => {
-    const { generateSessionKey } = await import("../../src/claude-session");
-    const key = generateSessionKey();
-    // Format: <12-char-hex>-<16-char-hex>
-    expect(key).toMatch(/^[0-9a-f]{12}-[0-9a-f]{16}$/);
-  });
-
-  it("produces unique keys on successive calls", async () => {
-    const { generateSessionKey } = await import("../../src/claude-session");
-    const keys = new Set(
-      Array.from({ length: 50 }, () => generateSessionKey()),
-    );
-    expect(keys.size).toBe(50);
-  });
-
-  it("timestamp portion increases monotonically (within the same ms bucket)", async () => {
-    const { generateSessionKey } = await import("../../src/claude-session");
-    const k1 = generateSessionKey();
-    const k2 = generateSessionKey();
-    const ts1 = parseInt(k1.split("-")[0]!, 16);
-    const ts2 = parseInt(k2.split("-")[0]!, 16);
-    // ts2 must be >= ts1 (both generated in quick succession).
-    expect(ts2).toBeGreaterThanOrEqual(ts1);
-  });
-
-  it("timestamp portion encodes a recent Unix epoch millisecond value", async () => {
-    const { generateSessionKey } = await import("../../src/claude-session");
-    const before = Date.now();
-    const key = generateSessionKey();
-    const after = Date.now();
-    const ts = parseInt(key.split("-")[0]!, 16);
-    expect(ts).toBeGreaterThanOrEqual(before);
-    expect(ts).toBeLessThanOrEqual(after);
-  });
-});
 
 // ── appendTurnLog ─────────────────────────────────────────────────────────────
 
@@ -165,6 +126,36 @@ describe("appendTurnLog", () => {
   });
 });
 
+// ── streamTurn ────────────────────────────────────────────────────────────────
+
+describe("streamTurn", () => {
+  it("posts without a synthetic session key", async () => {
+    const streamTmpDir = join(
+      tmpdir(),
+      `claude-session-stream-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
+    mkdirSync(streamTmpDir, { recursive: true });
+    const fetchSpy = vi.fn().mockResolvedValue(
+      new Response(
+        'event: session\ndata: {"sessionId":"abc"}\n\ndata: ok\n\nevent: done\ndata: {"filesChanged":[]}\n\n',
+        {
+          headers: { "Content-Type": "text/event-stream" },
+        },
+      ),
+    );
+    const { streamTurn } = await import("../../src/claude-session");
+    const stream = streamTurn("hello world", streamTmpDir, "design", fetchSpy as unknown as typeof fetch);
+    await new Response(stream).text();
+
+    expect(fetchSpy).toHaveBeenCalledOnce();
+    const [, opts] = fetchSpy.mock.calls[0] as [string, RequestInit];
+    const body = JSON.parse(opts.body as string) as Record<string, unknown>;
+    expect(body.message).toBe("hello world");
+    expect(body).not.toHaveProperty("sessionKey");
+    rmSync(streamTmpDir, { recursive: true, force: true });
+  });
+});
+
 // ── detectAffectedServices ────────────────────────────────────────────────────
 
 describe("detectAffectedServices", () => {
@@ -206,15 +197,5 @@ describe("detectAffectedServices", () => {
     expect(
       detectAffectedServices(["scripts/dev-start.ts", "docker-compose.yml"]),
     ).toEqual([]);
-  });
-});
-
-// ── SESSION_KEY ───────────────────────────────────────────────────────────────
-
-describe("SESSION_KEY", () => {
-  it("is a non-empty string with valid key format", async () => {
-    const { SESSION_KEY } = await import("../../src/claude-session");
-    expect(typeof SESSION_KEY).toBe("string");
-    expect(SESSION_KEY).toMatch(/^[0-9a-f]{12}-[0-9a-f]{16}$/);
   });
 });

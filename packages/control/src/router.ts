@@ -30,8 +30,7 @@
  * (/api/auth/register, /api/auth/login) are handled before the auth check.
  *
  * The cluster-events and chat-stream SSE endpoints are deliberately unauthenticated:
- * cluster status is non-sensitive, and the streaming endpoint is session-scoped with
- * its own session key check.
+ * cluster status is non-sensitive, and the streaming endpoint is session-scoped.
  *
  * ## Proxy behaviour
  *
@@ -206,9 +205,6 @@ export async function serveStaticAsset(
  *     event: done\ndata: \n\n   — turn complete
  *     event: error\ndata: ...\n\n — non-zero exit code
  *
- *   The session key is the module-level SESSION_KEY from claude-session.ts
- *   (generated once at server startup and reused across all turns).
- *
  * Rebuild endpoint (docs/cluster-definition.md — "On a code change"):
  *   POST /studio/rebuild
  *
@@ -311,7 +307,7 @@ export async function route(
   // SSE stream endpoint for Claude CLI turns.
   // Canonical spec: docs/studio-mode.md — "Claude CLI Integration"
   if (req.method === "GET" && pathname === "/studio/chat/stream") {
-    const { streamTurn, SESSION_KEY } = await import("./claude-session");
+    const { streamTurn } = await import("./claude-session");
     const message = url.searchParams.get("message") ?? "";
     if (!message.trim()) {
       return errorResponse({
@@ -323,7 +319,7 @@ export async function route(
     const modeParam = url.searchParams.get("mode");
     const mode =
       modeParam === "question" ? ("question" as const) : ("design" as const);
-    const stream = streamTurn(message, SESSION_KEY, config.logDir, mode);
+    const stream = streamTurn(message, config.logDir, mode);
     return new Response(stream, {
       status: 200,
       headers: {

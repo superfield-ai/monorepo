@@ -31,6 +31,10 @@ export default defineConfig({
         find: /^@superfield\/control-core$/,
         replacement: resolve(pkgRoot, "../control-core/index.ts"),
       },
+      {
+        find: /^@superfield\/db$/,
+        replacement: resolve(pkgRoot, "../db/index.ts"),
+      },
     ],
   },
   test: {

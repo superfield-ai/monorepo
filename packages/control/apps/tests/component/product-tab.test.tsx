@@ -182,6 +182,7 @@ function makeChatControllerMock(
     connect: vi.fn(() => {}),
     disconnect: vi.fn(() => {}),
     sendMessage: vi.fn(async (_text: string) => {}),
+    resetSession: vi.fn(async () => {}),
   } as unknown as WsChatController;
 
   return { controller, setState };
@@ -237,6 +238,25 @@ test("product chat submit calls sendMessage on the injected controller", async (
   expect(chatController.sendMessage).toHaveBeenCalledWith(
     "How does steer work?",
   );
+});
+
+test("product chat reset session button calls resetSession", async () => {
+  const { controller: docsController } = makeDocsControllerMock();
+  const { controller: chatController } = makeChatControllerMock({
+    messages: [],
+    turnState: "idle",
+  });
+
+  const screen = render(
+    <ProductTab
+      docsController={docsController}
+      chatController={chatController}
+    />,
+  );
+
+  await screen.getByRole("button", { name: "Reset session" }).click();
+
+  expect(chatController.resetSession).toHaveBeenCalledOnce();
 });
 
 test("product chat supports a browser multi-turn conversation without crypto.randomUUID", async () => {

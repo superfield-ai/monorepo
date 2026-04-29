@@ -18,7 +18,6 @@
  */
 
 import type { WebSocketHandler, ServerWebSocket } from "bun";
-import { SESSION_KEY } from "./claude-session";
 import { streamTurn } from "./claude-session";
 
 export interface WsData {
@@ -81,17 +80,11 @@ export const controlWsHandler: WebSocketHandler<WsData> = {
       ) => baseFetch(input, { ...init, signal: ac.signal })) as typeof fetch;
 
       const _streamTurn = ws.data._streamTurn ?? streamTurn;
-      const stream = _streamTurn(
-        frame.message,
-        SESSION_KEY,
-        ws.data.logDir,
-        mode,
-        abortableFetch,
-      );
+      const stream = _streamTurn(frame.message, ws.data.logDir, mode, abortableFetch);
       const reader = stream.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-      let capturedSessionId = SESSION_KEY;
+      let capturedSessionId = "";
       let filesChanged: string[] = [];
 
       try {

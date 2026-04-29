@@ -31,8 +31,10 @@ import { buildQuestionModePrompt } from "./question-mode";
 import { buildAllowedToolsFlag } from "./permissions";
 
 export const REPO_ROOT = process.env.SUPERFIELD_REPO_ROOT ?? process.cwd();
-const SUPERFIELD_API_URL =
-  process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
+
+export function resolveSuperfieldApiUrl(): string {
+  return process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
+}
 
 /**
  * Collect the full text from a POST /studio/run SSE stream.
@@ -111,7 +113,7 @@ export async function runAgent(
 
   const allowedTools = buildAllowedToolsFlag(mode);
 
-  const res = await _fetch(`${SUPERFIELD_API_URL}/studio/run`, {
+  const res = await _fetch(`${resolveSuperfieldApiUrl()}/studio/run`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({

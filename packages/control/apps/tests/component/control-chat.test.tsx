@@ -71,6 +71,7 @@ function makeChatControllerMock(
       messages: [...currentState.messages],
     })),
     sendMessage: vi.fn(async (_text: string) => {}),
+    resetSession: vi.fn(async () => {}),
   } as unknown as ChatController;
 
   return { controller, setState };
@@ -182,6 +183,24 @@ test("rollback button calls commitController.rollback(sha) with the correct sha"
   await rollbackButton.click();
 
   expect(commitController.rollback).toHaveBeenCalledWith("abc1234");
+});
+
+test("reset session button calls chatController.resetSession", async () => {
+  const { controller: chatController } = makeChatControllerMock();
+  const { controller: commitController } = makeCommitControllerMock();
+
+  const screen = render(
+    <ControlChat
+      chatController={chatController}
+      commitController={commitController}
+    />,
+  );
+
+  const resetButton = screen.getByRole("button", { name: "Reset session" });
+  await expect.element(resetButton).toBeVisible();
+  await resetButton.click();
+
+  expect(chatController.resetSession).toHaveBeenCalledOnce();
 });
 
 test("commit list does not roll back when user cancels confirmation", async () => {

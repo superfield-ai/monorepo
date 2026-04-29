@@ -163,14 +163,28 @@ describe("POST /studio/run", () => {
     expect(Array.isArray(parsed.filesChanged)).toBe(true);
   });
 
-  it("valid message + sessionKey → response is still SSE", async () => {
+  it("persists the Claude session id and resumes on the next turn", async () => {
+    const resetRes = await fetch(`http://127.0.0.1:${port}/studio/reset`, {
+      method: "POST",
+    });
+    expect(resetRes.status).toBe(200);
+
     const res = await postRun({
       message: "hello",
       repoRoot: "/tmp",
-      sessionKey: "key-123",
     });
     expect(res.headers.get("Content-Type")).toContain("text/event-stream");
-    await res.body?.cancel();
+    const events = await collectSse(res);
+    const sessionEvent = events.find((e) => e.event === "session");
+    expect(sessionEvent).toBeDefined();
+    const parsed = JSON.parse(sessionEvent!.data) as { sessionId: string };
+    expect(parsed.sessionId).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/,
+    );
+
+    const second = await postRun({ message: "follow up", repoRoot: "/tmp" });
+    expect(second.headers.get("Content-Type")).toContain("text/event-stream");
+    await collectSse(second);
 
     const today = new Date().toISOString().slice(0, 10);
     const traceFile = join(traceDir, `${today}.traces.jsonl`);
@@ -191,8 +205,8 @@ describe("POST /studio/run", () => {
       .at(-1)!;
     expect(start.level).toBe("info");
     expect(start.message).toBe("POST /studio/run started");
-    expect(start.context?.args).toContain("--session-id");
-    expect(start.context?.args).not.toContain("--session-key");
+    expect(start.context?.args).toContain("--resume");
+    expect(start.context?.args).toContain(parsed.sessionId);
   });
 
   it("writes a trace record when claude exits nonzero", async () => {

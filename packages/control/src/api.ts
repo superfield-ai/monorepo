@@ -13,7 +13,7 @@
  *   GET  /studio/commits   — session commit log since fork point
  *   GET  /studio/timeline  — checkpoint timeline with timestamps
  *   POST /studio/rollback  — hard reset HEAD to a prior commit hash
- *   POST /studio/reset     — clear the in-memory session message history
+ *   POST /studio/reset     — clear the in-memory session history + Claude resume id
  *   POST /studio/chat      — run the Claude agent for one turn
  *
  * ## Studio mode detection
@@ -25,7 +25,7 @@
 
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
-import { runAgent, REPO_ROOT } from "./agent";
+import { runAgent, REPO_ROOT, resolveSuperfieldApiUrl } from "./agent";
 import {
   getCurrentBranch,
   getSessionCommits,
@@ -45,6 +45,17 @@ import { appendTraceLog } from "@superfield/core";
 
 // In-memory session context per studio session
 const sessionMessages: ControlMessage[] = [];
+
+async function resetClaudeSessionStore(): Promise<void> {
+  const res = await fetch(`${resolveSuperfieldApiUrl()}/studio/reset`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({}),
+  });
+  if (!res.ok) {
+    throw new Error(`POST /studio/reset failed: ${res.status}`);
+  }
+}
 
 /**
  * Extract a plain-language checkpoint summary from the agent's reply.
@@ -176,6 +187,12 @@ export async function handleControlRequest(
 
   // POST /studio/reset — clear session context
   if (req.method === "POST" && url.pathname === "/studio/reset") {
+    try {
+      await resetClaudeSessionStore();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return json({ error: `reset failed: ${msg}` }, 502);
+    }
     sessionMessages.length = 0;
     return json({ ok: true });
   }

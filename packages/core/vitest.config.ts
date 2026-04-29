@@ -4,6 +4,7 @@ import path from "node:path";
 export default defineConfig({
   resolve: {
     alias: {
+      "@superfield/db": path.resolve(__dirname, "../db/index.ts"),
       "@superfield/github": path.resolve(__dirname, "../github/index.ts"),
       "@superfield/git": path.resolve(__dirname, "../git/index.ts"),
     },

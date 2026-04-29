@@ -206,9 +206,8 @@ describe("Claude subprocess — correct flags via API fixture", () => {
   });
 
   it("invokes the claude stub with --dangerously-skip-permissions via API server", async () => {
-    const { streamTurn, SESSION_KEY } =
-      await import("../../src/claude-session");
-    const stream = streamTurn("test flag check", SESSION_KEY, tmpDir, "design");
+    const { streamTurn } = await import("../../src/claude-session");
+    const stream = streamTurn("test flag check", tmpDir, "design");
     const res = new Response(stream, {
       headers: { "Content-Type": "text/event-stream" },
     });
@@ -218,7 +217,8 @@ describe("Claude subprocess — correct flags via API fixture", () => {
     const log = readFileSync(claudeLogPath, "utf8");
 
     expect(log).toContain("--dangerously-skip-permissions");
-    expect(log).toContain("-p");
+    expect(log).toContain("--output-format");
+    expect(log).toContain("json");
     expect(log).toContain("test flag check");
   });
 });

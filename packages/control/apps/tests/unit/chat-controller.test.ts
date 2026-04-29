@@ -187,4 +187,16 @@ describe("ChatController", () => {
     resolveFetch(makeJsonResponse({ reply: "done" }));
     await first;
   });
+
+  it("resetSession posts to the reset endpoint", async () => {
+    const fetchSpy = vi.fn(() => Promise.resolve(makeJsonResponse({ ok: true })));
+    vi.stubGlobal("fetch", fetchSpy);
+
+    await ctrl.resetSession();
+
+    expect(fetchSpy).toHaveBeenCalledWith(
+      "/studio/reset",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
 });

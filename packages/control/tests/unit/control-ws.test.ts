@@ -43,7 +43,7 @@ function makeSseStream(text: string): ReadableStream<Uint8Array> {
 
 /** streamTurn stub that emits the given SSE text. */
 function makeStreamTurn(sseText: string): WsData["_streamTurn"] {
-  return () => makeSseStream(sseText);
+  return (_message, _logDir, _mode, _fetch) => makeSseStream(sseText);
 }
 
 // ── Invalid frames ─────────────────────────────────────────────────────────────
@@ -75,10 +75,9 @@ describe("turn frame", () => {
       asServerWs(ws),
       JSON.stringify({ type: "turn", message: "hello" }),
     );
-    const [, , , mode] = streamTurnSpy.mock.calls[0] as [
+    const [, , mode] = streamTurnSpy.mock.calls[0] as [
       string,
       string,
-      string | undefined,
       string,
     ];
     expect(mode).toBe("design");
@@ -97,8 +96,7 @@ describe("turn frame", () => {
       asServerWs(ws),
       JSON.stringify({ type: "turn", message: "q", mode: "question" }),
     );
-    const [, , , mode] = streamTurnSpy.mock.calls[0] as unknown as [
-      string,
+    const [, , mode] = streamTurnSpy.mock.calls[0] as unknown as [
       string,
       string,
       string,
@@ -196,7 +194,7 @@ describe("turn frame", () => {
     );
     let calls = 0;
     const ws = makeWs({
-      _streamTurn: (_msg, _key, _dir, _mode, fetchFn) => {
+      _streamTurn: (_msg, _dir, _mode, fetchFn) => {
         calls++;
         if (calls === 1) {
           // Record the AbortController by making a dummy fetch call to capture the signal.

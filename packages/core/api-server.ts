@@ -6,6 +6,11 @@ import {
 import { randomUUID } from "node:crypto";
 import { spawn as nodeSpawn } from "node:child_process";
 import { Readable } from "node:stream";
+import {
+  openClaudeSessionStore,
+  resolveClaudeSessionDbPath,
+  type ClaudeSessionStore,
+} from "@superfield/db";
 import type { ApiState } from "./api-state.js";
 import type { Logger } from "./logger.js";
 import { appendTraceLog } from "./trace-log.js";
@@ -52,6 +57,32 @@ function spawnClaude(args: string[], cwd: string): BunSpawnResult {
       proc.once("close", (code) => resolve(code ?? 1));
     }),
   };
+}
+
+interface ClaudeJsonResult {
+  type: string;
+  subtype: string;
+  is_error: boolean;
+  session_id: string;
+  result?: string;
+  error?: string;
+  cost_usd?: number;
+  duration_ms?: number;
+  num_turns?: number;
+}
+
+const claudeSessionStores = new Map<string, Promise<ClaudeSessionStore>>();
+
+function getClaudeSessionStore(logDir?: string): Promise<ClaudeSessionStore> {
+  const filePath = resolveClaudeSessionDbPath(
+    logDir ?? process.env.CONTROL_LOG_DIR ?? "../studio-logs",
+  );
+  let store = claudeSessionStores.get(filePath);
+  if (!store) {
+    store = openClaudeSessionStore(filePath);
+    claudeSessionStores.set(filePath, store);
+  }
+  return store;
 }
 
 export interface ApiServerOpts {
@@ -196,12 +227,28 @@ export function startApiServer(
       return json(res, 200, { requestId, accepted: true });
     }
 
+    // POST /studio/reset — clear the stored Claude session id
+    if (method === "POST" && url === "/studio/reset") {
+      const sessionStore = await getClaudeSessionStore(logDir);
+      await sessionStore.clearSessionId();
+      appendTraceLog(
+        {
+          ts: new Date().toISOString(),
+          origin: "backend" as const,
+          source: "api-server",
+          level: "info",
+          message: "POST /studio/reset completed",
+        },
+        logDir,
+      );
+      return json(res, 200, { ok: true });
+    }
+
     // POST /studio/run — SSE stream of a Claude agent turn
     if (method === "POST" && url === "/studio/run") {
       const body = (await readBody(req)) as {
         message?: string;
         repoRoot?: string;
-        sessionKey?: string;
         allowedTools?: string;
         mode?: string;
       };
@@ -210,21 +257,24 @@ export function startApiServer(
         return json(res, 400, { error: "message is required" });
       }
 
-      const sessionId = randomUUID();
       const repoRoot = body.repoRoot ?? process.cwd();
       const allowedTools =
         body.allowedTools ?? "Read,Edit,Write,Bash,Glob,Grep";
+      const sessionStore = await getClaudeSessionStore(logDir);
+      const existingSessionId = await sessionStore.getSessionId();
       const args = [
         "claude",
-        "-p",
-        body.message,
+        "--print",
+        "--output-format",
+        "json",
         "--dangerously-skip-permissions",
         "--allowed-tools",
         allowedTools,
       ];
-      if (body.sessionKey) {
-        args.push("--session-id", body.sessionKey);
+      if (existingSessionId) {
+        args.push("--resume", existingSessionId);
       }
+      args.push(body.message);
 
       const traceBase = {
         ts: new Date().toISOString(),
@@ -240,7 +290,7 @@ export function startApiServer(
             repoRoot,
             mode: body.mode ?? "design",
             allowedTools,
-            sessionKeyPresent: Boolean(body.sessionKey),
+            sessionIdPresent: Boolean(existingSessionId),
             args,
           },
         },
@@ -252,9 +302,6 @@ export function startApiServer(
         "Cache-Control": "no-cache",
         Connection: "keep-alive",
       });
-
-      // Emit session ID before any content chunks.
-      res.write(`event: session\ndata: ${JSON.stringify({ sessionId })}\n\n`);
 
       let proc: BunSpawnResult | undefined;
       let stdoutText = "";
@@ -273,7 +320,7 @@ export function startApiServer(
               repoRoot,
               mode: body.mode ?? "design",
               allowedTools,
-              sessionKeyPresent: Boolean(body.sessionKey),
+              sessionIdPresent: Boolean(existingSessionId),
               args,
               error: msg,
             },
@@ -285,32 +332,12 @@ export function startApiServer(
         return;
       }
 
-      // Stream stdout chunks as SSE data events.
-      const reader = (proc.stdout as ReadableStream<Uint8Array>).getReader();
-      const decoder = new TextDecoder();
       try {
-        while (true) {
-          const { done, value } = await reader.read();
-          if (done) break;
-          const chunk = decoder.decode(value, { stream: true });
-          stdoutText += chunk;
-          // Prefix each line with "data: " for proper SSE formatting.
-          for (const line of chunk.split("\n")) {
-            res.write(`data: ${line}\n`);
-          }
-          res.write("\n");
-        }
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        res.write(`event: error\ndata: ${JSON.stringify(msg)}\n\n`);
-        res.end();
-        return;
-      }
-
-      try {
+        stdoutText = await new Response(proc.stdout).text();
         stderrText = await new Response(proc.stderr).text();
       } catch {
-        stderrText = "";
+        stdoutText = stdoutText || "";
+        stderrText = stderrText || "";
       }
 
       const exitCode = await proc.exited;
@@ -329,7 +356,7 @@ export function startApiServer(
               repoRoot,
               mode: body.mode ?? "design",
               allowedTools,
-              sessionKeyPresent: Boolean(body.sessionKey),
+              sessionIdPresent: Boolean(existingSessionId),
               args,
               exitCode,
               stderr: stderrText,
@@ -339,17 +366,23 @@ export function startApiServer(
           logDir,
         );
         res.write(`event: error\ndata: ${JSON.stringify(errorMessage)}\n\n`);
-      } else {
+        res.end();
+        return;
+      }
+      let parsed: ClaudeJsonResult;
+      try {
+        parsed = JSON.parse(stdoutText) as ClaudeJsonResult;
+      } catch {
         appendTraceLog(
           {
             ...traceBase,
-            level: "info",
-            message: "POST /studio/run completed",
+            level: "error",
+            message: "POST /studio/run failed",
             context: {
               repoRoot,
               mode: body.mode ?? "design",
               allowedTools,
-              sessionKeyPresent: Boolean(body.sessionKey),
+              sessionIdPresent: Boolean(existingSessionId),
               args,
               exitCode,
               stderr: stderrText,
@@ -359,9 +392,71 @@ export function startApiServer(
           logDir,
         );
         res.write(
-          `event: done\ndata: ${JSON.stringify({ filesChanged: [] })}\n\n`,
+          `event: error\ndata: ${JSON.stringify("claude response was not valid JSON")}\n\n`,
         );
+        res.end();
+        return;
       }
+
+      if (!parsed.session_id) {
+        appendTraceLog(
+          {
+            ...traceBase,
+            level: "error",
+            message: "POST /studio/run failed",
+            context: {
+              repoRoot,
+              mode: body.mode ?? "design",
+              allowedTools,
+              sessionIdPresent: Boolean(existingSessionId),
+              args,
+              exitCode,
+              stderr: stderrText,
+              stdout: stdoutText,
+            },
+          },
+          logDir,
+        );
+        res.write(
+          `event: error\ndata: ${JSON.stringify("claude response missing session_id")}\n\n`,
+        );
+        res.end();
+        return;
+      }
+
+      await sessionStore.setSessionId(parsed.session_id);
+
+      const responseText = (parsed.result ?? parsed.error ?? "").trim();
+      res.write(
+        `event: session\ndata: ${JSON.stringify({ sessionId: parsed.session_id })}\n\n`,
+      );
+      if (responseText.length > 0) {
+        for (const line of responseText.split(/\r?\n/)) {
+          res.write(`data: ${line}\n\n`);
+        }
+      }
+      appendTraceLog(
+        {
+          ...traceBase,
+          level: "info",
+          message: "POST /studio/run completed",
+          context: {
+            repoRoot,
+            mode: body.mode ?? "design",
+            allowedTools,
+            sessionId: parsed.session_id,
+            sessionIdPresent: Boolean(existingSessionId),
+            args,
+            exitCode,
+            stderr: stderrText,
+            stdout: stdoutText,
+          },
+        },
+        logDir,
+      );
+      res.write(
+        `event: done\ndata: ${JSON.stringify({ filesChanged: [] })}\n\n`,
+      );
       res.end();
       return;
     }
