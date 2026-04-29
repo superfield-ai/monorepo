@@ -13,6 +13,7 @@ test("clicking mobile/tablet/desktop sets the iframe width", async ({
 }) => {
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+  await page.click('[data-testid="tab-viewport"]');
   await expect(page.getByTestId("viewport-toolbar")).toBeVisible();
 
   const iframe = page.getByTestId("app-iframe");
@@ -32,9 +33,11 @@ test("viewport selection persists across reload via localStorage", async ({
 }) => {
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+  await page.click('[data-testid="tab-viewport"]');
   await page.click('[data-testid="viewport-tablet"]');
   await page.reload();
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+  await page.click('[data-testid="tab-viewport"]');
   const iframe = page.getByTestId("app-iframe");
   await expect(iframe).toHaveAttribute("style", /width:\s*768px/);
 });

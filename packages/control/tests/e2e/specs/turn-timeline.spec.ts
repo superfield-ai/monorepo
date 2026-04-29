@@ -83,7 +83,10 @@ test("turn timeline renders inside slot card and opens prompt modal", async ({
 
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-  await page.click('[data-testid="tab-orchestrator"]');
+  await page.click('[data-testid="tab-studio"]');
+  await expect(page.getByTestId("feature-pane")).toBeVisible();
+
+  await page.click('[data-testid="feature-row-301"]');
 
   const timeline = page.getByTestId(`turn-timeline-${SESSION_ID}`);
   await expect(timeline).toBeVisible();

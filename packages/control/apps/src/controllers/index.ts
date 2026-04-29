@@ -42,3 +42,13 @@ export type {
   CommitControllerState,
   CommitControllerListener,
 } from "./CommitController";
+
+export { FeaturePaneController } from "./FeaturePaneController";
+export type {
+  FeatureItem,
+  FeaturePaneState,
+  FeaturePaneListener,
+} from "./FeaturePaneController";
+
+export { DocsController } from "./DocsController";
+export type { DocsState, DocsListener } from "./DocsController";

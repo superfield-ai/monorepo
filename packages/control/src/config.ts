@@ -49,6 +49,8 @@ export interface ControlConfig {
   verbose?: boolean;
   /** Base URL of the superfield dev-loop API server (for agent turns and steering). */
   superfieldApiUrl?: string;
+  /** Absolute path to the target project root (from --path / SUPERFIELD_REPO_ROOT). */
+  projectRoot?: string;
 }
 
 export function loadConfig(): ControlConfig {
@@ -90,6 +92,7 @@ export function loadConfig(): ControlConfig {
   const verbose = process.env.CONTROL_VERBOSE === "1";
   const superfieldApiUrl =
     process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
+  const projectRoot = process.env.SUPERFIELD_REPO_ROOT;
 
   return {
     port,
@@ -101,6 +104,7 @@ export function loadConfig(): ControlConfig {
     assetsDir,
     verbose,
     superfieldApiUrl,
+    projectRoot,
   };
 }
 

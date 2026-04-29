@@ -73,25 +73,15 @@ export function IframePanel({
       }
     }
 
-    // E14: surface a cluster-down failure overlay when the cluster reports it
-    // is unhealthy or unknown for long enough that the iframe is unusable.
-    if (clusterStatus === "degraded" || clusterStatus === "unknown") {
+    // E14: surface a cluster-down failure overlay only when the cluster
+    // explicitly reports degraded. "unknown" means no SSE yet (e.g. direct
+    // localhost target) — don't block the iframe in that case.
+    if (clusterStatus === "degraded") {
       setFailureMode("cluster-down");
     } else if (clusterStatus === "healthy") {
       setFailureMode(null);
     }
   }, [clusterStatus, src]);
-
-  function handleIframeError() {
-    // The iframe's `error` event fires for cross-origin or full-document load
-    // failures. Without cluster context we fall back to "build-error" — the
-    // operator gets a Retry button either way.
-    if (clusterStatus === "healthy") {
-      setFailureMode("build-error");
-    } else {
-      setFailureMode("cluster-down");
-    }
-  }
 
   function handleRetry() {
     setFailureMode(null);
@@ -130,7 +120,6 @@ export function IframePanel({
         }
         style={iframeStyle}
         data-testid="app-iframe"
-        onError={handleIframeError}
       />
 
       {effectiveFailureMode && !overlayVisible && (

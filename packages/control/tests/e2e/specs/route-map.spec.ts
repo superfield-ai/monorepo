@@ -25,10 +25,11 @@ test("clicking a route updates the iframe src", async ({ page }) => {
   await page.setViewportSize({ width: 1400, height: 900 });
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+  await page.click('[data-testid="tab-viewport"]');
   await expect(page.getByTestId("route-map")).toBeVisible();
   await expect(page.getByTestId("route-item-/dashboard")).toBeVisible();
 
   await page.click('[data-testid="route-item-/dashboard"]');
   const iframe = page.getByTestId("app-iframe");
-  await expect(iframe).toHaveAttribute("src", /\/app\/dashboard$/);
+  await expect(iframe).toHaveAttribute("src", /localhost:4444\/dashboard$/);
 });

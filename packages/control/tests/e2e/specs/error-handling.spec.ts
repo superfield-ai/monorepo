@@ -101,60 +101,27 @@ test.describe("dev-loop API unreachable", () => {
   });
 });
 
-test.describe("Deploy view failures", () => {
-  test("doctor failure renders InlineError with Retry", async ({ page }) => {
-    // Stub envs so the matrix renders without slow external network calls.
-    await page.route("**/studio/deploy/envs", (route) =>
+test.describe("Feature pane failures", () => {
+  test("slots failure renders the feature-pane error banner", async ({
+    page,
+  }) => {
+    await page.route("**/analytics/slots", (route) =>
       route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ envs: ["dev"], source: "github" }),
-      }),
-    );
-    await page.route("**/studio/deploy/secrets/**", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ env: "dev", checks: [] }),
-      }),
-    );
-    await page.route("**/studio/deploy/ci", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({ runs: [], source: "stub" }),
-      }),
-    );
-    // Return a 200 with a failed check so DeployView renders the matrix row
-    // with an InlineError (a 500 would set doctorErrors but leave doctorByEnv
-    // empty, meaning checkNames is empty and the table never renders).
-    await page.route("**/studio/deploy/doctor/**", async (route) => {
-      const url = new URL(route.request().url());
-      const env = url.pathname.split("/").pop() ?? "dev";
-      await route.fulfill({
         status: 200,
         contentType: "application/json",
         body: JSON.stringify({
-          env,
-          checks: [
-            {
-              name: "ssh-reachable",
-              ok: false,
-              detail: "DEPLOY_HOST_DEV not configured",
-            },
-          ],
-          allOk: false,
+          ok: false,
+          error: { code: "internal", message: "slots unavailable" },
         }),
-      });
-    });
+      }),
+    );
 
     await page.goto("/");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-    await page.click('[data-testid="tab-deploy"]');
-    const view = page.locator('[data-testid="deploy-view"]');
+    await page.click('[data-testid="tab-studio"]');
+    const view = page.locator('[data-testid="feature-pane"]');
     await expect(view).toBeVisible();
-    // The doctor InlineError uses retryLabel="Re-run" — match that or "Retry".
-    await expect(view.getByTestId("inline-error-retry")).toBeVisible({
+    await expect(view).toContainText(/slots unavailable|internal/i, {
       timeout: 10_000,
     });
   });
@@ -162,24 +129,24 @@ test.describe("Deploy view failures", () => {
 
 test.describe("Generic backend error envelope", () => {
   test("DebugView captures backend errors", async ({ page }) => {
-    await page.route("**/studio/deploy/envs", (route) =>
+    await page.route("**/analytics/slots", (route) =>
       route.fulfill({
-        status: 500,
+        status: 503,
         contentType: "application/json",
         body: JSON.stringify({
           ok: false,
-          error: { code: "internal", message: "envs unavailable" },
+          error: { code: "internal", message: "slots unavailable" },
         }),
       }),
     );
 
     await page.goto("/");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
-    await page.click('[data-testid="tab-deploy"]');
+    await page.click('[data-testid="tab-studio"]');
     await page.click('[data-testid="debug-badge"]');
     const debug = page.locator('[data-testid="debug-view"]');
     await expect(debug).toBeVisible();
-    await expect(debug).toContainText(/envs|unavailable|internal/i, {
+    await expect(debug).toContainText(/slots|unavailable|internal/i, {
       timeout: 10_000,
     });
   });
@@ -187,17 +154,56 @@ test.describe("Generic backend error envelope", () => {
 
 test.describe("iframe failure overlay", () => {
   test("cluster-down status surfaces the IframeOverlay", async ({ page }) => {
-    // Mock cluster events SSE so the controller marks status degraded.
-    await page.route("**/studio/cluster/events", (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: "text/event-stream",
-        body: 'event: status\ndata: {"status":"degraded"}\n\n',
-      }),
-    );
+    await page.addInitScript(() => {
+      type Listener = (event: MessageEvent<string>) => void;
+      class MockEventSource {
+        static readonly CONNECTING = 0;
+        static readonly OPEN = 1;
+        static readonly CLOSED = 2;
+        readonly url: string;
+        readyState = MockEventSource.OPEN;
+        onerror: ((this: EventSource, ev: Event) => unknown) | null = null;
+        private readonly listeners = new Map<string, Set<Listener>>();
+
+        constructor(url: string) {
+          this.url = url;
+          queueMicrotask(() => {
+            if (!url.includes("/studio/cluster/events")) return;
+            const payload = JSON.stringify({ status: "degraded" });
+            const listeners = this.listeners.get("cluster-status");
+            if (!listeners) return;
+            const event = { data: payload } as MessageEvent<string>;
+            for (const listener of listeners) listener(event);
+          });
+        }
+
+        addEventListener(type: string, listener: EventListener) {
+          const set = this.listeners.get(type) ?? new Set<Listener>();
+          set.add(listener as Listener);
+          this.listeners.set(type, set);
+        }
+
+        removeEventListener(type: string, listener: EventListener) {
+          this.listeners.get(type)?.delete(listener as Listener);
+        }
+
+        dispatchEvent(): boolean {
+          return true;
+        }
+
+        close(): void {
+          this.readyState = MockEventSource.CLOSED;
+        }
+      }
+
+      (
+        window as typeof window & { EventSource: typeof EventSource }
+      ).EventSource = MockEventSource as unknown as typeof EventSource;
+    });
 
     await page.goto("/");
     await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+    await page.click('[data-testid="tab-viewport"]');
     const overlay = page.locator('[data-testid="iframe-overlay"]');
     await expect(overlay).toBeVisible({ timeout: 10_000 });
     await expect(overlay).toHaveAttribute("data-mode", "cluster-down");

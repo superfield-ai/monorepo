@@ -22,7 +22,7 @@ const SKIPPED_RULES = ["color-contrast"];
 
 async function gotoTab(
   page: import("@playwright/test").Page,
-  tab: "studio" | "orchestrator" | "preview" | "deploy" | "debug",
+  tab: "studio" | "viewport" | "debug",
 ) {
   await page.goto("/");
   await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
@@ -70,24 +70,10 @@ test.describe.skip("a11y smoke", () => {
     await runAxe(page);
   });
 
-  test("Orchestrator tab has no serious/critical a11y violations", async ({
+  test("Viewport tab has no serious/critical a11y violations", async ({
     page,
   }) => {
-    await gotoTab(page, "orchestrator");
-    await runAxe(page);
-  });
-
-  test("Preview tab has no serious/critical a11y violations", async ({
-    page,
-  }) => {
-    await gotoTab(page, "preview");
-    await runAxe(page);
-  });
-
-  test("Deploy tab has no serious/critical a11y violations", async ({
-    page,
-  }) => {
-    await gotoTab(page, "deploy");
+    await gotoTab(page, "viewport");
     await runAxe(page);
   });
 

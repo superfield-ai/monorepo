@@ -71,6 +71,7 @@ import { handleOrchestratorRequest } from "./orchestrator";
 import { handleDeployRequest } from "./deploy";
 import { handleDemoRequest } from "./demo";
 import { handleTurnsRequest } from "./turns";
+import { handleDocsRequest } from "./docs";
 import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
 
@@ -255,21 +256,33 @@ export async function route(
 
   // REST steer fallback (for tests, curl, and non-WS clients).
   if (req.method === "POST" && pathname === "/studio/steer") {
-    const body = (await req.json().catch(() => ({}))) as { context?: string };
+    const body = (await req.json().catch(() => ({}))) as {
+      context?: string;
+      sessionId?: string;
+      session_id?: string;
+    };
+    const sessionId = body.session_id ?? body.sessionId;
     if (!body.context) {
       return errorResponse({
         code: "validation",
         message: "context is required",
-        hint: "POST { context: string } to /studio/steer.",
+        hint: "POST { context: string, sessionId: string } to /studio/steer.",
+      });
+    }
+    if (!sessionId) {
+      return errorResponse({
+        code: "validation",
+        message: "sessionId is required",
+        hint: "Select a running issue before steering a live agent session.",
       });
     }
     try {
       const res = await fetch(`${config.superfieldApiUrl}/steer/context`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ context: body.context }),
+        body: JSON.stringify({ context: body.context, session_id: sessionId }),
       });
-      const json = await res.json();
+      const json = await res.json().catch(() => ({}));
       return new Response(JSON.stringify(json), {
         status: res.status,
         headers: { "Content-Type": "application/json" },
@@ -346,6 +359,10 @@ export async function route(
   const turnsResponse = handleTurnsRequest(req, url);
   if (turnsResponse) return turnsResponse;
 
+  // Docs endpoints — Product tab markdown viewer.
+  const docsResponse = handleDocsRequest(req, url, config.projectRoot);
+  if (docsResponse) return docsResponse;
+
   // Orchestrator endpoints — manage the dev loop child process.
   const orchResponse = await handleOrchestratorRequest(
     req,
@@ -353,6 +370,15 @@ export async function route(
     config.superfieldApiUrl ?? "http://127.0.0.1:7837",
   );
   if (orchResponse) return orchResponse;
+
+  // Analytics endpoints — proxy to the superfield API server (dev loop).
+  // The frontend controllers use /analytics/* directly; the control server
+  // must forward them to superfieldApiUrl where the core api-server handles them.
+  if (pathname.startsWith("/analytics/")) {
+    const apiUrl = config.superfieldApiUrl ?? "http://127.0.0.1:7837";
+    vlog(config, `Proxying ${pathname} → ${apiUrl} (analytics)`);
+    return proxyRequest(req, url, apiUrl, "");
+  }
 
   // Auth endpoints — handled locally, not proxied upstream.
   const authResponse = await handleAuthRequest(req, url);

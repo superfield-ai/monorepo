@@ -17,7 +17,6 @@
 import React, { useEffect, useState } from "react";
 import { fetchJson } from "../lib/net";
 import type { AppError } from "../lib/errors";
-import { EmptyState } from "./EmptyState";
 import { InlineError } from "./InlineError";
 
 export interface DemoRoute {
@@ -64,7 +63,7 @@ export function RouteMap({
   onSelect,
   routesOverride,
   selected,
-}: RouteMapProps): JSX.Element {
+}: RouteMapProps): JSX.Element | null {
   const [routes, setRoutes] = useState<readonly DemoRoute[]>(
     routesOverride ?? [],
   );
@@ -108,15 +107,7 @@ export function RouteMap({
   }
 
   if (!loading && routes.length === 0) {
-    return (
-      <div data-testid="route-map" style={{ padding: "var(--sp-3)" }}>
-        <EmptyState
-          title="No demo routes configured"
-          hint="Run `bun run scripts/seed-demo.ts` to populate .studio/demo/routes.json."
-          testId="route-map"
-        />
-      </div>
-    );
+    return null;
   }
 
   return (
