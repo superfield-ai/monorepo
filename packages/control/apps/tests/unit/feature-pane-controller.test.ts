@@ -56,10 +56,7 @@ describe("FeaturePaneController", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        makeJsonResponse(
-          { error: "sessionId is required" },
-          400,
-        ),
+        makeJsonResponse({ error: "sessionId is required" }, 400),
       ),
     );
 

@@ -9,7 +9,10 @@ import React from "react";
 import { render } from "vitest-browser-react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ProductTab } from "../../src/components/ProductTab";
-import type { DocsController, DocsState } from "../../src/controllers/DocsController";
+import type {
+  DocsController,
+  DocsState,
+} from "../../src/controllers/DocsController";
 import type {
   WsChatController,
   WsChatControllerState,
@@ -20,9 +23,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-function makeDocsControllerMock(
-  initialState: Partial<DocsState> = {},
-): {
+function makeDocsControllerMock(initialState: Partial<DocsState> = {}): {
   controller: DocsController;
   setState: (partial: Partial<DocsState>) => void;
 } {
@@ -141,15 +142,24 @@ test("renders docs and seeded assistant output from a Claude fixture", async () 
   const { controller: chatController } = makeChatControllerMock();
 
   const screen = render(
-    <ProductTab docsController={docsController} chatController={chatController} />,
+    <ProductTab
+      docsController={docsController}
+      chatController={chatController}
+    />,
   );
 
   await expect.element(screen.getByTestId("product-tab")).toBeVisible();
   await expect.element(screen.getByTestId("docs-viewer")).toBeVisible();
   await expect.element(screen.getByTestId("product-chat-panel")).toBeVisible();
-  await expect.element(screen.getByText("Refine the button spacing")).toBeVisible();
   await expect
-    .element(screen.getByText(/wrote outermost failing test against narrow blueprint context/))
+    .element(screen.getByText("Refine the button spacing"))
+    .toBeVisible();
+  await expect
+    .element(
+      screen.getByText(
+        /wrote outermost failing test against narrow blueprint context/,
+      ),
+    )
     .toBeVisible();
 });
 
@@ -161,7 +171,10 @@ test("product chat submit calls sendMessage on the injected controller", async (
   });
 
   const screen = render(
-    <ProductTab docsController={docsController} chatController={chatController} />,
+    <ProductTab
+      docsController={docsController}
+      chatController={chatController}
+    />,
   );
 
   await screen.getByTestId("product-chat-input").fill("How does steer work?");

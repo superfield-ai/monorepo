@@ -68,11 +68,17 @@ test("renders running issue details and selects the clicked issue", async () => 
 
   await expect.element(screen.getByTestId("issue-rail")).toBeVisible();
   await expect.element(screen.getByText("#42")).toBeVisible();
-  await expect.element(screen.getByText("Refine the control chat")).toBeVisible();
-  await expect.element(screen.getByText("render assistant output")).toBeVisible();
+  await expect
+    .element(screen.getByText("Refine the control chat"))
+    .toBeVisible();
+  await expect
+    .element(screen.getByText("render assistant output"))
+    .toBeVisible();
   await expect.element(screen.getByText(/3\s+turns/)).toBeVisible();
 
-  await screen.getByRole("button", { name: /refine the control chat/i }).click();
+  await screen
+    .getByRole("button", { name: /refine the control chat/i })
+    .click();
   expect(onSelectIssue).toHaveBeenCalledWith(ISSUES[0]);
 });
 

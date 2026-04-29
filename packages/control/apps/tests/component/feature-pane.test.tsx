@@ -95,8 +95,12 @@ test("renders issue detail and forwards selected sessionId to steer", async () =
   await expect.element(screen.getByTestId("feature-pane")).toBeVisible();
   await expect.element(screen.getByTestId("feature-detail")).toBeVisible();
   await expect.element(screen.getByText("#42")).toBeVisible();
-  await expect.element(screen.getByText("Refine the control chat")).toBeVisible();
-  await expect.element(screen.getByText("render assistant output")).toBeVisible();
+  await expect
+    .element(screen.getByText("Refine the control chat"))
+    .toBeVisible();
+  await expect
+    .element(screen.getByText("render assistant output"))
+    .toBeVisible();
 
   const textarea = screen.getByPlaceholder(
     /discuss changes to this feature spec/i,

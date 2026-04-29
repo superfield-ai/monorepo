@@ -138,14 +138,12 @@ describe("/studio/steer", () => {
   it("forwards context and sessionId to the Superfield API", async () => {
     const { route } = await import("../../src/router");
 
-    const fetchSpy = vi
-      .spyOn(globalThis, "fetch")
-      .mockResolvedValueOnce(
-        new Response(JSON.stringify({ accepted: true, requestId: "req-1" }), {
-          status: 200,
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
+    const fetchSpy = vi.spyOn(globalThis, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ accepted: true, requestId: "req-1" }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
 
     const req = new Request("http://localhost:7000/studio/steer", {
       method: "POST",
@@ -173,7 +171,10 @@ describe("/studio/steer", () => {
       }),
     );
     expect(res.status).toBe(200);
-    const body = (await res.json()) as { accepted?: boolean; requestId?: string };
+    const body = (await res.json()) as {
+      accepted?: boolean;
+      requestId?: string;
+    };
     expect(body.accepted).toBe(true);
     expect(body.requestId).toBe("req-1");
 

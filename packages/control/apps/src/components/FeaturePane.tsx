@@ -210,7 +210,11 @@ function FeatureListView({
         )}
 
         <div
-          style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "var(--sp-2)",
+          }}
         >
           {features.map((f) => (
             <FeatureRow key={f.issueNumber} feature={f} onSelect={onSelect} />
@@ -396,9 +400,7 @@ function FeatureDetailView({
                   <span
                     style={{
                       flexShrink: 0,
-                      color: task.done
-                        ? "var(--accent-green)"
-                        : "var(--fg-3)",
+                      color: task.done ? "var(--accent-green)" : "var(--fg-3)",
                       fontFamily: "var(--font-mono)",
                       fontSize: "var(--text-xs)",
                     }}
@@ -487,9 +489,10 @@ export function FeaturePane({ controller: controllerProp }: FeaturePaneProps) {
     };
   }, []);
 
-  const selectedFeature = state.selectedIssueNumber != null
-    ? state.features.find((f) => f.issueNumber === state.selectedIssueNumber)
-    : null;
+  const selectedFeature =
+    state.selectedIssueNumber != null
+      ? state.features.find((f) => f.issueNumber === state.selectedIssueNumber)
+      : null;
 
   function handleSteer(text: string, sessionId?: string) {
     void controllerRef.current.steer(text, sessionId);

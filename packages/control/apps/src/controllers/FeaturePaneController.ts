@@ -152,7 +152,12 @@ export class FeaturePaneController {
         return true;
       });
 
-      this.state = { ...this.state, features: unique, loading: false, error: null };
+      this.state = {
+        ...this.state,
+        features: unique,
+        loading: false,
+        error: null,
+      };
     } catch (err) {
       this.state = {
         ...this.state,

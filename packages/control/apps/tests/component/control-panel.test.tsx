@@ -326,15 +326,15 @@ test("clicking the debug badge opens the DebugView and marks unread events read"
     />,
   );
 
-  await expect.element(screen.getByTestId("debug-badge-count")).toHaveTextContent(
-    "FAULT 1",
-  );
+  await expect
+    .element(screen.getByTestId("debug-badge-count"))
+    .toHaveTextContent("FAULT 1");
 
   await screen.getByTestId("debug-badge").click();
   await expect.element(screen.getByTestId("debug-view")).toBeVisible();
-  await expect.element(screen.getByTestId("debug-badge-count")).toHaveTextContent(
-    "FAULT 0",
-  );
+  await expect
+    .element(screen.getByTestId("debug-badge-count"))
+    .toHaveTextContent("FAULT 0");
 });
 
 test("studio panel propagates status update to IframePanel on Viewport tab", async () => {
