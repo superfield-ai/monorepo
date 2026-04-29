@@ -23,6 +23,50 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
+class FakeWebSocket {
+  static readonly CONNECTING = 0;
+  static readonly OPEN = 1;
+  static readonly CLOSING = 2;
+  static readonly CLOSED = 3;
+
+  readonly sent: string[] = [];
+  readyState = FakeWebSocket.CONNECTING;
+  private readonly listeners = new Map<string, Set<(ev: unknown) => void>>();
+
+  constructor(readonly url: string) {
+    queueMicrotask(() => {
+      this.readyState = FakeWebSocket.OPEN;
+      this.dispatch("open", {});
+    });
+  }
+
+  addEventListener(type: string, listener: (ev: unknown) => void) {
+    if (!this.listeners.has(type)) this.listeners.set(type, new Set());
+    this.listeners.get(type)?.add(listener);
+  }
+
+  removeEventListener(type: string, listener: (ev: unknown) => void) {
+    this.listeners.get(type)?.delete(listener);
+  }
+
+  send(data: string) {
+    this.sent.push(data);
+    this.dispatch("message", {
+      data: JSON.stringify({ type: "chunk", text: " browser-safe" }),
+    });
+    this.dispatch("message", { data: JSON.stringify({ type: "done" }) });
+  }
+
+  close() {
+    this.readyState = FakeWebSocket.CLOSED;
+    this.dispatch("close", { wasClean: true, code: 1000, reason: "" });
+  }
+
+  private dispatch(type: string, ev: unknown) {
+    this.listeners.get(type)?.forEach((listener) => listener(ev));
+  }
+}
+
 function makeDocsControllerMock(initialState: Partial<DocsState> = {}): {
   controller: DocsController;
   setState: (partial: Partial<DocsState>) => void;
@@ -183,4 +227,44 @@ test("product chat submit calls sendMessage on the injected controller", async (
   expect(chatController.sendMessage).toHaveBeenCalledWith(
     "How does steer work?",
   );
+});
+
+test("product chat still submits when crypto.randomUUID is unavailable", async () => {
+  let call = 0;
+  vi.stubGlobal("crypto", {
+    getRandomValues: (array: Uint8Array) => {
+      array.fill(call++ === 0 ? 5 : 6);
+      return array;
+    },
+  } as unknown as Crypto);
+  vi.stubGlobal("WebSocket", FakeWebSocket as unknown as typeof WebSocket);
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (url.endsWith("/studio/docs")) {
+        return new Response(JSON.stringify({ files: ["README.md"] }), {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+      if (url.endsWith("/studio/docs/README.md")) {
+        return new Response("# Demo docs", {
+          status: 200,
+          headers: { "Content-Type": "text/markdown" },
+        });
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    }),
+  );
+
+  const screen = render(<ProductTab />);
+
+  await expect.element(screen.getByTestId("product-tab")).toBeVisible();
+  await screen.getByTestId("product-chat-input").fill("Tell me more");
+  await screen.getByTestId("product-chat-submit").click();
+
+  await expect
+    .element(screen.getByText("Tell me more browser-safe"))
+    .toBeVisible();
 });
