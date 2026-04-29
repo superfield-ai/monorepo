@@ -105,7 +105,12 @@ export class DocsController {
       return;
     }
 
-    this.state = { ...this.state, selectedFile: filename, loading: true, error: null };
+    this.state = {
+      ...this.state,
+      selectedFile: filename,
+      loading: true,
+      error: null,
+    };
     this.notify();
 
     try {
@@ -114,7 +119,12 @@ export class DocsController {
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const text = await res.text();
       this.contentCache.set(filename, text);
-      this.state = { ...this.state, content: text, loading: false, error: null };
+      this.state = {
+        ...this.state,
+        content: text,
+        loading: false,
+        error: null,
+      };
     } catch (err) {
       this.state = {
         ...this.state,

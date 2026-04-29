@@ -86,7 +86,9 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
                 <button
                   type="button"
                   data-testid={`doc-file-${filename}`}
-                  onClick={() => void controllerRef.current.selectFile(filename)}
+                  onClick={() =>
+                    void controllerRef.current.selectFile(filename)
+                  }
                   style={{
                     width: "100%",
                     textAlign: "left",
@@ -170,9 +172,7 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
               {error}
             </p>
           )}
-          {!loading && !error && content && (
-            <WikiRender content={content} />
-          )}
+          {!loading && !error && content && <WikiRender content={content} />}
           {!loading && !error && !content && !selectedFile && (
             <p
               style={{
@@ -198,7 +198,9 @@ interface ProductChatPanelProps {
   controller?: WsChatController;
 }
 
-function ProductChatPanel({ controller: controllerProp }: ProductChatPanelProps) {
+function ProductChatPanel({
+  controller: controllerProp,
+}: ProductChatPanelProps) {
   const controllerRef = useRef<WsChatController>(
     controllerProp ?? new WsChatController({ wsEndpoint: "/studio/ws" }),
   );
@@ -314,7 +316,10 @@ function ProductChatPanel({ controller: controllerProp }: ProductChatPanelProps)
           return (
             <div
               key={msg.id}
-              style={{ display: "flex", justifyContent: isUser ? "flex-end" : "flex-start" }}
+              style={{
+                display: "flex",
+                justifyContent: isUser ? "flex-end" : "flex-start",
+              }}
             >
               <div
                 style={{
@@ -343,7 +348,8 @@ function ProductChatPanel({ controller: controllerProp }: ProductChatPanelProps)
                       marginLeft: 2,
                       background: "var(--fg-2)",
                       verticalAlign: "text-bottom",
-                      animation: "pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                      animation:
+                        "pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite",
                     }}
                   />
                 )}
@@ -356,7 +362,10 @@ function ProductChatPanel({ controller: controllerProp }: ProductChatPanelProps)
 
       {/* Input form */}
       <form
-        onSubmit={(e) => { e.preventDefault(); void handleSubmit(); }}
+        onSubmit={(e) => {
+          e.preventDefault();
+          void handleSubmit();
+        }}
         data-testid="product-chat-form"
         style={{
           padding: "var(--sp-3) var(--sp-4)",
@@ -365,7 +374,13 @@ function ProductChatPanel({ controller: controllerProp }: ProductChatPanelProps)
           flexShrink: 0,
         }}
       >
-        <div style={{ display: "flex", alignItems: "flex-end", gap: "var(--sp-2)" }}>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "flex-end",
+            gap: "var(--sp-2)",
+          }}
+        >
           <textarea
             ref={textareaRef}
             value={input}
@@ -420,7 +435,10 @@ interface ProductTabProps {
   chatController?: WsChatController;
 }
 
-export function ProductTab({ docsController, chatController }: ProductTabProps) {
+export function ProductTab({
+  docsController,
+  chatController,
+}: ProductTabProps) {
   return (
     <div
       data-testid="product-tab"
@@ -433,7 +451,9 @@ export function ProductTab({ docsController, chatController }: ProductTabProps) 
       }}
     >
       {/* Left: docs viewer — takes all remaining space */}
-      <div style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex" }}>
+      <div
+        style={{ flex: 1, minWidth: 0, overflow: "hidden", display: "flex" }}
+      >
         <DocsViewer controller={docsController} />
       </div>
 

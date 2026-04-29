@@ -82,7 +82,10 @@ export function handleDocsFileRequest(
   const resolvedDocsDir = resolve(docsDir);
 
   // Ensure the resolved path is within the docs directory.
-  if (!resolvedPath.startsWith(resolvedDocsDir + "/") && resolvedPath !== resolvedDocsDir) {
+  if (
+    !resolvedPath.startsWith(resolvedDocsDir + "/") &&
+    resolvedPath !== resolvedDocsDir
+  ) {
     return errorResponse({
       code: "validation",
       message: "Path traversal denied",

@@ -85,7 +85,9 @@ test.describe("Viewport tab", () => {
     });
   });
 
-  test("Studio tab feature-pane disappears after switching", async ({ page }) => {
+  test("Studio tab feature-pane disappears after switching", async ({
+    page,
+  }) => {
     await expect(page.getByTestId("feature-pane")).not.toBeVisible();
   });
 
