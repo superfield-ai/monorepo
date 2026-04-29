@@ -160,6 +160,28 @@ describe("POST /studio/run", () => {
     });
     expect(res.headers.get("Content-Type")).toContain("text/event-stream");
     await res.body?.cancel();
+
+    const today = new Date().toISOString().slice(0, 10);
+    const traceFile = join(traceDir, `${today}.traces.jsonl`);
+    const entries = readFileSync(traceFile, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean)
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            level: string;
+            message: string;
+            context?: { args?: string[] };
+          },
+      );
+    const start = entries
+      .filter((entry) => entry.message === "POST /studio/run started")
+      .at(-1)!;
+    expect(start.level).toBe("info");
+    expect(start.message).toBe("POST /studio/run started");
+    expect(start.context?.args).toContain("--session-id");
+    expect(start.context?.args).not.toContain("--session-key");
   });
 
   it("writes a trace record when claude exits nonzero", async () => {

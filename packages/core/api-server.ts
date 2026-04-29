@@ -219,7 +219,7 @@ export function startApiServer(
         allowedTools,
       ];
       if (body.sessionKey) {
-        args.push("--session-key", body.sessionKey);
+        args.push("--session-id", body.sessionKey);
       }
 
       const traceBase = {
