@@ -190,6 +190,30 @@ describe("connect", () => {
     ctrl.connect();
     expect(openSocket.history).toHaveLength(1);
   });
+
+  it("falls back when crypto.randomUUID is unavailable", async () => {
+    vi.unstubAllGlobals();
+    let call = 0;
+    vi.stubGlobal("crypto", {
+      getRandomValues: (array: Uint8Array) => {
+        array.fill(call++ === 0 ? 3 : 4);
+        return array;
+      },
+    });
+
+    const { ctrl, openSocket } = makeHarness();
+    ctrl.connect();
+    openSocket.last!.fireOpen();
+
+    await ctrl.sendMessage("hello");
+
+    expect(openSocket.last!.sent).toContain(
+      JSON.stringify({ type: "turn", message: "hello", mode: "design" }),
+    );
+    const state = ctrl.getState();
+    expect(state.messages[0]?.id).toBe("03030303030303030303030303030303");
+    expect(state.messages[1]?.id).toBe("04040404040404040404040404040404");
+  });
 });
 
 // ── reconnect state machine ───────────────────────────────────────────────────

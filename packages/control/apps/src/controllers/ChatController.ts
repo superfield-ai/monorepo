@@ -34,6 +34,16 @@ export interface ChatControllerState {
 
 export type ChatControllerListener = (state: ChatControllerState) => void;
 
+function createMessageId(): string {
+  const cryptoObj = globalThis.crypto as Crypto | undefined;
+  if (cryptoObj && typeof cryptoObj.randomUUID === "function") {
+    return cryptoObj.randomUUID();
+  }
+  const bytes = new Uint8Array(16);
+  cryptoObj?.getRandomValues?.(bytes);
+  return [...bytes].map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * ChatController manages the send/receive lifecycle for the Claude chat panel.
  *
@@ -77,7 +87,7 @@ export class ChatController {
     if (this.turnState !== "idle" || !text.trim()) return;
 
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: createMessageId(),
       role: "user",
       content: text.trim(),
     };
@@ -86,7 +96,7 @@ export class ChatController {
     this.turnState = "streaming";
     this.notify();
 
-    const assistantId = crypto.randomUUID();
+    const assistantId = createMessageId();
 
     try {
       const res = await fetch(this.chatEndpoint, {
@@ -382,14 +392,14 @@ export class WsChatController {
     }
 
     const userMessage: ChatMessage = {
-      id: crypto.randomUUID(),
+      id: createMessageId(),
       role: "user",
       content: text.trim(),
     };
     this.messages = [...this.messages, userMessage];
     this.turnState = "streaming";
 
-    const assistantId = crypto.randomUUID();
+    const assistantId = createMessageId();
     this.pendingAssistantId = assistantId;
     this.messages = [
       ...this.messages,
@@ -423,7 +433,7 @@ export class WsChatController {
     this.messages = [
       ...this.messages,
       {
-        id: crypto.randomUUID(),
+        id: createMessageId(),
         role: "user",
         content: context.trim(),
       },

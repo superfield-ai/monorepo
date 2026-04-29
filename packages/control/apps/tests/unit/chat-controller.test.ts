@@ -66,6 +66,27 @@ describe("ChatController", () => {
     vi.restoreAllMocks();
   });
 
+  it("falls back when crypto.randomUUID is unavailable", async () => {
+    let call = 0;
+    const cryptoStub = {
+      getRandomValues: vi.fn((array: Uint8Array) => {
+        array.fill(call++ === 0 ? 7 : 8);
+        return array;
+      }),
+    };
+    vi.stubGlobal("crypto", cryptoStub as unknown as Crypto);
+    vi.stubGlobal("fetch", () =>
+      Promise.resolve(makeJsonResponse({ reply: "ok" })),
+    );
+
+    await ctrl.sendMessage("Fallback please");
+
+    const state = ctrl.getState();
+    expect(state.messages).toHaveLength(2);
+    expect(state.messages[0]?.id).toBe("07070707070707070707070707070707");
+    expect(state.messages[1]?.id).toBe("08080808080808080808080808080808");
+  });
+
   it("starts in idle state with empty messages", () => {
     // Scenario 1: Initial idle state
     const state = ctrl.getState();
