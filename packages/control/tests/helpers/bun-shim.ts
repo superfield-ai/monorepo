@@ -34,4 +34,9 @@ if (typeof globalThis.Bun === "undefined") {
       stdin: null,
     }),
   };
+  (
+    (globalThis as Record<string, unknown>).Bun as {
+      spawn: { __superfieldShim?: boolean };
+    }
+  ).spawn.__superfieldShim = true;
 }

@@ -11,7 +11,8 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { join, delimiter, resolve } from "node:path";
-import { createWriteStream } from "node:fs";
+import { createWriteStream, mkdirSync, mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
 import type { AddressInfo } from "node:net";
 
 const E2E_ROOT = resolve(import.meta.dirname);
@@ -35,6 +36,17 @@ async function waitFor(url: string, timeoutMs = 20_000): Promise<void> {
 }
 
 export default async function globalSetup() {
+  const testRoot = mkdtempSync(join(tmpdir(), "superfield-e2e-"));
+  mkdirSync(join(testRoot, "home"), { recursive: true });
+  mkdirSync(join(testRoot, "control-logs"), { recursive: true });
+  mkdirSync(join(testRoot, "superfield-logs"), { recursive: true });
+  process.env.SUPERFIELD_TEST_ROOT = testRoot;
+  process.env.HOME = join(testRoot, "home");
+  process.env.USERPROFILE = join(testRoot, "home");
+  process.env.CONTROL_LOG_DIR = join(testRoot, "control-logs");
+  process.env.SUPERFIELD_LOG_DIR = join(testRoot, "superfield-logs");
+  process.env.CLAUDE_E2E_LOG_PATH = join(testRoot, "claude-studio-e2e.log");
+
   // Start the superfield API server in-process on a random port.
   const { ApiState } = await import("@superfield/core/api-state");
   const { startApiServer } = await import("@superfield/core/api-server");
@@ -48,7 +60,6 @@ export default async function globalSetup() {
   // Inject the claude stub into PATH so agent turns return canned responses.
   const origPath = process.env.PATH ?? "";
   process.env.PATH = `${FIXTURES_DIR}${delimiter}${origPath}`;
-  process.env.CLAUDE_E2E_LOG_PATH = "/tmp/claude-studio-e2e.log";
 
   const apiUrl = `http://127.0.0.1:${apiPort}`;
 
@@ -86,7 +97,7 @@ export default async function globalSetup() {
   // Capture all studio output to a file so crashes are diagnosable from CI
   // artifacts. The file path is stashed in globalThis so global-teardown can
   // surface it on failure.
-  const studioLogPath = resolve(REPO_ROOT, "studio-e2e.log");
+  const studioLogPath = resolve(testRoot, "studio-e2e.log");
   const studioLogStream = createWriteStream(studioLogPath, { flags: "w" });
   const writeLog = (prefix: string, d: Buffer): void => {
     const line = `${prefix} ${d}`;

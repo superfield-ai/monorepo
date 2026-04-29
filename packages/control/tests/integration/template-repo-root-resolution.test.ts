@@ -40,13 +40,14 @@ import type { ControlConfig } from "../../src/config";
 import { findTemplatePath } from "../helpers/template-path";
 
 const d = findTemplatePath() ? describe : describe.skip;
+const TEST_LOG_DIR = process.env.CONTROL_LOG_DIR ?? "../studio-logs";
 
 // ── Helpers (mirror studio-server.test.ts) ────────────────────────────────────
 
 function makeConfig(overrides: Partial<ControlConfig> = {}): ControlConfig {
   return {
     port: 0,
-    logDir: "/tmp/studio-test-logs",
+    logDir: TEST_LOG_DIR,
     clusterContext: "default",
     openBrowser: false,
     webServiceUrl: "http://127.0.0.1:0",

@@ -85,7 +85,8 @@ describe.skipIf(!existsSync(STUDIO_DOWN_SCRIPT))("studio-scripts suite", () => {
         ...process.env,
         PATH: pathWithStubs,
         CONTROL_PORT: "17099",
-        CONTROL_LOG_DIR: "/tmp/studio-test-logs",
+        CONTROL_LOG_DIR:
+          process.env.CONTROL_LOG_DIR ?? join(tmpdir(), "studio-test-logs"),
         ...env,
       },
       stdio: "pipe",

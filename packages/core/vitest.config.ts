@@ -10,5 +10,6 @@ export default defineConfig({
   },
   test: {
     include: ["tests/**/*.test.ts"],
+    setupFiles: [path.resolve(__dirname, "../../tests/test-env.ts")],
   },
 });

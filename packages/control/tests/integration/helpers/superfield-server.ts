@@ -10,7 +10,8 @@
  *   fixture.stop();
  */
 
-import { delimiter } from "node:path";
+import { delimiter, join } from "node:path";
+import { tmpdir } from "node:os";
 import { ApiState } from "@superfield/core/api-state";
 import { startApiServer } from "@superfield/core/api-server";
 
@@ -26,8 +27,11 @@ export async function startSuperfieldFixture(): Promise<SuperfieldFixture> {
   // server resolves to our stub script.
   const origPath = process.env.PATH ?? "";
   process.env.PATH = `${FIXTURES_DIR}${delimiter}${origPath}`;
+  const testRoot =
+    process.env.SUPERFIELD_TEST_ROOT ?? join(tmpdir(), "superfield-tests");
   process.env.CLAUDE_E2E_LOG_PATH =
-    process.env.CLAUDE_E2E_LOG_PATH ?? "/tmp/claude-studio-fixture.log";
+    process.env.CLAUDE_E2E_LOG_PATH ??
+    join(testRoot, "claude-studio-fixture.log");
 
   const state = new ApiState();
   const logger = {

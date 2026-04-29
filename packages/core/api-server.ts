@@ -19,10 +19,14 @@ type BunSpawnResult = {
 function spawnClaude(args: string[], cwd: string): BunSpawnResult {
   const bun = (
     globalThis as unknown as {
-      Bun?: { spawn: (...spawnArgs: unknown[]) => BunSpawnResult };
+      Bun?: {
+        spawn: ((...spawnArgs: unknown[]) => BunSpawnResult) & {
+          __superfieldShim?: boolean;
+        };
+      };
     }
   ).Bun;
-  if (bun) {
+  if (bun && !bun.spawn.__superfieldShim) {
     return bun.spawn(args, {
       cwd,
       stdout: "pipe",

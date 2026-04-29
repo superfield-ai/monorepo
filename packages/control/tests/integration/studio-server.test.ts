@@ -17,12 +17,14 @@ import type { AddressInfo } from "net";
 import { route } from "../../src/router";
 import type { ControlConfig } from "../../src/config";
 
+const TEST_LOG_DIR = process.env.CONTROL_LOG_DIR ?? "../studio-logs";
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 function makeConfig(overrides: Partial<ControlConfig> = {}): ControlConfig {
   return {
     port: 0,
-    logDir: "/tmp/studio-test-logs",
+    logDir: TEST_LOG_DIR,
     clusterContext: "default",
     openBrowser: false,
     webServiceUrl: "http://127.0.0.1:0", // overridden per test

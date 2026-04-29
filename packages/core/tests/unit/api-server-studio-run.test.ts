@@ -8,8 +8,15 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer } from "node:http";
 import { delimiter } from "node:path";
 import type { AddressInfo } from "node:net";
-import { existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  mkdtempSync,
+} from "node:fs";
 import { join } from "node:path";
+import { tmpdir } from "node:os";
 import { ApiState } from "../../api-state.js";
 import { startApiServer } from "../../api-server.js";
 import type { Logger } from "../../logger.js";
@@ -34,7 +41,9 @@ beforeAll(
       probe.listen(0, "127.0.0.1", () => {
         port = (probe.address() as AddressInfo).port;
         probe.close(() => {
-          traceDir = `/tmp/api-server-studio-run-traces-${Date.now()}`;
+          traceDir = mkdtempSync(
+            join(tmpdir(), "api-server-studio-run-traces-"),
+          );
           mkdirSync(traceDir, { recursive: true });
           const state = new ApiState();
           const srv = startApiServer({
@@ -53,7 +62,9 @@ beforeAll(() => {
   savedPath = process.env.PATH ?? "";
   savedLogPath = process.env.CLAUDE_E2E_LOG_PATH;
   process.env.PATH = `${STUB_DIR}${delimiter}${savedPath}`;
-  process.env.CLAUDE_E2E_LOG_PATH = "/tmp/api-server-studio-run-test.log";
+  process.env.CLAUDE_E2E_LOG_PATH =
+    process.env.CLAUDE_E2E_LOG_PATH ??
+    join(traceDir, "claude-studio-run-test.log");
 });
 
 afterAll(() => {

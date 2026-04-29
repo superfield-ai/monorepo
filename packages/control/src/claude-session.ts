@@ -55,6 +55,8 @@
  */
 
 import { appendFileSync, mkdirSync } from "fs";
+import { spawn as nodeSpawn } from "node:child_process";
+import { Readable } from "node:stream";
 import { join, resolve } from "path";
 import { buildAllowedToolsFlag } from "./permissions";
 import type { ControlMode } from "./helpers";
@@ -146,12 +148,40 @@ export function appendTurnLog(entry: TurnLogEntry, logDir?: string): void {
  */
 export async function getChangedFiles(baseRef: string): Promise<string[]> {
   const repoRoot = process.env.SUPERFIELD_REPO_ROOT ?? REPO_ROOT;
-  const proc = Bun.spawn(["git", "diff", "--name-only", baseRef], {
-    cwd: repoRoot,
-    stdout: "pipe",
-    stderr: "pipe",
-    env: process.env,
-  });
+  const bun = (
+    globalThis as unknown as {
+      Bun?: {
+        spawn: ((...spawnArgs: unknown[]) => {
+          stdout: ReadableStream<Uint8Array>;
+          exited: Promise<number>;
+        }) & { __superfieldShim?: boolean };
+      };
+    }
+  ).Bun;
+  const proc =
+    bun && !bun.spawn.__superfieldShim
+      ? bun.spawn(["git", "diff", "--name-only", baseRef], {
+          cwd: repoRoot,
+          stdout: "pipe",
+          stderr: "pipe",
+          env: process.env,
+        })
+      : (() => {
+          const child = nodeSpawn("git", ["diff", "--name-only", baseRef], {
+            cwd: repoRoot,
+            stdio: ["ignore", "pipe", "pipe"],
+            env: process.env,
+          });
+          return {
+            stdout: Readable.toWeb(
+              child.stdout!,
+            ) as unknown as ReadableStream<Uint8Array>,
+            exited: new Promise<number>((resolve, reject) => {
+              child.once("error", reject);
+              child.once("close", (code) => resolve(code ?? 1));
+            }),
+          };
+        })();
   const text = await new Response(proc.stdout).text();
   await proc.exited;
   return text.trim().split("\n").filter(Boolean);
