@@ -262,11 +262,16 @@ export function startApiServer(
         body.allowedTools ?? "Read,Edit,Write,Bash,Glob,Grep";
       const sessionStore = await getClaudeSessionStore(logDir);
       const existingSessionId = await sessionStore.getSessionId();
+      // -p must come before --allowed-tools: Claude's --allowed-tools parser is
+      // greedy and will consume subsequent positional arguments as tool names if
+      // the prompt is placed after it.
       const args = [
         "claude",
         "--print",
         "--output-format",
         "json",
+        "-p",
+        body.message,
         "--dangerously-skip-permissions",
         "--allowed-tools",
         allowedTools,
@@ -274,7 +279,6 @@ export function startApiServer(
       if (existingSessionId) {
         args.push("--resume", existingSessionId);
       }
-      args.push(body.message);
 
       const traceBase = {
         ts: new Date().toISOString(),
