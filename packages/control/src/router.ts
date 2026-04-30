@@ -63,7 +63,7 @@ import { join } from "path";
 import type { ControlConfig } from "./config";
 import { vlog } from "./config";
 import { handleAuthRequest } from "./auth";
-import { handleControlRequest } from "./api";
+import { handleControlRequest, handleIssueRequest } from "./api";
 import { clusterStatusSseResponse } from "./cluster-status-sse";
 import { type WsData } from "./control-ws";
 import { handleOrchestratorRequest } from "./orchestrator";
@@ -379,6 +379,10 @@ export async function route(
   // Auth endpoints — handled locally, not proxied upstream.
   const authResponse = await handleAuthRequest(req, url);
   if (authResponse) return authResponse;
+
+  // Issue endpoints — local DB CRUD + GitHub sync trigger.
+  const issueResponse = await handleIssueRequest(req, url, config.projectRoot);
+  if (issueResponse) return issueResponse;
 
   // Studio endpoints — handled locally, not proxied upstream.
   const studioResponse = await handleControlRequest(req, url, config.logDir);

@@ -1,16 +1,14 @@
 /**
  * @file FeaturePane
  *
- * Studio tab main area. Replaces the ChatPanel + OrchestratorView split.
+ * Studio tab main area. Shows features from two sources:
+ *   - Active slots (dev loop running, pulsing dot indicator)
+ *   - Local DB records (queued/draft/blocked, static badge)
  *
- * Two views:
- *   - Feature list (default): shows active features from /analytics/slots.
- *     A steer form at the bottom allows submitting a new feature description.
- *   - Feature detail (when a feature is selected): issue header, subtask
- *     checklist, session log via TurnTimeline, and a contextual steer form.
- *
- * Follows Superfield Control Room design system: near-void backgrounds,
- * sharp 1px borders, ALL-CAPS mono labels, token-sourced colours.
+ * Three SteerForm modes driven by context:
+ *   List view         → create new feature (POST /studio/issues)
+ *   Detail, no session → refine feature spec (PATCH /studio/issues/:n)
+ *   Detail, active session → steer running agent (POST /studio/steer)
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -65,10 +63,12 @@ const TEXTAREA_STYLE: React.CSSProperties = {
 
 function SteerForm({
   placeholder,
+  submitLabel = "SUBMIT",
   onSubmit,
   disabled,
 }: {
   placeholder: string;
+  submitLabel?: string;
   onSubmit: (text: string) => void;
   disabled?: boolean;
 }) {
@@ -122,7 +122,7 @@ function SteerForm({
           cursor: disabled || !value.trim() ? "not-allowed" : "pointer",
         }}
       >
-        SUBMIT
+        {submitLabel}
       </button>
     </div>
   );
@@ -133,11 +133,11 @@ function SteerForm({
 function FeatureListView({
   state,
   onSelect,
-  onSteer,
+  onCreate,
 }: {
   state: FeaturePaneState;
   onSelect: (issueNumber: number) => void;
-  onSteer: (text: string) => void;
+  onCreate: (title: string) => void;
 }) {
   const { features, loading, error } = state;
 
@@ -205,7 +205,7 @@ function FeatureListView({
               marginTop: "var(--sp-8)",
             }}
           >
-            NO ACTIVE FEATURES
+            NO FEATURES — describe one below to get started
           </p>
         )}
 
@@ -222,10 +222,11 @@ function FeatureListView({
         </div>
       </div>
 
-      {/* Steer form */}
+      {/* Create form */}
       <SteerForm
-        placeholder="Discuss or describe a new feature…"
-        onSubmit={onSteer}
+        placeholder="Name a new feature to create…"
+        submitLabel="CREATE"
+        onSubmit={onCreate}
       />
     </div>
   );
@@ -238,6 +239,8 @@ function FeatureRow({
   feature: FeatureItem;
   onSelect: (issueNumber: number) => void;
 }) {
+  const isActive = feature.source === "slot";
+
   return (
     <button
       type="button"
@@ -271,6 +274,21 @@ function FeatureRow({
           gap: "var(--sp-2)",
         }}
       >
+        {/* Active pulse indicator */}
+        {isActive && (
+          <span
+            title="In dev loop"
+            style={{
+              display: "inline-block",
+              width: 6,
+              height: 6,
+              borderRadius: "50%",
+              background: "var(--accent-cyan)",
+              flexShrink: 0,
+              alignSelf: "center",
+            }}
+          />
+        )}
         <span
           className="label"
           style={{ color: "var(--accent-cyan)", flexShrink: 0 }}
@@ -278,6 +296,21 @@ function FeatureRow({
           #{feature.issueNumber}
         </span>
         <span style={{ color: "var(--fg-1)" }}>{feature.title}</span>
+        {!isActive && (
+          <span
+            style={{
+              marginLeft: "auto",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              color: "var(--fg-3)",
+              textTransform: "uppercase",
+              letterSpacing: "var(--ls-wider)",
+              flexShrink: 0,
+            }}
+          >
+            {feature.status}
+          </span>
+        )}
       </div>
     </button>
   );
@@ -289,14 +322,17 @@ function FeatureDetailView({
   feature,
   onBack,
   onSteer,
+  onPatch,
   error,
 }: {
   feature: FeatureItem;
   onBack: () => void;
-  onSteer: (text: string, sessionId?: string) => void;
+  onSteer: (text: string, sessionId: string) => void;
+  onPatch: (text: string) => void;
   error: string | null;
 }) {
   const subtasks = parseSubtasks(feature.body);
+  const hasSession = !!feature.sessionId;
 
   return (
     <div
@@ -334,6 +370,19 @@ function FeatureDetailView({
         <span style={{ color: "var(--fg-1)", fontSize: "var(--text-sm)" }}>
           {feature.title}
         </span>
+        {hasSession && (
+          <span
+            style={{
+              marginLeft: "auto",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              color: "var(--accent-cyan)",
+              letterSpacing: "var(--ls-wider)",
+            }}
+          >
+            ACTIVE
+          </span>
+        )}
       </div>
 
       {/* Scrollable content */}
@@ -443,11 +492,20 @@ function FeatureDetailView({
         </section>
       </div>
 
-      {/* Steer form */}
-      <SteerForm
-        placeholder="Discuss changes to this feature spec…"
-        onSubmit={(text) => onSteer(text, feature.sessionId)}
-      />
+      {/* Context-aware bottom form */}
+      {hasSession ? (
+        <SteerForm
+          placeholder="Steer the running agent…"
+          submitLabel="STEER"
+          onSubmit={(text) => onSteer(text, feature.sessionId!)}
+        />
+      ) : (
+        <SteerForm
+          placeholder="Refine this feature spec…"
+          submitLabel="UPDATE"
+          onSubmit={onPatch}
+        />
+      )}
     </div>
   );
 }
@@ -457,14 +515,13 @@ interface Subtask {
   text: string;
 }
 
-/** Parse GitHub-style checklist items from markdown body. */
 function parseSubtasks(body?: string): Subtask[] {
   if (!body) return [];
   const results: Subtask[] = [];
   for (const line of body.split("\n")) {
     const m = line.match(/^\s*-\s+\[( |x|X)\]\s+(.+)$/);
     if (m) {
-      results.push({ done: m[1] !== " ", text: m[2].trim() });
+      results.push({ done: m[1] !== " ", text: m[2]!.trim() });
     }
   }
   return results;
@@ -499,10 +556,6 @@ export function FeaturePane({ controller: controllerProp }: FeaturePaneProps) {
       ? state.features.find((f) => f.issueNumber === state.selectedIssueNumber)
       : null;
 
-  function handleSteer(text: string, sessionId?: string) {
-    void controllerRef.current.steer(text, sessionId);
-  }
-
   return (
     <div
       data-testid="feature-pane"
@@ -517,14 +570,22 @@ export function FeaturePane({ controller: controllerProp }: FeaturePaneProps) {
         <FeatureDetailView
           feature={selectedFeature}
           onBack={() => controllerRef.current.selectFeature(null)}
-          onSteer={handleSteer}
+          onSteer={(text, sessionId) =>
+            void controllerRef.current.steer(text, sessionId)
+          }
+          onPatch={(text) =>
+            void controllerRef.current.patchFeature(
+              selectedFeature.issueNumber,
+              text,
+            )
+          }
           error={state.error}
         />
       ) : (
         <FeatureListView
           state={state}
           onSelect={(n) => controllerRef.current.selectFeature(n)}
-          onSteer={(text) => handleSteer(text)}
+          onCreate={(title) => void controllerRef.current.createFeature(title)}
         />
       )}
     </div>

@@ -13,6 +13,7 @@ import { embeddedAssets } from "./embedded-assets.gen";
 import { ProcessManager } from "./process-manager";
 import { route } from "./router";
 import { controlWsHandler, type WsData } from "./control-ws";
+import { startSync, stopSync } from "./sync";
 
 export interface StartControlOpts {
   /** Override individual config values (takes precedence over env vars). */
@@ -91,6 +92,8 @@ export async function startControl(opts: StartControlOpts = {}): Promise<{
     },
   });
 
+  startSync(config.projectRoot);
+
   console.log(`\n⬡ Studio Mode`);
   console.log(`  Studio:  http://0.0.0.0:${config.port}`);
   console.log(`  App:     http://0.0.0.0:${config.port}/app/`);
@@ -105,6 +108,7 @@ export async function startControl(opts: StartControlOpts = {}): Promise<{
     shuttingDown = true;
 
     console.log(`\n[studio] Received ${signal}. Shutting down…`);
+    stopSync();
     server.stop();
     await pm.shutdown();
     console.log("[studio] Goodbye.");
