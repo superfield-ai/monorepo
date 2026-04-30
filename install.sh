@@ -36,10 +36,9 @@ OS="$(uname -s)"
 ARCH="$(uname -m)"
 
 case "$OS" in
-  Linux)  OS_SLUG="linux" ;;
-  Darwin) OS_SLUG="darwin" ;;
+  Linux) OS_SLUG="linux" ;;
   *)
-    echo "Unsupported OS: $OS" >&2
+    echo "Unsupported OS: $OS (only Linux is supported)" >&2
     exit 1
     ;;
 esac

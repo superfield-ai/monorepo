@@ -55,8 +55,6 @@ jobs:
           files: |
             packages/cli/dist/superfield-linux-amd64
             packages/cli/dist/superfield-linux-arm64
-            packages/cli/dist/superfield-darwin-amd64
-            packages/cli/dist/superfield-darwin-arm64
           fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
