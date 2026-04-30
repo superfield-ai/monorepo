@@ -1,20 +1,35 @@
 /**
  * @file FeaturePaneController
  *
- * Fetches active slots from /analytics/slots and issue metadata from the
- * orchestrator. Manages selected feature state for the FeaturePane component.
+ * Merges two data sources into a single feature list:
+ *   - /analytics/slots  — issues currently running in the dev loop (have a live sessionId)
+ *   - /studio/issues    — local DB records (draft / queued / blocked)
  *
- * No React imports — pure TypeScript controller.
+ * Three intent-based actions:
+ *   createFeature(title)             → POST /studio/issues
+ *   patchFeature(number, body)       → PATCH /studio/issues/:number
+ *   steer(context, sessionId)        → POST /studio/steer
  */
 
 import type { SlotInfo } from "./OrchestratorController";
 import { fetchJson } from "../lib/net";
+
+export type FeatureSource = "slot" | "db";
+export type FeatureStatus =
+  | "active"
+  | "draft"
+  | "open"
+  | "in_progress"
+  | "blocked"
+  | "done";
 
 export interface FeatureItem {
   issueNumber: number;
   title: string;
   body?: string;
   sessionId?: string;
+  source: FeatureSource;
+  status: FeatureStatus;
 }
 
 export interface FeaturePaneState {
@@ -28,6 +43,7 @@ export type FeaturePaneListener = (state: FeaturePaneState) => void;
 
 export interface FeaturePaneControllerOptions {
   readonly slotsUrl?: string;
+  readonly issuesUrl?: string;
   readonly statusUrl?: string;
   pollIntervalMs?: number;
 }
@@ -42,16 +58,16 @@ export class FeaturePaneController {
   private listeners: Set<FeaturePaneListener> = new Set();
   private pollTimer: ReturnType<typeof setInterval> | null = null;
   private readonly slotsUrl: string;
-  private readonly statusUrl: string;
+  private readonly issuesUrl: string;
   private readonly pollIntervalMs: number;
 
   constructor({
     slotsUrl = "/analytics/slots",
-    statusUrl = "/studio/status",
+    issuesUrl = "/studio/issues",
     pollIntervalMs = 10_000,
   }: FeaturePaneControllerOptions = {}) {
     this.slotsUrl = slotsUrl;
-    this.statusUrl = statusUrl;
+    this.issuesUrl = issuesUrl;
     this.pollIntervalMs = pollIntervalMs;
   }
 
@@ -85,19 +101,59 @@ export class FeaturePaneController {
     this.notify();
   }
 
-  async steer(context: string, sessionId?: string): Promise<void> {
-    if (!sessionId) {
-      this.state = {
-        ...this.state,
-        error: "SELECT A RUNNING ISSUE BEFORE STEERING",
-      };
-      this.notify();
-      return;
-    }
-
+  async createFeature(title: string): Promise<void> {
     this.state = { ...this.state, error: null };
     this.notify();
+    try {
+      const res = await fetch(this.issuesUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ title, pushToGithub: true }),
+      });
+      if (!res.ok) {
+        const body = (await res.json().catch(() => ({}))) as { error?: string };
+        this.state = { ...this.state, error: body.error ?? "CREATE FAILED" };
+        this.notify();
+        return;
+      }
+      const created = (await res.json()) as { number: number };
+      await this.fetch();
+      this.state = {
+        ...this.state,
+        selectedIssueNumber: created.number,
+        error: null,
+      };
+    } catch {
+      this.state = { ...this.state, error: "CREATE REQUEST FAILED" };
+    }
+    this.notify();
+  }
 
+  async patchFeature(issueNumber: number, body: string): Promise<void> {
+    this.state = { ...this.state, error: null };
+    this.notify();
+    try {
+      const res = await fetch(`${this.issuesUrl}/${issueNumber}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body }),
+      });
+      if (!res.ok) {
+        const json = (await res.json().catch(() => ({}))) as { error?: string };
+        this.state = { ...this.state, error: json.error ?? "PATCH FAILED" };
+        this.notify();
+        return;
+      }
+      await this.fetch();
+    } catch {
+      this.state = { ...this.state, error: "PATCH REQUEST FAILED" };
+      this.notify();
+    }
+  }
+
+  async steer(context: string, sessionId: string): Promise<void> {
+    this.state = { ...this.state, error: null };
+    this.notify();
     try {
       const res = await fetch("/studio/steer", {
         method: "POST",
@@ -108,25 +164,19 @@ export class FeaturePaneController {
         const body = (await res.json().catch(() => ({}))) as {
           error?: string;
           message?: string;
-          detail?: string;
         };
         this.state = {
           ...this.state,
-          error:
-            body.error ??
-            body.message ??
-            body.detail ??
-            "STEER REQUEST REJECTED",
+          error: body.error ?? body.message ?? "STEER REQUEST REJECTED",
         };
         this.notify();
         return;
       }
       this.state = { ...this.state, error: null };
-      this.notify();
     } catch {
       this.state = { ...this.state, error: "STEER REQUEST FAILED" };
-      this.notify();
     }
+    this.notify();
   }
 
   private async fetch(): Promise<void> {
@@ -134,39 +184,59 @@ export class FeaturePaneController {
     this.notify();
 
     try {
-      const result = await fetchJson<{ slots?: SlotInfo[] }>(this.slotsUrl);
-      if (!result.ok) {
-        this.state = {
-          ...this.state,
-          loading: false,
-          error: result.error.message,
-        };
-        this.notify();
-        return;
+      const [slotsResult, issuesResult] = await Promise.all([
+        fetchJson<{ slots?: SlotInfo[] }>(this.slotsUrl),
+        fetchJson<{ issues?: DbIssue[] }>(this.issuesUrl),
+      ]);
+
+      // Active slots from the dev loop
+      const slotFeatures: FeatureItem[] = slotsResult.ok
+        ? (slotsResult.value.slots ?? []).map((slot) => ({
+            issueNumber: slot.issueNumber,
+            title: `Issue #${slot.issueNumber}`,
+            sessionId: slot.sessionId,
+            source: "slot" as FeatureSource,
+            status: "active" as FeatureStatus,
+          }))
+        : [];
+
+      const activeNumbers = new Set(slotFeatures.map((f) => f.issueNumber));
+
+      // Local DB records that are not already in the slot list
+      const dbFeatures: FeatureItem[] = issuesResult.ok
+        ? (issuesResult.value.issues ?? [])
+            .filter((i) => !activeNumbers.has(i.number))
+            .filter((i) => i.status !== "done")
+            .map((i) => ({
+              issueNumber: i.number,
+              title: i.title,
+              body: i.body,
+              source: "db" as FeatureSource,
+              status: i.status as FeatureStatus,
+            }))
+        : [];
+
+      const features = [...slotFeatures, ...dbFeatures];
+
+      // Preserve title/body from DB for slot items when available
+      if (issuesResult.ok) {
+        const dbMap = new Map(
+          (issuesResult.value.issues ?? []).map((i) => [i.number, i]),
+        );
+        for (const f of slotFeatures) {
+          const db = dbMap.get(f.issueNumber);
+          if (db) {
+            f.title = db.title;
+            f.body = db.body;
+          }
+        }
       }
-
-      const slotsBody = result.value;
-      const slots = slotsBody.slots ?? [];
-
-      const features: FeatureItem[] = slots.map((slot) => ({
-        issueNumber: slot.issueNumber,
-        title: `Issue #${slot.issueNumber}`,
-        sessionId: slot.sessionId,
-      }));
-
-      // Deduplicate by issue number — keep first occurrence
-      const seen = new Set<number>();
-      const unique = features.filter((f) => {
-        if (seen.has(f.issueNumber)) return false;
-        seen.add(f.issueNumber);
-        return true;
-      });
 
       this.state = {
         ...this.state,
-        features: unique,
+        features,
         loading: false,
-        error: null,
+        error: slotsResult.ok ? null : slotsResult.error.message,
       };
     } catch (err) {
       this.state = {
@@ -184,4 +254,11 @@ export class FeaturePaneController {
       listener(state);
     }
   }
+}
+
+interface DbIssue {
+  number: number;
+  title: string;
+  body?: string;
+  status: string;
 }

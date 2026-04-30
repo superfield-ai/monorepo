@@ -42,6 +42,13 @@ import {
 import { getCorsHeaders, getAuthenticatedUser } from "./auth";
 import { makeJson } from "../lib/response";
 import { appendTraceLog } from "@superfield/core";
+import {
+  openIssueStore,
+  resolveIssueDbPath,
+  type LocalIssueRecord,
+} from "@superfield/db";
+import { GitHubClient } from "@superfield/github";
+import { parseRepo, triggerSync } from "./sync";
 
 // In-memory session context per studio session
 const sessionMessages: ControlMessage[] = [];
@@ -90,6 +97,113 @@ function getControlInfo(): { sessionId: string; branch: string } | null {
   const studioFile = join(REPO_ROOT, ".studio");
   if (!existsSync(studioFile)) return null;
   return parseControlInfo(readFileSync(studioFile, "utf8"));
+}
+
+export async function handleIssueRequest(
+  req: Request,
+  url: URL,
+  projectRoot?: string,
+): Promise<Response | null> {
+  const issuesBase = "/studio/issues";
+  const syncPath = "/studio/sync/github";
+  if (!url.pathname.startsWith(issuesBase) && url.pathname !== syncPath)
+    return null;
+
+  const corsHeaders = getCorsHeaders(req);
+  const json = makeJson(corsHeaders);
+
+  // GET /studio/issues[?status=draft|open|in_progress|blocked|done]
+  if (req.method === "GET" && url.pathname === issuesBase) {
+    const store = await openIssueStore(resolveIssueDbPath(projectRoot));
+    const all = await store.getAll();
+    const statusFilter = url.searchParams.get("status");
+    const issues = statusFilter
+      ? all.filter((i) => i.status === statusFilter)
+      : all;
+    return json({ issues });
+  }
+
+  // POST /studio/issues — create a new local issue, optionally push to GitHub
+  if (req.method === "POST" && url.pathname === issuesBase) {
+    const body = (await req.json().catch(() => ({}))) as {
+      title?: string;
+      body?: string;
+      pushToGithub?: boolean;
+    };
+    if (!body.title?.trim()) return json({ error: "title is required" }, 400);
+
+    const store = await openIssueStore(resolveIssueDbPath(projectRoot));
+    const existing = await store.getAll();
+    const maxLocal = existing.reduce((m, i) => Math.max(m, i.number), 0);
+
+    const now = new Date().toISOString();
+    const repoEnv = process.env.GITHUB_REPO ?? "local/local";
+    const record: LocalIssueRecord = {
+      repo: repoEnv,
+      number: maxLocal + 1,
+      title: body.title.trim(),
+      body: body.body ?? "",
+      status: "draft",
+      acceptance: [],
+      testPlan: [],
+      updatedAt: now,
+    };
+
+    if (body.pushToGithub) {
+      const token = process.env.GITHUB_TOKEN;
+      const parsed = parseRepo(repoEnv);
+      if (token && parsed) {
+        try {
+          const client = new GitHubClient(token);
+          const ghIssue = await client.createIssue({
+            owner: parsed.owner,
+            repo: parsed.repo,
+            title: record.title,
+            body: record.body,
+            labels: [],
+          });
+          record.number = ghIssue.number;
+          record.githubIssueNumber = ghIssue.number;
+          record.githubIssueUrl = ghIssue.html_url;
+          record.status = "open";
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return json({ error: `GitHub API error: ${msg}` }, 502);
+        }
+      }
+    }
+
+    await store.upsert(record);
+    return json(record, 201);
+  }
+
+  // PATCH /studio/issues/:number
+  const patchMatch = url.pathname.match(/^\/studio\/issues\/(\d+)$/);
+  if (req.method === "PATCH" && patchMatch) {
+    const number = parseInt(patchMatch[1] ?? "0", 10);
+    const body = (await req.json().catch(() => ({}))) as Partial<{
+      title: string;
+      body: string;
+      status: LocalIssueRecord["status"];
+    }>;
+    const store = await openIssueStore(resolveIssueDbPath(projectRoot));
+    const updated = await store.patch(number, (issue) => ({
+      ...issue,
+      ...(body.title !== undefined ? { title: body.title } : {}),
+      ...(body.body !== undefined ? { body: body.body } : {}),
+      ...(body.status !== undefined ? { status: body.status } : {}),
+    }));
+    if (!updated) return json({ error: "issue not found" }, 404);
+    return json(updated);
+  }
+
+  // POST /studio/sync/github — manual trigger
+  if (req.method === "POST" && url.pathname === syncPath) {
+    await triggerSync(projectRoot);
+    return json({ ok: true });
+  }
+
+  return null;
 }
 
 export async function handleControlRequest(

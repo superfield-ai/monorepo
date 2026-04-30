@@ -75,11 +75,7 @@ describe("turn frame", () => {
       asServerWs(ws),
       JSON.stringify({ type: "turn", message: "hello" }),
     );
-    const [, , mode] = streamTurnSpy.mock.calls[0] as [
-      string,
-      string,
-      string,
-    ];
+    const [, , mode] = streamTurnSpy.mock.calls[0] as [string, string, string];
     expect(mode).toBe("design");
   });
 

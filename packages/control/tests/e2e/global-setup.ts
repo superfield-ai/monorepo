@@ -41,6 +41,16 @@ export default async function globalSetup() {
   mkdirSync(join(testRoot, "control-logs"), { recursive: true });
   mkdirSync(join(testRoot, "superfield-logs"), { recursive: true });
   process.env.SUPERFIELD_TEST_ROOT = testRoot;
+  const realHome = process.env.HOME;
+  // Pin the Playwright browser cache to the real home so it survives the HOME
+  // override below (Playwright defaults to $HOME/.cache/ms-playwright).
+  if (!process.env.PLAYWRIGHT_BROWSERS_PATH && realHome) {
+    process.env.PLAYWRIGHT_BROWSERS_PATH = join(
+      realHome,
+      ".cache",
+      "ms-playwright",
+    );
+  }
   process.env.HOME = join(testRoot, "home");
   process.env.USERPROFILE = join(testRoot, "home");
   process.env.CONTROL_LOG_DIR = join(testRoot, "control-logs");
@@ -68,7 +78,7 @@ export default async function globalSetup() {
   // different PATH than the shell.
   const bunBin = process.env.BUN_INSTALL
     ? join(process.env.BUN_INSTALL, "bin", "bun")
-    : join(process.env.HOME ?? "/root", ".bun", "bin", "bun");
+    : join(realHome ?? "/root", ".bun", "bin", "bun");
 
   const studioProc: ChildProcess = spawn(
     bunBin,

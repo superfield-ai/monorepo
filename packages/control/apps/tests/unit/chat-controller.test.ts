@@ -189,7 +189,9 @@ describe("ChatController", () => {
   });
 
   it("resetSession posts to the reset endpoint", async () => {
-    const fetchSpy = vi.fn(() => Promise.resolve(makeJsonResponse({ ok: true })));
+    const fetchSpy = vi.fn(() =>
+      Promise.resolve(makeJsonResponse({ ok: true })),
+    );
     vi.stubGlobal("fetch", fetchSpy);
 
     await ctrl.resetSession();
