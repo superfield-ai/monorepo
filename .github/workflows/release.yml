@@ -14,8 +14,8 @@ jobs:
     uses: ./.github/workflows/test-unit.yml
     secrets: inherit
 
-  release:
-    name: Build and publish release
+  build:
+    name: Build release binaries
     runs-on: [self-hosted, Linux, X64]
     needs: test-unit
     container:
@@ -31,23 +31,18 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
-      - name: Build local binary
+      - name: Build all platform binaries
         run: |
           SUPERFIELD_BUILD_VERSION="${GITHUB_REF_NAME#v}" \
           SUPERFIELD_BUILD_COMMIT="${GITHUB_SHA}" \
           SUPERFIELD_BUILD_DATE="$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
           SUPERFIELD_BUILD_BLUEPRINT_COMMIT="$(git -C blueprint rev-parse --short HEAD)" \
-          bun run --filter @superfield/cli release
+          bun run --filter @superfield/cli build:compile:all
 
-      - name: Stage release asset
+      - name: Smoke test (linux-amd64)
         run: |
-          mkdir -p release
-          cp "$HOME/.bun/bin/superfield" release/superfield
-
-      - name: Smoke test help output
-        run: |
-          export PATH="$HOME/.bun/bin:$PATH"
-          help_output="$(superfield --help)"
+          chmod +x packages/cli/dist/superfield-linux-amd64
+          help_output="$(packages/cli/dist/superfield-linux-amd64 --help)"
           printf '%s\n' "$help_output"
           printf '%s\n' "$help_output" | grep -F "Version: ${GITHUB_REF_NAME#v}"
           printf '%s\n' "$help_output" | grep -F "Commit: ${GITHUB_SHA}"
@@ -57,6 +52,11 @@ jobs:
       - name: Publish release
         uses: softprops/action-gh-release@v2
         with:
-          files: release/superfield
+          files: |
+            packages/cli/dist/superfield-linux-amd64
+            packages/cli/dist/superfield-linux-arm64
+            packages/cli/dist/superfield-darwin-amd64
+            packages/cli/dist/superfield-darwin-arm64
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
