@@ -497,7 +497,9 @@ function FeatureDetailView({
         <SteerForm
           placeholder="Steer the running agent…"
           submitLabel="STEER"
-          onSubmit={(text) => onSteer(text, feature.sessionId!)}
+          onSubmit={(text) =>
+            feature.sessionId && onSteer(text, feature.sessionId)
+          }
         />
       ) : (
         <SteerForm
@@ -521,7 +523,7 @@ function parseSubtasks(body?: string): Subtask[] {
   for (const line of body.split("\n")) {
     const m = line.match(/^\s*-\s+\[( |x|X)\]\s+(.+)$/);
     if (m) {
-      results.push({ done: m[1] !== " ", text: m[2]!.trim() });
+      results.push({ done: m[1] !== " ", text: (m[2] ?? "").trim() });
     }
   }
   return results;

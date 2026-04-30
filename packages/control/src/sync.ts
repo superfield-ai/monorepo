@@ -22,9 +22,7 @@ import {
 } from "@superfield/db";
 import { logBackend, logBackendError } from "./debug-events";
 
-function parseRepo(
-  repoEnv: string,
-): { owner: string; repo: string } | null {
+function parseRepo(repoEnv: string): { owner: string; repo: string } | null {
   const parts = repoEnv.split("/");
   if (parts.length !== 2 || !parts[0] || !parts[1]) return null;
   return { owner: parts[0], repo: parts[1] };

@@ -190,16 +190,15 @@ export class FeaturePaneController {
       ]);
 
       // Active slots from the dev loop
-      const slotFeatures: FeatureItem[] =
-        slotsResult.ok
-          ? (slotsResult.value.slots ?? []).map((slot) => ({
-              issueNumber: slot.issueNumber,
-              title: `Issue #${slot.issueNumber}`,
-              sessionId: slot.sessionId,
-              source: "slot" as FeatureSource,
-              status: "active" as FeatureStatus,
-            }))
-          : [];
+      const slotFeatures: FeatureItem[] = slotsResult.ok
+        ? (slotsResult.value.slots ?? []).map((slot) => ({
+            issueNumber: slot.issueNumber,
+            title: `Issue #${slot.issueNumber}`,
+            sessionId: slot.sessionId,
+            source: "slot" as FeatureSource,
+            status: "active" as FeatureStatus,
+          }))
+        : [];
 
       const activeNumbers = new Set(slotFeatures.map((f) => f.issueNumber));
 

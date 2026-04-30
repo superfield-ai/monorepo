@@ -168,7 +168,7 @@ export async function startCommand(
       port: apiPort,
       state: apiState,
       logger: apiLogger,
-      logDir: currentLogFile() ? path.dirname(currentLogFile()) : config.logDir,
+      logDir: path.dirname(currentLogFile() ?? "") || undefined,
     });
   }
 

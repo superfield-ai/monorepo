@@ -106,10 +106,7 @@ export async function handleIssueRequest(
 ): Promise<Response | null> {
   const issuesBase = "/studio/issues";
   const syncPath = "/studio/sync/github";
-  if (
-    !url.pathname.startsWith(issuesBase) &&
-    url.pathname !== syncPath
-  )
+  if (!url.pathname.startsWith(issuesBase) && url.pathname !== syncPath)
     return null;
 
   const corsHeaders = getCorsHeaders(req);
@@ -183,7 +180,7 @@ export async function handleIssueRequest(
   // PATCH /studio/issues/:number
   const patchMatch = url.pathname.match(/^\/studio\/issues\/(\d+)$/);
   if (req.method === "PATCH" && patchMatch) {
-    const number = parseInt(patchMatch[1]!, 10);
+    const number = parseInt(patchMatch[1] ?? "0", 10);
     const body = (await req.json().catch(() => ({}))) as Partial<{
       title: string;
       body: string;
