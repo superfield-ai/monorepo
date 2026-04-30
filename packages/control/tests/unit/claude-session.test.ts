@@ -144,7 +144,12 @@ describe("streamTurn", () => {
       ),
     );
     const { streamTurn } = await import("../../src/claude-session");
-    const stream = streamTurn("hello world", streamTmpDir, "design", fetchSpy as unknown as typeof fetch);
+    const stream = streamTurn(
+      "hello world",
+      streamTmpDir,
+      "design",
+      fetchSpy as unknown as typeof fetch,
+    );
     await new Response(stream).text();
 
     expect(fetchSpy).toHaveBeenCalledOnce();

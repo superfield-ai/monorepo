@@ -113,15 +113,11 @@ async function main(): Promise<void> {
     return;
   }
 
-  const toRecord = scenario
-    ? { [scenario]: SCENARIOS[scenario] }
-    : SCENARIOS;
+  const toRecord = scenario ? { [scenario]: SCENARIOS[scenario] } : SCENARIOS;
 
   if (scenario && !SCENARIOS[scenario]) {
     console.error(`Unknown scenario: ${scenario}`);
-    console.error(
-      "Run with --list to see available scenarios.",
-    );
+    console.error("Run with --list to see available scenarios.");
     process.exit(1);
   }
 

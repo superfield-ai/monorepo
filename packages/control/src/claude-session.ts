@@ -134,9 +134,10 @@ export async function getChangedFiles(baseRef: string): Promise<string[]> {
             stdio: ["ignore", "pipe", "pipe"],
             env: process.env,
           });
+          if (!child.stdout) throw new Error("git stdout pipe unavailable");
           return {
             stdout: Readable.toWeb(
-              child.stdout!,
+              child.stdout,
             ) as unknown as ReadableStream<Uint8Array>,
             exited: new Promise<number>((resolve, reject) => {
               child.once("error", reject);

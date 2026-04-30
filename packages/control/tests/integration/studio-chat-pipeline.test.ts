@@ -27,10 +27,8 @@ import {
 import { streamTurn } from "../../src/claude-session";
 
 // Path to the studio goldens directory (adjacent to the claude stub).
-const GOLDENS_DIR = new URL(
-  "../fixtures/studio-goldens",
-  import.meta.url,
-).pathname;
+const GOLDENS_DIR = new URL("../fixtures/studio-goldens", import.meta.url)
+  .pathname;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -326,7 +324,10 @@ describe("golden fixture — design mode response", () => {
     const logFile = join(tmpDir, `${today}.jsonl`);
     expect(existsSync(logFile)).toBe(true);
 
-    const lines = readFileSync(logFile, "utf8").trim().split("\n").filter(Boolean);
+    const lines = readFileSync(logFile, "utf8")
+      .trim()
+      .split("\n")
+      .filter(Boolean);
     const entry = JSON.parse(lines.at(-1)!) as Record<string, unknown>;
     expect(entry.message).toBe("Update README docs");
     expect(typeof entry.response).toBe("string");

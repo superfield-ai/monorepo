@@ -80,7 +80,12 @@ export const controlWsHandler: WebSocketHandler<WsData> = {
       ) => baseFetch(input, { ...init, signal: ac.signal })) as typeof fetch;
 
       const _streamTurn = ws.data._streamTurn ?? streamTurn;
-      const stream = _streamTurn(frame.message, ws.data.logDir, mode, abortableFetch);
+      const stream = _streamTurn(
+        frame.message,
+        ws.data.logDir,
+        mode,
+        abortableFetch,
+      );
       const reader = stream.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
