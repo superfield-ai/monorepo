@@ -418,7 +418,18 @@ function FeatureDetailView({
           >
             SUBTASKS
           </h2>
-          {subtasks.length === 0 ? (
+          {!feature.body?.trim() ? (
+            <p
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-xs)",
+                color: "var(--fg-3)",
+              }}
+            >
+              No description yet — add one below using markdown checklist syntax
+              (<code>- [ ] task</code>).
+            </p>
+          ) : subtasks.length === 0 ? (
             <p
               style={{
                 fontFamily: "var(--font-mono)",
