@@ -108,7 +108,7 @@ export class FeaturePaneController {
       const res = await fetch(this.issuesUrl, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ title, pushToGithub: true }),
+        body: JSON.stringify({ title, pushToGithub: false }),
       });
       if (!res.ok) {
         const body = (await res.json().catch(() => ({}))) as { error?: string };
@@ -189,48 +189,68 @@ export class FeaturePaneController {
         fetchJson<{ issues?: DbIssue[] }>(this.issuesUrl),
       ]);
 
-      // Active slots from the dev loop
-      const slotFeatures: FeatureItem[] = slotsResult.ok
-        ? (slotsResult.value.slots ?? []).map((slot) => ({
-            issueNumber: slot.issueNumber,
-            title: `Issue #${slot.issueNumber}`,
-            sessionId: slot.sessionId,
-            source: "slot" as FeatureSource,
-            status: "active" as FeatureStatus,
-          }))
-        : [];
+      const slots = slotsResult.ok ? (slotsResult.value.slots ?? []) : [];
+      const dbMap = new Map(
+        issuesResult.ok
+          ? (issuesResult.value.issues ?? []).map((i) => [i.number, i])
+          : [],
+      );
 
-      const activeNumbers = new Set(slotFeatures.map((f) => f.issueNumber));
-
-      // Local DB records that are not already in the slot list
-      const dbFeatures: FeatureItem[] = issuesResult.ok
-        ? (issuesResult.value.issues ?? [])
-            .filter((i) => !activeNumbers.has(i.number))
-            .filter((i) => i.status !== "done")
-            .map((i) => ({
-              issueNumber: i.number,
-              title: i.title,
-              body: i.body,
-              source: "db" as FeatureSource,
-              status: i.status as FeatureStatus,
-            }))
-        : [];
-
-      const features = [...slotFeatures, ...dbFeatures];
-
-      // Preserve title/body from DB for slot items when available
-      if (issuesResult.ok) {
-        const dbMap = new Map(
-          (issuesResult.value.issues ?? []).map((i) => [i.number, i]),
+      // For any active slot without a local DB record, register a stub so the
+      // body can be added via the detail view without needing GitHub credentials.
+      const stubsNeeded = slots.filter((s) => !dbMap.has(s.issueNumber));
+      await Promise.all(
+        stubsNeeded.map((s) =>
+          fetch(this.issuesUrl, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              number: s.issueNumber,
+              pushToGithub: false,
+            }),
+          }).catch(() => null),
+        ),
+      );
+      // Re-fetch DB after stub creation so the map is current.
+      if (stubsNeeded.length > 0) {
+        const refreshed = await fetchJson<{ issues?: DbIssue[] }>(
+          this.issuesUrl,
         );
-        for (const f of slotFeatures) {
-          const db = dbMap.get(f.issueNumber);
-          if (db) {
-            f.title = db.title;
-            f.body = db.body;
+        if (refreshed.ok) {
+          for (const i of refreshed.value.issues ?? []) {
+            dbMap.set(i.number, i);
           }
         }
       }
+
+      // Active slots — title/body come from local DB when available.
+      const slotFeatures: FeatureItem[] = slots.map((slot) => {
+        const db = dbMap.get(slot.issueNumber);
+        return {
+          issueNumber: slot.issueNumber,
+          title: db?.title ?? `Issue #${slot.issueNumber}`,
+          body: db?.body,
+          sessionId: slot.sessionId,
+          source: "slot" as FeatureSource,
+          status: "active" as FeatureStatus,
+        };
+      });
+
+      const activeNumbers = new Set(slotFeatures.map((f) => f.issueNumber));
+
+      // Local DB records not currently in a slot.
+      const dbFeatures: FeatureItem[] = [...dbMap.values()]
+        .filter((i) => !activeNumbers.has(i.number))
+        .filter((i) => i.status !== "done")
+        .map((i) => ({
+          issueNumber: i.number,
+          title: i.title,
+          body: i.body,
+          source: "db" as FeatureSource,
+          status: i.status as FeatureStatus,
+        }));
+
+      const features = [...slotFeatures, ...dbFeatures];
 
       this.state = {
         ...this.state,

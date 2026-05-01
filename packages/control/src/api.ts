@@ -123,27 +123,41 @@ export async function handleIssueRequest(
     return json({ issues });
   }
 
-  // POST /studio/issues — create a new local issue, optionally push to GitHub
+  // POST /studio/issues — create a new local issue, optionally push to GitHub.
+  // Pass `number` to register a stub for a known issue number (e.g. a dev-loop
+  // slot that hasn't been synced yet). When `number` is omitted a new local
+  // number is assigned. `title` is required unless `number` is provided.
   if (req.method === "POST" && url.pathname === issuesBase) {
     const body = (await req.json().catch(() => ({}))) as {
+      number?: number;
       title?: string;
       body?: string;
       pushToGithub?: boolean;
     };
-    if (!body.title?.trim()) return json({ error: "title is required" }, 400);
+
+    const hasNumber = typeof body.number === "number" && body.number > 0;
+    if (!hasNumber && !body.title?.trim())
+      return json({ error: "title is required" }, 400);
 
     const store = await openIssueStore(resolveIssueDbPath(projectRoot));
-    const existing = await store.getAll();
-    const maxLocal = existing.reduce((m, i) => Math.max(m, i.number), 0);
+
+    // If registering by known number, return existing record unchanged.
+    if (hasNumber) {
+      const existing = await store.get(body.number as number);
+      if (existing) return json(existing, 200);
+    }
+
+    const all = await store.getAll();
+    const maxLocal = all.reduce((m, i) => Math.max(m, i.number), 0);
 
     const now = new Date().toISOString();
     const repoEnv = process.env.GITHUB_REPO ?? "local/local";
     const record: LocalIssueRecord = {
       repo: repoEnv,
-      number: maxLocal + 1,
-      title: body.title.trim(),
+      number: hasNumber ? (body.number as number) : maxLocal + 1,
+      title: body.title?.trim() ?? `Issue #${body.number}`,
       body: body.body ?? "",
-      status: "draft",
+      status: hasNumber ? "in_progress" : "draft",
       acceptance: [],
       testPlan: [],
       updatedAt: now,
