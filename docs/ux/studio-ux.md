@@ -85,12 +85,14 @@ Each row is a `<button>` that fills the rail width.
 ```
 
 **Active slot** (source = `"slot"`, status = `"active"`):
+
 - 6 px filled circle, `var(--accent-cyan)`, vertically centred left of the number.
 - Issue number in `var(--accent-cyan)`.
 - Title truncated with ellipsis at 1 line.
 - No status badge (the dot communicates "running").
 
 **Local DB item** (source = `"db"`):
+
 - No dot.
 - Issue number in `var(--accent-cyan)`.
 - Title truncated at 1 line.
@@ -98,10 +100,12 @@ Each row is a `<button>` that fills the rail width.
   `done` items are filtered out of the list entirely.
 
 **Selected row**:
+
 - Left border 2 px `var(--accent-cyan)`.
 - Background `var(--bg-base)` (slightly lighter than the raised rail background).
 
 **Hover**:
+
 - Border color transitions to `var(--accent-cyan)` on the full row border (1 px).
 
 **Row height**: 40 px minimum, padding `var(--sp-2) var(--sp-3)`.
@@ -244,10 +248,10 @@ change based on feature state:
              [              BUTTON LABEL             ]
 ```
 
-| Condition                        | Placeholder                         | Button   | Action                           |
-|----------------------------------|-------------------------------------|----------|----------------------------------|
-| Feature selected, no session     | `Refine the feature spec…`          | `UPDATE` | `PATCH /studio/issues/:n` (body) |
-| Feature selected, active session | `Steer the running agent…`          | `STEER`  | `POST /studio/steer`             |
+| Condition                        | Placeholder                | Button   | Action                           |
+| -------------------------------- | -------------------------- | -------- | -------------------------------- |
+| Feature selected, no session     | `Refine the feature spec…` | `UPDATE` | `PATCH /studio/issues/:n` (body) |
+| Feature selected, active session | `Steer the running agent…` | `STEER`  | `POST /studio/steer`             |
 
 The textarea is `var(--bg-base)`, 1 px `var(--border-subtle)` border, font-mono, sm.
 The button is full-width beneath the textarea, `var(--accent-cyan)` border and text,
@@ -296,12 +300,12 @@ visible list and detail body update in place without visual flash.
 
 ## Data Sources
 
-| UI element           | Source                              | Poll interval |
-|----------------------|-------------------------------------|---------------|
-| Feature rail list    | `/analytics/slots` + `/studio/issues` | 10 s        |
-| Feature body/title   | `/studio/issues` (embedded DB)      | 10 s          |
-| Session log (turns)  | `/studio/turns/:sessionId`          | on detail open + 10 s |
-| Sync trigger         | `POST /studio/sync/github`          | manual only   |
+| UI element          | Source                                | Poll interval         |
+| ------------------- | ------------------------------------- | --------------------- |
+| Feature rail list   | `/analytics/slots` + `/studio/issues` | 10 s                  |
+| Feature body/title  | `/studio/issues` (embedded DB)        | 10 s                  |
+| Session log (turns) | `/studio/turns/:sessionId`            | on detail open + 10 s |
+| Sync trigger        | `POST /studio/sync/github`            | manual only           |
 
 The embedded DB (`packages/db`) is the sole source of truth for title and body.
 `/analytics/slots` supplies `sessionId` and slot metadata only.
@@ -313,7 +317,7 @@ The embedded DB (`packages/db`) is the sole source of truth for title and body.
 All measurements use the shared design token set. Key tokens for this surface:
 
 | Token                  | Usage                                    |
-|------------------------|------------------------------------------|
+| ---------------------- | ---------------------------------------- |
 | `var(--bg-base)`       | Detail panel background, selected row bg |
 | `var(--bg-raised)`     | Rail background, form docking areas      |
 | `var(--border-subtle)` | All 1 px dividing lines                  |
@@ -337,13 +341,13 @@ Rail width: **220 px**, fixed, no resize handle.
 
 ## Keyboard Interactions
 
-| Key              | Context            | Action                             |
-|------------------|--------------------|-------------------------------------|
-| `Escape`         | Detail view        | Return to no-selection (back)       |
-| `Enter`          | CREATE textarea    | Submit create form                  |
-| `Enter`          | UPDATE/STEER form  | Submit form                         |
-| `Shift+Enter`    | Any textarea       | Insert newline                      |
-| `↑` / `↓`        | Rail (future)      | Move selection between features     |
+| Key           | Context           | Action                          |
+| ------------- | ----------------- | ------------------------------- |
+| `Escape`      | Detail view       | Return to no-selection (back)   |
+| `Enter`       | CREATE textarea   | Submit create form              |
+| `Enter`       | UPDATE/STEER form | Submit form                     |
+| `Shift+Enter` | Any textarea      | Insert newline                  |
+| `↑` / `↓`     | Rail (future)     | Move selection between features |
 
 ---
 
@@ -352,6 +356,7 @@ Rail width: **220 px**, fixed, no resize handle.
 The two-column layout is designed for laptop and desktop widths (≥ 900 px).
 
 At narrower widths (< 768 px):
+
 - The rail collapses — the layout switches back to the single-pane drill-down (Option A
   behaviour). The rail is shown as the list view; selecting a feature replaces it with
   the detail view plus a back button.
@@ -363,10 +368,10 @@ The Studio tab is not intended for mobile use.
 
 ## Section Labels — Canonical Names
 
-| Old label   | New label       | Reason                                             |
-|-------------|-----------------|-----------------------------------------------------|
-| SUBTASKS    | DESCRIPTION     | The section shows the full body, not only task items |
-| (none)      | SESSION LOG     | Unchanged                                           |
+| Old label | New label   | Reason                                               |
+| --------- | ----------- | ---------------------------------------------------- |
+| SUBTASKS  | DESCRIPTION | The section shows the full body, not only task items |
+| (none)    | SESSION LOG | Unchanged                                            |
 
 ---
 
