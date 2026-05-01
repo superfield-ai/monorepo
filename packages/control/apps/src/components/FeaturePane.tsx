@@ -1,14 +1,15 @@
 /**
  * @file FeaturePane
  *
- * Studio tab main area. Shows features from two sources:
- *   - Active slots (dev loop running, pulsing dot indicator)
- *   - Local DB records (queued/draft/blocked, static badge)
+ * Two-column Studio tab layout per docs/ux/studio-ux.md.
  *
- * Three SteerForm modes driven by context:
- *   List view         → create new feature (POST /studio/issues)
- *   Detail, no session → refine feature spec (PATCH /studio/issues/:n)
- *   Detail, active session → steer running agent (POST /studio/steer)
+ * Left  — Feature rail (220 px fixed): always-visible list + create form.
+ * Right — Detail panel (flex-1): description, session log, action form.
+ *
+ * Selecting a feature in the rail loads detail on the right without
+ * replacing the rail. The rail stays visible at all times.
+ *
+ * Responsive: below 768 px collapses to single-pane drill-down (Option A).
  */
 
 import React, { useEffect, useRef, useState } from "react";
@@ -19,36 +20,40 @@ import {
 } from "../controllers/FeaturePaneController";
 import { TurnTimeline } from "./TurnTimeline";
 
-// ── Shared style constants ────────────────────────────────────────────────────
+// ── Design tokens ─────────────────────────────────────────────────────────────
 
-const SECTION: React.CSSProperties = {
-  background: "var(--bg-raised)",
-  border: "1px solid var(--border-subtle)",
-  padding: "var(--sp-3) var(--sp-4)",
-};
+const RAIL_WIDTH = 220;
 
-const BTN_PRIMARY: React.CSSProperties = {
+const LABEL: React.CSSProperties = {
   fontFamily: "var(--font-mono)",
   fontSize: "var(--text-xs)",
   fontWeight: 500,
   letterSpacing: "var(--ls-wider)",
   textTransform: "uppercase",
+};
+
+const BTN_PRIMARY: React.CSSProperties = {
+  ...LABEL,
   padding: "var(--sp-1) var(--sp-3)",
   background: "transparent",
   color: "var(--accent-cyan)",
   border: "1px solid var(--accent-cyan)",
   cursor: "pointer",
+  width: "100%",
 };
 
 const BTN_GHOST: React.CSSProperties = {
-  ...BTN_PRIMARY,
+  ...LABEL,
+  padding: "var(--sp-1) var(--sp-3)",
+  background: "transparent",
   color: "var(--fg-2)",
   border: "1px solid var(--border-subtle)",
-  fontSize: "var(--text-xs)",
+  cursor: "pointer",
 };
 
-const TEXTAREA_STYLE: React.CSSProperties = {
-  flex: 1,
+const TEXTAREA: React.CSSProperties = {
+  width: "100%",
+  boxSizing: "border-box",
   resize: "none",
   background: "var(--bg-base)",
   border: "1px solid var(--border-subtle)",
@@ -59,32 +64,23 @@ const TEXTAREA_STYLE: React.CSSProperties = {
   outline: "none",
 };
 
-// ── SteerForm — shared prompt form ───────────────────────────────────────────
+// ── Shared form component ─────────────────────────────────────────────────────
 
-function SteerForm({
+function ActionForm({
   placeholder,
-  submitLabel = "SUBMIT",
+  submitLabel,
   onSubmit,
-  disabled,
 }: {
   placeholder: string;
-  submitLabel?: string;
+  submitLabel: string;
   onSubmit: (text: string) => void;
-  disabled?: boolean;
 }) {
   const [value, setValue] = useState("");
   const ref = useRef<HTMLTextAreaElement>(null);
 
-  function handleKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      submit();
-    }
-  }
-
   function submit() {
     const text = value.trim();
-    if (!text || disabled) return;
+    if (!text) return;
     onSubmit(text);
     setValue("");
     ref.current?.focus();
@@ -93,13 +89,13 @@ function SteerForm({
   return (
     <div
       style={{
-        padding: "var(--sp-3) var(--sp-4)",
+        padding: "var(--sp-3)",
         borderTop: "1px solid var(--border-subtle)",
         background: "var(--bg-raised)",
         flexShrink: 0,
         display: "flex",
+        flexDirection: "column",
         gap: "var(--sp-2)",
-        alignItems: "flex-end",
       }}
     >
       <textarea
@@ -107,19 +103,23 @@ function SteerForm({
         value={value}
         rows={2}
         placeholder={placeholder}
-        disabled={disabled}
         onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        style={{ ...TEXTAREA_STYLE, opacity: disabled ? 0.5 : 1 }}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" && !e.shiftKey) {
+            e.preventDefault();
+            submit();
+          }
+        }}
+        style={TEXTAREA}
       />
       <button
         type="button"
-        disabled={disabled || !value.trim()}
+        disabled={!value.trim()}
         onClick={submit}
         style={{
           ...BTN_PRIMARY,
-          opacity: disabled || !value.trim() ? 0.4 : 1,
-          cursor: disabled || !value.trim() ? "not-allowed" : "pointer",
+          opacity: !value.trim() ? 0.4 : 1,
+          cursor: !value.trim() ? "not-allowed" : "pointer",
         }}
       >
         {submitLabel}
@@ -128,15 +128,35 @@ function SteerForm({
   );
 }
 
-// ── Feature list view ─────────────────────────────────────────────────────────
+// ── Section header (flat, no card border) ─────────────────────────────────────
 
-function FeatureListView({
+function SectionHeader({ label }: { label: string }) {
+  return (
+    <div
+      style={{
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-3)",
+        marginBottom: "var(--sp-3)",
+      }}
+    >
+      <span style={{ ...LABEL, color: "var(--fg-2)" }}>{label}</span>
+      <div style={{ flex: 1, height: 1, background: "var(--border-subtle)" }} />
+    </div>
+  );
+}
+
+// ── Feature rail (left column) ────────────────────────────────────────────────
+
+function FeatureRail({
   state,
+  selectedIssueNumber,
   onSelect,
   onCreate,
 }: {
   state: FeaturePaneState;
-  onSelect: (issueNumber: number) => void;
+  selectedIssueNumber: number | null;
+  onSelect: (n: number) => void;
   onCreate: (title: string) => void;
 }) {
   const { features, loading, error } = state;
@@ -144,49 +164,51 @@ function FeatureListView({
   return (
     <div
       style={{
+        width: RAIL_WIDTH,
+        flexShrink: 0,
         display: "flex",
         flexDirection: "column",
         height: "100%",
-        background: "var(--bg-base)",
+        background: "var(--bg-raised)",
+        borderRight: "1px solid var(--border-subtle)",
       }}
       data-testid="feature-list"
     >
-      {/* Header */}
+      {/* Rail header */}
       <div
         style={{
-          ...SECTION,
-          borderTop: "none",
-          borderLeft: "none",
-          borderRight: "none",
+          padding: "var(--sp-3) var(--sp-3)",
+          borderBottom: "1px solid var(--border-subtle)",
           display: "flex",
           alignItems: "center",
-          gap: "var(--sp-3)",
+          gap: "var(--sp-2)",
+          flexShrink: 0,
         }}
       >
-        <span
-          className="label"
-          style={{ color: "var(--fg-1)", letterSpacing: "var(--ls-wider)" }}
-        >
-          FEATURES
-        </span>
+        <span style={{ ...LABEL, color: "var(--fg-1)" }}>FEATURES</span>
         {loading && (
-          <span style={{ color: "var(--fg-3)", fontSize: "var(--text-xs)" }}>
-            loading…
+          <span
+            style={{
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              color: "var(--fg-3)",
+            }}
+          >
+            ↻
           </span>
         )}
       </div>
 
-      {/* Feature items */}
-      <div style={{ flex: 1, overflowY: "auto", padding: "var(--sp-3)" }}>
+      {/* Rail list */}
+      <div style={{ flex: 1, overflowY: "auto" }}>
         {error && (
           <div
             style={{
-              color: "var(--accent-red)",
               fontFamily: "var(--font-mono)",
               fontSize: "var(--text-xs)",
-              padding: "var(--sp-2)",
-              border: "1px solid var(--accent-red)",
-              marginBottom: "var(--sp-2)",
+              color: "var(--accent-red)",
+              padding: "var(--sp-2) var(--sp-3)",
+              borderBottom: "1px solid var(--border-subtle)",
             }}
           >
             {error}
@@ -196,35 +218,30 @@ function FeatureListView({
         {!loading && features.length === 0 && !error && (
           <p
             style={{
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-xs)",
-              letterSpacing: "var(--ls-wider)",
-              textTransform: "uppercase",
+              ...LABEL,
               color: "var(--fg-3)",
               textAlign: "center",
-              marginTop: "var(--sp-8)",
+              padding: "var(--sp-8) var(--sp-3)",
+              lineHeight: 1.6,
             }}
           >
-            NO FEATURES — describe one below to get started
+            NO FEATURES
           </p>
         )}
 
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            gap: "var(--sp-2)",
-          }}
-        >
-          {features.map((f) => (
-            <FeatureRow key={f.issueNumber} feature={f} onSelect={onSelect} />
-          ))}
-        </div>
+        {features.map((f) => (
+          <RailRow
+            key={f.issueNumber}
+            feature={f}
+            selected={f.issueNumber === selectedIssueNumber}
+            onSelect={onSelect}
+          />
+        ))}
       </div>
 
       {/* Create form */}
-      <SteerForm
-        placeholder="Name a new feature to create…"
+      <ActionForm
+        placeholder="New feature…"
         submitLabel="CREATE"
         onSubmit={onCreate}
       />
@@ -232,12 +249,14 @@ function FeatureListView({
   );
 }
 
-function FeatureRow({
+function RailRow({
   feature,
+  selected,
   onSelect,
 }: {
   feature: FeatureItem;
-  onSelect: (issueNumber: number) => void;
+  selected: boolean;
+  onSelect: (n: number) => void;
 }) {
   const isActive = feature.source === "slot";
 
@@ -247,78 +266,113 @@ function FeatureRow({
       data-testid={`feature-row-${feature.issueNumber}`}
       onClick={() => onSelect(feature.issueNumber)}
       style={{
+        display: "block",
         width: "100%",
         textAlign: "left",
-        background: "var(--bg-raised)",
-        border: "1px solid var(--border-subtle)",
-        padding: "var(--sp-3)",
+        background: selected ? "var(--bg-base)" : "transparent",
+        borderLeft: selected
+          ? "2px solid var(--accent-cyan)"
+          : "2px solid transparent",
+        borderTop: "none",
+        borderRight: "none",
+        borderBottom: "1px solid var(--border-subtle)",
+        padding: "var(--sp-2) var(--sp-3)",
         cursor: "pointer",
-        color: "var(--fg-1)",
-        fontFamily: "var(--font-sans)",
-        fontSize: "var(--text-sm)",
-        transition: "border-color var(--duration-fast) var(--ease-out)",
+        transition: "background var(--duration-fast) var(--ease-out)",
       }}
-      onMouseEnter={(e) =>
-        ((e.currentTarget as HTMLButtonElement).style.borderColor =
-          "var(--accent-cyan)")
-      }
-      onMouseLeave={(e) =>
-        ((e.currentTarget as HTMLButtonElement).style.borderColor =
-          "var(--border-subtle)")
-      }
     >
+      {/* Row: dot + number + truncated title */}
       <div
         style={{
           display: "flex",
-          alignItems: "baseline",
-          gap: "var(--sp-2)",
+          alignItems: "center",
+          gap: "var(--sp-1)",
+          overflow: "hidden",
         }}
       >
-        {/* Active pulse indicator */}
         {isActive && (
           <span
             title="In dev loop"
             style={{
-              display: "inline-block",
+              flexShrink: 0,
               width: 6,
               height: 6,
               borderRadius: "50%",
               background: "var(--accent-cyan)",
-              flexShrink: 0,
-              alignSelf: "center",
+              display: "inline-block",
             }}
           />
         )}
         <span
-          className="label"
-          style={{ color: "var(--accent-cyan)", flexShrink: 0 }}
+          style={{
+            ...LABEL,
+            color: "var(--accent-cyan)",
+            flexShrink: 0,
+          }}
         >
           #{feature.issueNumber}
         </span>
-        <span style={{ color: "var(--fg-1)" }}>{feature.title}</span>
-        {!isActive && (
-          <span
-            style={{
-              marginLeft: "auto",
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-xs)",
-              color: "var(--fg-3)",
-              textTransform: "uppercase",
-              letterSpacing: "var(--ls-wider)",
-              flexShrink: 0,
-            }}
-          >
-            {feature.status}
-          </span>
-        )}
+        <span
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "var(--text-xs)",
+            color: "var(--fg-1)",
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+            flex: 1,
+          }}
+        >
+          {feature.title}
+        </span>
       </div>
+      {/* Status badge (local-only items) */}
+      {!isActive && (
+        <div
+          style={{
+            ...LABEL,
+            color: "var(--fg-3)",
+            fontSize: "10px",
+            marginTop: 2,
+            paddingLeft: "var(--sp-1)",
+          }}
+        >
+          {feature.status}
+        </div>
+      )}
     </button>
   );
 }
 
-// ── Feature detail view ───────────────────────────────────────────────────────
+// ── Detail panel (right column) ───────────────────────────────────────────────
 
-function FeatureDetailView({
+function NoSelectionPlaceholder() {
+  return (
+    <div
+      style={{
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+      }}
+    >
+      <p
+        style={{
+          ...LABEL,
+          color: "var(--fg-3)",
+          textAlign: "center",
+          lineHeight: 1.8,
+        }}
+      >
+        SELECT A FEATURE
+        <br />
+        OR CREATE ONE
+      </p>
+    </div>
+  );
+}
+
+function DetailPanel({
   feature,
   onBack,
   onSteer,
@@ -334,6 +388,15 @@ function FeatureDetailView({
   const subtasks = parseSubtasks(feature.body);
   const hasSession = !!feature.sessionId;
 
+  // Escape key to deselect
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") onBack();
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onBack]);
+
   return (
     <div
       style={{
@@ -344,16 +407,16 @@ function FeatureDetailView({
       }}
       data-testid="feature-detail"
     >
-      {/* Header */}
+      {/* Detail header */}
       <div
         style={{
-          ...SECTION,
-          borderTop: "none",
-          borderLeft: "none",
-          borderRight: "none",
+          padding: "var(--sp-2) var(--sp-4)",
+          borderBottom: "1px solid var(--border-subtle)",
+          background: "var(--bg-raised)",
           display: "flex",
           alignItems: "center",
           gap: "var(--sp-3)",
+          flexShrink: 0,
         }}
       >
         <button
@@ -364,60 +427,57 @@ function FeatureDetailView({
         >
           ← BACK
         </button>
-        <span className="label" style={{ color: "var(--accent-cyan)" }}>
+        <span style={{ ...LABEL, color: "var(--accent-cyan)" }}>
           #{feature.issueNumber}
         </span>
-        <span style={{ color: "var(--fg-1)", fontSize: "var(--text-sm)" }}>
+        <span
+          style={{
+            fontFamily: "var(--font-sans)",
+            fontSize: "var(--text-sm)",
+            color: "var(--fg-1)",
+            flex: 1,
+            overflow: "hidden",
+            textOverflow: "ellipsis",
+            whiteSpace: "nowrap",
+          }}
+        >
           {feature.title}
         </span>
         {hasSession && (
           <span
-            style={{
-              marginLeft: "auto",
-              fontFamily: "var(--font-mono)",
-              fontSize: "var(--text-xs)",
-              color: "var(--accent-cyan)",
-              letterSpacing: "var(--ls-wider)",
-            }}
+            style={{ ...LABEL, color: "var(--accent-cyan)", flexShrink: 0 }}
           >
             ACTIVE
           </span>
         )}
       </div>
 
-      {/* Scrollable content */}
+      {/* Scrollable body */}
       <div
         style={{
           flex: 1,
           overflowY: "auto",
           padding: "var(--sp-4)",
-          display: "flex",
-          flexDirection: "column",
-          gap: "var(--sp-4)",
         }}
       >
         {error && (
           <div
             style={{
-              color: "var(--accent-red)",
               fontFamily: "var(--font-mono)",
               fontSize: "var(--text-xs)",
+              color: "var(--accent-red)",
               padding: "var(--sp-2)",
               border: "1px solid var(--accent-red)",
+              marginBottom: "var(--sp-4)",
             }}
           >
             {error}
           </div>
         )}
 
-        {/* Subtasks */}
-        <section style={SECTION}>
-          <h2
-            className="label"
-            style={{ marginBottom: "var(--sp-2)", display: "block" }}
-          >
-            SUBTASKS
-          </h2>
+        {/* DESCRIPTION section */}
+        <section style={{ marginBottom: "var(--sp-6)" }}>
+          <SectionHeader label="DESCRIPTION" />
           {!feature.body?.trim() ? (
             <p
               style={{
@@ -426,20 +486,19 @@ function FeatureDetailView({
                 color: "var(--fg-3)",
               }}
             >
-              No description yet — add one below using markdown checklist syntax
-              (<code>- [ ] task</code>).
+              No description yet — add one using the form below. Use{" "}
+              <code
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  background: "var(--bg-raised)",
+                  padding: "0 3px",
+                }}
+              >
+                - [ ] task
+              </code>{" "}
+              for checklist items.
             </p>
-          ) : subtasks.length === 0 ? (
-            <p
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-xs)",
-                color: "var(--fg-3)",
-              }}
-            >
-              No subtasks yet
-            </p>
-          ) : (
+          ) : subtasks.length > 0 ? (
             <ul
               style={{
                 listStyle: "none",
@@ -468,27 +527,22 @@ function FeatureDetailView({
                       color: task.done ? "var(--accent-green)" : "var(--fg-3)",
                       fontFamily: "var(--font-mono)",
                       fontSize: "var(--text-xs)",
+                      marginTop: 2,
                     }}
                   >
                     {task.done ? "[x]" : "[ ]"}
                   </span>
-                  <span>{task.text}</span>
+                  <span
+                    style={{
+                      textDecoration: task.done ? "line-through" : "none",
+                      color: task.done ? "var(--fg-3)" : "var(--fg-1)",
+                    }}
+                  >
+                    {task.text}
+                  </span>
                 </li>
               ))}
             </ul>
-          )}
-        </section>
-
-        {/* Session log */}
-        <section style={SECTION}>
-          <h2
-            className="label"
-            style={{ marginBottom: "var(--sp-2)", display: "block" }}
-          >
-            SESSION LOG
-          </h2>
-          {feature.sessionId ? (
-            <TurnTimeline sessionId={feature.sessionId} />
           ) : (
             <p
               style={{
@@ -497,15 +551,33 @@ function FeatureDetailView({
                 color: "var(--fg-3)",
               }}
             >
-              No active session for this feature.
+              No checklist items — body has prose but no{" "}
+              <code
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  background: "var(--bg-raised)",
+                  padding: "0 3px",
+                }}
+              >
+                - [ ]
+              </code>{" "}
+              lines.
             </p>
           )}
         </section>
+
+        {/* SESSION LOG — only shown when a session exists */}
+        {hasSession && (
+          <section>
+            <SectionHeader label="SESSION LOG" />
+            <TurnTimeline sessionId={feature.sessionId as string} />
+          </section>
+        )}
       </div>
 
-      {/* Context-aware bottom form */}
+      {/* Docked action form */}
       {hasSession ? (
-        <SteerForm
+        <ActionForm
           placeholder="Steer the running agent…"
           submitLabel="STEER"
           onSubmit={(text) =>
@@ -513,8 +585,8 @@ function FeatureDetailView({
           }
         />
       ) : (
-        <SteerForm
-          placeholder="Refine this feature spec…"
+        <ActionForm
+          placeholder="Refine the feature spec…"
           submitLabel="UPDATE"
           onSubmit={onPatch}
         />
@@ -522,6 +594,8 @@ function FeatureDetailView({
     </div>
   );
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 interface Subtask {
   done: boolean;
@@ -533,14 +607,26 @@ function parseSubtasks(body?: string): Subtask[] {
   const results: Subtask[] = [];
   for (const line of body.split("\n")) {
     const m = line.match(/^\s*-\s+\[( |x|X)\]\s+(.+)$/);
-    if (m) {
-      results.push({ done: m[1] !== " ", text: (m[2] ?? "").trim() });
-    }
+    if (m) results.push({ done: m[1] !== " ", text: (m[2] ?? "").trim() });
   }
   return results;
 }
 
-// ── Main FeaturePane component ────────────────────────────────────────────────
+function useIsNarrow(breakpoint = 768): boolean {
+  const [narrow, setNarrow] = useState(
+    () => typeof window !== "undefined" && window.innerWidth < breakpoint,
+  );
+  useEffect(() => {
+    const mq = window.matchMedia(`(max-width: ${breakpoint - 1}px)`);
+    const handler = (e: MediaQueryListEvent) => setNarrow(e.matches);
+    mq.addEventListener("change", handler);
+    setNarrow(mq.matches);
+    return () => mq.removeEventListener("change", handler);
+  }, [breakpoint]);
+  return narrow;
+}
+
+// ── Root component ────────────────────────────────────────────────────────────
 
 interface FeaturePaneProps {
   controller?: FeaturePaneController;
@@ -553,6 +639,7 @@ export function FeaturePane({ controller: controllerProp }: FeaturePaneProps) {
   const [state, setState] = useState<FeaturePaneState>(
     controllerRef.current.getState(),
   );
+  const isNarrow = useIsNarrow();
 
   useEffect(() => {
     const ctrl = controllerRef.current;
@@ -564,43 +651,85 @@ export function FeaturePane({ controller: controllerProp }: FeaturePaneProps) {
     };
   }, []);
 
+  const ctrl = controllerRef.current;
   const selectedFeature =
     state.selectedIssueNumber != null
       ? state.features.find((f) => f.issueNumber === state.selectedIssueNumber)
       : null;
 
+  function handleSelect(n: number) {
+    ctrl.selectFeature(n);
+  }
+  function handleBack() {
+    ctrl.selectFeature(null);
+  }
+  function handleCreate(title: string) {
+    void ctrl.createFeature(title);
+  }
+
+  // ── Narrow: single-pane drill-down (< 768 px) ────────────────────────────
+  if (isNarrow) {
+    return (
+      <div
+        data-testid="feature-pane"
+        style={{ display: "flex", height: "100%", flexDirection: "column" }}
+      >
+        {selectedFeature ? (
+          <DetailPanel
+            feature={selectedFeature}
+            onBack={handleBack}
+            onSteer={(text, sessionId) => void ctrl.steer(text, sessionId)}
+            onPatch={(text) =>
+              void ctrl.patchFeature(selectedFeature.issueNumber, text)
+            }
+            error={state.error}
+          />
+        ) : (
+          <FeatureRail
+            state={state}
+            selectedIssueNumber={state.selectedIssueNumber}
+            onSelect={handleSelect}
+            onCreate={handleCreate}
+          />
+        )}
+      </div>
+    );
+  }
+
+  // ── Wide: two-column layout ───────────────────────────────────────────────
   return (
     <div
       data-testid="feature-pane"
-      style={{
-        display: "flex",
-        height: "100%",
-        flexDirection: "column",
-        background: "var(--bg-base)",
-      }}
+      style={{ display: "flex", height: "100%", overflow: "hidden" }}
     >
-      {selectedFeature ? (
-        <FeatureDetailView
-          feature={selectedFeature}
-          onBack={() => controllerRef.current.selectFeature(null)}
-          onSteer={(text, sessionId) =>
-            void controllerRef.current.steer(text, sessionId)
-          }
-          onPatch={(text) =>
-            void controllerRef.current.patchFeature(
-              selectedFeature.issueNumber,
-              text,
-            )
-          }
-          error={state.error}
-        />
-      ) : (
-        <FeatureListView
-          state={state}
-          onSelect={(n) => controllerRef.current.selectFeature(n)}
-          onCreate={(title) => void controllerRef.current.createFeature(title)}
-        />
-      )}
+      <FeatureRail
+        state={state}
+        selectedIssueNumber={state.selectedIssueNumber}
+        onSelect={handleSelect}
+        onCreate={handleCreate}
+      />
+      <div
+        style={{
+          flex: 1,
+          display: "flex",
+          flexDirection: "column",
+          overflow: "hidden",
+        }}
+      >
+        {selectedFeature ? (
+          <DetailPanel
+            feature={selectedFeature}
+            onBack={handleBack}
+            onSteer={(text, sessionId) => void ctrl.steer(text, sessionId)}
+            onPatch={(text) =>
+              void ctrl.patchFeature(selectedFeature.issueNumber, text)
+            }
+            error={state.error}
+          />
+        ) : (
+          <NoSelectionPlaceholder />
+        )}
+      </div>
     </div>
   );
 }
