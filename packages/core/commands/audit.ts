@@ -163,7 +163,7 @@ const AUDIT_CONCURRENCY = 5;
  * in-flight at once. Order of completion is not guaranteed.
  */
 async function withConcurrency<T>(
-  items: T[],
+  items: readonly T[],
   concurrency: number,
   fn: (item: T) => Promise<void>,
 ): Promise<void> {
@@ -171,8 +171,8 @@ async function withConcurrency<T>(
   const workers = Array.from(
     { length: Math.min(concurrency, items.length) },
     async () => {
-      while (queue.length > 0) {
-        const item = queue.shift()!;
+      let item: T | undefined;
+      while ((item = queue.shift()) !== undefined) {
         await fn(item);
       }
     },
