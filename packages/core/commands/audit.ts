@@ -1,5 +1,9 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import * as path from "node:path";
+import { promisify } from "node:util";
+
+const execFileAsync = promisify(execFile);
 
 import { spawnAgent } from "../agent.ts";
 import { githubRequest } from "../github/http.ts";
@@ -45,6 +49,8 @@ export interface AuditOpts {
   capabilities?: string[];
   /** Skip GitHub issue creation even when gaps are found. */
   noIssues?: boolean;
+  /** Re-run all capabilities even if their findings are newer than HEAD. */
+  force?: boolean;
   /** Dependency injection for tests. */
   deps?: AuditDeps;
 }
@@ -60,10 +66,29 @@ export interface AuditDeps {
   writeFile?: (filePath: string, content: string) => Promise<void>;
   readFile?: (filePath: string) => Promise<string | null>;
   mkdir?: (dirPath: string) => Promise<void>;
+  /** Injectable for tests — returns the mtime of a finding file. */
+  statFn?: (filePath: string) => Promise<{ mtimeMs: number }>;
+  /** Injectable for tests — returns the HEAD commit time in ms. */
+  getHeadTime?: (repoPath: string) => Promise<number>;
   onLog?: (line: string) => void;
 }
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+async function getHeadCommitTime(repoPath: string): Promise<number> {
+  try {
+    const { stdout } = await execFileAsync(
+      "git",
+      ["log", "-1", "--format=%ct"],
+      { cwd: repoPath },
+    );
+    const seconds = parseInt(stdout.trim(), 10);
+    return Number.isFinite(seconds) ? seconds * 1000 : 0;
+  } catch {
+    // git not available or not a git repo — treat as no HEAD → never stale
+    return 0;
+  }
+}
 
 function log(deps: AuditDeps | undefined, line: string): void {
   (deps?.onLog ?? ((l) => process.stdout.write(`${l}\n`)))(line);
@@ -199,8 +224,14 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
         return null;
       }
     });
+  const statFn = deps.statFn ?? stat;
+  const getHeadTimeFn = deps.getHeadTime ?? getHeadCommitTime;
 
   await mkdirFn(outputDir);
+
+  // Resolve HEAD commit time once; if force is set we use 0 so nothing is
+  // ever considered fresh (the mtime comparison always falls through).
+  const headTimeMs = opts.force ? 0 : await getHeadTimeFn(opts.repoPath);
 
   const requestedCaps = opts.capabilities;
   const capsToRun = requestedCaps
@@ -231,20 +262,48 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
   await withConcurrency(capsToRun, AUDIT_CONCURRENCY, async (cap) => {
     const findingPath = path.join(outputDir, `${cap.id}.json`);
 
-    // Resume: skip if a complete finding already exists on disk.
-    const existing = await readFn(findingPath);
-    if (existing) {
-      try {
-        const parsed = JSON.parse(existing) as CapabilityFinding;
-        if (typeof parsed.conformant === "boolean") {
-          log(deps, `[audit] skip ${cap.id} — finding already on disk`);
-          await enqueueWrite(async () => {
-            findings.push(parsed);
-          });
-          return;
+    // Resume / stale-check: skip if a complete finding already exists on disk
+    // AND either (a) the finding is newer than the repo's HEAD commit, or
+    // (b) git is unavailable (headTimeMs === 0) — legacy resume-on-crash.
+    // When force=true we skip all of this and always re-run.
+    if (!opts.force) {
+      const existing = await readFn(findingPath);
+      if (existing) {
+        try {
+          const parsed = JSON.parse(existing) as CapabilityFinding;
+          if (typeof parsed.conformant === "boolean") {
+            let shouldSkip = false;
+
+            if (headTimeMs === 0) {
+              // Git unavailable — preserve legacy resume-on-crash behaviour.
+              shouldSkip = true;
+              log(deps, `[audit] skip ${cap.id} — finding already on disk`);
+            } else {
+              // Git available — skip only if the finding is newer than HEAD.
+              try {
+                const fileStat = await statFn(findingPath);
+                if (fileStat.mtimeMs > headTimeMs) {
+                  shouldSkip = true;
+                  log(
+                    deps,
+                    `[audit] ${cap.id}: fresh (finding newer than HEAD) — skipping`,
+                  );
+                }
+              } catch {
+                // stat failed — fall through and re-run
+              }
+            }
+
+            if (shouldSkip) {
+              await enqueueWrite(async () => {
+                findings.push(parsed);
+              });
+              return;
+            }
+          }
+        } catch {
+          // corrupted file — re-run
         }
-      } catch {
-        // corrupted file — re-run
       }
     }
 

@@ -92,7 +92,7 @@ describe("runAudit", () => {
     expect(spawnCalls).toHaveLength(2);
   });
 
-  it("skips capabilities whose finding file already exists on disk (resume mode)", async () => {
+  it("skips capabilities whose finding file already exists on disk (resume mode — git unavailable)", async () => {
     const existingFinding = JSON.stringify({
       capabilityId: CAP_A,
       present: true,
@@ -115,6 +115,9 @@ describe("runAudit", () => {
         readFile: async () => existingFinding,
         writeFile: async () => {},
         onLog: () => {},
+        // headTimeMs === 0 → git unavailable → legacy resume-on-crash
+        getHeadTime: async () => 0,
+        statFn: async () => ({ mtimeMs: Date.now() }),
         spawnAgent: async (opts: AgentOpts): Promise<AgentResult> => {
           spawnCalls.push(opts.task ?? "");
           return {
@@ -129,6 +132,137 @@ describe("runAudit", () => {
     // spawn should NOT be called — existing finding was reused.
     expect(spawnCalls).toHaveLength(0);
     expect(summary.capabilities).toContain(CAP_A);
+  });
+
+  it("skips capabilities whose finding is newer than HEAD commit (stale-check)", async () => {
+    const existingFinding = JSON.stringify({
+      capabilityId: CAP_A,
+      present: true,
+      conformant: true,
+      gaps: [],
+      evidence: [],
+      summary: "already done",
+      checkedAt: new Date().toISOString(),
+    });
+
+    const headTimeMs = 1_000_000_000_000; // some past time
+    const findingMtimeMs = headTimeMs + 5_000; // finding is 5 s newer than HEAD
+
+    const spawnCalls: string[] = [];
+
+    const summary = await runAudit({
+      repoPath: "/tmp/fake-repo",
+      outputDir: "/tmp/fake-audit",
+      capabilities: [CAP_A],
+      noIssues: true,
+      deps: {
+        mkdir: async () => {},
+        readFile: async () => existingFinding,
+        writeFile: async () => {},
+        onLog: () => {},
+        getHeadTime: async () => headTimeMs,
+        statFn: async () => ({ mtimeMs: findingMtimeMs }),
+        spawnAgent: async (opts: AgentOpts): Promise<AgentResult> => {
+          spawnCalls.push(opts.task ?? "");
+          return {
+            sessionId: "sess-1",
+            output: makeFinding(CAP_A, true),
+            isError: false,
+          };
+        },
+      },
+    });
+
+    // spawn should NOT be called — finding is fresh.
+    expect(spawnCalls).toHaveLength(0);
+    expect(summary.capabilities).toContain(CAP_A);
+  });
+
+  it("re-runs capabilities whose finding is older than HEAD commit", async () => {
+    const existingFinding = JSON.stringify({
+      capabilityId: CAP_A,
+      present: true,
+      conformant: true,
+      gaps: [],
+      evidence: [],
+      summary: "stale finding",
+      checkedAt: new Date().toISOString(),
+    });
+
+    const headTimeMs = 1_000_000_000_000;
+    const findingMtimeMs = headTimeMs - 5_000; // finding is 5 s OLDER than HEAD
+
+    const spawnCalls: string[] = [];
+
+    await runAudit({
+      repoPath: "/tmp/fake-repo",
+      outputDir: "/tmp/fake-audit",
+      capabilities: [CAP_A],
+      noIssues: true,
+      deps: {
+        mkdir: async () => {},
+        readFile: async () => existingFinding,
+        writeFile: async () => {},
+        onLog: () => {},
+        getHeadTime: async () => headTimeMs,
+        statFn: async () => ({ mtimeMs: findingMtimeMs }),
+        spawnAgent: async (opts: AgentOpts): Promise<AgentResult> => {
+          spawnCalls.push(opts.task ?? "");
+          return {
+            sessionId: "sess-1",
+            output: makeFinding(CAP_A, true),
+            isError: false,
+          };
+        },
+      },
+    });
+
+    // spawn SHOULD be called — finding is stale.
+    expect(spawnCalls).toHaveLength(1);
+  });
+
+  it("re-runs capabilities when force=true even if finding is newer than HEAD", async () => {
+    const existingFinding = JSON.stringify({
+      capabilityId: CAP_A,
+      present: true,
+      conformant: true,
+      gaps: [],
+      evidence: [],
+      summary: "fresh finding",
+      checkedAt: new Date().toISOString(),
+    });
+
+    const headTimeMs = 1_000_000_000_000;
+    const findingMtimeMs = headTimeMs + 10_000; // finding is newer than HEAD
+
+    const spawnCalls: string[] = [];
+
+    await runAudit({
+      repoPath: "/tmp/fake-repo",
+      outputDir: "/tmp/fake-audit",
+      capabilities: [CAP_A],
+      noIssues: true,
+      force: true, // bypass stale-check
+      deps: {
+        mkdir: async () => {},
+        readFile: async () => existingFinding,
+        writeFile: async () => {},
+        onLog: () => {},
+        getHeadTime: async () => headTimeMs,
+        statFn: async () => ({ mtimeMs: findingMtimeMs }),
+        spawnAgent: async (opts: AgentOpts): Promise<AgentResult> => {
+          spawnCalls.push(opts.task ?? "");
+          return {
+            sessionId: "sess-1",
+            output: makeFinding(CAP_A, true),
+            isError: false,
+          };
+        },
+      },
+    });
+
+    // spawn SHOULD be called — force bypasses the stale-check.
+    expect(spawnCalls).toHaveLength(1);
   });
 
   it("continues other capabilities when one agent call fails", async () => {

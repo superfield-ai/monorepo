@@ -49,6 +49,21 @@ describe("parseAuditArgs", () => {
     expect(r.noIssues).toBe(true);
   });
 
+  it("parses --force flag", () => {
+    const r = parseAuditArgs(["--path", "/p", "--force"]);
+    expect(r.force).toBe(true);
+  });
+
+  it("parses -f shorthand for --force", () => {
+    const r = parseAuditArgs(["--path", "/p", "-f"]);
+    expect(r.force).toBe(true);
+  });
+
+  it("defaults force to false when omitted", () => {
+    const r = parseAuditArgs(["--path", "/p"]);
+    expect(r.force).toBe(false);
+  });
+
   it("parses --output-dir", () => {
     const r = parseAuditArgs(["--path", "/p", "--output-dir", "/tmp/audit"]);
     expect(r.outputDir).toBe("/tmp/audit");
