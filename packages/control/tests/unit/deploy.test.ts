@@ -1,8 +1,17 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { handleDeployRequest, _resetRollbackJobs } from "../../src/deploy";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import {
+  handleDeployRequest,
+  _resetRollbackJobs,
+  _injectKubectlLogs,
+} from "../../src/deploy";
 
 beforeEach(() => {
   _resetRollbackJobs();
+  _injectKubectlLogs(null);
+});
+
+afterEach(() => {
+  _injectKubectlLogs(null);
 });
 
 function makeReq(method: string, pathname: string, body?: object): Request {
@@ -159,5 +168,75 @@ describe("GET /studio/deploy/rollback-log", () => {
     const text = await logRes!.text();
     expect(text).toContain("rollback request accepted");
     expect(text).toContain("event: done");
+  });
+});
+
+describe("GET /studio/deploy/migration-log", () => {
+  it("400s when env param is missing", async () => {
+    const res = await handleDeployRequest(
+      makeReq("GET", "/studio/deploy/migration-log"),
+      makeUrl("/studio/deploy/migration-log"),
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(400);
+    const body = (await res!.json()) as { ok: boolean; error: { code: string } };
+    expect(body.ok).toBe(false);
+    expect(body.error.code).toBe("validation");
+  });
+
+  it("streams injected log lines and emits done event", async () => {
+    async function* fakeLines(_env: string): AsyncIterable<string> {
+      yield "2024-01-01T00:00:00Z migrating schema";
+      yield "2024-01-01T00:00:01Z migration complete";
+    }
+    _injectKubectlLogs(fakeLines);
+
+    const res = await handleDeployRequest(
+      makeReq("GET", "/studio/deploy/migration-log?env=dev"),
+      makeUrl("/studio/deploy/migration-log?env=dev"),
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(200);
+    expect(res!.headers.get("Content-Type")).toBe("text/event-stream");
+    const text = await res!.text();
+    expect(text).toContain("data: 2024-01-01T00:00:00Z migrating schema");
+    expect(text).toContain("data: 2024-01-01T00:00:01Z migration complete");
+    expect(text).toContain("event: done");
+    expect(text).toContain("data: complete");
+  });
+
+  it("emits error event when injected generator throws", async () => {
+    async function* failingLines(_env: string): AsyncIterable<string> {
+      yield "starting";
+      throw new Error("migration job not found");
+    }
+    _injectKubectlLogs(failingLines);
+
+    const res = await handleDeployRequest(
+      makeReq("GET", "/studio/deploy/migration-log?env=staging"),
+      makeUrl("/studio/deploy/migration-log?env=staging"),
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(200);
+    const text = await res!.text();
+    expect(text).toContain("event: error");
+    expect(text).toContain("migration job not found");
+  });
+
+  it("passes the correct env to the kubectl injection", async () => {
+    const seen: string[] = [];
+    async function* captureEnv(env: string): AsyncIterable<string> {
+      seen.push(env);
+      yield `env-was: ${env}`;
+    }
+    _injectKubectlLogs(captureEnv);
+
+    const res = await handleDeployRequest(
+      makeReq("GET", "/studio/deploy/migration-log?env=prod"),
+      makeUrl("/studio/deploy/migration-log?env=prod"),
+    );
+    // consume the stream so the generator runs
+    await res!.text();
+    expect(seen).toContain("prod");
   });
 });

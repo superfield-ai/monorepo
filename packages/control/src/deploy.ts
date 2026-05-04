@@ -14,6 +14,8 @@
  * the demo can degrade gracefully when GitHub credentials are absent.
  */
 
+import { spawn } from "node:child_process";
+import type { ChildProcess } from "node:child_process";
 import { doctor } from "../../core/commands/doctor.ts";
 import { errorResponse } from "../lib/error-envelope";
 import { logBackendError } from "./debug-events";
@@ -397,6 +399,148 @@ export function _resetRollbackJobs(): void {
   rollbackJobs.clear();
 }
 
+/** GET /studio/deploy/migration-log?env=<env> — SSE tail of the k8s migration Job */
+function handleMigrationLog(url: URL): Response {
+  const env = url.searchParams.get("env");
+  if (!env) {
+    return errorResponse({
+      code: "validation",
+      message: "env query parameter is required",
+      hint: "Pass ?env=<envName> to /studio/deploy/migration-log.",
+    });
+  }
+
+  const encoder = new TextEncoder();
+  const stream = new ReadableStream<Uint8Array>({
+    async start(controller) {
+      const sendLine = (line: string): void => {
+        controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+      };
+      const sendEvent = (event: string, data: string): void => {
+        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
+      };
+
+      let child: ChildProcess | null = null;
+      try {
+        child = spawn("kubectl", [
+          "logs",
+          "--follow",
+          "--timestamps",
+          `job/${env}-db-migrate`,
+          "--namespace",
+          "superfield",
+        ]);
+
+        let exited = false;
+        let exitCode: number | null = null;
+
+        child.stdout?.on("data", (chunk: Buffer) => {
+          const lines = chunk.toString().split("\n");
+          for (const line of lines) {
+            if (line.trim()) sendLine(line);
+          }
+        });
+
+        child.stderr?.on("data", (chunk: Buffer) => {
+          const text = chunk.toString().trim();
+          if (text) sendLine(`[stderr] ${text}`);
+        });
+
+        const captured = child;
+        await new Promise<void>((resolve) => {
+          captured.on("close", (code) => {
+            exited = true;
+            exitCode = code;
+            resolve();
+          });
+          captured.on("error", (spawnErr) => {
+            sendEvent(
+              "error",
+              `kubectl unavailable: ${spawnErr.message}`,
+            );
+            exited = true;
+            resolve();
+          });
+        });
+
+        if (exited && exitCode !== null && exitCode !== 0) {
+          sendEvent("error", "migration job not found");
+        } else if (exited) {
+          sendEvent("done", "complete");
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        sendEvent("error", `kubectl unavailable: ${message}`);
+      } finally {
+        child?.kill();
+        controller.close();
+      }
+    },
+  });
+
+  return new Response(stream, {
+    status: 200,
+    headers: {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    },
+  });
+}
+
+/** Test seam — inject a fake kubectlLogs function for unit tests. */
+export type KubectlLogsInjection = (env: string) => AsyncIterable<string>;
+let _kubectlLogsOverride: KubectlLogsInjection | null = null;
+
+export function _injectKubectlLogs(fn: KubectlLogsInjection | null): void {
+  _kubectlLogsOverride = fn;
+}
+
+/** GET /studio/deploy/migration-log?env=<env> — injectable version for tests */
+function handleMigrationLogInjectable(url: URL): Response {
+  const env = url.searchParams.get("env");
+  if (!env) {
+    return errorResponse({
+      code: "validation",
+      message: "env query parameter is required",
+      hint: "Pass ?env=<envName> to /studio/deploy/migration-log.",
+    });
+  }
+
+  // If a test injection is present, use it instead of spawning kubectl.
+  if (_kubectlLogsOverride) {
+    const logsFn = _kubectlLogsOverride;
+    const encoder = new TextEncoder();
+    const stream = new ReadableStream<Uint8Array>({
+      async start(controller) {
+        try {
+          for await (const line of logsFn(env)) {
+            controller.enqueue(encoder.encode(`data: ${line}\n\n`));
+          }
+          controller.enqueue(encoder.encode(`event: done\ndata: complete\n\n`));
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          controller.enqueue(
+            encoder.encode(`event: error\ndata: ${message}\n\n`),
+          );
+        } finally {
+          controller.close();
+        }
+      },
+    });
+    return new Response(stream, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/event-stream",
+        "Cache-Control": "no-cache",
+        Connection: "keep-alive",
+      },
+    });
+  }
+
+  return handleMigrationLog(url);
+}
+
 function jsonOk(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -429,6 +573,9 @@ export async function handleDeployRequest(
   }
   if (method === "GET" && pathname === "/studio/deploy/rollback-log") {
     return handleRollbackLog(url);
+  }
+  if (method === "GET" && pathname === "/studio/deploy/migration-log") {
+    return handleMigrationLogInjectable(url);
   }
 
   const doctorMatch = pathname.match(/^\/studio\/deploy\/doctor\/([^/]+)$/);
