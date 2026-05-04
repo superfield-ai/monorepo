@@ -92,15 +92,16 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 - ✅ Summary written to `<output-dir>/summary.json`
 - ✅ Gap → GitHub issue in blueprint issue format (skipped when `--no-issues` or no `--repo`)
 - ✅ `"audit"` job type registered in job registry (medium dev spec)
-- ⬜ Expand capability set from blueprint YAML `checklist` rules
+- ⬜ Expand capability set: derive from `loadBlueprintSync()` filtering `type === "checklist"` instead of hardcoded `CAPABILITIES` in `audit/capabilities.ts`
 - ⬜ Parallel capability runs
 - ⬜ Stale-check: skip re-running capabilities where finding mtime > repo HEAD mtime
 
 ### Cross-cutting A (remaining)
 
 - ✅ All three loops wired in `superfield start` (`packages/cli/commands/start.ts`)
-- ⬜ Integration test: full planning-loop tick end-to-end against MSW
-- ⬜ Integration tests for dev-loop and doc-loop using recorded fixtures
+- ✅ Planning-loop integration test (`tests/integration/planning-loop.test.ts`, 306 lines) — uses mock GitHubClient, not MSW
+- ✅ Dev-loop integration test (`tests/integration/dev-loop.test.ts`, 318 lines) — uses recorded fixtures + GitHub MSW stubs
+- 🟡 Doc-loop integration test — stub only (32 lines); scenarios covered by unit tests in `tests/unit/doc-loop.test.ts`
 
 ---
 
@@ -151,8 +152,6 @@ Current build status. For product scope see [`product.md`](./product.md); for de
 
 - ✅ Extract shared `resolveEnvCredentials(env)` — landed in PR #208
 - ✅ AWS RDS: real SigV4 signing — landed in PR #202
-- ⬜ Self-hosted runner CI for ops integration tests (see GitHub issue)
-- ⬜ GCP provision path functional from the CLI
 
 ---
 
@@ -208,20 +207,20 @@ Spec: [`product.md` § Control Webapp](./product.md#control-webapp). Implementat
 - ✅ All control workflows renamed to `.yml.disabled`
 - ✅ `cli-migration` branch pushed to origin for archival
 
-### Phase C-9 — Demo-readiness extensions ⬜
+### Phase C-9 — Demo-readiness extensions 🟡
 
 Scoped for the 2026-04-28 client demo. Source spec: `architecture.md § Control Webapp` (Phase 9 routes).
 
 | Item                                            | Pillar             | Status |
 | ----------------------------------------------- | ------------------ | ------ |
-| C-9.1 Per-route preview map                     | Iterative dev      | ⬜     |
-| C-9.2 Design-tokens panel                       | UX design          | ⬜     |
+| C-9.1 Per-route preview map                     | Iterative dev      | ✅     |
+| C-9.2 Design-tokens panel                       | UX design          | ✅     |
 | C-9.3 Mock-route gallery                        | UX design          | ⬜     |
-| C-9.4 Viewport toolbar                          | Iterative dev / UX | ⬜     |
-| C-9.5 Deployment health view (`/studio/deploy`) | Deployment health  | ⬜     |
-| C-9.6 Turn timeline + prompt inspector          | Agent monitoring   | ⬜     |
+| C-9.4 Viewport toolbar                          | Iterative dev / UX | ✅     |
+| C-9.5 Deployment health view (`/studio/deploy`) | Deployment health  | ✅     |
+| C-9.6 Turn timeline + prompt inspector          | Agent monitoring   | ✅     |
 | C-9.7 Blueprint conformance feed                | Agent monitoring   | ⬜     |
-| C-9.8 `scripts/seed-demo.ts`                    | Demo               | ⬜     |
+| C-9.8 `scripts/seed-demo.ts`                    | Demo               | ✅     |
 
 ### Cross-cutting C (post-demo)
 
