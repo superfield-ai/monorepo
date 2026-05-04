@@ -52,3 +52,10 @@ export type {
 
 export { DocsController } from "./DocsController";
 export type { DocsState, DocsListener } from "./DocsController";
+
+export { MockRouteController } from "./MockRouteController";
+export type {
+  MockRoute,
+  MockRouteState,
+  MockRouteListener,
+} from "./MockRouteController";
