@@ -17,6 +17,7 @@ import React, { useEffect, useRef, useState } from "react";
 import { IframePanel } from "./IframePanel";
 import { FeaturePane } from "./FeaturePane";
 import { MockRouteGallery } from "./MockRouteGallery";
+import { BlueprintConformanceFeed } from "./BlueprintConformanceFeed";
 import { ProductTab } from "./ProductTab";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
@@ -85,9 +86,9 @@ export function ControlPanel({
     "studio" | "viewport" | "product" | "debug"
   >("studio");
 
-  const [studioSubView, setStudioSubView] = useState<"features" | "mocks">(
-    "features",
-  );
+  const [studioSubView, setStudioSubView] = useState<
+    "features" | "mocks" | "conformance"
+  >("features");
 
   const [viewport, setViewportState] = useState<Viewport>(() => loadViewport());
   const setViewport = (v: Viewport): void => {
@@ -188,10 +189,17 @@ export function ControlPanel({
                 active={studioSubView === "mocks"}
                 onClick={() => setStudioSubView("mocks")}
               />
+              <StudioSubTab
+                testid="studio-sub-conformance"
+                label="Conformance"
+                active={studioSubView === "conformance"}
+                onClick={() => setStudioSubView("conformance")}
+              />
             </div>
             <div className="flex flex-1 overflow-hidden">
               {studioSubView === "features" && <FeaturePane />}
               {studioSubView === "mocks" && <MockRouteGallery />}
+              {studioSubView === "conformance" && <BlueprintConformanceFeed />}
             </div>
           </div>
         </ErrorBoundary>

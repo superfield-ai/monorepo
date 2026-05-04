@@ -59,3 +59,12 @@ export type {
   MockRouteState,
   MockRouteListener,
 } from "./MockRouteController";
+
+export { BlueprintConformanceController } from "./BlueprintConformanceController";
+export type {
+  ConformanceRule,
+  ConformanceStatus,
+  ConformanceResult,
+  BlueprintConformanceState,
+  ConformanceListener,
+} from "./BlueprintConformanceController";
