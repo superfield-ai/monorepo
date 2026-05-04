@@ -45,6 +45,9 @@ export interface DeployState {
   readonly loadingSecrets: ReadonlySet<string>;
   readonly rolloutLog: readonly string[];
   readonly rolloutActive: boolean;
+  readonly migrationLog: readonly string[];
+  readonly migrationLogOpen: boolean;
+  readonly migrationLogEnv: string | null;
 }
 
 const INITIAL: DeployState = {
@@ -60,6 +63,9 @@ const INITIAL: DeployState = {
   loadingSecrets: new Set(),
   rolloutLog: [],
   rolloutActive: false,
+  migrationLog: [],
+  migrationLogOpen: false,
+  migrationLogEnv: null,
 };
 
 export type DeployListener = (state: DeployState) => void;
@@ -237,6 +243,45 @@ export class DeployController {
         },
       });
     });
+  }
+
+  /**
+   * Open the migration log panel and start streaming SSE from
+   * GET /studio/deploy/migration-log?env=<env>.
+   */
+  openMigrationLog(env: string): void {
+    this.set({
+      migrationLog: [],
+      migrationLogOpen: true,
+      migrationLogEnv: env,
+    });
+    const handle = openEventSource({
+      url: `${this.base}/studio/deploy/migration-log?env=${encodeURIComponent(env)}`,
+      onMessage: (ev) => this.appendMigrationLog(String(ev.data)),
+      events: {
+        done: (ev) => {
+          this.appendMigrationLog(`done: ${String(ev.data)}`);
+          handle.close();
+        },
+        error: (ev) => {
+          this.appendMigrationLog(`error: ${String(ev.data)}`);
+          handle.close();
+        },
+      },
+      onError: (errorPayload) => {
+        this.appendMigrationLog(`stream error: ${errorPayload.message}`);
+        handle.close();
+      },
+    });
+  }
+
+  /** Close the migration log panel. */
+  closeMigrationLog(): void {
+    this.set({ migrationLogOpen: false });
+  }
+
+  private appendMigrationLog(line: string): void {
+    this.set({ migrationLog: [...this.state.migrationLog, line] });
   }
 
   private appendLog(line: string): void {

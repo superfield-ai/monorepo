@@ -386,19 +386,29 @@ export function DeployView({
             }}
           >
             <span className="label">ROLLBACK&nbsp;{state.selectedEnv}</span>
-            <button
-              type="button"
-              data-testid="rollback-trigger"
-              onClick={() => setConfirmOpen(true)}
-              disabled={state.rolloutActive}
-              style={{
-                ...dangerButton,
-                opacity: state.rolloutActive ? 0.5 : 1,
-                cursor: state.rolloutActive ? "not-allowed" : "pointer",
-              }}
-            >
-              ROLL BACK THIS ENVIRONMENT
-            </button>
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+              <button
+                type="button"
+                data-testid="migration-log-trigger"
+                onClick={() => controller.openMigrationLog(state.selectedEnv)}
+                style={ghostButton}
+              >
+                MIGRATION LOGS
+              </button>
+              <button
+                type="button"
+                data-testid="rollback-trigger"
+                onClick={() => setConfirmOpen(true)}
+                disabled={state.rolloutActive}
+                style={{
+                  ...dangerButton,
+                  opacity: state.rolloutActive ? 0.5 : 1,
+                  cursor: state.rolloutActive ? "not-allowed" : "pointer",
+                }}
+              >
+                ROLL BACK THIS ENVIRONMENT
+              </button>
+            </div>
           </div>
           {state.rolloutLog.length > 0 ? (
             <pre
@@ -418,6 +428,61 @@ export function DeployView({
               {state.rolloutLog.join("\n")}
             </pre>
           ) : null}
+          {state.migrationLogOpen && (
+            <div data-testid="migration-log-panel" style={{ marginTop: 12 }}>
+              <div
+                style={{
+                  display: "flex",
+                  justifyContent: "space-between",
+                  marginBottom: 4,
+                }}
+              >
+                <span
+                  style={{
+                    fontSize: "var(--text-xs)",
+                    color: "var(--fg-3)",
+                    fontFamily: "var(--font-mono)",
+                    letterSpacing: "var(--ls-wider)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  Migration log ({state.migrationLogEnv})
+                </span>
+                <button
+                  type="button"
+                  data-testid="migration-log-close"
+                  onClick={() => controller.closeMigrationLog()}
+                  style={{
+                    background: "transparent",
+                    border: "none",
+                    color: "var(--fg-3)",
+                    cursor: "pointer",
+                    fontSize: "var(--text-xs)",
+                    fontFamily: "var(--font-mono)",
+                    padding: "0 var(--sp-1)",
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+              <pre
+                data-testid="migration-log"
+                style={{
+                  maxHeight: 300,
+                  overflow: "auto",
+                  fontSize: 11,
+                  padding: 8,
+                  background: "var(--bg-void)",
+                  border: "1px solid var(--border-subtle)",
+                  fontFamily: "var(--font-mono)",
+                  color: "var(--accent-green)",
+                  margin: 0,
+                }}
+              >
+                {state.migrationLog.join("\n") || "(waiting for logs…)"}
+              </pre>
+            </div>
+          )}
         </section>
       )}
 
