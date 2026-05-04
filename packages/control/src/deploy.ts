@@ -417,7 +417,9 @@ function handleMigrationLog(url: URL): Response {
         controller.enqueue(encoder.encode(`data: ${line}\n\n`));
       };
       const sendEvent = (event: string, data: string): void => {
-        controller.enqueue(encoder.encode(`event: ${event}\ndata: ${data}\n\n`));
+        controller.enqueue(
+          encoder.encode(`event: ${event}\ndata: ${data}\n\n`),
+        );
       };
 
       let child: ChildProcess | null = null;
@@ -454,10 +456,7 @@ function handleMigrationLog(url: URL): Response {
             resolve();
           });
           captured.on("error", (spawnErr) => {
-            sendEvent(
-              "error",
-              `kubectl unavailable: ${spawnErr.message}`,
-            );
+            sendEvent("error", `kubectl unavailable: ${spawnErr.message}`);
             exited = true;
             resolve();
           });

@@ -179,7 +179,10 @@ describe("GET /studio/deploy/migration-log", () => {
     );
     expect(res).not.toBeNull();
     expect(res!.status).toBe(400);
-    const body = (await res!.json()) as { ok: boolean; error: { code: string } };
+    const body = (await res!.json()) as {
+      ok: boolean;
+      error: { code: string };
+    };
     expect(body.ok).toBe(false);
     expect(body.error.code).toBe("validation");
   });
