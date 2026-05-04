@@ -67,5 +67,5 @@ PR #204 (`cli-migration`) merged 2026-04-26.
 ### Track C — Cross-cutting
 
 - ✅ Merge PR #204 to main
-- ⬜ Archive `superfield-studio` GitHub repo after PR #73 merges
+- ✅ Archive `superfield-studio` GitHub repo (archived 2026-05-04)
 - Post-demo backlog: screenshots, visual diff, cost charts, log search, fixture switcher

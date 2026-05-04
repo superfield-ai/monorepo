@@ -225,7 +225,7 @@ Scoped for the 2026-04-28 client demo. Source spec: `architecture.md § Control 
 ### Cross-cutting C (post-demo)
 
 - ✅ Merge PR #204 to main
-- ⬜ Archive `superfield-studio` GitHub repo after PR #73 merges
+- ✅ Archive `superfield-studio` GitHub repo (archived 2026-05-04)
 - ⬜ Per-turn screenshot capture into `docs/studio-sessions/`
 - ⬜ Visual diff before / after a turn
 - ⬜ Cost-over-time sparkline; log search/filter; slot heartbeat history
