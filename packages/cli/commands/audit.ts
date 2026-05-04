@@ -6,7 +6,7 @@ const VALID_CAPABILITY_IDS = CAPABILITIES.map((c) => c.id);
 
 const USAGE = `Usage: superfield audit --path <repo-path>
                       [--repo <owner/name>] [--capabilities <id,...>]
-                      [--output-dir <dir>] [--no-issues]
+                      [--output-dir <dir>] [--no-issues] [--force]
 
 Options:
   --path <dir>              Absolute or relative path to the app repo on disk  [required]
@@ -14,6 +14,7 @@ Options:
   --capabilities <id,...>   Comma-separated capability IDs to check (default: all)
   --output-dir <dir>        Where to write JSON findings (default: <path>/.superfield/audit)
   --no-issues               Analyse only — do not open GitHub issues
+  --force, -f               Re-run all capabilities even if findings are newer than HEAD
 
 Capabilities: ${VALID_CAPABILITY_IDS.join(", ")}`;
 
@@ -23,11 +24,12 @@ export interface ParsedAuditArgs {
   capabilities?: string[];
   outputDir?: string;
   noIssues: boolean;
+  force: boolean;
   unknown: string[];
 }
 
 export function parseAuditArgs(args: string[]): ParsedAuditArgs {
-  const out: ParsedAuditArgs = { noIssues: false, unknown: [] };
+  const out: ParsedAuditArgs = { noIssues: false, force: false, unknown: [] };
 
   let i = 0;
   while (i < args.length) {
@@ -61,6 +63,7 @@ export function parseAuditArgs(args: string[]): ParsedAuditArgs {
         .map((s) => s.trim())
         .filter(Boolean);
     } else if (a === "--no-issues") out.noIssues = true;
+    else if (a === "--force" || a === "-f") out.force = true;
     else out.unknown.push(a);
 
     i++;
@@ -107,6 +110,7 @@ export async function auditCommand(args: string[]): Promise<void> {
       outputDir: parsed.outputDir,
       capabilities: parsed.capabilities,
       noIssues: parsed.noIssues,
+      force: parsed.force,
     });
 
     console.log(`\naudit complete`);
