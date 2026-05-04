@@ -81,6 +81,7 @@ import { errorResponse } from "../lib/error-envelope";
 import { handleRebuildStart, handleRebuildLog } from "./rebuild";
 import { handleMockRoutesRequest } from "./mock-routes";
 import { handleConformanceRequest } from "./conformance";
+import { handleFixturesRequest } from "./fixtures";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -356,6 +357,14 @@ export async function route(
   // Blueprint conformance feed endpoints — C-9.7.
   const conformanceResponse = await handleConformanceRequest(req, url);
   if (conformanceResponse) return conformanceResponse;
+
+  // Fixture switcher endpoints — list and activate fixtures per route.
+  const fixturesResponse = await handleFixturesRequest(
+    req,
+    url,
+    config.projectRoot ?? process.cwd(),
+  );
+  if (fixturesResponse) return fixturesResponse;
 
   // Deploy endpoints — D1 / C-9.5 deployment health view.
   const deployResponse = await handleDeployRequest(req, url);

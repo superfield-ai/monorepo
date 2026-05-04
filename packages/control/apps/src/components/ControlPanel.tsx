@@ -18,6 +18,7 @@ import { IframePanel } from "./IframePanel";
 import { FeaturePane } from "./FeaturePane";
 import { MockRouteGallery } from "./MockRouteGallery";
 import { BlueprintConformanceFeed } from "./BlueprintConformanceFeed";
+import { FixtureSwitcher } from "./FixtureSwitcher";
 import { ProductTab } from "./ProductTab";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
@@ -87,7 +88,7 @@ export function ControlPanel({
   >("studio");
 
   const [studioSubView, setStudioSubView] = useState<
-    "features" | "mocks" | "conformance"
+    "features" | "mocks" | "conformance" | "fixtures"
   >("features");
 
   const [viewport, setViewportState] = useState<Viewport>(() => loadViewport());
@@ -195,11 +196,18 @@ export function ControlPanel({
                 active={studioSubView === "conformance"}
                 onClick={() => setStudioSubView("conformance")}
               />
+              <StudioSubTab
+                testid="studio-sub-fixtures"
+                label="Fixtures"
+                active={studioSubView === "fixtures"}
+                onClick={() => setStudioSubView("fixtures")}
+              />
             </div>
             <div className="flex flex-1 overflow-hidden">
               {studioSubView === "features" && <FeaturePane />}
               {studioSubView === "mocks" && <MockRouteGallery />}
               {studioSubView === "conformance" && <BlueprintConformanceFeed />}
+              {studioSubView === "fixtures" && <FixtureSwitcher />}
             </div>
           </div>
         </ErrorBoundary>

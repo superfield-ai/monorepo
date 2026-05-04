@@ -68,3 +68,9 @@ export type {
   BlueprintConformanceState,
   ConformanceListener,
 } from "./BlueprintConformanceController";
+
+export { FixtureSwitcherController } from "./FixtureSwitcherController";
+export type {
+  FixtureSwitcherState,
+  FixtureSwitcherListener,
+} from "./FixtureSwitcherController";
