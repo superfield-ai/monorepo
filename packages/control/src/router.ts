@@ -8,6 +8,8 @@
  *
  * ## Complete route table (priority order)
  *
+ *   GET  /studio/mock-routes                → list registered mock routes
+ *   POST /studio/mock-routes/:id/toggle    → toggle a mock route on/off
  *   POST /studio/rebuild          → trigger image rebuild + rollout restart
  *   GET  /studio/chat/stream      → SSE: Claude CLI turn stream (one per session)
  *   GET  /studio/cluster/events   → SSE: aggregate cluster health (healthy/unknown)
@@ -75,6 +77,7 @@ import { debugEventsSseResponse, logBackendError } from "./debug-events";
 import { errorResponse } from "../lib/error-envelope";
 
 import { handleRebuildStart, handleRebuildLog } from "./rebuild";
+import { handleMockRoutesRequest } from "./mock-routes";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -342,6 +345,10 @@ export async function route(
   if (req.method === "GET" && pathname === "/studio/cluster/events") {
     return clusterStatusSseResponse(config.clusterContext);
   }
+
+  // Mock-route registry endpoints — C-9.3 mock-route gallery.
+  const mockRoutesResponse = handleMockRoutesRequest(req, url);
+  if (mockRoutesResponse) return mockRoutesResponse;
 
   // Deploy endpoints — D1 / C-9.5 deployment health view.
   const deployResponse = await handleDeployRequest(req, url);

@@ -16,6 +16,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { IframePanel } from "./IframePanel";
 import { FeaturePane } from "./FeaturePane";
+import { MockRouteGallery } from "./MockRouteGallery";
 import { ProductTab } from "./ProductTab";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
@@ -83,6 +84,10 @@ export function ControlPanel({
   const [activeTab, setActiveTab] = useState<
     "studio" | "viewport" | "product" | "debug"
   >("studio");
+
+  const [studioSubView, setStudioSubView] = useState<"features" | "mocks">(
+    "features",
+  );
 
   const [viewport, setViewportState] = useState<Viewport>(() => loadViewport());
   const setViewport = (v: Viewport): void => {
@@ -156,11 +161,38 @@ export function ControlPanel({
         />
       </div>
 
-      {/* Studio tab — feature pane */}
+      {/* Studio tab — feature pane + mock-route gallery */}
       {activeTab === "studio" && (
         <ErrorBoundary label="Studio">
-          <div className="flex flex-1 overflow-hidden">
-            <FeaturePane />
+          <div className="flex flex-1 overflow-hidden flex-col">
+            {/* Studio sub-navigation */}
+            <div
+              style={{
+                display: "flex",
+                flexShrink: 0,
+                background: "var(--bg-raised)",
+                borderBottom: "1px solid var(--border-subtle)",
+                paddingLeft: "var(--sp-2)",
+              }}
+              data-testid="studio-sub-nav"
+            >
+              <StudioSubTab
+                testid="studio-sub-features"
+                label="Features"
+                active={studioSubView === "features"}
+                onClick={() => setStudioSubView("features")}
+              />
+              <StudioSubTab
+                testid="studio-sub-mocks"
+                label="Mock Routes"
+                active={studioSubView === "mocks"}
+                onClick={() => setStudioSubView("mocks")}
+              />
+            </div>
+            <div className="flex flex-1 overflow-hidden">
+              {studioSubView === "features" && <FeaturePane />}
+              {studioSubView === "mocks" && <MockRouteGallery />}
+            </div>
           </div>
         </ErrorBoundary>
       )}
@@ -210,6 +242,46 @@ export function ControlPanel({
 
       <Toaster />
     </div>
+  );
+}
+
+// ── StudioSubTab ─────────────────────────────────────────────────────────────
+
+function StudioSubTab({
+  testid,
+  label,
+  active,
+  onClick,
+}: {
+  testid: string;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      data-testid={testid}
+      onClick={onClick}
+      style={{
+        padding: "4px 12px",
+        background: "transparent",
+        border: "none",
+        borderBottom: active
+          ? "2px solid var(--accent-cyan)"
+          : "2px solid transparent",
+        cursor: "pointer",
+        fontFamily: "var(--font-mono)",
+        fontSize: "var(--text-xs)",
+        fontWeight: 500,
+        letterSpacing: "var(--ls-wider)",
+        textTransform: "uppercase",
+        color: active ? "var(--accent-cyan)" : "var(--fg-2)",
+        transition:
+          "color var(--duration-fast), border-color var(--duration-fast)",
+      }}
+    >
+      {label}
+    </button>
   );
 }
 
