@@ -154,6 +154,32 @@ async function createIssueDefault(
   return { url: data.html_url, number: data.number };
 }
 
+// ── Concurrency helpers ───────────────────────────────────────────────────────
+
+const AUDIT_CONCURRENCY = 5;
+
+/**
+ * Run `fn` over every item in `items`, with at most `concurrency` items
+ * in-flight at once. Order of completion is not guaranteed.
+ */
+async function withConcurrency<T>(
+  items: readonly T[],
+  concurrency: number,
+  fn: (item: T) => Promise<void>,
+): Promise<void> {
+  const queue = [...items];
+  const workers = Array.from(
+    { length: Math.min(concurrency, items.length) },
+    async () => {
+      let item: T | undefined;
+      while ((item = queue.shift()) !== undefined) {
+        await fn(item);
+      }
+    },
+  );
+  await Promise.all(workers);
+}
+
 // ── Core function ─────────────────────────────────────────────────────────────
 
 export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
@@ -194,7 +220,15 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
   const issueUrls: Record<string, string> = {};
   const findings: CapabilityFinding[] = [];
 
-  for (const cap of capsToRun) {
+  // Mutex: serialize finding pushes and disk writes so concurrent workers
+  // don't interleave writes to the shared arrays/objects.
+  let writeLock = Promise.resolve();
+  const enqueueWrite = (fn: () => Promise<void>): Promise<void> => {
+    writeLock = writeLock.then(fn);
+    return writeLock;
+  };
+
+  await withConcurrency(capsToRun, AUDIT_CONCURRENCY, async (cap) => {
     const findingPath = path.join(outputDir, `${cap.id}.json`);
 
     // Resume: skip if a complete finding already exists on disk.
@@ -204,8 +238,10 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
         const parsed = JSON.parse(existing) as CapabilityFinding;
         if (typeof parsed.conformant === "boolean") {
           log(deps, `[audit] skip ${cap.id} — finding already on disk`);
-          findings.push(parsed);
-          continue;
+          await enqueueWrite(async () => {
+            findings.push(parsed);
+          });
+          return;
         }
       } catch {
         // corrupted file — re-run
@@ -216,18 +252,27 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
 
     const prompt = buildAuditCapabilityPrompt({ capability: cap });
 
-    const agentResult = await spawnFn({
-      worktreePath: opts.repoPath,
-      prompt,
-      jobType: "audit",
-      task: cap.name,
-      loop: "audit",
-      maxTurns: 100,
-    });
+    let agentResult;
+    try {
+      agentResult = await spawnFn({
+        worktreePath: opts.repoPath,
+        prompt,
+        jobType: "audit",
+        task: cap.name,
+        loop: "audit",
+        maxTurns: 100,
+      });
+    } catch (err) {
+      log(
+        deps,
+        `[audit] agent threw for ${cap.id}: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      return;
+    }
 
     if (agentResult.isError) {
       log(deps, `[audit] agent error for ${cap.id}: ${agentResult.output}`);
-      continue;
+      return;
     }
 
     const finding = extractFinding(agentResult.output);
@@ -240,7 +285,7 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
         path.join(outputDir, `${cap.id}.raw.txt`),
         agentResult.output,
       );
-      continue;
+      return;
     }
 
     const fullFinding: CapabilityFinding = {
@@ -250,21 +295,27 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
       checkedAt: new Date().toISOString(),
     };
 
-    await writeFn(findingPath, JSON.stringify(fullFinding, null, 2));
-    findings.push(fullFinding);
-
     log(
       deps,
       `[audit] ${cap.id}: present=${finding.present} conformant=${finding.conformant} gaps=${finding.gaps.length}`,
     );
 
-    // Open a GitHub issue for each capability gap.
+    // Serialize disk write + shared-state mutation to avoid interleaving.
+    await enqueueWrite(async () => {
+      await writeFn(findingPath, JSON.stringify(fullFinding, null, 2));
+      findings.push(fullFinding);
+    });
+
+    // Open a GitHub issue for each capability gap (outside the write lock —
+    // network I/O is independent of shared state).
     if (!finding.conformant && !opts.noIssues && opts.repo) {
       const title = `feat: ${cap.name}`;
       const body = buildIssueBody(cap, finding);
       try {
         const issue = await createIssueFn(opts.repo, title, body, githubDeps);
-        issueUrls[cap.id] = issue.url;
+        await enqueueWrite(async () => {
+          issueUrls[cap.id] = issue.url;
+        });
         log(
           deps,
           `[audit] opened issue #${issue.number} for ${cap.id}: ${issue.url}`,
@@ -276,7 +327,7 @@ export async function runAudit(opts: AuditOpts): Promise<AuditSummary> {
         );
       }
     }
-  }
+  });
 
   const summary: AuditSummary = {
     repoPath: opts.repoPath,
