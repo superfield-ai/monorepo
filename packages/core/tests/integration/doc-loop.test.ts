@@ -88,7 +88,7 @@ describe("doc loop — end to end", () => {
         // Use a wildcard and check the decoded URL to match correctly.
         http.get(
           `https://api.github.com/repos/${OWNER}/${REPO}/contents/:filePath*`,
-          ({ request, params }) => {
+          ({ params }) => {
             const rawPath = String(params.filePath ?? "");
             const decoded = decodeURIComponent(rawPath);
             if (decoded !== "docs/prd.md") return undefined; // pass to next handler
