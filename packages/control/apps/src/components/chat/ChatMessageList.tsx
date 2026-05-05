@@ -70,8 +70,7 @@ export function ChatMessageList({
                     marginLeft: 2,
                     background: "var(--fg-2)",
                     verticalAlign: "text-bottom",
-                    animation:
-                      "pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+                    animation: "pulse 1s cubic-bezier(0.4, 0, 0.6, 1) infinite",
                   }}
                 />
               )}
