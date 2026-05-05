@@ -74,9 +74,7 @@ test("a message with streaming:false does NOT render aria-label='streaming'", as
     { id: "1", role: "assistant", content: "Done", streaming: false },
   ];
   const bottomRef = createRef<HTMLDivElement>();
-  const screen = render(
-    <ChatMessageList messages={messages} bottomRef={bottomRef} />,
-  );
+  render(<ChatMessageList messages={messages} bottomRef={bottomRef} />);
 
   expect(
     document.querySelector('[data-testid="chat-streaming-indicator"]'),
