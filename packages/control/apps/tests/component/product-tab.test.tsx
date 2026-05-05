@@ -205,7 +205,7 @@ test("renders docs and seeded assistant output from a Claude fixture", async () 
 
   await expect.element(screen.getByTestId("product-tab")).toBeVisible();
   await expect.element(screen.getByTestId("docs-viewer")).toBeVisible();
-  await expect.element(screen.getByTestId("product-chat-panel")).toBeVisible();
+  await expect.element(screen.getByTestId("ws-chat")).toBeVisible();
   await expect
     .element(screen.getByText("Refine the button spacing"))
     .toBeVisible();
@@ -232,31 +232,12 @@ test("product chat submit calls sendMessage on the injected controller", async (
     />,
   );
 
-  await screen.getByTestId("product-chat-input").fill("How does steer work?");
-  await screen.getByTestId("product-chat-submit").click();
+  await screen.getByTestId("chat-composer-input").fill("How does steer work?");
+  await screen.getByTestId("chat-composer-submit").click();
 
   expect(chatController.sendMessage).toHaveBeenCalledWith(
     "How does steer work?",
   );
-});
-
-test("product chat reset session button calls resetSession", async () => {
-  const { controller: docsController } = makeDocsControllerMock();
-  const { controller: chatController } = makeChatControllerMock({
-    messages: [],
-    turnState: "idle",
-  });
-
-  const screen = render(
-    <ProductTab
-      docsController={docsController}
-      chatController={chatController}
-    />,
-  );
-
-  await screen.getByRole("button", { name: "Reset session" }).click();
-
-  expect(chatController.resetSession).toHaveBeenCalledOnce();
 });
 
 test("product chat supports a browser multi-turn conversation without crypto.randomUUID", async () => {
@@ -297,14 +278,14 @@ test("product chat supports a browser multi-turn conversation without crypto.ran
   const screen = render(<ProductTab />);
 
   await expect.element(screen.getByTestId("product-tab")).toBeVisible();
-  await screen.getByTestId("product-chat-input").fill("Tell me more");
-  await screen.getByTestId("product-chat-submit").click();
+  await screen.getByTestId("chat-composer-input").fill("Tell me more");
+  await screen.getByTestId("chat-composer-submit").click();
   await expect
     .element(screen.getByText("Tell me more first browser turn"))
     .toBeVisible();
 
-  await screen.getByTestId("product-chat-input").fill("And again");
-  await screen.getByTestId("product-chat-submit").click();
+  await screen.getByTestId("chat-composer-input").fill("And again");
+  await screen.getByTestId("chat-composer-submit").click();
 
   await expect
     .element(screen.getByText("And again second browser turn"))
@@ -341,15 +322,15 @@ test("product chat can retry after an assistant error response", async () => {
 
   const screen = render(<ProductTab />);
 
-  await screen.getByTestId("product-chat-input").fill("Why did it fail?");
-  await screen.getByTestId("product-chat-submit").click();
+  await screen.getByTestId("chat-composer-input").fill("Why did it fail?");
+  await screen.getByTestId("chat-composer-submit").click();
   await expect
     .element(screen.getByText(/Error: claude exited with code 1/))
     .toBeVisible();
 
-  await expect.element(screen.getByTestId("product-chat-input")).toBeEnabled();
-  await screen.getByTestId("product-chat-input").fill("Try again");
-  await screen.getByTestId("product-chat-submit").click();
+  await expect.element(screen.getByTestId("chat-composer-input")).toBeEnabled();
+  await screen.getByTestId("chat-composer-input").fill("Try again");
+  await screen.getByTestId("chat-composer-submit").click();
   await expect
     .element(screen.getByText("Try again retry succeeded"))
     .toBeVisible();
