@@ -62,7 +62,6 @@ export default defineWorkspace([
       name: "component",
       root: webRoot,
       include: [resolve(webRoot, "tests/component/**/*.test.tsx")],
-      setupFiles: [resolve(webRoot, "../../../tests/test-env.ts")],
       browser: {
         enabled: true,
         provider: "playwright",
