@@ -12,7 +12,7 @@
  */
 
 import React, { useState } from "react";
-import { render, screen } from "vitest-browser-react";
+import { render } from "vitest-browser-react";
 import { afterEach, expect, test, vi } from "vitest";
 import { ChatComposer } from "../../src/components/chat/ChatComposer";
 
