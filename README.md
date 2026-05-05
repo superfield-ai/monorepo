@@ -10,22 +10,22 @@ Where a traditional IDE helps a human write code, Superfield runs a continuous a
 
 The current release gives you four integrated layers:
 
-| Layer | What it does |
-| --- | --- |
-| **Orchestration** | Continuous dev loop: CI watchdog → issue audit → blueprint conformance → primary + speculative coding agents → doc sync |
-| **Self-improvement** | Agents learn from their own run history. The planning loop audits past turns, detects drift from the blueprint, and tightens the rules curriculum over time (inspired by [Honcho](https://honcho.dev)) |
+| Layer                 | What it does                                                                                                                                                                                                                      |
+| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Orchestration**     | Continuous dev loop: CI watchdog → issue audit → blueprint conformance → primary + speculative coding agents → doc sync                                                                                                           |
+| **Self-improvement**  | Agents learn from their own run history. The planning loop audits past turns, detects drift from the blueprint, and tightens the rules curriculum over time (inspired by [Honcho](https://honcho.dev))                            |
 | **Blueprint (brain)** | A bundled knowledge graph of architectural rules, security threats, and design antipatterns. Agents receive a narrow rule slice on turn 1; deeper principles layer in as context expands. Every PR is self-audited before opening |
-| **Deploy + Control** | One-command k3s deployment across GCP / DigitalOcean / AWS / Vultr, plus a browser console for watching agents work, steering them mid-turn, and triaging deployments |
+| **Deploy + Control**  | One-command k3s deployment across GCP / DigitalOcean / AWS / Vultr, plus a browser console for watching agents work, steering them mid-turn, and triaging deployments                                                             |
 
 ## Phase 2 — Self-Improving App Platforms _(R&D)_
 
 Phase 1 keeps Git and GitHub as the delivery plane. Phase 2 replaces them with infrastructure purpose-built for agent iteration speed:
 
-| Component | Repo | Role |
-| --- | --- | --- |
-| **Sharp** | [`superfield-ai/sharp`](https://github.com/superfield-ai/sharp) | Agent-native VCS, backwards-compatible with Git. Branching-free change tracking at sub-second cadence |
-| **Nexum** | [`superfield-ai/nexum`](https://github.com/superfield-ai/nexum) | Self-improving synthetic corpus — living curriculum that agents refine as they work, improving future runs |
-| **FastEnv** | _(in design)_ | Ultrafast container forking for sub-second CI inner loops — a fresh isolated env per test run |
+| Component   | Repo                                                            | Role                                                                                                       |
+| ----------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
+| **Sharp**   | [`superfield-ai/sharp`](https://github.com/superfield-ai/sharp) | Agent-native VCS, backwards-compatible with Git. Branching-free change tracking at sub-second cadence      |
+| **Nexum**   | [`superfield-ai/nexum`](https://github.com/superfield-ai/nexum) | Self-improving synthetic corpus — living curriculum that agents refine as they work, improving future runs |
+| **FastEnv** | _(in design)_                                                   | Ultrafast container forking for sub-second CI inner loops — a fresh isolated env per test run              |
 
 **The end goal: self-improving app platforms** — applications that continuously audit and improve themselves, with Superfield as the safe, observable, reversible runtime for autonomous self-modification.
 

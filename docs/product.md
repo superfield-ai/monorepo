@@ -224,6 +224,7 @@ The pillars 1–4 above describe the destination. The demo cut targets the gaps 
 ## Out of Scope
 
 ### Phase 1
+
 - Slack / webhook notifications
 - Forges other than GitHub
 - Self-hosted LLM backends (Claude and Codex CLIs are supported)
@@ -231,6 +232,7 @@ The pillars 1–4 above describe the destination. The demo cut targets the gaps 
 - Agent-native version control or embedded CI (Phase 2)
 
 ### Entire roadmap
+
 - Generic observability (not a Grafana replacement — every metric surfaced is one an operator acts on)
 - Configuration UI (Superfield encodes one correct way to do things)
 
