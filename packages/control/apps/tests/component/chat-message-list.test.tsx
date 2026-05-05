@@ -65,7 +65,7 @@ test("a message with streaming:true renders span aria-label='streaming'", async 
   );
 
   await expect
-    .element(screen.getByRole("generic", { name: "streaming" }))
+    .element(screen.getByTestId("chat-streaming-indicator"))
     .toBeInTheDocument();
 });
 
@@ -78,9 +78,9 @@ test("a message with streaming:false does NOT render aria-label='streaming'", as
     <ChatMessageList messages={messages} bottomRef={bottomRef} />,
   );
 
-  await expect
-    .element(screen.getByRole("generic", { name: "streaming" }))
-    .not.toBeInTheDocument();
+  expect(
+    document.querySelector('[data-testid="chat-streaming-indicator"]'),
+  ).toBeNull();
 });
 
 test("when a new message is appended, bottomRef.current.scrollIntoView is called", async () => {

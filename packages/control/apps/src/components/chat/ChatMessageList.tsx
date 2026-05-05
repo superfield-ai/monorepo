@@ -63,6 +63,7 @@ export function ChatMessageList({
               {msg.streaming && (
                 <span
                   aria-label="streaming"
+                  data-testid="chat-streaming-indicator"
                   style={{
                     display: "inline-block",
                     width: 6,
