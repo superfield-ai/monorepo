@@ -12,6 +12,7 @@
 
 export { ControlPanel } from "./ControlPanel";
 export { ChatPanel } from "./ChatPanel";
+export { ChatMessageList } from "./chat/ChatMessageList";
 export { IframePanel } from "./IframePanel";
 export { ClusterStatusIndicator } from "./ClusterStatusIndicator";
 export type { ClusterStatus } from "./ClusterStatusIndicator";

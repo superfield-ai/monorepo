@@ -37,6 +37,9 @@
     },
     "packages/control": {
       "name": "@superfield/control",
+      "dependencies": {
+        "@superfield/core": "workspace:*",
+      },
       "devDependencies": {
         "@types/bun": "latest",
         "typescript": "^5.0.0",
@@ -76,6 +79,7 @@
       "name": "@superfield/core",
       "dependencies": {
         "@scure/bip39": "1.4.0",
+        "@superfield/db": "workspace:*",
         "isomorphic-git": "^1.37.5",
         "libsodium-wrappers": "^0.8.4",
       },
