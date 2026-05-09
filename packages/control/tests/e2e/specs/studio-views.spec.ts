@@ -137,6 +137,6 @@ test.describe("tab switching", () => {
     await page.getByTestId("tab-product").click();
     await expect(page.getByTestId("product-tab")).toBeVisible();
     await expect(page.getByTestId("docs-viewer")).toBeVisible();
-    await expect(page.getByTestId("product-chat-panel")).toBeVisible();
+    await expect(page.getByTestId("ws-chat")).toBeVisible();
   });
 });

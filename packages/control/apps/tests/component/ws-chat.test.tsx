@@ -66,6 +66,7 @@ function makeWsChatControllerMock(
     disconnect: vi.fn(() => {}),
     sendMessage: vi.fn(async (_text: string) => {}),
     clearError: vi.fn(() => {}),
+    resetSession: vi.fn(async () => {}),
   } as unknown as WsChatController;
 
   return { controller, setState };
@@ -137,6 +138,17 @@ test("when turnState is 'error', submit calls clearError before sendMessage", as
   expect(controller.clearError).toHaveBeenCalledOnce();
   expect(controller.sendMessage).toHaveBeenCalledWith("retry me");
   expect(callOrder).toEqual(["clearError", "sendMessage"]);
+});
+
+test("clicking 'Reset session' calls controller.resetSession", async () => {
+  const { controller } = makeWsChatControllerMock();
+
+  const screen = render(<WsChat controller={controller} />);
+
+  const button = screen.getByRole("button", { name: "Reset session" });
+  await button.click();
+
+  expect(controller.resetSession).toHaveBeenCalledOnce();
 });
 
 test("renders the actions slot in the header", async () => {

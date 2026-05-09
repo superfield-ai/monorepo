@@ -69,6 +69,34 @@ export function WsChat({
     void controllerRef.current.sendMessage(text);
   }
 
+  async function handleResetSession() {
+    try {
+      await controllerRef.current.resetSession();
+    } catch (err) {
+      console.error("[ws-chat] reset session failed:", err);
+    }
+  }
+
+  const resetButton = (
+    <button
+      type="button"
+      onClick={() => void handleResetSession()}
+      className="self-start rounded-full border border-zinc-700 bg-zinc-900 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.2em] text-zinc-400 hover:border-zinc-500 hover:text-zinc-200"
+    >
+      Reset session
+    </button>
+  );
+
+  const headerActions =
+    actions === undefined ? (
+      resetButton
+    ) : (
+      <>
+        {actions}
+        {resetButton}
+      </>
+    );
+
   const emptyState = (
     <p
       data-testid="ws-chat-empty"
@@ -97,7 +125,7 @@ export function WsChat({
         color: "var(--fg-1)",
       }}
     >
-      <ChatPanelHeader label={label} actions={actions} />
+      <ChatPanelHeader label={label} actions={headerActions} />
       <ChatMessageList
         messages={chatState.messages}
         bottomRef={bottomRef}
