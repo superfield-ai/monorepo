@@ -23,6 +23,7 @@
  *   POST /studio/rollback         → reset HEAD to prior commit (auth required)
  *   POST /studio/reset            → clear in-memory session messages (auth required)
  *   POST /studio/chat             → send message, run agent, return reply (auth required)
+ *   GET  /studio/screenshots/:sessionId → list per-turn screenshot files (issue #249)
  *   GET  /app/*                   → reverse-proxy to web ClusterIP service (strip /app)
  *   GET  /api/*                   → reverse-proxy to api ClusterIP service
  *   GET  /*                       → serve browser UI static assets (CONTROL_ASSETS_DIR)
@@ -82,6 +83,7 @@ import { handleRebuildStart, handleRebuildLog } from "./rebuild";
 import { handleMockRoutesRequest } from "./mock-routes";
 import { handleConformanceRequest } from "./conformance";
 import { handleFixturesRequest } from "./fixtures";
+import { handleScreenshotsRequest } from "./screenshots";
 
 /** Result of the route() call — either a fully-resolved Response or a signal
  *  that the response is pending an async proxy operation. */
@@ -377,6 +379,10 @@ export async function route(
   // Turn timeline — D6 / C-9.6.
   const turnsResponse = handleTurnsRequest(req, url);
   if (turnsResponse) return turnsResponse;
+
+  // Per-turn screenshots — issue #249.
+  const screenshotsResponse = handleScreenshotsRequest(req, url);
+  if (screenshotsResponse) return screenshotsResponse;
 
   // Docs endpoints — Product tab markdown viewer.
   const docsResponse = handleDocsRequest(req, url, config.projectRoot);
