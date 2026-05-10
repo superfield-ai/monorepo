@@ -492,7 +492,10 @@ export function TestOutputPane({
                       }}
                     >
                       {parseAnsi(rawOutput).map((seg, si) => (
-                        <span key={si} style={seg.color ? { color: seg.color } : undefined}>
+                        <span
+                          key={si}
+                          style={seg.color ? { color: seg.color } : undefined}
+                        >
                           {seg.text}
                         </span>
                       ))}

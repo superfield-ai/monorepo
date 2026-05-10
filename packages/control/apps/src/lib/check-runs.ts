@@ -44,15 +44,11 @@ export function aggregateCheckRunStatus(
   if (runs.length === 0) return "unknown";
   if (runs.some((r) => r.status !== "completed")) return "running";
   if (
-    runs.some(
-      (r) => r.conclusion === "failure" || r.conclusion === "timed_out",
-    )
+    runs.some((r) => r.conclusion === "failure" || r.conclusion === "timed_out")
   )
     return "fail";
   if (
-    runs.every(
-      (r) => r.conclusion === "success" || r.conclusion === "skipped",
-    )
+    runs.every((r) => r.conclusion === "success" || r.conclusion === "skipped")
   )
     return "pass";
   return "unknown";

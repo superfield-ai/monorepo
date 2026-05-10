@@ -404,7 +404,10 @@ export function CiStatusFeed({
   }
 
   return (
-    <div data-testid="ci-status-feed" style={{ overflow: "auto", maxHeight: 320 }}>
+    <div
+      data-testid="ci-status-feed"
+      style={{ overflow: "auto", maxHeight: 320 }}
+    >
       {escalateError && (
         <div
           style={{
@@ -427,13 +430,22 @@ export function CiStatusFeed({
       >
         <thead>
           <tr style={{ textAlign: "left" }}>
-            <th className="label" style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}>
+            <th
+              className="label"
+              style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}
+            >
               CHECK
             </th>
-            <th className="label" style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}>
+            <th
+              className="label"
+              style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}
+            >
               SHA
             </th>
-            <th className="label" style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}>
+            <th
+              className="label"
+              style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}
+            >
               STATUS
             </th>
             <th className="label" style={{ padding: "var(--sp-1) 0" }}>

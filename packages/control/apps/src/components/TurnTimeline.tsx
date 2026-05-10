@@ -22,7 +22,11 @@
 import React, { useEffect, useState } from "react";
 import { fetchJson } from "../lib/net";
 import type { AppError } from "../lib/errors";
-import type { CheckRun, CheckRunStatus, CheckRunsResponse } from "../lib/check-runs";
+import type {
+  CheckRun,
+  CheckRunStatus,
+  CheckRunsResponse,
+} from "../lib/check-runs";
 import { aggregateCheckRunStatus } from "../lib/check-runs";
 import { EmptyState } from "./EmptyState";
 import { InlineError } from "./InlineError";
@@ -160,9 +164,7 @@ export function CheckRunBadge({
         }}
       />
       {label}
-      {runs.length > 0 && (
-        <span style={{ opacity: 0.7 }}>({runs.length})</span>
-      )}
+      {runs.length > 0 && <span style={{ opacity: 0.7 }}>({runs.length})</span>}
     </button>
   );
 }
@@ -289,7 +291,13 @@ export function TurnTimeline({
                 }}
               >
                 <span>{formatTs(turn.ts)}</span>
-                <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+                <div
+                  style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "var(--sp-2)",
+                  }}
+                >
                   {/* C-11.1: per-turn check-run badge */}
                   {turn.commitSha && (
                     <CheckRunBadge
