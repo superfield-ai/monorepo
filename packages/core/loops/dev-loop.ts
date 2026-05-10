@@ -83,6 +83,32 @@ export interface DevLoopOpts {
   startupReapedSessions?: number[];
   /** Optional shared API state for analytics and steering. */
   apiState?: ApiState;
+  /**
+   * Optional hook called after each agent turn completes (issue #249).
+   * Receives the turn-completion context and should resolve quickly; errors
+   * are silently swallowed so a failed screenshot never aborts the dev loop.
+   */
+  onTurnComplete?: (ctx: TurnCompletionContext) => Promise<void>;
+}
+
+/**
+ * Context passed to the optional `onTurnComplete` hook after each agent turn.
+ *
+ * All fields are available at the hook call site in `runIssueSlot()`.
+ */
+export interface TurnCompletionContext {
+  /** Agent session identifier — correlates screenshots with turn logs. */
+  readonly sessionId: string;
+  /** Numeric slot index (0 = primary). */
+  readonly slot: number;
+  /** GitHub issue number being developed. */
+  readonly issueNumber: number;
+  /** Absolute path to the issue worktree. */
+  readonly worktreePath: string;
+  /** Whether the agent turn exited with an error. */
+  readonly isError: boolean;
+  /** Cost of the completed turn in USD (0 when unknown). */
+  readonly costUsd: number;
 }
 
 export interface PruneResult {
@@ -890,6 +916,24 @@ async function executeAgentWithAudit(
       "claude",
       agentResult.isError,
     );
+    // Issue #249 — per-turn screenshot hook (best-effort, never throws)
+    if (opts.onTurnComplete) {
+      const hookCtx: TurnCompletionContext = {
+        sessionId: agentResult.sessionId,
+        slot,
+        issueNumber: entry.number,
+        worktreePath: wt.path,
+        isError: agentResult.isError,
+        costUsd: agentResult.costUsd ?? 0,
+      };
+      opts.onTurnComplete(hookCtx).catch((err: unknown) => {
+        devLog(
+          "warn",
+          `onTurnComplete hook failed for #${entry.number}: ${err instanceof Error ? err.message : String(err)}`,
+          slot,
+        );
+      });
+    }
   } catch (err) {
     clearInterval(heartbeatInterval);
     opts.apiState?.recordAgentEnd(slot, 0, "claude", true);
