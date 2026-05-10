@@ -102,8 +102,10 @@ async function main(args: string[]): Promise<void> {
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--base") base = rest[++i];
         else if (rest[i] === "--name") name = rest[++i];
-        else if (rest[i]?.startsWith("--base=")) base = (rest[i] as string).slice(7);
-        else if (rest[i]?.startsWith("--name=")) name = (rest[i] as string).slice(7);
+        else if (rest[i]?.startsWith("--base="))
+          base = (rest[i] as string).slice(7);
+        else if (rest[i]?.startsWith("--name="))
+          name = (rest[i] as string).slice(7);
       }
       if (!base) die("fork requires --base <image>");
       if (!name) die("fork requires --name <fork-id>");
@@ -198,7 +200,8 @@ async function main(args: string[]): Promise<void> {
       let concurrency: number | undefined;
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--image") image = rest[++i];
-        else if (rest[i]?.startsWith("--image=")) image = (rest[i] as string).slice(8);
+        else if (rest[i]?.startsWith("--image="))
+          image = (rest[i] as string).slice(8);
         else if (rest[i] === "--forks") forks = parseInt(rest[++i] ?? "20", 10);
         else if (rest[i]?.startsWith("--forks="))
           forks = parseInt((rest[i] as string).slice(8), 10);
