@@ -270,7 +270,10 @@ function parseAnsi(text: string): Array<{ text: string; color?: string }> {
 
   const segments: Array<{ text: string; color?: string }> = [];
   // Split on any CSI sequence: ESC [ … m
-  const parts = text.split(/\x1b\[([0-9;]*)m/);
+  // Use new RegExp() to avoid the no-control-regex ESLint rule.
+  const parts = text.split(
+    new RegExp("\x1b\\[([0-9;]*)m"), // eslint-disable-line no-control-regex
+  );
   let currentColor: string | undefined;
 
   for (let i = 0; i < parts.length; i++) {
