@@ -20,14 +20,14 @@ one optional new SSE endpoint.
 
 The superfield API server (`packages/core/api-server.ts`) exposes:
 
-| Endpoint | Data surfaced |
-|---|---|
-| `GET /analytics/status` | activeSlots, loopHealth, totalCostUsd, agentCount, errorCount |
-| `GET /analytics/slots` | Full slot objects (sessionId, issueNumber, slot, role, startedAt, elapsedMs) |
-| `GET /analytics/sessions` | Session list |
-| `GET /analytics/loops` | Plan/dev/doc loop health |
-| `GET /analytics/costs` | Cost aggregates |
-| `GET /analytics/circuit` | Circuit-breaker state (tripped, consecutiveFailures) |
+| Endpoint                  | Data surfaced                                                                |
+| ------------------------- | ---------------------------------------------------------------------------- |
+| `GET /analytics/status`   | activeSlots, loopHealth, totalCostUsd, agentCount, errorCount                |
+| `GET /analytics/slots`    | Full slot objects (sessionId, issueNumber, slot, role, startedAt, elapsedMs) |
+| `GET /analytics/sessions` | Session list                                                                 |
+| `GET /analytics/loops`    | Plan/dev/doc loop health                                                     |
+| `GET /analytics/costs`    | Cost aggregates                                                              |
+| `GET /analytics/circuit`  | Circuit-breaker state (tripped, consecutiveFailures)                         |
 
 **Gap**: None of these endpoints surface check-run data. `CheckRun` objects
 (`packages/github/client.ts:3`) are polled by `runWatchdogStep()` in
@@ -62,12 +62,12 @@ no check-run information.
 
 ## 3. Component Files C-11.1–C-11.4 Will Touch
 
-| Sub-issue | File | Nature of change |
-|---|---|---|
-| C-11.1 | `packages/control/apps/src/components/TurnTimeline.tsx` | Add `CheckRunBadge` on each turn row; requires `commitSha` on `TurnSummary` |
-| C-11.2 | `packages/control/apps/src/components/VisualDiffPanel.tsx` | Add expandable `TestOutputPane` below the diff; requires ANSI→HTML rendering |
-| C-11.3 | `packages/control/apps/src/components/OrchestratorView.tsx` | New `CiStatusFeed` section; may need new `/analytics/check-runs/stream` SSE |
-| C-11.4 | `packages/control/apps/src/components/OrchestratorView.tsx` | One-click escalate button; calls `POST /steer/escalate` (already implemented) |
+| Sub-issue | File                                                        | Nature of change                                                              |
+| --------- | ----------------------------------------------------------- | ----------------------------------------------------------------------------- |
+| C-11.1    | `packages/control/apps/src/components/TurnTimeline.tsx`     | Add `CheckRunBadge` on each turn row; requires `commitSha` on `TurnSummary`   |
+| C-11.2    | `packages/control/apps/src/components/VisualDiffPanel.tsx`  | Add expandable `TestOutputPane` below the diff; requires ANSI→HTML rendering  |
+| C-11.3    | `packages/control/apps/src/components/OrchestratorView.tsx` | New `CiStatusFeed` section; may need new `/analytics/check-runs/stream` SSE   |
+| C-11.4    | `packages/control/apps/src/components/OrchestratorView.tsx` | One-click escalate button; calls `POST /steer/escalate` (already implemented) |
 
 ---
 
