@@ -8,6 +8,13 @@
  * This component contains no fetch() calls or stream logic.
  *
  * Canonical docs: docs/studio-mode.md — "Claude CLI Integration", "Rollback"
+ *
+ * @deprecated C-10 cleanup (#272): This file is scheduled for deletion once
+ * the import graph is verified clean (see dev-scout #279). As of the scout
+ * pass, zero importers of ControlChat exist in packages/control/apps/src
+ * outside this file itself. The only active test file that imports this
+ * component is tests/component/control-chat.test.tsx — that file must be
+ * cleaned up or removed as part of #272.
  */
 
 import React, { useState, useEffect, useRef } from "react";
