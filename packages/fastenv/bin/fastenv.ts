@@ -110,7 +110,7 @@ async function main(args: string[]): Promise<void> {
       console.log(`[fastenv] forking ${base} → ${name}`);
       const result = await forkWorkspace(base, name);
       console.log(
-        `[fastenv] fork created: ${result.forkId} in ${result.durationMs.toFixed(1)}ms`
+        `[fastenv] fork created: ${result.forkId} in ${result.durationMs.toFixed(1)}ms`,
       );
       break;
     }
@@ -178,13 +178,16 @@ async function main(args: string[]): Promise<void> {
     case "gc": {
       let ttlMs = 3_600_000; // 1 hour default
       for (let i = 0; i < rest.length; i++) {
-        if (rest[i] === "--ttl" && rest[i + 1]) ttlMs = parseInt(rest[++i]!, 10);
+        if (rest[i] === "--ttl" && rest[i + 1])
+          ttlMs = parseInt(rest[++i]!, 10);
         else if (rest[i]?.startsWith("--ttl="))
           ttlMs = parseInt(rest[i]!.slice(6), 10);
       }
       console.log(`[fastenv] running GC (TTL: ${ttlMs}ms)`);
       const discarded = await gcForks(ttlMs);
-      console.log(`[fastenv] GC complete — discarded ${discarded.length} forks`);
+      console.log(
+        `[fastenv] GC complete — discarded ${discarded.length} forks`,
+      );
       discarded.forEach((id) => console.log(`  - ${id}`));
       break;
     }
@@ -211,7 +214,7 @@ async function main(args: string[]): Promise<void> {
       // Exit non-zero if p95 exceeds 100ms target.
       if (result.latency.p95Ms > 100) {
         console.error(
-          `[fastenv] FAIL: p95 ${result.latency.p95Ms.toFixed(1)}ms exceeds 100ms target`
+          `[fastenv] FAIL: p95 ${result.latency.p95Ms.toFixed(1)}ms exceeds 100ms target`,
         );
         process.exit(1);
       }
@@ -224,6 +227,8 @@ async function main(args: string[]): Promise<void> {
 }
 
 main(process.argv.slice(2)).catch((err) => {
-  console.error(`[fastenv] error: ${err instanceof Error ? err.message : String(err)}`);
+  console.error(
+    `[fastenv] error: ${err instanceof Error ? err.message : String(err)}`,
+  );
   process.exit(1);
 });

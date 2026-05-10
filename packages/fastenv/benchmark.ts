@@ -46,7 +46,7 @@ function percentile(sorted: number[], p: number): number {
  * Precondition: the base image must already be unpacked (`fastenv build-base`).
  */
 export async function runBenchmark(
-  opts: BenchmarkOptions
+  opts: BenchmarkOptions,
 ): Promise<BenchmarkResult> {
   const forkCount = opts.forks ?? 20;
   const concurrency = opts.concurrency ?? 10;
@@ -60,7 +60,7 @@ export async function runBenchmark(
     latencies.push(result.durationMs);
     await discardFork(id);
     process.stdout.write(
-      `\r  ${i + 1}/${forkCount} — last: ${result.durationMs.toFixed(1)}ms`
+      `\r  ${i + 1}/${forkCount} — last: ${result.durationMs.toFixed(1)}ms`,
     );
   }
   console.log();
@@ -85,10 +85,10 @@ export async function runBenchmark(
   console.log(`[bench] concurrent fork test: ${concurrency} parallel forks`);
   const concIds = Array.from(
     { length: concurrency },
-    (_, i) => `bench-conc-${Date.now()}-${i}`
+    (_, i) => `bench-conc-${Date.now()}-${i}`,
   );
   const results = await Promise.allSettled(
-    concIds.map((id) => forkWorkspace(opts.image, id))
+    concIds.map((id) => forkWorkspace(opts.image, id)),
   );
   const succeeded = results.filter((r) => r.status === "fulfilled").length;
 
@@ -107,23 +107,19 @@ export function printBenchmarkResult(result: BenchmarkResult): void {
   console.log("\n=== fastenv benchmark results ===");
   console.log(`Image:              ${result.image}`);
   console.log(
-    `Fork latency p50:   ${result.latency.p50Ms.toFixed(1)}ms ${result.latency.p50Ms <= 50 ? "✓" : "✗ (target ≤50ms)"}`
+    `Fork latency p50:   ${result.latency.p50Ms.toFixed(1)}ms ${result.latency.p50Ms <= 50 ? "✓" : "✗ (target ≤50ms)"}`,
   );
   console.log(
-    `Fork latency p95:   ${result.latency.p95Ms.toFixed(1)}ms ${result.latency.p95Ms <= 100 ? "✓" : "✗ (target ≤100ms)"}`
+    `Fork latency p95:   ${result.latency.p95Ms.toFixed(1)}ms ${result.latency.p95Ms <= 100 ? "✓" : "✗ (target ≤100ms)"}`,
   );
-  console.log(
-    `Fork latency min:   ${result.latency.minMs.toFixed(1)}ms`
-  );
-  console.log(
-    `Fork latency max:   ${result.latency.maxMs.toFixed(1)}ms`
-  );
+  console.log(`Fork latency min:   ${result.latency.minMs.toFixed(1)}ms`);
+  console.log(`Fork latency max:   ${result.latency.maxMs.toFixed(1)}ms`);
   console.log(`Samples:            ${result.latency.samples}`);
   console.log(
-    `Idle writable size: ${(result.baseWritableBytes / 1024).toFixed(1)} KiB (COW delta only)`
+    `Idle writable size: ${(result.baseWritableBytes / 1024).toFixed(1)} KiB (COW delta only)`,
   );
   console.log(
-    `Concurrent forks:   ${result.concurrentForks} completed without error`
+    `Concurrent forks:   ${result.concurrentForks} completed without error`,
   );
   console.log("");
 }

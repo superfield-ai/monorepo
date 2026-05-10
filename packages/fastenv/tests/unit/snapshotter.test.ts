@@ -60,7 +60,7 @@ describe("forkWorkspace", () => {
     const result = await forkWorkspace(
       "docker.io/library/alpine:3.20",
       "my-fork",
-      exec
+      exec,
     );
 
     expect(result.forkId).toBe("my-fork");
@@ -83,7 +83,7 @@ describe("forkWorkspace", () => {
         "--snapshotter",
         SNAPSHOTTER,
         "test-fork",
-      ])
+      ]),
     );
   });
 
@@ -99,10 +99,10 @@ describe("forkWorkspace", () => {
 
   it("propagates errors from ctr", async () => {
     const exec = failExec(
-      "connection refused: /run/containerd/containerd.sock"
+      "connection refused: /run/containerd/containerd.sock",
     );
     await expect(
-      forkWorkspace("docker.io/library/alpine:3.20", "fail-fork", exec)
+      forkWorkspace("docker.io/library/alpine:3.20", "fail-fork", exec),
     ).rejects.toThrow("connection refused");
   });
 });
@@ -114,7 +114,8 @@ describe("forkWorkspace", () => {
 describe("diskUsage", () => {
   it("parses upperdir and returns writable byte count", async () => {
     const exec = routedExec({
-      mounts: "overlay type overlay (upperdir=/snap/upper,workdir=/snap/work,lowerdir=/snap/lower)",
+      mounts:
+        "overlay type overlay (upperdir=/snap/upper,workdir=/snap/work,lowerdir=/snap/lower)",
       "-sb": "4096\t/snap/upper\n",
     });
 
@@ -152,7 +153,8 @@ describe("diffFork", () => {
 
   it("strips upperdir prefix from file paths", async () => {
     const exec = routedExec({
-      mounts: "overlay type overlay (upperdir=/snap/upper,workdir=/snap/work,lowerdir=/snap/lower)",
+      mounts:
+        "overlay type overlay (upperdir=/snap/upper,workdir=/snap/work,lowerdir=/snap/lower)",
       "-type f": "/snap/upper/src/main.ts\n/snap/upper/package.json\n",
     });
 
@@ -182,7 +184,7 @@ describe("discardFork", () => {
     await expect(discardFork("gone-fork", exec)).resolves.toBeUndefined();
     expect(exec).toHaveBeenCalledWith(
       "ctr",
-      expect.arrayContaining(["containers", "delete", "gone-fork"])
+      expect.arrayContaining(["containers", "delete", "gone-fork"]),
     );
   });
 
@@ -237,14 +239,20 @@ describe("exportPatch", () => {
     await exportPatch("my-fork", "/tmp/patch.tar.gz", exec);
     expect(exec).toHaveBeenCalledWith(
       "tar",
-      expect.arrayContaining(["-czf", "/tmp/patch.tar.gz", "-C", "/snap/upper", "."])
+      expect.arrayContaining([
+        "-czf",
+        "/tmp/patch.tar.gz",
+        "-C",
+        "/snap/upper",
+        ".",
+      ]),
     );
   });
 
   it("throws when no writable layer is found", async () => {
     const exec = stubExec("no-overlay");
     await expect(
-      exportPatch("no-fork", "/tmp/patch.tar.gz", exec)
+      exportPatch("no-fork", "/tmp/patch.tar.gz", exec),
     ).rejects.toThrow("No writable layer found");
   });
 });
@@ -316,7 +324,10 @@ describe("benchmark", () => {
       const joined = args.join(" ");
       calls.push(joined);
       if (joined.includes("mounts")) {
-        return { stdout: "overlay type overlay (upperdir=/tmp/upper)", stderr: "" };
+        return {
+          stdout: "overlay type overlay (upperdir=/tmp/upper)",
+          stderr: "",
+        };
       }
       if (joined.includes("-sb")) {
         return { stdout: "0\t/tmp/upper\n", stderr: "" };

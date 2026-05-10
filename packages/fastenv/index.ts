@@ -23,16 +23,9 @@ export {
   CONTAINERD_SOCKET,
 } from "./snapshotter.ts";
 
-export type {
-  SnapshotInfo,
-  ForkResult,
-  DiskUsage,
-} from "./snapshotter.ts";
+export type { SnapshotInfo, ForkResult, DiskUsage } from "./snapshotter.ts";
 
-export {
-  runBenchmark,
-  printBenchmarkResult,
-} from "./benchmark.ts";
+export { runBenchmark, printBenchmarkResult } from "./benchmark.ts";
 
 export type {
   BenchmarkOptions,

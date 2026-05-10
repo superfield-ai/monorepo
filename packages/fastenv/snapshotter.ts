@@ -46,7 +46,7 @@ export interface DiskUsage {
  */
 export type ExecFn = (
   cmd: string,
-  args: string[]
+  args: string[],
 ) => Promise<{ stdout: string; stderr: string }>;
 
 /** Default production exec using promisified execFile. */
@@ -61,7 +61,7 @@ export const defaultExec: ExecFn = async (cmd, args) => {
  */
 async function ctr(
   args: string[],
-  exec: ExecFn = defaultExec
+  exec: ExecFn = defaultExec,
 ): Promise<string> {
   const { stdout } = await exec("ctr", ["--namespace", NAMESPACE, ...args]);
   return stdout.trim();
@@ -76,7 +76,7 @@ async function ctr(
  */
 export async function buildBase(
   image: string,
-  exec: ExecFn = defaultExec
+  exec: ExecFn = defaultExec,
 ): Promise<void> {
   // Pull the image (no-op if already present).
   await ctr(["images", "pull", image], exec);
@@ -98,7 +98,7 @@ export async function buildBase(
 export async function forkWorkspace(
   baseImage: string,
   forkId: string,
-  exec: ExecFn = defaultExec
+  exec: ExecFn = defaultExec,
 ): Promise<ForkResult> {
   const start = performance.now();
 
@@ -118,7 +118,7 @@ export async function forkWorkspace(
       baseImage,
       forkId,
     ],
-    exec
+    exec,
   );
 
   const durationMs = performance.now() - start;
@@ -133,7 +133,7 @@ export async function forkWorkspace(
  */
 export async function execInFork(
   forkId: string,
-  cmd: string[]
+  cmd: string[],
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   // ctr run --rm runs a process inside the container snapshot.
   return new Promise((resolve) => {
@@ -149,7 +149,7 @@ export async function execInFork(
         `exec-${Date.now()}`,
         ...cmd,
       ],
-      { stdio: ["inherit", "pipe", "pipe"] }
+      { stdio: ["inherit", "pipe", "pipe"] },
     );
 
     let stdout = "";
@@ -175,13 +175,13 @@ export async function execInFork(
  */
 export async function diskUsage(
   forkId: string,
-  exec: ExecFn = defaultExec
+  exec: ExecFn = defaultExec,
 ): Promise<DiskUsage> {
   // `ctr snapshots mounts` returns the overlayfs mount options including
   // upperdir= which points to the writable layer directory.
   const mountInfo = await ctr(
     ["snapshots", "mounts", "--snapshotter", SNAPSHOTTER, forkId],
-    exec
+    exec,
   );
 
   // Parse upperdir= from the overlayfs mount options.
@@ -203,11 +203,11 @@ export async function diskUsage(
  */
 export async function diffFork(
   forkId: string,
-  exec: ExecFn = defaultExec
+  exec: ExecFn = defaultExec,
 ): Promise<string[]> {
   const mountInfo = await ctr(
     ["snapshots", "mounts", "--snapshotter", SNAPSHOTTER, forkId],
-    exec
+    exec,
   );
 
   const upperDirMatch = mountInfo.match(/upperdir=([^,)]+)/);
@@ -232,11 +232,11 @@ export async function diffFork(
 export async function exportPatch(
   forkId: string,
   outputPath: string,
-  exec: ExecFn = defaultExec
+  exec: ExecFn = defaultExec,
 ): Promise<void> {
   const mountInfo = await ctr(
     ["snapshots", "mounts", "--snapshotter", SNAPSHOTTER, forkId],
-    exec
+    exec,
   );
 
   const upperDirMatch = mountInfo.match(/upperdir=([^,)]+)/);
@@ -256,7 +256,7 @@ export async function exportPatch(
  */
 export async function discardFork(
   forkId: string,
-  exec: ExecFn = defaultExec
+  exec: ExecFn = defaultExec,
 ): Promise<void> {
   // Remove the container (releases the snapshot reference).
   try {
@@ -276,9 +276,7 @@ export async function discardFork(
 /**
  * List all active forks (containers) in the fastenv namespace.
  */
-export async function listForks(
-  exec: ExecFn = defaultExec
-): Promise<string[]> {
+export async function listForks(exec: ExecFn = defaultExec): Promise<string[]> {
   const out = await ctr(["containers", "list", "--quiet"], exec);
   return out.split("\n").filter(Boolean);
 }
@@ -289,7 +287,7 @@ export async function listForks(
  */
 export async function gcForks(
   ttlMs: number,
-  exec: ExecFn = defaultExec
+  exec: ExecFn = defaultExec,
 ): Promise<string[]> {
   const out = await ctr(["containers", "list"], exec);
   const lines = out.split("\n").filter(Boolean);
