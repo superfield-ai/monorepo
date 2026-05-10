@@ -25,8 +25,7 @@ import {
   type ProcessState,
 } from "../controllers/OrchestratorController";
 import { TurnTimeline } from "./TurnTimeline";
-import { openEventSource } from "../lib/net";
-import { fetchJson } from "../lib/net";
+import { openEventSource, fetchJson } from "../lib/net";
 import type { CheckRun } from "../lib/check-runs";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
