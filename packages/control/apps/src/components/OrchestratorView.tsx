@@ -15,9 +15,10 @@
  * values are preserved verbatim.
  */
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
   OrchestratorController,
+  type HeartbeatEntry,
   type OrchestratorState,
   type ProcessState,
 } from "../controllers/OrchestratorController";
@@ -117,7 +118,67 @@ function LoopRow({
   );
 }
 
-function SlotCard({ slot }: { slot: OrchestratorState["slots"][number] }) {
+/** State-colour map for heartbeat timeline dots. */
+const HEARTBEAT_STATE_COLOR: Record<HeartbeatEntry["state"], string> = {
+  idle: "var(--fg-3)",
+  running: "var(--status-nominal)",
+  done: "var(--accent-green)",
+};
+
+/**
+ * SlotHeartbeatHistory renders a mini horizontal timeline of the last N slot
+ * state transitions (idle → running → done).
+ */
+function SlotHeartbeatHistory({
+  history,
+  slotKey,
+}: {
+  history: HeartbeatEntry[];
+  slotKey: string;
+}): JSX.Element | null {
+  if (history.length === 0) return null;
+  return (
+    <div
+      data-testid={`slot-heartbeat-history-${slotKey}`}
+      style={{
+        marginTop: "var(--sp-1)",
+        display: "flex",
+        alignItems: "center",
+        gap: "var(--sp-1)",
+        flexWrap: "wrap",
+      }}
+    >
+      <span
+        className="label"
+        style={{ fontSize: "var(--text-xs)", color: "var(--fg-3)" }}
+      >
+        HB
+      </span>
+      {history.map((entry, idx) => (
+        <span
+          key={`${entry.at}-${idx}`}
+          title={`${entry.state} @ ${new Date(entry.at).toISOString().slice(11, 19)}`}
+          style={{
+            width: 6,
+            height: 6,
+            borderRadius: "50%",
+            background: HEARTBEAT_STATE_COLOR[entry.state],
+            flexShrink: 0,
+            display: "inline-block",
+          }}
+        />
+      ))}
+    </div>
+  );
+}
+
+function SlotCard({
+  slot,
+  heartbeatHistory,
+}: {
+  slot: OrchestratorState["slots"][number];
+  heartbeatHistory: HeartbeatEntry[];
+}) {
   const heartbeatAge = slot.heartbeatAt
     ? Date.now() - slot.heartbeatAt
     : Infinity;
@@ -191,6 +252,10 @@ function SlotCard({ slot }: { slot: OrchestratorState["slots"][number] }) {
         </span>
       </div>
       {slot.sessionId ? <TurnTimeline sessionId={slot.sessionId} /> : null}
+      <SlotHeartbeatHistory
+        history={heartbeatHistory}
+        slotKey={String(slot.slot)}
+      />
     </div>
   );
 }
@@ -247,6 +312,15 @@ export function OrchestratorView({
   );
   const logEndRef = useRef<HTMLDivElement>(null);
   const [repoInput, setRepoInput] = useState(repo);
+  const [logFilter, setLogFilter] = useState("");
+
+  /** Logs filtered by the current keyword / level query (case-insensitive). */
+  const filteredLogs = useMemo(() => {
+    const trimmed = logFilter.trim();
+    if (!trimmed) return state.logs;
+    const lower = trimmed.toLowerCase();
+    return state.logs.filter((line) => line.toLowerCase().includes(lower));
+  }, [state.logs, logFilter]);
 
   useEffect(() => {
     const ctrl = controllerRef.current;
@@ -440,7 +514,13 @@ export function OrchestratorView({
             }}
           >
             {state.slots.map((slot) => (
-              <SlotCard key={slot.slot} slot={slot} />
+              <SlotCard
+                key={slot.slot}
+                slot={slot}
+                heartbeatHistory={
+                  state.heartbeatHistory[String(slot.slot)] ?? []
+                }
+              />
             ))}
           </div>
         </section>
@@ -458,9 +538,46 @@ export function OrchestratorView({
           padding: "var(--sp-3)",
         }}
       >
-        <h2 className="label" style={SECTION_TITLE_STYLE}>
-          Dev loop logs
-        </h2>
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
+            marginBottom: "var(--sp-2)",
+            gap: "var(--sp-3)",
+            flexWrap: "wrap",
+          }}
+        >
+          <h2 className="label" style={{ margin: 0 }}>
+            Dev loop logs
+          </h2>
+          <input
+            data-testid="log-filter-input"
+            type="search"
+            placeholder="filter logs…"
+            value={logFilter}
+            onChange={(e) => setLogFilter(e.target.value)}
+            aria-label="Filter log lines"
+            style={{
+              padding: "var(--sp-1) var(--sp-2)",
+              background: "var(--bg-base)",
+              border: "1px solid var(--border-subtle)",
+              color: "var(--fg-1)",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              outline: "none",
+              minWidth: 160,
+            }}
+          />
+          {logFilter && (
+            <span
+              className="label"
+              style={{ color: "var(--fg-3)", fontSize: "var(--text-xs)" }}
+            >
+              {filteredLogs.length}/{state.logs.length}
+            </span>
+          )}
+        </div>
         <div
           style={{
             flex: 1,
@@ -471,7 +588,7 @@ export function OrchestratorView({
             color: "var(--accent-green)",
           }}
         >
-          {state.logs.map((line, i) => (
+          {filteredLogs.map((line, i) => (
             <div key={i} style={{ whiteSpace: "pre" }}>
               {line}
             </div>

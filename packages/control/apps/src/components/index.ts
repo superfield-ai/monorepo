@@ -34,3 +34,4 @@ export { RouteMap } from "./RouteMap";
 export { IssueRail } from "./IssueRail";
 export { DesignTokensPanel } from "./DesignTokensPanel";
 export { TurnTimeline } from "./TurnTimeline";
+export { TurnSparkline } from "./TurnSparkline";

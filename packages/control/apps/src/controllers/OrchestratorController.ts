@@ -10,6 +10,14 @@
 
 export type ProcessState = "stopped" | "starting" | "running" | "stopping";
 
+/** One entry in a slot's heartbeat history timeline. */
+export interface HeartbeatEntry {
+  /** Unix timestamp (ms) when this heartbeat was recorded. */
+  at: number;
+  /** Slot state at this heartbeat moment. */
+  state: "idle" | "running" | "done";
+}
+
 export interface LoopHealth {
   lastTickAt?: number;
   lastTickDurationMs?: number;
@@ -30,6 +38,9 @@ export interface SlotInfo {
   heartbeatAt?: number;
 }
 
+/** Maximum heartbeat history entries retained per slot. */
+const MAX_HEARTBEAT_HISTORY = 20;
+
 export interface OrchestratorState {
   processState: ProcessState;
   pid: number | null;
@@ -37,6 +48,8 @@ export interface OrchestratorState {
   uptimeMs: number;
   loops: Record<"plan" | "dev" | "doc", LoopHealth>;
   slots: SlotInfo[];
+  /** Heartbeat history per slot key (slot index as string). At most MAX_HEARTBEAT_HISTORY entries. */
+  heartbeatHistory: Record<string, HeartbeatEntry[]>;
   logs: string[];
   error: string | null;
 }
@@ -63,6 +76,7 @@ export class OrchestratorController {
       doc: { ...DEFAULT_LOOP_HEALTH },
     },
     slots: [],
+    heartbeatHistory: {},
     logs: [],
     error: null,
   };
@@ -103,6 +117,7 @@ export class OrchestratorController {
       ...this.state,
       logs: [...this.state.logs],
       slots: [...this.state.slots],
+      heartbeatHistory: { ...this.state.heartbeatHistory },
     };
   }
 
@@ -166,6 +181,9 @@ export class OrchestratorController {
       };
       const slotsBody = (await slotsRes.json()) as { slots?: SlotInfo[] };
 
+      const newSlots = slotsBody.slots ?? [];
+      const updatedHistory = this.buildHeartbeatHistory(newSlots);
+
       this.state = {
         ...this.state,
         processState: status.process ?? "stopped",
@@ -177,13 +195,61 @@ export class OrchestratorController {
           dev: loopsBody.loops?.["dev"] ?? { ...DEFAULT_LOOP_HEALTH },
           doc: loopsBody.loops?.["doc"] ?? { ...DEFAULT_LOOP_HEALTH },
         },
-        slots: slotsBody.slots ?? [],
+        slots: newSlots,
+        heartbeatHistory: updatedHistory,
         error: null,
       };
       this.notify();
     } catch {
       // Network errors are transient — don't surface as errors.
     }
+  }
+
+  /**
+   * Accumulate heartbeat history for each slot.
+   * Infers slot state: "running" if a heartbeatAt timestamp is present and
+   * recent (< 30 s), otherwise "idle". The state "done" is appended when a
+   * slot that previously had an entry is no longer present in the new list.
+   */
+  private buildHeartbeatHistory(
+    newSlots: SlotInfo[],
+  ): Record<string, HeartbeatEntry[]> {
+    const now = Date.now();
+    const prev = this.state.heartbeatHistory;
+    const updated: Record<string, HeartbeatEntry[]> = { ...prev };
+
+    // Mark missing slots as "done".
+    const newKeys = new Set(newSlots.map((s) => String(s.slot)));
+    for (const key of Object.keys(updated)) {
+      if (!newKeys.has(key)) {
+        const history = updated[key];
+        const last = history[history.length - 1];
+        if (last && last.state !== "done") {
+          updated[key] = [
+            ...history,
+            { at: now, state: "done" as const },
+          ].slice(-MAX_HEARTBEAT_HISTORY);
+        }
+      }
+    }
+
+    // Update or initialise entries for current slots.
+    for (const slot of newSlots) {
+      const key = String(slot.slot);
+      const history = updated[key] ?? [];
+      const heartbeatAge = slot.heartbeatAt ? now - slot.heartbeatAt : Infinity;
+      const state: HeartbeatEntry["state"] =
+        heartbeatAge < 30_000 ? "running" : "idle";
+      const last = history[history.length - 1];
+      // Only append when state changes or this is the first entry.
+      if (!last || last.state !== state) {
+        updated[key] = [...history, { at: now, state }].slice(
+          -MAX_HEARTBEAT_HISTORY,
+        );
+      }
+    }
+
+    return updated;
   }
 
   private startLogStream(): void {
