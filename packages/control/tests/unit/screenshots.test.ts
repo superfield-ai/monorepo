@@ -1,7 +1,8 @@
 /**
  * Unit tests for packages/control/src/screenshots.ts
  *
- * Tests the GET /studio/screenshots/:sessionId route handler.
+ * Tests the GET /studio/screenshots/:sessionId and
+ * GET /studio/screenshots/diff/:sessionId/:beforeTurn/:afterTurn route handlers.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
@@ -129,5 +130,76 @@ describe("handleScreenshotsRequest", () => {
     );
     expect(res).not.toBeNull();
     expect(res!.status).toBe(404);
+  });
+});
+
+describe("handleScreenshotsRequest — diff endpoint", () => {
+  it("returns diff metadata with both files existing", async () => {
+    seedSession("diff-sess", [1, 2]);
+    const res = handleScreenshotsRequest(
+      makeReq("/studio/screenshots/diff/diff-sess/1/2"),
+      makeUrl("/studio/screenshots/diff/diff-sess/1/2"),
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(200);
+    const body = (await res!.json()) as {
+      sessionId: string;
+      beforeTurn: number;
+      afterTurn: number;
+      beforeUrl: string;
+      afterUrl: string;
+      beforeExists: boolean;
+      afterExists: boolean;
+    };
+    expect(body.sessionId).toBe("diff-sess");
+    expect(body.beforeTurn).toBe(1);
+    expect(body.afterTurn).toBe(2);
+    expect(body.beforeExists).toBe(true);
+    expect(body.afterExists).toBe(true);
+    expect(body.beforeUrl).toContain("turn-1.png");
+    expect(body.afterUrl).toContain("turn-2.png");
+  });
+
+  it("returns beforeExists=false when before screenshot is missing", async () => {
+    seedSession("diff-partial", [2]);
+    const res = handleScreenshotsRequest(
+      makeReq("/studio/screenshots/diff/diff-partial/1/2"),
+      makeUrl("/studio/screenshots/diff/diff-partial/1/2"),
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(200);
+    const body = (await res!.json()) as {
+      beforeExists: boolean;
+      afterExists: boolean;
+    };
+    expect(body.beforeExists).toBe(false);
+    expect(body.afterExists).toBe(true);
+  });
+
+  it("returns both false when session does not exist", async () => {
+    const res = handleScreenshotsRequest(
+      makeReq("/studio/screenshots/diff/no-session/1/2"),
+      makeUrl("/studio/screenshots/diff/no-session/1/2"),
+    );
+    expect(res).not.toBeNull();
+    expect(res!.status).toBe(200);
+    const body = (await res!.json()) as {
+      beforeExists: boolean;
+      afterExists: boolean;
+    };
+    expect(body.beforeExists).toBe(false);
+    expect(body.afterExists).toBe(false);
+  });
+
+  it("returns null for non-numeric turn indices (no pattern match)", async () => {
+    // Path /studio/screenshots/diff/sess/abc/def does not match the diff route
+    // (\d+ required), does not match the single-file route (turn-N.png required),
+    // and does not match the list route (has extra segments).
+    // The handler returns null so the router can fall through.
+    const res = handleScreenshotsRequest(
+      makeReq("/studio/screenshots/diff/sess/abc/def"),
+      makeUrl("/studio/screenshots/diff/sess/abc/def"),
+    );
+    expect(res).toBeNull();
   });
 });

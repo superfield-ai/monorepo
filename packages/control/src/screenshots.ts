@@ -1,21 +1,36 @@
 /**
  * @file screenshots.ts
  *
- * Screenshot listing endpoint (issue #249).
+ * Screenshot listing and diff endpoints (issues #249, #250).
  *
  *   GET /studio/screenshots/:sessionId
+ *   GET /studio/screenshots/:sessionId/:filename
+ *   GET /studio/screenshots/diff/:sessionId/:beforeTurn/:afterTurn
  *
  * Reads the `docs/studio-sessions/<sessionId>/` directory and returns a
  * sorted list of `{ filename, path, url }` objects for each `turn-N.png`
  * file found there.
  *
- * Response shape:
+ * List response shape:
  * ```json
  * {
  *   "sessionId": "<session-id>",
  *   "screenshots": [
  *     { "filename": "turn-1.png", "turnIndex": 1, "url": "/studio/screenshots/<sessionId>/turn-1.png" }
  *   ]
+ * }
+ * ```
+ *
+ * Diff response shape (GET /studio/screenshots/diff/:sessionId/:beforeTurn/:afterTurn):
+ * ```json
+ * {
+ *   "sessionId": "<session-id>",
+ *   "beforeTurn": 1,
+ *   "afterTurn": 2,
+ *   "beforeUrl": "/studio/screenshots/<sessionId>/turn-1.png",
+ *   "afterUrl": "/studio/screenshots/<sessionId>/turn-2.png",
+ *   "beforeExists": true,
+ *   "afterExists": true
  * }
  * ```
  *
@@ -100,6 +115,43 @@ function handleServePng(sessionId: string, filename: string): Response {
   });
 }
 
+export interface ScreenshotDiff {
+  readonly sessionId: string;
+  readonly beforeTurn: number;
+  readonly afterTurn: number;
+  readonly beforeUrl: string;
+  readonly afterUrl: string;
+  readonly beforeExists: boolean;
+  readonly afterExists: boolean;
+}
+
+/** GET /studio/screenshots/diff/:sessionId/:beforeTurn/:afterTurn */
+function handleScreenshotDiff(
+  sessionId: string,
+  beforeTurn: number,
+  afterTurn: number,
+): Response {
+  const dir = sessionDir(sessionId);
+  const beforeFilename = `turn-${beforeTurn}.png`;
+  const afterFilename = `turn-${afterTurn}.png`;
+  const beforeExists = existsSync(join(dir, beforeFilename));
+  const afterExists = existsSync(join(dir, afterFilename));
+  const base = `/studio/screenshots/${encodeURIComponent(sessionId)}`;
+  const diff: ScreenshotDiff = {
+    sessionId,
+    beforeTurn,
+    afterTurn,
+    beforeUrl: `${base}/${beforeFilename}`,
+    afterUrl: `${base}/${afterFilename}`,
+    beforeExists,
+    afterExists,
+  };
+  return new Response(JSON.stringify(diff), {
+    status: 200,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
 /**
  * Top-level screenshots route handler.
  * Returns null when the request does not match /studio/screenshots/* so the
@@ -111,6 +163,18 @@ export function handleScreenshotsRequest(
 ): Response | null {
   const { pathname } = url;
   if (req.method !== "GET") return null;
+
+  // /studio/screenshots/diff/:sessionId/:beforeTurn/:afterTurn — visual diff metadata
+  const diffMatch = pathname.match(
+    /^\/studio\/screenshots\/diff\/([^/]+)\/(\d+)\/(\d+)$/,
+  );
+  if (diffMatch?.[1] && diffMatch?.[2] && diffMatch?.[3]) {
+    return handleScreenshotDiff(
+      decodeURIComponent(diffMatch[1]),
+      parseInt(diffMatch[2], 10),
+      parseInt(diffMatch[3], 10),
+    );
+  }
 
   // /studio/screenshots/:sessionId/:filename — serve a single PNG
   const fileMatch = pathname.match(/^\/studio\/screenshots\/([^/]+)\/([^/]+)$/);

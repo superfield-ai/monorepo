@@ -24,6 +24,8 @@
  *   POST /studio/reset            → clear in-memory session messages (auth required)
  *   POST /studio/chat             → send message, run agent, return reply (auth required)
  *   GET  /studio/screenshots/:sessionId → list per-turn screenshot files (issue #249)
+ *   GET  /studio/screenshots/diff/:sessionId/:beforeTurn/:afterTurn → before/after diff metadata (issue #250)
+ *   GET  /studio/screenshots/:sessionId/:filename → serve individual PNG (issue #249)
  *   GET  /app/*                   → reverse-proxy to web ClusterIP service (strip /app)
  *   GET  /api/*                   → reverse-proxy to api ClusterIP service
  *   GET  /*                       → serve browser UI static assets (CONTROL_ASSETS_DIR)
