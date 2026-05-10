@@ -8,6 +8,8 @@
  *   - Loop status bar: plan / dev / doc — last tick, circuit state
  *   - Active slots list: issue, role, backend, elapsed, heartbeat indicator
  *   - Log tail pane: last N lines, auto-scroll, SSE-streamed
+ *   - C-11.3: CI status feed — live check-run events for the target repo (SSE)
+ *   - C-11.4: One-click escalate button on failed check-run rows
  *
  * Visuals follow the Superfield Control Room design system: near-void
  * backgrounds, sharp corners, mono ALL-CAPS labels, status-coloured badges
@@ -23,6 +25,9 @@ import {
   type ProcessState,
 } from "../controllers/OrchestratorController";
 import { TurnTimeline } from "./TurnTimeline";
+import { openEventSource } from "../lib/net";
+import { fetchJson } from "../lib/net";
+import type { CheckRun } from "../lib/check-runs";
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -256,6 +261,268 @@ function SlotCard({
         history={heartbeatHistory}
         slotKey={String(slot.slot)}
       />
+    </div>
+  );
+}
+
+// ── C-11.3/11.4: CiStatusFeed ────────────────────────────────────────────────
+
+const MAX_CI_ROWS = 50;
+
+/** Shape of one event pushed by the SSE stream at /analytics/check-runs/stream. */
+interface CiStreamEvent {
+  readonly sha: string;
+  readonly checkRun: CheckRun;
+  readonly ts: number;
+}
+
+/** Unique key for a CiRow — sha + check name. */
+function ciRowKey(sha: string, name: string): string {
+  return `${sha}:${name}`;
+}
+
+interface CiRow {
+  readonly key: string;
+  readonly sha: string;
+  readonly checkRun: CheckRun;
+  readonly ts: number;
+}
+
+interface EscalateResult {
+  readonly ok: boolean;
+  readonly issueUrl?: string;
+  readonly error?: string;
+}
+
+/**
+ * CiStatusFeed — C-11.3
+ *
+ * Subscribes to `GET /analytics/check-runs/stream` via SSE and renders a live
+ * table of check-run events. Capped at MAX_CI_ROWS (50) entries; older rows
+ * are pruned automatically. Auto-scrolls to new events.
+ *
+ * C-11.4: Each failed check-run row has a one-click "ESCALATE" button that
+ * calls `POST /steer/escalate` with `{ sha, checkRunName }` to open a
+ * ci-failure issue. On success it navigates to the new GitHub issue URL.
+ *
+ * @param repo - The target repo slug (owner/name) passed down from OrchestratorView.
+ * @param ciRowsOverride - Static rows for tests / Storybook (skips SSE connection).
+ */
+export function CiStatusFeed({
+  repo,
+  ciRowsOverride,
+}: {
+  readonly repo: string;
+  readonly ciRowsOverride?: readonly CiRow[];
+}): JSX.Element {
+  const [rows, setRows] = useState<readonly CiRow[]>(ciRowsOverride ?? []);
+  const [escalating, setEscalating] = useState<string | null>(null);
+  const [escalateError, setEscalateError] = useState<string | null>(null);
+  const feedEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (ciRowsOverride !== undefined) {
+      setRows(ciRowsOverride);
+      return;
+    }
+    const handle = openEventSource({
+      url: "/analytics/check-runs/stream",
+      onMessage: (ev) => {
+        try {
+          const data = JSON.parse(ev.data as string) as CiStreamEvent;
+          setRows((prev) => {
+            const key = ciRowKey(data.sha, data.checkRun.name);
+            // Update existing row or append new one.
+            const existing = prev.findIndex((r) => r.key === key);
+            let next: readonly CiRow[];
+            if (existing >= 0) {
+              next = [
+                ...prev.slice(0, existing),
+                { key, sha: data.sha, checkRun: data.checkRun, ts: data.ts },
+                ...prev.slice(existing + 1),
+              ];
+            } else {
+              next = [
+                ...prev,
+                { key, sha: data.sha, checkRun: data.checkRun, ts: data.ts },
+              ];
+            }
+            // Prune oldest rows beyond the cap.
+            return next.length > MAX_CI_ROWS
+              ? next.slice(next.length - MAX_CI_ROWS)
+              : next;
+          });
+        } catch {
+          // Ignore malformed SSE payloads.
+        }
+      },
+    });
+    return () => handle.close();
+  }, [ciRowsOverride, repo]);
+
+  // Auto-scroll to newest row.
+  useEffect(() => {
+    feedEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [rows]);
+
+  async function handleEscalate(row: CiRow): Promise<void> {
+    const key = row.key;
+    setEscalating(key);
+    setEscalateError(null);
+    const result = await fetchJson<EscalateResult>("/steer/escalate", {
+      method: "POST",
+      body: { sha: row.sha, checkRunName: row.checkRun.name, repo },
+    });
+    setEscalating(null);
+    if (result.ok && result.value.issueUrl) {
+      window.open(result.value.issueUrl, "_blank", "noopener");
+    } else {
+      setEscalateError(
+        result.ok
+          ? (result.value.error ?? "Escalation failed")
+          : result.error.message,
+      );
+    }
+  }
+
+  if (rows.length === 0) {
+    return (
+      <div
+        data-testid="ci-status-feed-empty"
+        style={{
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-xs)",
+          color: "var(--fg-3)",
+          letterSpacing: "var(--ls-wider)",
+          textTransform: "uppercase",
+          padding: "var(--sp-2) 0",
+        }}
+      >
+        AWAITING CHECK-RUN EVENTS…
+      </div>
+    );
+  }
+
+  return (
+    <div data-testid="ci-status-feed" style={{ overflow: "auto", maxHeight: 320 }}>
+      {escalateError && (
+        <div
+          style={{
+            color: "var(--accent-red, #e06c75)",
+            fontFamily: "var(--font-mono)",
+            fontSize: "var(--text-xs)",
+            marginBottom: "var(--sp-1)",
+          }}
+        >
+          ESCALATE ERROR: {escalateError}
+        </div>
+      )}
+      <table
+        style={{
+          width: "100%",
+          borderCollapse: "collapse",
+          fontFamily: "var(--font-mono)",
+          fontSize: "var(--text-xs)",
+        }}
+      >
+        <thead>
+          <tr style={{ textAlign: "left" }}>
+            <th className="label" style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}>
+              CHECK
+            </th>
+            <th className="label" style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}>
+              SHA
+            </th>
+            <th className="label" style={{ padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0" }}>
+              STATUS
+            </th>
+            <th className="label" style={{ padding: "var(--sp-1) 0" }}>
+              ACTION
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => {
+            const failed =
+              row.checkRun.conclusion === "failure" ||
+              row.checkRun.conclusion === "timed_out";
+            const statusColor = failed
+              ? "var(--accent-red, #e06c75)"
+              : row.checkRun.status !== "completed"
+                ? "var(--accent-amber, #e5c07b)"
+                : "var(--accent-green, #39d98a)";
+            const isEscalating = escalating === row.key;
+
+            return (
+              <tr
+                key={row.key}
+                data-testid={`ci-row-${row.key}`}
+                style={{ borderTop: "1px solid var(--border-subtle)" }}
+              >
+                <td
+                  style={{
+                    padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0",
+                    color: "var(--fg-1)",
+                    maxWidth: 200,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {row.checkRun.name}
+                </td>
+                <td
+                  style={{
+                    padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0",
+                    color: "var(--fg-3)",
+                    fontFamily: "var(--font-mono)",
+                  }}
+                >
+                  {row.sha.slice(0, 7)}
+                </td>
+                <td
+                  style={{
+                    padding: "var(--sp-1) var(--sp-2) var(--sp-1) 0",
+                    color: statusColor,
+                    letterSpacing: "var(--ls-wider)",
+                    textTransform: "uppercase",
+                  }}
+                >
+                  {row.checkRun.conclusion ?? row.checkRun.status}
+                </td>
+                <td style={{ padding: "var(--sp-1) 0" }}>
+                  {/* C-11.4: One-click escalate button on failed rows */}
+                  {failed && (
+                    <button
+                      type="button"
+                      data-testid={`escalate-btn-${row.key}`}
+                      disabled={isEscalating}
+                      onClick={() => void handleEscalate(row)}
+                      style={{
+                        fontFamily: "var(--font-mono)",
+                        fontSize: "var(--text-xs)",
+                        letterSpacing: "var(--ls-wider)",
+                        textTransform: "uppercase",
+                        padding: "1px var(--sp-2)",
+                        background: "transparent",
+                        color: isEscalating
+                          ? "var(--fg-3)"
+                          : "var(--accent-red, #e06c75)",
+                        border: `1px solid ${isEscalating ? "var(--fg-3)" : "var(--accent-red, #e06c75)"}`,
+                        cursor: isEscalating ? "wait" : "pointer",
+                        opacity: isEscalating ? 0.6 : 1,
+                      }}
+                    >
+                      {isEscalating ? "ESCALATING…" : "ESCALATE"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div ref={feedEndRef} />
     </div>
   );
 }
@@ -525,6 +792,14 @@ export function OrchestratorView({
           </div>
         </section>
       )}
+
+      {/* C-11.3: CI status feed — live check-run events */}
+      <section style={SECTION_STYLE} data-testid="ci-status-feed-section">
+        <h2 className="label" style={SECTION_TITLE_STYLE}>
+          CI STATUS
+        </h2>
+        <CiStatusFeed repo={repoInput} />
+      </section>
 
       {/* Log tail */}
       <section

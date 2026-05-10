@@ -12,16 +12,22 @@
  * (currently the file/service lists from the seed JSONL), and a before/after
  * visual diff (issue #250).
  *
+ * C-11.1: Each turn row shows a CheckRunBadge sourced from
+ *   GET /analytics/check-runs?sha=<commitSha>
+ * Clicking the badge expands the inline test-output pane (C-11.2).
+ *
  * Canonical docs: docs/studio-e2e-infrastructure.md — "Per-turn screenshot capture"
  */
 
 import React, { useEffect, useState } from "react";
 import { fetchJson } from "../lib/net";
 import type { AppError } from "../lib/errors";
+import type { CheckRun, CheckRunStatus, CheckRunsResponse } from "../lib/check-runs";
+import { aggregateCheckRunStatus } from "../lib/check-runs";
 import { EmptyState } from "./EmptyState";
 import { InlineError } from "./InlineError";
 import { TurnSparkline } from "./TurnSparkline";
-import { VisualDiffPanel } from "./VisualDiffPanel";
+import { VisualDiffPanel, TestOutputPane } from "./VisualDiffPanel";
 
 export interface TurnSummary {
   readonly ts: string;
@@ -39,6 +45,126 @@ export interface TurnSummary {
    * When absent (e.g. older turn data) the diff panel is not shown.
    */
   readonly turnIndex?: number;
+  /**
+   * Commit SHA associated with this turn's output (C-11.1).
+   * When present, enables fetching check-run results for the per-turn badge.
+   */
+  readonly commitSha?: string;
+  /**
+   * Pull-request number associated with this turn (C-11.1).
+   * Carried alongside commitSha for future drill-down links.
+   */
+  readonly prNumber?: number;
+}
+
+// ── C-11.1: CheckRunBadge ─────────────────────────────────────────────────────
+
+// Re-export shared check-run types for consumers (e.g. tests/Storybook).
+export type { CheckRun, CheckRunStatus };
+
+const CHECK_RUN_BADGE_COLORS: Record<CheckRunStatus, string> = {
+  pass: "var(--accent-green, #39d98a)",
+  fail: "var(--accent-red, #e06c75)",
+  running: "var(--accent-amber, #e5c07b)",
+  unknown: "var(--fg-3)",
+};
+
+/**
+ * CheckRunBadge — fetches check-run results for a given commit SHA and renders
+ * a compact pass/fail/running/unknown indicator on each TurnTimeline row.
+ * Clicking the badge toggles the inline TestOutputPane (C-11.2).
+ *
+ * @param commitSha - The commit SHA to look up check-run results for.
+ * @param onTogglePane - Called when the badge is clicked to toggle the test output pane.
+ * @param paneOpen - Whether the test output pane is currently expanded.
+ * @param checkRunsOverride - Override for tests / Storybook (skips fetch).
+ */
+export function CheckRunBadge({
+  commitSha,
+  onTogglePane,
+  paneOpen,
+  checkRunsOverride,
+}: {
+  readonly commitSha: string;
+  readonly onTogglePane: () => void;
+  readonly paneOpen: boolean;
+  readonly checkRunsOverride?: readonly CheckRun[];
+}): JSX.Element {
+  const [runs, setRuns] = useState<readonly CheckRun[]>(
+    checkRunsOverride ?? [],
+  );
+  const [loading, setLoading] = useState(checkRunsOverride === undefined);
+
+  useEffect(() => {
+    if (checkRunsOverride !== undefined) {
+      setRuns(checkRunsOverride);
+      setLoading(false);
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    void (async () => {
+      const result = await fetchJson<CheckRunsResponse>(
+        `/analytics/check-runs?sha=${encodeURIComponent(commitSha)}`,
+      );
+      if (cancelled) return;
+      setLoading(false);
+      if (result.ok) {
+        setRuns(result.value.checkRuns);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [commitSha, checkRunsOverride]);
+
+  const status: CheckRunStatus = loading
+    ? "running"
+    : aggregateCheckRunStatus(runs);
+  const color = CHECK_RUN_BADGE_COLORS[status];
+  const label = loading ? "…" : status.toUpperCase();
+
+  return (
+    <button
+      type="button"
+      data-testid={`check-run-badge-${commitSha}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onTogglePane();
+      }}
+      title={`CI: ${status}${paneOpen ? " — click to collapse" : " — click to expand"}`}
+      style={{
+        display: "inline-flex",
+        alignItems: "center",
+        gap: 4,
+        padding: "1px var(--sp-1)",
+        border: `1px solid ${color}`,
+        background: "transparent",
+        color,
+        fontFamily: "var(--font-mono)",
+        fontSize: "var(--text-xs)",
+        letterSpacing: "var(--ls-wider)",
+        textTransform: "uppercase",
+        cursor: "pointer",
+        flexShrink: 0,
+      }}
+    >
+      <span
+        style={{
+          width: 6,
+          height: 6,
+          borderRadius: "50%",
+          background: color,
+          flexShrink: 0,
+          display: "inline-block",
+        }}
+      />
+      {label}
+      {runs.length > 0 && (
+        <span style={{ opacity: 0.7 }}>({runs.length})</span>
+      )}
+    </button>
+  );
 }
 
 interface TurnsResponse {
@@ -62,6 +188,8 @@ export function TurnTimeline({
   const [error, setError] = useState<AppError | null>(null);
   const [loading, setLoading] = useState(turnsOverride === undefined);
   const [active, setActive] = useState<TurnSummary | null>(null);
+  /** Track which turn rows have the test-output pane expanded (by turn index). */
+  const [expandedPane, setExpandedPane] = useState<number | null>(null);
 
   useEffect(() => {
     if (turnsOverride !== undefined) {
@@ -161,7 +289,19 @@ export function TurnTimeline({
                 }}
               >
                 <span>{formatTs(turn.ts)}</span>
-                <span>{formatDuration(turn.durationMs)}</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-2)" }}>
+                  {/* C-11.1: per-turn check-run badge */}
+                  {turn.commitSha && (
+                    <CheckRunBadge
+                      commitSha={turn.commitSha}
+                      paneOpen={expandedPane === idx}
+                      onTogglePane={() =>
+                        setExpandedPane((prev) => (prev === idx ? null : idx))
+                      }
+                    />
+                  )}
+                  <span>{formatDuration(turn.durationMs)}</span>
+                </div>
               </div>
               <div
                 style={{
@@ -175,6 +315,13 @@ export function TurnTimeline({
                 {turn.prompt || "(no prompt)"}
               </div>
             </button>
+            {/* C-11.2: inline test-output pane, expanded when badge is clicked */}
+            {turn.commitSha && expandedPane === idx && (
+              <TestOutputPane
+                commitSha={turn.commitSha}
+                defaultExpanded={true}
+              />
+            )}
           </li>
         ))}
       </ol>
