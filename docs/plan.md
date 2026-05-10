@@ -238,26 +238,26 @@ Scoped for the 2026-04-28 client demo. Source spec: `architecture.md § Control 
 
 Tracked in PLAN (#199). Consolidate three divergent chat implementations into shared primitives. This is the core interaction model for feature planning — MVP-critical.
 
-| Step | Issue | Work | Status | MVP |
-|---|---|---|---|---|
-| C-10.1 | #267 | `<ChatMessageList>` — message rows, streaming cursor, auto-scroll, empty-state slot | ✅ | ✓ |
-| C-10.2 | #268 | `<ChatComposer>` — textarea, Enter-submit, Shift+Enter passthrough, disabled state | ✅ | ✓ |
-| C-10.3 | #269 | `<ChatPanelHeader>` — mono label + right-side actions slot | ✅ | ✓ |
-| C-10.4 | #270 | `<WsChat>` — composed panel wiring `WsChatController` onto the three primitives | ✅ | ✓ |
-| C-10.5 | #271 | Migrate `ProductChatPanel` (inline in `ProductTab.tsx`) to use `<WsChat>` | ✅ | ✓ |
-| C-10.6 | #272 | Delete `ControlChat.tsx` and `ChatPanel.tsx` (dead SSE/WS-era components) | ✅ | ✓ |
-| C-10.7 | #273 | Component test suite `ws-chat.test.tsx` (8 scenarios) | ✅ | post-MVP |
+| Step   | Issue | Work                                                                                | Status | MVP      |
+| ------ | ----- | ----------------------------------------------------------------------------------- | ------ | -------- |
+| C-10.1 | #267  | `<ChatMessageList>` — message rows, streaming cursor, auto-scroll, empty-state slot | ✅     | ✓        |
+| C-10.2 | #268  | `<ChatComposer>` — textarea, Enter-submit, Shift+Enter passthrough, disabled state  | ✅     | ✓        |
+| C-10.3 | #269  | `<ChatPanelHeader>` — mono label + right-side actions slot                          | ✅     | ✓        |
+| C-10.4 | #270  | `<WsChat>` — composed panel wiring `WsChatController` onto the three primitives     | ✅     | ✓        |
+| C-10.5 | #271  | Migrate `ProductChatPanel` (inline in `ProductTab.tsx`) to use `<WsChat>`           | ✅     | ✓        |
+| C-10.6 | #272  | Delete `ControlChat.tsx` and `ChatPanel.tsx` (dead SSE/WS-era components)           | ✅     | ✓        |
+| C-10.7 | #273  | Component test suite `ws-chat.test.tsx` (8 scenarios)                               | ✅     | post-MVP |
 
 ### Phase C-11 — App-development UI feedback ⬜
 
 Tracked in #293. Surface live build/test/CI feedback for the target app inside the Control webapp. Today a developer must check the orchestrator view or raw logs to know whether a turn's output builds, passes tests, or breaks CI. C-11 makes that feedback first-class in the UI.
 
-| Step | Issue | Work | Status |
-|---|---|---|---|
-| C-11.1 | #293 | Per-turn build/test result badge on `TurnTimeline` rows | ⬜ |
-| C-11.2 | #293 | Inline test-output pane (expandable) alongside the diff view | ⬜ |
-| C-11.3 | #293 | CI status feed on the Orchestrator view (live check-run events via SSE) | ⬜ |
-| C-11.4 | #293 | Failure triage shortcut — one-click "open ci-failure issue" from a failed check | ⬜ |
+| Step   | Issue | Work                                                                            | Status |
+| ------ | ----- | ------------------------------------------------------------------------------- | ------ |
+| C-11.1 | #293  | Per-turn build/test result badge on `TurnTimeline` rows                         | ⬜     |
+| C-11.2 | #293  | Inline test-output pane (expandable) alongside the diff view                    | ⬜     |
+| C-11.3 | #293  | CI status feed on the Orchestrator view (live check-run events via SSE)         | ⬜     |
+| C-11.4 | #293  | Failure triage shortcut — one-click "open ci-failure issue" from a failed check | ⬜     |
 
 ---
 

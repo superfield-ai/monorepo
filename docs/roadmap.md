@@ -50,17 +50,17 @@ Three Phase 1 delivery tracks plus Phase 2 R&D. Track A is the GitOps orchestrat
 
 ## Track C — Control Webapp
 
-| Phase | Scope                                                                                                                | Status                       |
-| ----- | -------------------------------------------------------------------------------------------------------------------- | ---------------------------- |
-| C-1   | Move studio source into `cli/packages/control/`; tests pass with DI                                                  | ✅ Done (cli-migration)      |
-| C-2   | `superfield control` subcommand — `--port`, `--repo`, `--api-url`; `startControl(opts?)` exported                    | ✅ Done (cli-migration)      |
-| C-3   | `POST /studio/run` SSE on superfield API; `runAgent`/`streamTurn` switched to `fetch`                                | ✅ Done (cli-migration)      |
-| C-4   | WebSocket handler (`/studio/ws`) + REST steer fallback (`/studio/steer`)                                             | ✅ Done (cli-migration)      |
-| C-5   | Orchestrator: `dev-loop-process.ts`, `/orchestrator/*` endpoints, `OrchestratorView.tsx`, ControlPanel tab           | ✅ Done (cli-migration)      |
-| C-6   | Studio preview (`/studio/preview`) + kitchen-sink split (template + control)                                         | ✅ Done (cli-migration)      |
-| C-7   | CI workflow `ci-control.yml` (build + unit + in-process integration)                                                 | ✅ Done (cli-migration)      |
-| C-8   | Retire standalone `control/` repo (deprecation banner, workflows disabled)                                           | ✅ Done                      |
-| C-9   | Demo-readiness extensions: route map, design tokens, viewport, deploy view, turn timeline, blueprint feed, seed-demo | ✅ Done                      |
+| Phase | Scope                                                                                                                | Status                  |
+| ----- | -------------------------------------------------------------------------------------------------------------------- | ----------------------- |
+| C-1   | Move studio source into `cli/packages/control/`; tests pass with DI                                                  | ✅ Done (cli-migration) |
+| C-2   | `superfield control` subcommand — `--port`, `--repo`, `--api-url`; `startControl(opts?)` exported                    | ✅ Done (cli-migration) |
+| C-3   | `POST /studio/run` SSE on superfield API; `runAgent`/`streamTurn` switched to `fetch`                                | ✅ Done (cli-migration) |
+| C-4   | WebSocket handler (`/studio/ws`) + REST steer fallback (`/studio/steer`)                                             | ✅ Done (cli-migration) |
+| C-5   | Orchestrator: `dev-loop-process.ts`, `/orchestrator/*` endpoints, `OrchestratorView.tsx`, ControlPanel tab           | ✅ Done (cli-migration) |
+| C-6   | Studio preview (`/studio/preview`) + kitchen-sink split (template + control)                                         | ✅ Done (cli-migration) |
+| C-7   | CI workflow `ci-control.yml` (build + unit + in-process integration)                                                 | ✅ Done (cli-migration) |
+| C-8   | Retire standalone `control/` repo (deprecation banner, workflows disabled)                                           | ✅ Done                 |
+| C-9   | Demo-readiness extensions: route map, design tokens, viewport, deploy view, turn timeline, blueprint feed, seed-demo | ✅ Done                 |
 
 PR #204 (`cli-migration`) merged 2026-04-26.
 
@@ -83,8 +83,8 @@ Phase 2 replaces Git/GitHub as the delivery plane with infrastructure designed f
 
 All D-track features require `--experimental` flag or `experimental: true` in `~/.superfield/config.yaml`.
 
-| Phase | Scope                                                                                                            | Status          |
-| ----- | ---------------------------------------------------------------------------------------------------------------- | --------------- |
-| D-1   | Sharp — agent-native VCS: branching-free change tracking, intent log, diff stream, Git-compatible export         | ⬜ R&D          |
-| D-2   | Nexum — self-improving synthetic corpus: post-turn curriculum refinement, replaces static `blueprint/` subtree   | ⬜ R&D          |
-| D-3   | FastEnv — ultrafast container forking: `packages/firecracker/`, `superfield ci` command, fastenv binary shim     | 🟡 In progress  |
+| Phase | Scope                                                                                                          | Status         |
+| ----- | -------------------------------------------------------------------------------------------------------------- | -------------- |
+| D-1   | Sharp — agent-native VCS: branching-free change tracking, intent log, diff stream, Git-compatible export       | ⬜ R&D         |
+| D-2   | Nexum — self-improving synthetic corpus: post-turn curriculum refinement, replaces static `blueprint/` subtree | ⬜ R&D         |
+| D-3   | FastEnv — ultrafast container forking: `packages/firecracker/`, `superfield ci` command, fastenv binary shim   | 🟡 In progress |
