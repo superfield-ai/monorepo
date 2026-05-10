@@ -119,6 +119,8 @@ export interface TurnCompletionContext {
  * @param _ctx  Turn-completion context (unused by the stub).
  */
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
-export async function onTurnComplete(_ctx: TurnCompletionContext): Promise<void> {
+export async function onTurnComplete(
+  _ctx: TurnCompletionContext,
+): Promise<void> {
   // no-op — real implementation belongs in issue #249
 }
