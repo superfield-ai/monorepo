@@ -8,8 +8,11 @@
  *
  * Fetches /studio/turns/:sessionId. Each turn renders as a compact row with
  * timestamp, duration, and a one-line excerpt of the prompt. Click a row →
- * opens a modal with the full prompt body, response, and a tool-call summary
- * (currently the file/service lists from the seed JSONL).
+ * opens a modal with the full prompt body, response, a tool-call summary
+ * (currently the file/service lists from the seed JSONL), and a before/after
+ * visual diff (issue #250).
+ *
+ * Canonical docs: docs/studio-e2e-infrastructure.md — "Per-turn screenshot capture"
  */
 
 import React, { useEffect, useState } from "react";
@@ -18,6 +21,7 @@ import type { AppError } from "../lib/errors";
 import { EmptyState } from "./EmptyState";
 import { InlineError } from "./InlineError";
 import { TurnSparkline } from "./TurnSparkline";
+import { VisualDiffPanel } from "./VisualDiffPanel";
 
 export interface TurnSummary {
   readonly ts: string;
@@ -29,6 +33,12 @@ export interface TurnSummary {
   readonly response: string;
   readonly filesChanged?: readonly string[];
   readonly servicesRestarted?: readonly string[];
+  /**
+   * 1-based index of this turn within the session.
+   * Used to derive before/after screenshot indices for the visual diff panel.
+   * When absent (e.g. older turn data) the diff panel is not shown.
+   */
+  readonly turnIndex?: number;
 }
 
 interface TurnsResponse {
@@ -169,7 +179,11 @@ export function TurnTimeline({
         ))}
       </ol>
       {active ? (
-        <TurnModal turn={active} onClose={() => setActive(null)} />
+        <TurnModal
+          turn={active}
+          sessionId={sessionId}
+          onClose={() => setActive(null)}
+        />
       ) : null}
       {turns.length > 0 && (
         <div
@@ -208,9 +222,11 @@ function formatDuration(ms: number): string {
 
 function TurnModal({
   turn,
+  sessionId,
   onClose,
 }: {
   readonly turn: TurnSummary;
+  readonly sessionId: string;
   readonly onClose: () => void;
 }): JSX.Element {
   return (
@@ -303,6 +319,28 @@ function TurnModal({
 
         <Section title="PROMPT" body={turn.prompt} />
         <Section title="RESPONSE" body={turn.response} />
+
+        {turn.turnIndex !== undefined ? (
+          <div style={{ marginTop: "var(--sp-3)" }}>
+            <div
+              style={{
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-xs)",
+                letterSpacing: "var(--ls-wider)",
+                textTransform: "uppercase",
+                color: "var(--fg-3)",
+                marginBottom: "var(--sp-1)",
+              }}
+            >
+              VISUAL DIFF
+            </div>
+            <VisualDiffPanel
+              sessionId={sessionId}
+              beforeTurn={turn.turnIndex - 1}
+              afterTurn={turn.turnIndex}
+            />
+          </div>
+        ) : null}
 
         {(turn.filesChanged?.length ?? 0) > 0 ||
         (turn.servicesRestarted?.length ?? 0) > 0 ? (

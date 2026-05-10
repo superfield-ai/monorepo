@@ -35,3 +35,5 @@ export { IssueRail } from "./IssueRail";
 export { DesignTokensPanel } from "./DesignTokensPanel";
 export { TurnTimeline } from "./TurnTimeline";
 export { TurnSparkline } from "./TurnSparkline";
+export { VisualDiffPanel } from "./VisualDiffPanel";
+export type { VisualDiffData } from "./VisualDiffPanel";
