@@ -17,6 +17,7 @@ import { fetchJson } from "../lib/net";
 import type { AppError } from "../lib/errors";
 import { EmptyState } from "./EmptyState";
 import { InlineError } from "./InlineError";
+import { TurnSparkline } from "./TurnSparkline";
 
 export interface TurnSummary {
   readonly ts: string;
@@ -170,6 +171,24 @@ export function TurnTimeline({
       {active ? (
         <TurnModal turn={active} onClose={() => setActive(null)} />
       ) : null}
+      {turns.length > 0 && (
+        <div
+          style={{
+            marginTop: "var(--sp-2)",
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-2)",
+          }}
+        >
+          <span
+            className="label"
+            style={{ fontSize: "var(--text-xs)", color: "var(--fg-3)" }}
+          >
+            COST / TURN
+          </span>
+          <TurnSparkline turns={turns} width={120} height={28} />
+        </div>
+      )}
     </div>
   );
 }
