@@ -8,13 +8,13 @@
 
 ## Toolchain Availability Matrix
 
-| Component | Dev (self-hosted) | CI (self-hosted runner) | Notes |
-|---|---|---|---|
-| containerd | ✅ v2.2.1 (`containerd.io`) | ✅ same runner | `dea7da59` |
-| overlayfs snapshotter | ✅ active (default) | ✅ same runner | Docker also reports `overlayfs` driver type `io.containerd.snapshotter.v1` |
-| `/dev/kvm` | ✅ present | ✅ same runner | Self-hosted runner on bare metal / KVM-capable host |
-| virtiofsd | ⚠️ via snap/lxd only | ⚠️ via snap/lxd only | `v1.11.1` at `/snap/lxd/38800/bin/virtiofsd` — not on `$PATH` |
-| Firecracker binary | ⚠️ not pre-installed | ⚠️ not pre-installed | v1.12.0 available via GitHub Releases; must be downloaded at runtime |
+| Component             | Dev (self-hosted)           | CI (self-hosted runner) | Notes                                                                      |
+| --------------------- | --------------------------- | ----------------------- | -------------------------------------------------------------------------- |
+| containerd            | ✅ v2.2.1 (`containerd.io`) | ✅ same runner          | `dea7da59`                                                                 |
+| overlayfs snapshotter | ✅ active (default)         | ✅ same runner          | Docker also reports `overlayfs` driver type `io.containerd.snapshotter.v1` |
+| `/dev/kvm`            | ✅ present                  | ✅ same runner          | Self-hosted runner on bare metal / KVM-capable host                        |
+| virtiofsd             | ⚠️ via snap/lxd only        | ⚠️ via snap/lxd only    | `v1.11.1` at `/snap/lxd/38800/bin/virtiofsd` — not on `$PATH`              |
+| Firecracker binary    | ⚠️ not pre-installed        | ⚠️ not pre-installed    | v1.12.0 available via GitHub Releases; must be downloaded at runtime       |
 
 ### Containerd overlay snapshotter confirmation
 
@@ -26,6 +26,7 @@ Kernel: 5.15.0-173-generic (supports overlay in user namespaces)
 ```
 
 Default snapshotter is `overlayfs` per `containerd config dump`:
+
 ```toml
 snapshotter = 'overlayfs'
 ```
@@ -33,6 +34,7 @@ snapshotter = 'overlayfs'
 ### Firecracker verification
 
 Downloaded `firecracker-v1.12.0-x86_64.tgz` from GitHub Releases, verified:
+
 ```
 Firecracker v1.12.0
 2026-05-10T01:15:28 [main] Firecracker exiting successfully. exit_code=0
@@ -61,12 +63,12 @@ Recommended: option 5 — bundle `virtiofsd` static binary in CI setup the same 
 Measured via `docker create` / `docker rm` cycle on `alpine:3.20` (n=10 runs).
 `docker create` triggers the containerd overlayfs snapshot fork path directly.
 
-| Metric | Value |
-|---|---|
-| p50 | 196 ms |
-| p95 | 208 ms |
-| min | 179 ms |
-| max | 221 ms |
+| Metric | Value  |
+| ------ | ------ |
+| p50    | 196 ms |
+| p95    | 208 ms |
+| min    | 179 ms |
+| max    | 221 ms |
 
 Raw timings (ms): 221, 197, 196, 208, 204, 180, 199, 188, 179, 191
 
@@ -83,12 +85,14 @@ within budget.
 ### For #261 (OCI snapshot forking)
 
 **Integration points:**
+
 - containerd Go client: `github.com/containerd/containerd` (use `v2.x` matching server `v2.2.1`)
 - Snapshotter API: `client.SnapshotService("overlayfs")`
 - Methods: `Prepare(ctx, key, parent, ...Opt)`, `Stat(ctx, key)`, `Remove(ctx, key)`
 - containerd socket: `/run/containerd/containerd.sock` (group `root:root 0660` — requires root or group membership in CI)
 
 **Risks:**
+
 - Socket permission: the containerd socket requires `root` or membership in the `containerd` group. CI jobs run as `runner` user. Need `usermod -aG containerd runner` or `sudo` wrapper.
 - overlayfs in user namespaces: kernel 5.15 supports this but requires `CONFIG_USER_NS=y` and `CONFIG_OVERLAY_FS=y` — both confirmed present on this kernel.
 - `v2` API break: containerd `v2.2.1` server requires the `v2` Go client import path (`github.com/containerd/containerd/v2`). Do not use the `v1` client.
@@ -96,12 +100,14 @@ within budget.
 ### For #254 (Firecracker local CI runner)
 
 **Integration points:**
+
 - Firecracker API: Unix socket at a path chosen at runtime (e.g. `/tmp/firecracker-<id>.sock`), HTTP-over-Unix API
 - Firecracker binary: must be downloaded and placed on `$PATH` or referenced by absolute path. No system package available.
 - `virtiofsd`: required for shared filesystem between host and VM. Must be provisioned separately (see mitigation options above).
 - `/dev/kvm`: confirmed available. Group ownership is `kvm` — CI runner needs `usermod -aG kvm runner`.
 
 **Risks:**
+
 - virtiofsd is a hard dependency for host-VM filesystem sharing. If not resolved before #254 starts, the feature cannot be tested end-to-end. **Flag: resolve virtiofsd provisioning strategy before #254 begins.**
 - Firecracker static binary download in CI adds ~7 MB to setup time. Cache in a CI artifact or pre-bake into the runner image.
 - Firecracker requires a rootfs image. Creating a minimal rootfs for CI is out of scope for #254 alone — needs a separate setup step or a pre-baked image stored in a registry.
