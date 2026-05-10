@@ -324,9 +324,8 @@ test("controller.subscribe receives connState updates when setState is called", 
   setState({ connState: "open" });
 
   // The last state delivered to listeners reflects the new connState.
-  const lastListenerArg = (
-    controller.subscribe as ReturnType<typeof vi.fn>
-  ).mock.calls[0][0] as (state: WsChatControllerState) => void;
+  const lastListenerArg = (controller.subscribe as ReturnType<typeof vi.fn>)
+    .mock.calls[0][0] as (state: WsChatControllerState) => void;
   expect(lastListenerArg).toBeInstanceOf(Function);
 });
 
