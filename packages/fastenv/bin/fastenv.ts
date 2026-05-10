@@ -102,8 +102,8 @@ async function main(args: string[]): Promise<void> {
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--base") base = rest[++i];
         else if (rest[i] === "--name") name = rest[++i];
-        else if (rest[i]?.startsWith("--base=")) base = rest[i]!.slice(7);
-        else if (rest[i]?.startsWith("--name=")) name = rest[i]!.slice(7);
+        else if (rest[i]?.startsWith("--base=")) base = (rest[i] as string).slice(7);
+        else if (rest[i]?.startsWith("--name=")) name = (rest[i] as string).slice(7);
       }
       if (!base) die("fork requires --base <image>");
       if (!name) die("fork requires --name <fork-id>");
@@ -179,9 +179,9 @@ async function main(args: string[]): Promise<void> {
       let ttlMs = 3_600_000; // 1 hour default
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--ttl" && rest[i + 1])
-          ttlMs = parseInt(rest[++i]!, 10);
+          ttlMs = parseInt(rest[++i] ?? "0", 10);
         else if (rest[i]?.startsWith("--ttl="))
-          ttlMs = parseInt(rest[i]!.slice(6), 10);
+          ttlMs = parseInt((rest[i] as string).slice(6), 10);
       }
       console.log(`[fastenv] running GC (TTL: ${ttlMs}ms)`);
       const discarded = await gcForks(ttlMs);
@@ -198,14 +198,14 @@ async function main(args: string[]): Promise<void> {
       let concurrency: number | undefined;
       for (let i = 0; i < rest.length; i++) {
         if (rest[i] === "--image") image = rest[++i];
-        else if (rest[i]?.startsWith("--image=")) image = rest[i]!.slice(8);
+        else if (rest[i]?.startsWith("--image=")) image = (rest[i] as string).slice(8);
         else if (rest[i] === "--forks") forks = parseInt(rest[++i] ?? "20", 10);
         else if (rest[i]?.startsWith("--forks="))
-          forks = parseInt(rest[i]!.slice(8), 10);
+          forks = parseInt((rest[i] as string).slice(8), 10);
         else if (rest[i] === "--concurrency")
           concurrency = parseInt(rest[++i] ?? "10", 10);
         else if (rest[i]?.startsWith("--concurrency="))
-          concurrency = parseInt(rest[i]!.slice(14), 10);
+          concurrency = parseInt((rest[i] as string).slice(14), 10);
       }
       if (!image) die("benchmark requires --image <image>");
       console.log("[fastenv] starting benchmark suite");

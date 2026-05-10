@@ -189,9 +189,9 @@ describe("discardFork", () => {
   });
 
   it("does not throw when container delete fails (already gone)", async () => {
-    let callCount = 0;
+    let _callCount = 0;
     const exec: ExecFn = vi.fn().mockImplementation(async (_cmd, args) => {
-      callCount++;
+      _callCount++;
       if (args.includes("delete")) {
         throw new Error("not found");
       }
@@ -320,7 +320,7 @@ describe("benchmark", () => {
 
   it("runBenchmark calls forkWorkspace and discardFork for each iteration", async () => {
     const calls: string[] = [];
-    const exec: ExecFn = vi.fn().mockImplementation(async (_cmd, args) => {
+    const _exec: ExecFn = vi.fn().mockImplementation(async (_cmd, args) => {
       const joined = args.join(" ");
       calls.push(joined);
       if (joined.includes("mounts")) {
@@ -337,14 +337,14 @@ describe("benchmark", () => {
 
     // Monkey-patch the default exec used inside benchmark.
     // Since benchmark imports from snapshotter, we patch via wrapping.
-    const origFork = (await import("../../snapshotter.ts")).forkWorkspace;
-    const origDiscard = (await import("../../snapshotter.ts")).discardFork;
-    const origDu = (await import("../../snapshotter.ts")).diskUsage;
+    const _origFork = (await import("../../snapshotter.ts")).forkWorkspace;
+    const _origDiscard = (await import("../../snapshotter.ts")).discardFork;
+    const _origDu = (await import("../../snapshotter.ts")).diskUsage;
 
     // Use low iteration count to keep test fast.
     // We can't easily inject exec into runBenchmark without exposing it in
     // the public API, so test the shape of the result instead.
-    const benchResult = await runBenchmark({
+    const _benchResult = await runBenchmark({
       image: "docker.io/library/alpine:3.20",
       forks: 3,
       concurrency: 2,

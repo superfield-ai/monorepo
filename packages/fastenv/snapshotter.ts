@@ -11,7 +11,7 @@
  * All fork operations must complete in ≤100ms p95 on the overlayfs snapshotter.
  */
 
-import { execFile } from "node:child_process";
+import { execFile, spawn } from "node:child_process";
 import { promisify } from "node:util";
 
 const execFileAsync = promisify(execFile);
@@ -137,7 +137,6 @@ export async function execInFork(
 ): Promise<{ exitCode: number; stdout: string; stderr: string }> {
   // ctr run --rm runs a process inside the container snapshot.
   return new Promise((resolve) => {
-    const { spawn } = require("node:child_process");
     const proc = spawn(
       "ctr",
       [
