@@ -25,6 +25,44 @@ describe("parseCiArgs — run subcommand", () => {
     expect(result.opts.vmExecutor).toBe(true);
   });
 
+  it("parses --workspace-image flag", () => {
+    const result = parseCiArgs([
+      "run",
+      "test-e2e.yml",
+      "--vm",
+      "--workspace-image",
+      "docker.io/myorg/workspace:latest",
+    ]);
+    expect(result.subcommand).toBe("run");
+    if (result.subcommand !== "run") return;
+    expect(result.opts.workspaceImage).toBe("docker.io/myorg/workspace:latest");
+  });
+
+  it("parses --workspace-image=value form", () => {
+    const result = parseCiArgs([
+      "run",
+      "test-e2e.yml",
+      "--vm",
+      "--workspace-image=docker.io/myorg/workspace:sha256",
+    ]);
+    expect(result.subcommand).toBe("run");
+    if (result.subcommand !== "run") return;
+    expect(result.opts.workspaceImage).toBe("docker.io/myorg/workspace:sha256");
+  });
+
+  it("parses --fastenv binary path", () => {
+    const result = parseCiArgs([
+      "run",
+      "test-e2e.yml",
+      "--vm",
+      "--fastenv",
+      "/usr/local/bin/fastenv",
+    ]);
+    expect(result.subcommand).toBe("run");
+    if (result.subcommand !== "run") return;
+    expect(result.opts.fastenvBinary).toBe("/usr/local/bin/fastenv");
+  });
+
   it("returns help when workflow is missing", () => {
     const result = parseCiArgs(["run"]);
     expect(result.subcommand).toBe("help");
@@ -105,7 +143,7 @@ describe("parseCiArgs — snapshot restore subcommand", () => {
     expect(result.opts.workspaceDir).toBeUndefined();
   });
 
-  it("parses optional --workspace flag", () => {
+  it("parses optional --workspace flag (raw dir, debug only)", () => {
     const result = parseCiArgs([
       "snapshot",
       "restore",
@@ -116,6 +154,20 @@ describe("parseCiArgs — snapshot restore subcommand", () => {
     expect(result.subcommand).toBe("snapshot-restore");
     if (result.subcommand !== "snapshot-restore") return;
     expect(result.opts.workspaceDir).toBe("/home/user/project");
+  });
+
+  it("parses --workspace-image flag (fastenv COW fork)", () => {
+    const result = parseCiArgs([
+      "snapshot",
+      "restore",
+      "/tmp/snapshots/abc123",
+      "--workspace-image",
+      "docker.io/myorg/workspace:latest",
+    ]);
+    expect(result.subcommand).toBe("snapshot-restore");
+    if (result.subcommand !== "snapshot-restore") return;
+    expect(result.opts.workspaceImage).toBe("docker.io/myorg/workspace:latest");
+    expect(result.opts.workspaceDir).toBeUndefined();
   });
 
   it("returns help when snapshot dir is missing", () => {

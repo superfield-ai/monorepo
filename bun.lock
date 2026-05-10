@@ -100,15 +100,6 @@
         "typescript": "^5.0.0",
       },
     },
-    "packages/fastenv": {
-      "name": "@superfield/fastenv",
-      "bin": {
-        "fastenv": "bin/fastenv.ts",
-      },
-      "devDependencies": {
-        "@types/node": "^20.0.0",
-      },
-    },
     "packages/firecracker": {
       "name": "@superfield/firecracker",
       "devDependencies": {
@@ -382,8 +373,6 @@
     "@superfield/core": ["@superfield/core@workspace:packages/core"],
 
     "@superfield/db": ["@superfield/db@workspace:packages/db"],
-
-    "@superfield/fastenv": ["@superfield/fastenv@workspace:packages/fastenv"],
 
     "@superfield/firecracker": ["@superfield/firecracker@workspace:packages/firecracker"],
 
