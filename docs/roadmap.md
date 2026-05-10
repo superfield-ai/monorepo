@@ -1,6 +1,6 @@
 # Superfield — Roadmap
 
-Two parallel delivery tracks. Track A is the orchestrator; Track B is the ops/deploy CLI. Both share the same monorepo and CLI binary.
+Three Phase 1 delivery tracks plus Phase 2 R&D. Track A is the GitOps orchestrator; Track B is the ops/deploy CLI; Track C is the Control webapp. Phase 2 (Track D) replaces Git/GitHub with agent-native infrastructure.
 
 ---
 
@@ -22,8 +22,8 @@ Two parallel delivery tracks. Track A is the orchestrator; Track B is the ops/de
 
 ### Track A — Remaining cross-cutting work
 
-- ⬜ Integration test that exercises a full planning-loop tick end-to-end against MSW
-- ⬜ Integration tests for dev-loop and doc-loop using recorded fixtures
+- 💤 Full planning-loop MSW end-to-end integration test — post-MVP
+- 💤 Doc-loop full integration test (currently stub-only) — post-MVP
 
 ---
 
@@ -43,8 +43,8 @@ Two parallel delivery tracks. Track A is the orchestrator; Track B is the ops/de
 
 - ✅ Extract shared `resolveEnvCredentials(env)` — landed in PR #208
 - ✅ AWS RDS snapshot: real SigV4 signing — landed in PR #202
-- ⬜ Integration tests for ops commands using a self-hosted runner as the deployment target (see GitHub issue)
-- ⬜ GCP provision path wired through the CLI (currently requires injected deps)
+- 💤 Integration tests for ops commands using a self-hosted runner — post-MVP
+- 💤 GCP provision path wired through the CLI — post-MVP
 
 ---
 
@@ -60,7 +60,7 @@ Two parallel delivery tracks. Track A is the orchestrator; Track B is the ops/de
 | C-6   | Studio preview (`/studio/preview`) + kitchen-sink split (template + control)                                         | ✅ Done (cli-migration)      |
 | C-7   | CI workflow `ci-control.yml` (build + unit + in-process integration)                                                 | ✅ Done (cli-migration)      |
 | C-8   | Retire standalone `control/` repo (deprecation banner, workflows disabled)                                           | ✅ Done                      |
-| C-9   | Demo-readiness extensions: route map, design tokens, viewport, deploy view, turn timeline, blueprint feed, seed-demo | ⬜ In progress (T-48h, demo) |
+| C-9   | Demo-readiness extensions: route map, design tokens, viewport, deploy view, turn timeline, blueprint feed, seed-demo | ✅ Done                      |
 
 PR #204 (`cli-migration`) merged 2026-04-26.
 
@@ -68,4 +68,23 @@ PR #204 (`cli-migration`) merged 2026-04-26.
 
 - ✅ Merge PR #204 to main
 - ✅ Archive `superfield-studio` GitHub repo (archived 2026-05-04)
-- Post-demo backlog: screenshots, visual diff, cost charts, log search, fixture switcher
+- ✅ DB-migration Job log tail on deploy view (PR #260)
+- ✅ Fixture switcher per route, persisted in `<repo>/.studio/`
+
+**Done:** Phase C-10 — Chat UI consolidation (C-10.1–C-10.7) shipped; per-turn screenshots, visual diff, cost sparkline, log search/filter, slot heartbeat history all landed.
+
+**MVP next:** Phase C-11 — App-development UI feedback: per-turn build/test badges, inline test-output pane, live CI check-run feed, failure triage shortcut.
+
+---
+
+## Track D — Phase 2: Agent-Native Infrastructure
+
+Phase 2 replaces Git/GitHub as the delivery plane with infrastructure designed for agent iteration speed. All phases are pre-implementation (R&D / design).
+
+All D-track features require `--experimental` flag or `experimental: true` in `~/.superfield/config.yaml`.
+
+| Phase | Scope                                                                                                            | Status          |
+| ----- | ---------------------------------------------------------------------------------------------------------------- | --------------- |
+| D-1   | Sharp — agent-native VCS: branching-free change tracking, intent log, diff stream, Git-compatible export         | ⬜ R&D          |
+| D-2   | Nexum — self-improving synthetic corpus: post-turn curriculum refinement, replaces static `blueprint/` subtree   | ⬜ R&D          |
+| D-3   | FastEnv — ultrafast container forking: `packages/firecracker/`, `superfield ci` command, fastenv binary shim     | 🟡 In progress  |
