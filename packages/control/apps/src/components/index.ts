@@ -3,7 +3,6 @@
  *
  * Entry points for the two-panel Studio Mode UI:
  *  - ControlPanel: root layout component (chat sidebar + iframe)
- *  - ChatPanel: Claude chat with SSE streaming
  *  - IframePanel: Superfield app iframe with reloading overlay
  *  - ClusterStatusIndicator: persistent cluster health badge
  *
@@ -11,7 +10,6 @@
  */
 
 export { ControlPanel } from "./ControlPanel";
-export { ChatPanel } from "./ChatPanel";
 export { ChatMessageList } from "./chat/ChatMessageList";
 export { IframePanel } from "./IframePanel";
 export { ClusterStatusIndicator } from "./ClusterStatusIndicator";
