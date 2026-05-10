@@ -19,7 +19,9 @@
       "@superfield/git": ["packages/git/index.ts"],
       "@superfield/cli": ["packages/cli/index.ts"],
       "@superfield/control-core": ["packages/control-core/index.ts"],
-      "@superfield/db": ["packages/db/index.ts"]
+      "@superfield/db": ["packages/db/index.ts"],
+      "@superfield/fastenv": ["packages/fastenv/index.ts"],
+      "@superfield/fastenv/*": ["packages/fastenv/*.ts"]
     }
   },
   "exclude": ["node_modules", "packages/control/apps"]
