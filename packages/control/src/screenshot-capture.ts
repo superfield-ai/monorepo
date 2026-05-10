@@ -61,8 +61,14 @@ export interface PlaywrightBrowserLike {
 
 /** Minimal subset of the Playwright Page API. */
 export interface PlaywrightPageLike {
-  goto(url: string, opts?: { timeout?: number; waitUntil?: string }): Promise<unknown>;
-  screenshot(opts?: { path?: string; type?: string }): Promise<Buffer | Uint8Array>;
+  goto(
+    url: string,
+    opts?: { timeout?: number; waitUntil?: string },
+  ): Promise<unknown>;
+  screenshot(opts?: {
+    path?: string;
+    type?: string;
+  }): Promise<Buffer | Uint8Array>;
 }
 
 /**
@@ -87,7 +93,8 @@ function resolveTargetUrl(opts: ScreenshotOpts): string {
  *   <repoRoot>/docs/studio-sessions/<sessionId>/
  */
 function resolveSessionDir(opts: ScreenshotOpts): string {
-  const root = opts.repoRoot ?? process.env.SUPERFIELD_REPO_ROOT ?? process.cwd();
+  const root =
+    opts.repoRoot ?? process.env.SUPERFIELD_REPO_ROOT ?? process.cwd();
   const dir = resolve(root, "docs", "studio-sessions", opts.sessionId);
   mkdirSync(dir, { recursive: true });
   return dir;
@@ -163,7 +170,10 @@ export async function captureScreenshot(
   try {
     browser = await chromiumLauncher.launch({ headless: true });
     const page = await browser.newPage();
-    await page.goto(targetUrl, { timeout: timeoutMs, waitUntil: "networkidle" });
+    await page.goto(targetUrl, {
+      timeout: timeoutMs,
+      waitUntil: "networkidle",
+    });
     await page.screenshot({ path: outPath, type: "png" });
     return outPath;
   } catch (err) {

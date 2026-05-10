@@ -105,7 +105,10 @@ function handleServePng(sessionId: string, filename: string): Response {
  * Returns null when the request does not match /studio/screenshots/* so the
  * router can fall through.
  */
-export function handleScreenshotsRequest(req: Request, url: URL): Response | null {
+export function handleScreenshotsRequest(
+  req: Request,
+  url: URL,
+): Response | null {
   const { pathname } = url;
   if (req.method !== "GET") return null;
 

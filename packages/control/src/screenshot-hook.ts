@@ -44,7 +44,9 @@ export type { TurnCompletionContext };
  * any error is logged and swallowed so a failed screenshot never disrupts the
  * dev loop.
  */
-export async function onTurnComplete(ctx: TurnCompletionContext): Promise<void> {
+export async function onTurnComplete(
+  ctx: TurnCompletionContext,
+): Promise<void> {
   const path = await captureScreenshot({
     sessionId: ctx.sessionId,
     repoRoot: REPO_ROOT,
