@@ -28,6 +28,7 @@
         "@superfield/control": "workspace:*",
         "@superfield/control-core": "workspace:*",
         "@superfield/core": "workspace:*",
+        "@superfield/firecracker": "workspace:*",
         "@superfield/git": "workspace:*",
         "@superfield/github": "workspace:*",
       },
@@ -104,6 +105,12 @@
       "bin": {
         "fastenv": "bin/fastenv.ts",
       },
+      "devDependencies": {
+        "@types/node": "^20.0.0",
+      },
+    },
+    "packages/firecracker": {
+      "name": "@superfield/firecracker",
       "devDependencies": {
         "@types/node": "^20.0.0",
       },
@@ -377,6 +384,8 @@
     "@superfield/db": ["@superfield/db@workspace:packages/db"],
 
     "@superfield/fastenv": ["@superfield/fastenv@workspace:packages/fastenv"],
+
+    "@superfield/firecracker": ["@superfield/firecracker@workspace:packages/firecracker"],
 
     "@superfield/git": ["@superfield/git@workspace:packages/git"],
 

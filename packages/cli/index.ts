@@ -13,6 +13,7 @@ import { exportDbCommand } from "./commands/export-db.ts";
 import { initCommand } from "./commands/init.ts";
 import { auditCommand } from "./commands/audit.ts";
 import { controlCommand } from "./commands/control.ts";
+import { ciCommand } from "./commands/ci.ts";
 const BUILD_VERSION = process.env.SUPERFIELD_BUILD_VERSION ?? "dev";
 const BUILD_COMMIT = process.env.SUPERFIELD_BUILD_COMMIT ?? "unknown";
 const BUILD_DATE = process.env.SUPERFIELD_BUILD_DATE ?? "unknown";
@@ -89,6 +90,14 @@ Commands:
                 Export the database for the given environment. Detects DB mode
                 from DATABASE_URL_<ENV> (local → pg_dump via SSH; managed →
                 provider snapshot API). Prints final size and SHA-256.
+  ci run <workflow> [--vm]
+                Run a CI workflow locally. Without --vm uses the Docker
+                executor; with --vm uses a Firecracker microVM (requires
+                /dev/kvm) for workflows that need a real Docker daemon or k3d.
+  ci snapshot build --tag <tag> --rootfs <path> [--binary <path>] [--kernel <path>]
+                Build a Firecracker VM snapshot for use with 'ci run --vm'.
+  ci snapshot restore <dir> [--workspace <dir>]
+                Restore a saved snapshot for debugging or inspection.
 `.trim();
 }
 
@@ -195,6 +204,11 @@ export async function runCLI(
 
   if (cmd === "export-db") {
     await exportDbCommand(args.slice(1));
+    return;
+  }
+
+  if (cmd === "ci") {
+    await ciCommand(args.slice(1));
     return;
   }
 
