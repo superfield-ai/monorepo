@@ -15,6 +15,14 @@
  * Visuals follow the Superfield Control Room design system: near-void
  * backgrounds, sharp 1px borders, mono ALL-CAPS header label, role-coloured
  * message rows (cyan for user, green for assistant).
+ *
+ * @deprecated C-10 cleanup (#272): This file is scheduled for deletion once
+ * the import graph is verified clean (see dev-scout #279). As of the scout
+ * pass, zero `import { ChatPanel }` statements exist in
+ * packages/control/apps/src outside this file and index.ts. The entry point
+ * (main.tsx) uses only ControlPanel. Test file
+ * tests/component/control-panel.test.tsx imports ChatPanel and must be
+ * updated or removed as part of #272.
  */
 
 import React, { useEffect, useRef, useState } from "react";
