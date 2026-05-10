@@ -21,7 +21,8 @@
     "@superfield/github": "workspace:*",
     "@superfield/git": "workspace:*",
     "@superfield/control": "workspace:*",
-    "@superfield/control-core": "workspace:*"
+    "@superfield/control-core": "workspace:*",
+    "@superfield/firecracker": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "^20.0.0"
