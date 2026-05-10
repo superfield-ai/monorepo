@@ -52,7 +52,7 @@ function handleListScreenshots(sessionId: string): Response {
       const files = readdirSync(dir).filter((f) => /^turn-\d+\.png$/.test(f));
       for (const filename of files) {
         const m = filename.match(/^turn-(\d+)\.png$/);
-        const turnIndex = m ? parseInt(m[1], 10) : 0;
+        const turnIndex = m?.[1] !== undefined ? parseInt(m[1], 10) : 0;
         screenshots.push({
           filename,
           turnIndex,

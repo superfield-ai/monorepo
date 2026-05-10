@@ -90,11 +90,12 @@ describe("handleScreenshotsRequest", () => {
     };
     expect(body.sessionId).toBe("test-sess");
     expect(body.screenshots).toHaveLength(3);
-    expect(body.screenshots[0].turnIndex).toBe(1);
-    expect(body.screenshots[1].turnIndex).toBe(2);
-    expect(body.screenshots[2].turnIndex).toBe(3);
-    expect(body.screenshots[0].url).toContain("/studio/screenshots/");
-    expect(body.screenshots[0].filename).toBe("turn-1.png");
+    const [first, second, third] = body.screenshots;
+    expect(first?.turnIndex).toBe(1);
+    expect(second?.turnIndex).toBe(2);
+    expect(third?.turnIndex).toBe(3);
+    expect(first?.url).toContain("/studio/screenshots/");
+    expect(first?.filename).toBe("turn-1.png");
   });
 
   it("serves a PNG file at /studio/screenshots/:sessionId/:filename", async () => {
