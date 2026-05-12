@@ -679,6 +679,7 @@ export function OrchestratorView({
         </span>
         <input
           data-testid="repo-input"
+          aria-label="Repository path"
           placeholder="/path/to/repo"
           value={repoInput}
           onChange={(e) => setRepoInput(e.target.value)}
@@ -694,6 +695,7 @@ export function OrchestratorView({
           }}
         />
         <button
+          type="button"
           data-testid="start-button"
           disabled={!canStart || !repoInput}
           onClick={() => controllerRef.current.startDevLoop(repoInput)}
@@ -706,6 +708,7 @@ export function OrchestratorView({
           START
         </button>
         <button
+          type="button"
           data-testid="stop-button"
           disabled={!canStop}
           onClick={() => controllerRef.current.stopDevLoop()}

@@ -88,6 +88,7 @@ export function DebugView(): JSX.Element {
       }}
     >
       <header
+        aria-label="Debug controls"
         style={{
           display: "flex",
           flexWrap: "wrap",
@@ -109,6 +110,8 @@ export function DebugView(): JSX.Element {
           {filtered.length} / {state.entries.length}
         </span>
         <div
+          role="group"
+          aria-label="Level filters"
           style={{
             display: "flex",
             gap: "var(--sp-1)",
@@ -125,7 +128,7 @@ export function DebugView(): JSX.Element {
             />
           ))}
         </div>
-        <div style={{ display: "flex", gap: "var(--sp-1)" }}>
+        <div role="group" aria-label="Source filters" style={{ display: "flex", gap: "var(--sp-1)" }}>
           {SOURCES.map((src) => (
             <FilterChip
               key={src}
@@ -138,6 +141,7 @@ export function DebugView(): JSX.Element {
         </div>
         <input
           type="search"
+          aria-label="Search debug events"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           placeholder="SEARCH…"
