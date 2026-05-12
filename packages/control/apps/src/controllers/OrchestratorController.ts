@@ -148,6 +148,8 @@ export class OrchestratorController {
   }
 
   async startDevLoop(repo: string, slotCount?: number): Promise<void> {
+    this.state = { ...this.state, processState: "starting", error: null };
+    this.notify();
     try {
       const res = await fetch(this.startUrl, {
         method: "POST",
@@ -156,19 +158,30 @@ export class OrchestratorController {
       });
       const body = (await res.json()) as { ok: boolean; reason?: string };
       if (!body.ok) {
+        this.state = { ...this.state, processState: "stopped" };
         this.setError(body.reason ?? "UNABLE — START DEV LOOP");
+        return;
       }
     } catch (err) {
+      this.state = { ...this.state, processState: "stopped" };
       this.setError(err instanceof Error ? err.message : String(err));
+      return;
     }
     await this.poll();
   }
 
   async stopDevLoop(): Promise<void> {
+    this.state = { ...this.state, processState: "stopping", error: null };
+    this.notify();
     try {
-      await fetch(this.stopUrl, { method: "POST" });
+      const res = await fetch(this.stopUrl, { method: "POST" });
+      if (!res.ok) {
+        this.setError("UNABLE — STOP DEV LOOP");
+        return;
+      }
     } catch (err) {
       this.setError(err instanceof Error ? err.message : String(err));
+      return;
     }
     await this.poll();
   }
@@ -180,6 +193,13 @@ export class OrchestratorController {
         fetch(this.loopsUrl),
         fetch(this.slotsUrl),
       ]);
+
+      if (!statusRes.ok) {
+        // Non-OK status response: mark API unreachable, preserve last processState.
+        this.state = { ...this.state, apiReachable: false };
+        this.notify();
+        return;
+      }
 
       const status = (await statusRes.json()) as {
         process?: ProcessState;
