@@ -47,9 +47,7 @@ async function stubOrchestratorStatus(
 }
 
 /** Stub analytics/loops with empty healthy loops. */
-async function stubLoops(
-  page: import("@playwright/test").Page,
-): Promise<void> {
+async function stubLoops(page: import("@playwright/test").Page): Promise<void> {
   await page.route("**/analytics/loops", (route) =>
     route.fulfill({
       status: 200,
@@ -157,7 +155,9 @@ test("slot card appears when analytics/slots returns a running slot", async ({
   await goToOrchestratorTab(page);
 
   // The OrchestratorView polls on start; wait for the slot card to appear.
-  await expect(page.getByTestId("slot-card-0")).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId("slot-card-0")).toBeVisible({
+    timeout: 10_000,
+  });
   await expect(page.getByText("#301")).toBeVisible();
 });
 

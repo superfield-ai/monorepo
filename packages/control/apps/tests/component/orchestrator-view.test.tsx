@@ -18,7 +18,10 @@
 import React from "react";
 import { render } from "vitest-browser-react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
-import { OrchestratorView, CiStatusFeed } from "../../src/components/OrchestratorView";
+import {
+  OrchestratorView,
+  CiStatusFeed,
+} from "../../src/components/OrchestratorView";
 import {
   OrchestratorController,
   type OrchestratorState,
@@ -62,9 +65,7 @@ function makeDefaultState(
   };
 }
 
-function makeStubController(
-  initial: Partial<OrchestratorState> = {},
-): {
+function makeStubController(initial: Partial<OrchestratorState> = {}): {
   controller: OrchestratorController;
   setState: (partial: Partial<OrchestratorState>) => void;
 } {
@@ -81,10 +82,13 @@ function makeStubController(
 
 beforeEach(() => {
   // Prevent any EventSource construction (used by CiStatusFeed when no override given).
-  vi.stubGlobal("EventSource", class {
-    close() {}
-    addEventListener() {}
-  });
+  vi.stubGlobal(
+    "EventSource",
+    class {
+      close() {}
+      addEventListener() {}
+    },
+  );
 });
 
 afterEach(() => {
@@ -292,8 +296,17 @@ describe("loop table", () => {
   test("loop table renders plan, dev, and doc rows", async () => {
     const { controller } = makeStubController({
       loops: {
-        plan: { circuitTripped: false, consecutiveFailures: 0, lastTickAt: Date.now() - 3000, lastTickDurationMs: 500 },
-        dev: { circuitTripped: true, consecutiveFailures: 3, idleReason: "no issues" },
+        plan: {
+          circuitTripped: false,
+          consecutiveFailures: 0,
+          lastTickAt: Date.now() - 3000,
+          lastTickDurationMs: 500,
+        },
+        dev: {
+          circuitTripped: true,
+          consecutiveFailures: 3,
+          idleReason: "no issues",
+        },
         doc: { circuitTripped: false, consecutiveFailures: 0 },
       },
     });
@@ -339,9 +352,7 @@ describe("log pane", () => {
     await expect
       .element(screen.getByText("[info] bootstrap complete"))
       .toBeVisible();
-    await expect
-      .element(screen.getByText("[warn] slow poll"))
-      .toBeVisible();
+    await expect.element(screen.getByText("[warn] slow poll")).toBeVisible();
   });
 });
 
@@ -349,7 +360,9 @@ describe("log pane", () => {
 
 describe("CiStatusFeed", () => {
   test("shows ci-status-feed-empty when no runs", async () => {
-    const screen = render(<CiStatusFeed repo="owner/repo" ciRowsOverride={[]} />);
+    const screen = render(
+      <CiStatusFeed repo="owner/repo" ciRowsOverride={[]} />,
+    );
     await expect
       .element(screen.getByTestId("ci-status-feed-empty"))
       .toBeVisible();
@@ -367,9 +380,7 @@ describe("CiStatusFeed", () => {
     const screen = render(
       <CiStatusFeed repo="owner/repo" ciRowsOverride={rows} />,
     );
-    await expect
-      .element(screen.getByTestId(`ci-row-${key}`))
-      .toBeVisible();
+    await expect.element(screen.getByTestId(`ci-row-${key}`)).toBeVisible();
     await expect.element(screen.getByText("build")).toBeVisible();
   });
 });
@@ -396,7 +407,10 @@ describe("escalate button", () => {
         status: 200,
         text: () =>
           Promise.resolve(
-            JSON.stringify({ ok: true, issueUrl: "https://github.com/owner/repo/issues/42" }),
+            JSON.stringify({
+              ok: true,
+              issueUrl: "https://github.com/owner/repo/issues/42",
+            }),
           ),
         json: () =>
           Promise.resolve({
