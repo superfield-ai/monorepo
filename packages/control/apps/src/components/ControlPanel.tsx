@@ -24,6 +24,7 @@ import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
 import { DebugView } from "./DebugView";
 import { DebugBadge } from "./DebugBadge";
+import { OrchestratorView } from "./OrchestratorView";
 import { Toaster } from "./Toaster";
 import { ErrorBoundary } from "./ErrorBoundary";
 import { ConnectionBanner } from "./ConnectionBanner";
@@ -84,7 +85,7 @@ export function ControlPanel({
   }, [initialClusterStatus]);
 
   const [activeTab, setActiveTab] = useState<
-    "studio" | "viewport" | "product" | "debug"
+    "studio" | "viewport" | "product" | "debug" | "orchestrator"
   >("studio");
 
   const [studioSubView, setStudioSubView] = useState<
@@ -156,6 +157,12 @@ export function ControlPanel({
           label="Product"
           active={activeTab === "product"}
           onClick={() => setActiveTab("product")}
+        />
+        <NavTab
+          testid="tab-orchestrator"
+          label="Orchestrator"
+          active={activeTab === "orchestrator"}
+          onClick={() => setActiveTab("orchestrator")}
         />
         <DebugBadge
           active={activeTab === "debug"}
@@ -243,6 +250,18 @@ export function ControlPanel({
         <ErrorBoundary label="Product">
           <div className="flex flex-1 overflow-hidden">
             <ProductTab />
+          </div>
+        </ErrorBoundary>
+      )}
+
+      {/* Orchestrator tab — agent monitoring, slot cards, CI feed */}
+      {activeTab === "orchestrator" && (
+        <ErrorBoundary label="Orchestrator">
+          <div
+            data-testid="orchestrator-tab-content"
+            className="flex-1 overflow-hidden"
+          >
+            <OrchestratorView manageLifecycle={false} />
           </div>
         </ErrorBoundary>
       )}
