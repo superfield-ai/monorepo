@@ -81,7 +81,9 @@ test("scenario 1: children render normally when no error is thrown", async () =>
   );
 
   await expect.element(screen.getByTestId("good-child")).toBeVisible();
-  expect(screen.container.querySelector('[data-testid="error-boundary-card"]')).toBeNull();
+  expect(
+    screen.container.querySelector('[data-testid="error-boundary-card"]'),
+  ).toBeNull();
 });
 
 test("scenario 2: a render-time exception in a child triggers the fallback UI", async () => {
@@ -91,10 +93,10 @@ test("scenario 2: a render-time exception in a child triggers the fallback UI", 
     </ErrorBoundary>,
   );
 
-  await expect
-    .element(screen.getByTestId("error-boundary-card"))
-    .toBeVisible();
-  expect(screen.container.querySelector('[data-testid="good-child"]')).toBeNull();
+  await expect.element(screen.getByTestId("error-boundary-card")).toBeVisible();
+  expect(
+    screen.container.querySelector('[data-testid="good-child"]'),
+  ).toBeNull();
 });
 
 test("scenario 3: fallback UI contains a Retry affordance", async () => {
@@ -137,9 +139,7 @@ test("scenario 5: clicking Retry clears the error and re-renders children", asyn
   const screen = render(<ToggleWrapper label="retry-test" onReset={onReset} />);
 
   // Fallback is visible first.
-  await expect
-    .element(screen.getByTestId("error-boundary-card"))
-    .toBeVisible();
+  await expect.element(screen.getByTestId("error-boundary-card")).toBeVisible();
 
   // Click Retry.
   await screen.getByTestId("error-boundary-retry").click();
