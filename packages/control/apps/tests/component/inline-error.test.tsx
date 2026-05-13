@@ -47,7 +47,9 @@ describe("InlineError", () => {
       <InlineError title="Load failed" error={baseError} />,
     );
     const container = screen.container;
-    expect(container.querySelector('[data-testid="inline-error"]')).not.toBeNull();
+    expect(
+      container.querySelector('[data-testid="inline-error"]'),
+    ).not.toBeNull();
     expect(container.textContent).toContain("Something went wrong");
   });
 
