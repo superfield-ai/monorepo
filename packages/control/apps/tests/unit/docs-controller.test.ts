@@ -52,7 +52,9 @@ describe("DocsController", () => {
     // Two fetch calls: one for the file list, one for README.md content.
     const fetchMock = vi
       .fn()
-      .mockResolvedValueOnce(makeJsonResponse({ files: ["README.md", "guide.md"] }))
+      .mockResolvedValueOnce(
+        makeJsonResponse({ files: ["README.md", "guide.md"] }),
+      )
       .mockResolvedValueOnce(makeTextResponse("# README content"));
     vi.stubGlobal("fetch", fetchMock);
 
@@ -87,7 +89,9 @@ describe("DocsController", () => {
 
   it("4: selectFile(path) fetches GET /studio/docs/<path>, sets selectedFile and content", async () => {
     const fileContent = "# Hello World";
-    const fetchMock = vi.fn(() => Promise.resolve(makeTextResponse(fileContent)));
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(makeTextResponse(fileContent)),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const ctrl = new DocsController();
@@ -103,7 +107,9 @@ describe("DocsController", () => {
 
   it("5: cache hit — selectFile(path) a second time does not re-fetch", async () => {
     const fileContent = "# Cached Content";
-    const fetchMock = vi.fn(() => Promise.resolve(makeTextResponse(fileContent)));
+    const fetchMock = vi.fn(() =>
+      Promise.resolve(makeTextResponse(fileContent)),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
     const ctrl = new DocsController();
