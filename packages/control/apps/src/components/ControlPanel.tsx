@@ -261,7 +261,7 @@ export function ControlPanel({
             data-testid="orchestrator-tab-content"
             className="flex-1 overflow-hidden"
           >
-            <OrchestratorView manageLifecycle={false} />
+            <OrchestratorView manageLifecycle={true} />
           </div>
         </ErrorBoundary>
       )}
