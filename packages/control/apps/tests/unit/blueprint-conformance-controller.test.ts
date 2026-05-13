@@ -32,10 +32,11 @@ function makeJsonResponse(body: unknown, status = 200): Response {
   });
 }
 
-function stubFetchOk(rules: ConformanceRule[], updatedAt = "2024-01-01T00:00:00Z") {
-  return vi.fn(async () =>
-    makeJsonResponse({ rules, updatedAt }),
-  );
+function stubFetchOk(
+  rules: ConformanceRule[],
+  updatedAt = "2024-01-01T00:00:00Z",
+) {
+  return vi.fn(async () => makeJsonResponse({ rules, updatedAt }));
 }
 
 function stubFetchError(status = 500) {
@@ -104,7 +105,9 @@ describe("BlueprintConformanceController", () => {
     expect(ctrl.getState().error).not.toBeNull();
 
     // Second call: succeed
-    const rules: ConformanceRule[] = [{ id: "r2", name: "Rule Two", status: "fail" }];
+    const rules: ConformanceRule[] = [
+      { id: "r2", name: "Rule Two", status: "fail" },
+    ];
     vi.stubGlobal("fetch", stubFetchOk(rules));
     await ctrl.load();
 
@@ -115,11 +118,17 @@ describe("BlueprintConformanceController", () => {
   // Scenario 5: start() schedules a timer; after interval fires, load() is called again
   it("start() schedules auto-refresh timer that calls load() after interval", async () => {
     vi.useFakeTimers();
-    const rules: ConformanceRule[] = [{ id: "r3", name: "Rule Three", status: "pass" }];
-    const fetchMock = vi.fn(async () => makeJsonResponse({ rules, updatedAt: null }));
+    const rules: ConformanceRule[] = [
+      { id: "r3", name: "Rule Three", status: "pass" },
+    ];
+    const fetchMock = vi.fn(async () =>
+      makeJsonResponse({ rules, updatedAt: null }),
+    );
     vi.stubGlobal("fetch", fetchMock);
 
-    const ctrl = new BlueprintConformanceController({ refreshIntervalMs: 5_000 });
+    const ctrl = new BlueprintConformanceController({
+      refreshIntervalMs: 5_000,
+    });
     ctrl.start();
 
     // The start() call triggers an immediate load()
@@ -143,7 +152,9 @@ describe("BlueprintConformanceController", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
 
-    const ctrl = new BlueprintConformanceController({ refreshIntervalMs: 5_000 });
+    const ctrl = new BlueprintConformanceController({
+      refreshIntervalMs: 5_000,
+    });
     ctrl.start();
 
     // Drain the immediate load
