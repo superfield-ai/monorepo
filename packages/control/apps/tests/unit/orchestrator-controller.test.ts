@@ -47,7 +47,7 @@ function makeFetchStub(
     statusHttpOk = true,
   } = options;
 
-  return vi.fn().mockImplementation((url: string, init?: RequestInit) => {
+  return vi.fn().mockImplementation((url: string, _init?: RequestInit) => {
     const urlStr = String(url);
     if (urlStr.includes("start")) {
       return Promise.resolve({
@@ -256,7 +256,15 @@ describe("OrchestratorController — process start/stop and loop status", () => 
   test("startDevLoop sets processState to 'starting' then 'running' on success", async () => {
     globalThis.fetch = makeFetchStub(
       { slots: [] },
-      { statusBody: { process: "running", pid: 1, apiReachable: true, uptimeMs: 0 }, startOk: true },
+      {
+        statusBody: {
+          process: "running",
+          pid: 1,
+          apiReachable: true,
+          uptimeMs: 0,
+        },
+        startOk: true,
+      },
     );
 
     const ctrl = new OrchestratorController();
@@ -293,7 +301,15 @@ describe("OrchestratorController — process start/stop and loop status", () => 
   test("stopDevLoop sets processState to 'stopping' then 'stopped' on success", async () => {
     globalThis.fetch = makeFetchStub(
       { slots: [] },
-      { statusBody: { process: "stopped", pid: null, apiReachable: true, uptimeMs: 0 }, stopOk: true },
+      {
+        statusBody: {
+          process: "stopped",
+          pid: null,
+          apiReachable: true,
+          uptimeMs: 0,
+        },
+        stopOk: true,
+      },
     );
 
     const ctrl = new OrchestratorController();
@@ -326,7 +342,14 @@ describe("OrchestratorController — process start/stop and loop status", () => 
   test("poll response with process 'running' updates processState to 'running'", async () => {
     globalThis.fetch = makeFetchStub(
       { slots: [] },
-      { statusBody: { process: "running", pid: 42, apiReachable: true, uptimeMs: 500 } },
+      {
+        statusBody: {
+          process: "running",
+          pid: 42,
+          apiReachable: true,
+          uptimeMs: 500,
+        },
+      },
     );
 
     const ctrl = new OrchestratorController();
@@ -345,7 +368,14 @@ describe("OrchestratorController — process start/stop and loop status", () => 
   test("poll response with process 'stopped' updates processState to 'stopped'", async () => {
     globalThis.fetch = makeFetchStub(
       { slots: [] },
-      { statusBody: { process: "stopped", pid: null, apiReachable: true, uptimeMs: 0 } },
+      {
+        statusBody: {
+          process: "stopped",
+          pid: null,
+          apiReachable: true,
+          uptimeMs: 0,
+        },
+      },
     );
 
     const ctrl = new OrchestratorController();
@@ -384,7 +414,10 @@ describe("OrchestratorController — process start/stop and loop status", () => 
       },
     };
 
-    globalThis.fetch = makeFetchStub({ slots: [] }, { loopsBody: loopsPayload });
+    globalThis.fetch = makeFetchStub(
+      { slots: [] },
+      { loopsBody: loopsPayload },
+    );
 
     const ctrl = new OrchestratorController();
     const states: ReturnType<typeof ctrl.getState>[] = [];
@@ -424,7 +457,10 @@ describe("OrchestratorController — process start/stop and loop status", () => 
           } as Response);
         }
         // Second call: non-OK
-        return Promise.resolve({ ok: false, json: () => Promise.resolve({}) } as Response);
+        return Promise.resolve({
+          ok: false,
+          json: () => Promise.resolve({}),
+        } as Response);
       }
       return Promise.resolve({
         ok: true,
