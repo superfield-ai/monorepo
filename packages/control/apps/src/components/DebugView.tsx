@@ -128,7 +128,11 @@ export function DebugView(): JSX.Element {
             />
           ))}
         </div>
-        <div role="group" aria-label="Source filters" style={{ display: "flex", gap: "var(--sp-1)" }}>
+        <div
+          role="group"
+          aria-label="Source filters"
+          style={{ display: "flex", gap: "var(--sp-1)" }}
+        >
           {SOURCES.map((src) => (
             <FilterChip
               key={src}
