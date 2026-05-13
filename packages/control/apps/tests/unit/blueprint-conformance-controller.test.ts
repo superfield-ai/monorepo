@@ -15,7 +15,7 @@
  * Uses fake timers for auto-refresh scenarios and stub fetch — no real network calls.
  */
 
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   BlueprintConformanceController,
   type ConformanceRule,
