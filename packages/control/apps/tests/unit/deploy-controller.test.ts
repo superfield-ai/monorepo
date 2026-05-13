@@ -89,8 +89,8 @@ describe("DeployController", () => {
     originalFetch = globalThis.fetch;
     originalEventSource = globalThis.EventSource;
     lastES = null;
-    globalThis.EventSource = vi.fn(
-      (url: string) => createESStub(url),
+    globalThis.EventSource = vi.fn((url: string) =>
+      createESStub(url),
     ) as unknown as typeof EventSource;
   });
 
@@ -122,7 +122,10 @@ describe("DeployController", () => {
     globalThis.fetch = vi.fn().mockImplementation((url: string) => {
       if (String(url).includes("/studio/deploy/envs")) {
         return Promise.resolve(
-          makeJsonResponse({ envs: ["dev", "staging", "prod"], source: "github" }),
+          makeJsonResponse({
+            envs: ["dev", "staging", "prod"],
+            source: "github",
+          }),
         );
       }
       if (String(url).includes("/studio/deploy/doctor/")) {
@@ -134,7 +137,9 @@ describe("DeployController", () => {
         return Promise.resolve(makeJsonResponse({ env: "dev", checks: [] }));
       }
       if (String(url).includes("/studio/deploy/ci")) {
-        return Promise.resolve(makeJsonResponse({ runs: [], source: "github" }));
+        return Promise.resolve(
+          makeJsonResponse({ runs: [], source: "github" }),
+        );
       }
       return Promise.resolve(makeJsonResponse({}, 404));
     });
@@ -154,9 +159,13 @@ describe("DeployController", () => {
 
   test("refreshAll() sets envsError when envs endpoint returns non-OK", async () => {
     // Return a fresh Response object per call to avoid "Body already used" errors.
-    globalThis.fetch = vi.fn().mockImplementation(() =>
-      Promise.resolve(makeJsonResponse({ message: "Internal Server Error" }, 500)),
-    );
+    globalThis.fetch = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          makeJsonResponse({ message: "Internal Server Error" }, 500),
+        ),
+      );
 
     const ctrl = new DeployController();
     await ctrl.refreshAll();
@@ -177,9 +186,11 @@ describe("DeployController", () => {
       { name: "db-ping", ok: true, detail: "200ms" },
       { name: "redis", ok: false, detail: "connection refused" },
     ];
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      makeJsonResponse({ env: "dev", checks, allOk: false }),
-    );
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        makeJsonResponse({ env: "dev", checks, allOk: false }),
+      );
 
     const ctrl = new DeployController();
     await ctrl.loadDoctor("dev");
@@ -195,9 +206,11 @@ describe("DeployController", () => {
   // -------------------------------------------------------------------------
 
   test("loadDoctor(env) records AppError in doctorErrors[env] on failure", async () => {
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      makeJsonResponse({ message: "Service Unavailable" }, 503),
-    );
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(
+        makeJsonResponse({ message: "Service Unavailable" }, 503),
+      );
 
     const ctrl = new DeployController();
     await ctrl.loadDoctor("staging");
@@ -218,9 +231,9 @@ describe("DeployController", () => {
       { name: "DATABASE_URL", present: true, detail: "set" },
       { name: "API_KEY", present: false, detail: "missing" },
     ];
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      makeJsonResponse({ env: "dev", checks }),
-    );
+    globalThis.fetch = vi
+      .fn()
+      .mockResolvedValue(makeJsonResponse({ env: "dev", checks }));
 
     const ctrl = new DeployController();
     await ctrl.loadSecrets("dev");
@@ -236,9 +249,7 @@ describe("DeployController", () => {
 
   test("rollback(env) transitions rolloutActive to true, streams rolloutLog lines, and resolves", async () => {
     const jobId = "job-abc-123";
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      makeJsonResponse({ jobId }),
-    );
+    globalThis.fetch = vi.fn().mockResolvedValue(makeJsonResponse({ jobId }));
 
     const ctrl = new DeployController();
 
@@ -283,9 +294,7 @@ describe("DeployController", () => {
 
   test("rollback('prod') behaves identically — no gate in the controller", async () => {
     const jobId = "job-prod-999";
-    globalThis.fetch = vi.fn().mockResolvedValue(
-      makeJsonResponse({ jobId }),
-    );
+    globalThis.fetch = vi.fn().mockResolvedValue(makeJsonResponse({ jobId }));
 
     const ctrl = new DeployController();
     const rollbackPromise = ctrl.rollback("prod");
@@ -317,9 +326,13 @@ describe("DeployController", () => {
   test("selectEnv(env) updates selectedEnv and notifies listeners", async () => {
     // Stub fetch for doctor/secrets called by selectEnv.
     // Return a fresh Response per call to avoid "Body already used" errors.
-    globalThis.fetch = vi.fn().mockImplementation(() =>
-      Promise.resolve(makeJsonResponse({ env: "staging", checks: [], allOk: true })),
-    );
+    globalThis.fetch = vi
+      .fn()
+      .mockImplementation(() =>
+        Promise.resolve(
+          makeJsonResponse({ env: "staging", checks: [], allOk: true }),
+        ),
+      );
 
     const ctrl = new DeployController();
     const notified: string[] = [];
