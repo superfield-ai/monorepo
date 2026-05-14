@@ -120,9 +120,9 @@ test("feature list renders the stubbed running issue", async ({ page }) => {
   // The feature rail always shows the feature list on wide viewports.
   await expect(page.getByTestId("feature-list")).toBeVisible();
   // The running slot must appear as a row in the rail.
-  await expect(
-    page.getByTestId(`feature-row-${ISSUE_NUMBER}`),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId(`feature-row-${ISSUE_NUMBER}`)).toBeVisible({
+    timeout: 10_000,
+  });
 });
 
 // ── Scenario 2: Selecting the running issue switches to steer mode ────────────
@@ -179,9 +179,7 @@ test("submitting a steer message dispatches to POST /studio/steer", async ({
   await expect(page.getByTestId("feature-detail")).toBeVisible();
 
   // Type a steer message into the steer textarea and submit.
-  const steerTextarea = page
-    .getByTestId("feature-detail")
-    .locator("textarea");
+  const steerTextarea = page.getByTestId("feature-detail").locator("textarea");
   await steerTextarea.fill("focus on the auth module");
   await page.keyboard.press("Enter");
 
@@ -213,9 +211,7 @@ test("steer textarea clears after submission", async ({ page }) => {
   await page.click(`[data-testid="feature-row-${ISSUE_NUMBER}"]`);
   await expect(page.getByTestId("feature-detail")).toBeVisible();
 
-  const steerTextarea = page
-    .getByTestId("feature-detail")
-    .locator("textarea");
+  const steerTextarea = page.getByTestId("feature-detail").locator("textarea");
   await steerTextarea.fill("redirect all traffic to the new handler");
   await page.keyboard.press("Enter");
 
@@ -238,7 +234,10 @@ test("detail header reflects the selected issue number while in steer mode", asy
   await expect(page.getByTestId("feature-detail")).toBeVisible();
 
   // The detail header must clearly identify the active issue number.
-  const header = page.getByTestId("feature-detail").locator("[style*='border-bottom']").first();
+  const header = page
+    .getByTestId("feature-detail")
+    .locator("[style*='border-bottom']")
+    .first();
   await expect(header.getByText(`#${ISSUE_NUMBER}`)).toBeVisible();
   // The title from the stub is also shown.
   await expect(
