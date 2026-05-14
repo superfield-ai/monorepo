@@ -112,6 +112,17 @@ export class OrchestratorController {
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * Test helper — replaces the internal state with the given partial and
+   * notifies all subscribers. Never call this in production code.
+   *
+   * @internal
+   */
+  _replaceState(partial: Partial<OrchestratorState>): void {
+    this.state = { ...this.state, ...partial };
+    this.notify();
+  }
+
   getState(): OrchestratorState {
     return {
       ...this.state,
