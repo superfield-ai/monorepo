@@ -123,7 +123,9 @@ export function ControlPanel({
       data-testid="studio-panel"
     >
       {!hideConnectionBanner && <ConnectionBanner />}
-      <div
+      {/* Primary navigation tab bar — role="tablist" satisfies landmark + aria-required-children */}
+      <nav
+        aria-label="Primary navigation"
         className="flex shrink-0"
         style={{
           background: "var(--bg-raised)",
@@ -131,149 +133,180 @@ export function ControlPanel({
         }}
         data-testid="tab-bar"
       >
-        <NavTab
-          testid="tab-studio"
-          label="Studio"
-          active={activeTab === "studio"}
-          onClick={() => setActiveTab("studio")}
-        />
-        <div
-          style={{
-            width: "1px",
-            margin: "6px 4px",
-            background: "var(--border-subtle)",
-            alignSelf: "stretch",
-          }}
-          aria-hidden="true"
-        />
-        <NavTab
-          testid="tab-viewport"
-          label="Viewport"
-          active={activeTab === "viewport"}
-          onClick={() => setActiveTab("viewport")}
-        />
-        <NavTab
-          testid="tab-product"
-          label="Product"
-          active={activeTab === "product"}
-          onClick={() => setActiveTab("product")}
-        />
-        <NavTab
-          testid="tab-orchestrator"
-          label="Orchestrator"
-          active={activeTab === "orchestrator"}
-          onClick={() => setActiveTab("orchestrator")}
-        />
+        <div role="tablist" aria-label="Main tabs" className="flex">
+          <NavTab
+            testid="tab-studio"
+            label="Studio"
+            active={activeTab === "studio"}
+            onClick={() => setActiveTab("studio")}
+          />
+          <div
+            style={{
+              width: "1px",
+              margin: "6px 4px",
+              background: "var(--border-subtle)",
+              alignSelf: "stretch",
+            }}
+            aria-hidden="true"
+          />
+          <NavTab
+            testid="tab-viewport"
+            label="Viewport"
+            active={activeTab === "viewport"}
+            onClick={() => setActiveTab("viewport")}
+          />
+          <NavTab
+            testid="tab-product"
+            label="Product"
+            active={activeTab === "product"}
+            onClick={() => setActiveTab("product")}
+          />
+          <NavTab
+            testid="tab-orchestrator"
+            label="Orchestrator"
+            active={activeTab === "orchestrator"}
+            onClick={() => setActiveTab("orchestrator")}
+          />
+        </div>
         <DebugBadge
           active={activeTab === "debug"}
           onClick={() => setActiveTab("debug")}
         />
-      </div>
+      </nav>
 
-      {/* Studio tab — feature pane + mock-route gallery */}
-      {activeTab === "studio" && (
-        <ErrorBoundary label="Studio">
-          <div className="flex flex-1 overflow-hidden flex-col">
-            {/* Studio sub-navigation */}
+      {/* Tab panel content — role="main" gives the page its required main landmark */}
+      <main className="flex flex-1 overflow-hidden flex-col" tabIndex={-1}>
+        {/* Studio tab — feature pane + mock-route gallery */}
+        {activeTab === "studio" && (
+          <ErrorBoundary label="Studio">
             <div
-              style={{
-                display: "flex",
-                flexShrink: 0,
-                background: "var(--bg-raised)",
-                borderBottom: "1px solid var(--border-subtle)",
-                paddingLeft: "var(--sp-2)",
-              }}
-              data-testid="studio-sub-nav"
+              role="tabpanel"
+              aria-label="Studio"
+              className="flex flex-1 overflow-hidden flex-col"
             >
-              <StudioSubTab
-                testid="studio-sub-features"
-                label="Features"
-                active={studioSubView === "features"}
-                onClick={() => setStudioSubView("features")}
-              />
-              <StudioSubTab
-                testid="studio-sub-mocks"
-                label="Mock Routes"
-                active={studioSubView === "mocks"}
-                onClick={() => setStudioSubView("mocks")}
-              />
-              <StudioSubTab
-                testid="studio-sub-conformance"
-                label="Conformance"
-                active={studioSubView === "conformance"}
-                onClick={() => setStudioSubView("conformance")}
-              />
-              <StudioSubTab
-                testid="studio-sub-fixtures"
-                label="Fixtures"
-                active={studioSubView === "fixtures"}
-                onClick={() => setStudioSubView("fixtures")}
-              />
-            </div>
-            <div className="flex flex-1 overflow-hidden">
-              {studioSubView === "features" && <FeaturePane />}
-              {studioSubView === "mocks" && <MockRouteGallery />}
-              {studioSubView === "conformance" && <BlueprintConformanceFeed />}
-              {studioSubView === "fixtures" && <FixtureSwitcher />}
-            </div>
-          </div>
-        </ErrorBoundary>
-      )}
-
-      {/* Viewport tab — route picker + resizable iframe */}
-      {activeTab === "viewport" && (
-        <ErrorBoundary label="Viewport">
-          <div className="flex flex-1 overflow-hidden">
-            <div className="hidden lg:flex">
-              <RouteMap
-                onSelect={(path) => {
-                  const base = appSrc.replace(/\/$/, "");
-                  const tail = path.startsWith("/") ? path : `/${path}`;
-                  setIframeSrc(`${base}${tail}`);
+              {/* Studio sub-navigation */}
+              <div
+                role="tablist"
+                aria-label="Studio views"
+                style={{
+                  display: "flex",
+                  flexShrink: 0,
+                  background: "var(--bg-raised)",
+                  borderBottom: "1px solid var(--border-subtle)",
+                  paddingLeft: "var(--sp-2)",
                 }}
-              />
+                data-testid="studio-sub-nav"
+              >
+                <StudioSubTab
+                  testid="studio-sub-features"
+                  label="Features"
+                  active={studioSubView === "features"}
+                  onClick={() => setStudioSubView("features")}
+                />
+                <StudioSubTab
+                  testid="studio-sub-mocks"
+                  label="Mock Routes"
+                  active={studioSubView === "mocks"}
+                  onClick={() => setStudioSubView("mocks")}
+                />
+                <StudioSubTab
+                  testid="studio-sub-conformance"
+                  label="Conformance"
+                  active={studioSubView === "conformance"}
+                  onClick={() => setStudioSubView("conformance")}
+                />
+                <StudioSubTab
+                  testid="studio-sub-fixtures"
+                  label="Fixtures"
+                  active={studioSubView === "fixtures"}
+                  onClick={() => setStudioSubView("fixtures")}
+                />
+              </div>
+              <div
+                role="tabpanel"
+                aria-label={studioSubView}
+                className="flex flex-1 overflow-hidden"
+              >
+                {studioSubView === "features" && <FeaturePane />}
+                {studioSubView === "mocks" && <MockRouteGallery />}
+                {studioSubView === "conformance" && (
+                  <BlueprintConformanceFeed />
+                )}
+                {studioSubView === "fixtures" && <FixtureSwitcher />}
+              </div>
             </div>
-            <div className="flex-1 flex flex-col">
-              <ViewportToolbar value={viewport} onChange={setViewport} />
-              <IframePanel
-                src={iframeSrc}
-                clusterStatus={clusterStatus}
-                iframeWidth={VIEWPORT_WIDTHS[viewport]}
-              />
+          </ErrorBoundary>
+        )}
+
+        {/* Viewport tab — route picker + resizable iframe */}
+        {activeTab === "viewport" && (
+          <ErrorBoundary label="Viewport">
+            <div
+              role="tabpanel"
+              aria-label="Viewport"
+              className="flex flex-1 overflow-hidden"
+            >
+              <div className="hidden lg:flex">
+                <RouteMap
+                  onSelect={(path) => {
+                    const base = appSrc.replace(/\/$/, "");
+                    const tail = path.startsWith("/") ? path : `/${path}`;
+                    setIframeSrc(`${base}${tail}`);
+                  }}
+                />
+              </div>
+              <div className="flex-1 flex flex-col">
+                <ViewportToolbar value={viewport} onChange={setViewport} />
+                <IframePanel
+                  src={iframeSrc}
+                  clusterStatus={clusterStatus}
+                  iframeWidth={VIEWPORT_WIDTHS[viewport]}
+                />
+              </div>
             </div>
-          </div>
-        </ErrorBoundary>
-      )}
+          </ErrorBoundary>
+        )}
 
-      {/* Product tab — docs viewer + product chat */}
-      {activeTab === "product" && (
-        <ErrorBoundary label="Product">
-          <div className="flex flex-1 overflow-hidden">
-            <ProductTab />
-          </div>
-        </ErrorBoundary>
-      )}
+        {/* Product tab — docs viewer + product chat */}
+        {activeTab === "product" && (
+          <ErrorBoundary label="Product">
+            <div
+              role="tabpanel"
+              aria-label="Product"
+              className="flex flex-1 overflow-hidden"
+            >
+              <ProductTab />
+            </div>
+          </ErrorBoundary>
+        )}
 
-      {/* Orchestrator tab — agent monitoring, slot cards, CI feed */}
-      {activeTab === "orchestrator" && (
-        <ErrorBoundary label="Orchestrator">
-          <div
-            data-testid="orchestrator-tab-content"
-            className="flex-1 overflow-hidden"
-          >
-            <OrchestratorView manageLifecycle={true} />
-          </div>
-        </ErrorBoundary>
-      )}
+        {/* Orchestrator tab — agent monitoring, slot cards, CI feed */}
+        {activeTab === "orchestrator" && (
+          <ErrorBoundary label="Orchestrator">
+            <div
+              role="tabpanel"
+              aria-label="Orchestrator"
+              data-testid="orchestrator-tab-content"
+              className="flex-1 overflow-hidden"
+            >
+              <OrchestratorView manageLifecycle={true} />
+            </div>
+          </ErrorBoundary>
+        )}
 
-      {/* Debug tab */}
-      {activeTab === "debug" && (
-        <ErrorBoundary label="Debug">
-          <div className="flex-1 overflow-hidden">
-            <DebugView />
-          </div>
-        </ErrorBoundary>
-      )}
+        {/* Debug tab */}
+        {activeTab === "debug" && (
+          <ErrorBoundary label="Debug">
+            <div
+              role="tabpanel"
+              aria-label="Debug"
+              className="flex-1 overflow-hidden"
+            >
+              <DebugView />
+            </div>
+          </ErrorBoundary>
+        )}
+      </main>
 
       <Toaster />
     </div>
@@ -295,6 +328,8 @@ function StudioSubTab({
 }) {
   return (
     <button
+      role="tab"
+      aria-selected={active}
       data-testid={testid}
       onClick={onClick}
       style={{
@@ -335,6 +370,8 @@ function NavTab({
 }) {
   return (
     <button
+      role="tab"
+      aria-selected={active}
       data-testid={testid}
       data-nav-label="true"
       data-active={active ? "true" : "false"}

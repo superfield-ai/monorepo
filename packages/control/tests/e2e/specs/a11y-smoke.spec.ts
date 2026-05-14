@@ -58,11 +58,7 @@ async function runAxe(page: import("@playwright/test").Page) {
   );
 }
 
-// Skipped pending a11y remediation pass. The smoke spec is correct — it found
-// real serious/critical violations on every pillar tab. Fixing them is a
-// dedicated audit-and-patch pass that does not fit the demo window. Re-enable
-// by removing the `.skip` after that pass lands.
-test.describe.skip("a11y smoke", () => {
+test.describe("a11y smoke", () => {
   test("Studio tab has no serious/critical a11y violations", async ({
     page,
   }) => {
