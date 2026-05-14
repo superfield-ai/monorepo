@@ -52,8 +52,7 @@ function installMockEventSource(page: import("@playwright/test").Page): void {
       }
 
       addEventListener(type: string, listener: EventListener): void {
-        const set =
-          this._listeners.get(type) ?? new Set<Listener>();
+        const set = this._listeners.get(type) ?? new Set<Listener>();
         set.add(listener as Listener);
         this._listeners.set(type, set);
       }
@@ -191,7 +190,10 @@ test.describe("Log tail SSE feed", () => {
     await page.evaluate(() => {
       const registry = (
         globalThis as unknown as {
-          __mockEventSources: Map<string, { emit(type: string, data: string): void; url: string }>;
+          __mockEventSources: Map<
+            string,
+            { emit(type: string, data: string): void; url: string }
+          >;
         }
       ).__mockEventSources;
 
@@ -236,7 +238,10 @@ test.describe("Log tail SSE feed", () => {
     await page.evaluate(() => {
       const registry = (
         globalThis as unknown as {
-          __mockEventSources: Map<string, { emit(type: string, data: string): void; url: string }>;
+          __mockEventSources: Map<
+            string,
+            { emit(type: string, data: string): void; url: string }
+          >;
         }
       ).__mockEventSources;
 
@@ -268,12 +273,12 @@ test.describe("Log tail SSE feed", () => {
       ) as HTMLElement | null;
       if (!scrollable) {
         // Fall back to the pane itself.
-        return (
-          pane.scrollHeight - pane.scrollTop - pane.clientHeight < 10
-        );
+        return pane.scrollHeight - pane.scrollTop - pane.clientHeight < 10;
       }
       return (
-        scrollable.scrollHeight - scrollable.scrollTop - scrollable.clientHeight <
+        scrollable.scrollHeight -
+          scrollable.scrollTop -
+          scrollable.clientHeight <
         10
       );
     });
@@ -308,16 +313,16 @@ test.describe("Cluster events SSE feed", () => {
     await page.evaluate(() => {
       const registry = (
         globalThis as unknown as {
-          __mockEventSources: Map<string, { emit(type: string, data: string): void; url: string }>;
+          __mockEventSources: Map<
+            string,
+            { emit(type: string, data: string): void; url: string }
+          >;
         }
       ).__mockEventSources;
 
       for (const [url, source] of registry) {
         if (url.includes("/studio/cluster/events")) {
-          source.emit(
-            "cluster-status",
-            JSON.stringify({ status: "degraded" }),
-          );
+          source.emit("cluster-status", JSON.stringify({ status: "degraded" }));
           return;
         }
       }
@@ -344,16 +349,16 @@ test.describe("Cluster events SSE feed", () => {
     await page.evaluate(() => {
       const registry = (
         globalThis as unknown as {
-          __mockEventSources: Map<string, { emit(type: string, data: string): void; url: string }>;
+          __mockEventSources: Map<
+            string,
+            { emit(type: string, data: string): void; url: string }
+          >;
         }
       ).__mockEventSources;
 
       for (const [url, source] of registry) {
         if (url.includes("/studio/cluster/events")) {
-          source.emit(
-            "cluster-status",
-            JSON.stringify({ status: "degraded" }),
-          );
+          source.emit("cluster-status", JSON.stringify({ status: "degraded" }));
           return;
         }
       }
@@ -367,16 +372,16 @@ test.describe("Cluster events SSE feed", () => {
     await page.evaluate(() => {
       const registry = (
         globalThis as unknown as {
-          __mockEventSources: Map<string, { emit(type: string, data: string): void; url: string }>;
+          __mockEventSources: Map<
+            string,
+            { emit(type: string, data: string): void; url: string }
+          >;
         }
       ).__mockEventSources;
 
       for (const [url, source] of registry) {
         if (url.includes("/studio/cluster/events")) {
-          source.emit(
-            "cluster-status",
-            JSON.stringify({ status: "healthy" }),
-          );
+          source.emit("cluster-status", JSON.stringify({ status: "healthy" }));
           return;
         }
       }
@@ -414,7 +419,10 @@ test.describe("CI check-run SSE feed", () => {
       ({ sha, checkRunName }) => {
         const registry = (
           globalThis as unknown as {
-            __mockEventSources: Map<string, { emit(type: string, data: string): void; url: string }>;
+            __mockEventSources: Map<
+              string,
+              { emit(type: string, data: string): void; url: string }
+            >;
           }
         ).__mockEventSources;
 
@@ -493,7 +501,10 @@ test.describe("CI check-run SSE feed", () => {
       ({ sha, checkRunName }) => {
         const registry = (
           globalThis as unknown as {
-            __mockEventSources: Map<string, { emit(type: string, data: string): void; url: string }>;
+            __mockEventSources: Map<
+              string,
+              { emit(type: string, data: string): void; url: string }
+            >;
           }
         ).__mockEventSources;
 
@@ -530,9 +541,9 @@ test.describe("CI check-run SSE feed", () => {
     // Wait for the POST to go through.
     await page.waitForTimeout(500);
     expect(escalateCalled).toBe(true);
-    expect(
-      (escalateBody as Record<string, unknown>)?.checkRunName,
-    ).toBe(checkRunName);
+    expect((escalateBody as Record<string, unknown>)?.checkRunName).toBe(
+      checkRunName,
+    );
     expect((escalateBody as Record<string, unknown>)?.sha).toBe(sha);
   });
 });
