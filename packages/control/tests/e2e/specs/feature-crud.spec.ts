@@ -384,7 +384,11 @@ test.describe("UPDATE feature flow", () => {
   test("after UPDATE the DESCRIPTION section re-renders with the new body", async ({
     page,
   }) => {
-    const updatedBody = "refreshed description after patch";
+    // Use a task-list body so the rendered DESCRIPTION changes visibly after
+    // patch — prose-only bodies render as "No checklist items" regardless of
+    // content, making old/new states indistinguishable.
+    const updatedBody = "- [ ] refreshed task item";
+    const updatedBodyText = "refreshed task item";
 
     // After the PATCH, the re-fetch returns the updated body.
     let issueBody = "original body";
@@ -461,11 +465,11 @@ test.describe("UPDATE feature flow", () => {
       .locator("button", { hasText: "UPDATE" });
     await updateButton.click();
 
-    // After the PATCH + re-fetch, the DESCRIPTION section must show the new body.
-    // The detail panel re-renders with "No checklist items" prose path since the
-    // updated body has no task-list lines.
+    // After the PATCH + re-fetch, the DESCRIPTION section must show the new
+    // body. The updated body contains a task-list item so the checklist renders
+    // its text rather than the "No checklist items" prose placeholder.
     await expect(page.getByTestId("feature-detail")).toContainText(
-      updatedBody,
+      updatedBodyText,
       { timeout: 5_000 },
     );
   });
