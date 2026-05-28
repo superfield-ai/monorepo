@@ -17,7 +17,12 @@ import type { BrowserContext } from "@playwright/test";
 import { test, expect } from "../fixtures";
 
 const PASSWORD = "pages-password-123";
-const TAB_TESTIDS: readonly string[] = ["tab-studio", "tab-viewport"];
+const TAB_TESTIDS: readonly string[] = [
+  "tab-studio",
+  "tab-viewport",
+  "tab-product",
+  "tab-orchestrator",
+];
 
 // We hit the studio server with plain `fetch` rather than Playwright's
 // APIRequestContext: the latter races against the `capturedConsole`
