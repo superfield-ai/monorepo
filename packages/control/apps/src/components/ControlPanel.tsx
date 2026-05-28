@@ -19,6 +19,7 @@ import { FeaturePane } from "./FeaturePane";
 import { MockRouteGallery } from "./MockRouteGallery";
 import { BlueprintConformanceFeed } from "./BlueprintConformanceFeed";
 import { FixtureSwitcher } from "./FixtureSwitcher";
+import { DeployView } from "./DeployView";
 import { ProductTab } from "./ProductTab";
 import type { ClusterStatus } from "./ClusterStatusIndicator";
 import { ClusterStatusController } from "../controllers/ClusterStatusController";
@@ -89,7 +90,7 @@ export function ControlPanel({
   >("studio");
 
   const [studioSubView, setStudioSubView] = useState<
-    "features" | "mocks" | "conformance" | "fixtures"
+    "features" | "mocks" | "conformance" | "fixtures" | "deploy"
   >("features");
 
   const [viewport, setViewportState] = useState<Viewport>(() => loadViewport());
@@ -221,6 +222,12 @@ export function ControlPanel({
                   active={studioSubView === "fixtures"}
                   onClick={() => setStudioSubView("fixtures")}
                 />
+                <StudioSubTab
+                  testid="studio-sub-deploy"
+                  label="Deploy"
+                  active={studioSubView === "deploy"}
+                  onClick={() => setStudioSubView("deploy")}
+                />
               </div>
               <div
                 role="tabpanel"
@@ -233,6 +240,7 @@ export function ControlPanel({
                   <BlueprintConformanceFeed />
                 )}
                 {studioSubView === "fixtures" && <FixtureSwitcher />}
+                {studioSubView === "deploy" && <DeployView />}
               </div>
             </div>
           </ErrorBoundary>
