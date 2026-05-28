@@ -176,5 +176,8 @@ test("steer form clears after successful steer submission", async () => {
   expect(value).toBe("");
 
   // steer was called with the correct args
-  expect(controller.steer).toHaveBeenCalledWith("Make the button red", "sess-42");
+  expect(controller.steer).toHaveBeenCalledWith(
+    "Make the button red",
+    "sess-42",
+  );
 });
