@@ -254,6 +254,23 @@ describe("slot card", () => {
   });
 });
 
+// ── Scenario 4b: Empty slots state ───────────────────────────────────────────
+
+describe("empty slots state", () => {
+  test("no slot cards are rendered when slots array is empty", async () => {
+    const { controller } = makeStubController({
+      processState: "running",
+      slots: [],
+    });
+    const screen = render(
+      <OrchestratorView controller={controller} manageLifecycle={false} />,
+    );
+    // With no slots, no slot-card-{n} elements should exist.
+    const card = screen.container.querySelector('[data-testid^="slot-card-"]');
+    expect(card).toBeNull();
+  });
+});
+
 // ── Scenario 5: Slot heartbeat history ───────────────────────────────────────
 
 describe("slot heartbeat history", () => {
