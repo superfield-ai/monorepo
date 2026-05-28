@@ -138,10 +138,7 @@ test("selecting a feature row with an active slot shows the steer form", async (
   const textarea = detail.locator("textarea");
   await expect(textarea).toBeVisible();
   await expect(textarea).toBeEnabled();
-  await expect(textarea).toHaveAttribute(
-    "placeholder",
-    /steer/i,
-  );
+  await expect(textarea).toHaveAttribute("placeholder", /steer/i);
 
   // The STEER submit button must be present.
   await expect(detail.getByRole("button", { name: /^STEER$/i })).toBeVisible();
@@ -242,7 +239,9 @@ test("steer textarea clears after Enter-key submission", async ({ page }) => {
 
 // ── Scenario 5: Textarea clears after button-click submit ────────────────────
 
-test("steer textarea clears after button-click submission", async ({ page }) => {
+test("steer textarea clears after button-click submission", async ({
+  page,
+}) => {
   await stubRunningSlot(page);
   await page.route("**/studio/steer", (route) =>
     route.fulfill({
@@ -318,7 +317,7 @@ test("new turn appears in the turn timeline after steer submission", async ({
   // The turn-timeline row must appear after the next polling cycle.
   const timeline = page.getByTestId(`turn-timeline-${SESSION_ID}`);
   await expect(timeline).toBeVisible({ timeout: 10_000 });
-  await expect(
-    page.getByTestId(`turn-row-${SESSION_ID}-0`),
-  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByTestId(`turn-row-${SESSION_ID}-0`)).toBeVisible({
+    timeout: 10_000,
+  });
 });
