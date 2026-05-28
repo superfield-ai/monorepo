@@ -49,7 +49,12 @@ async function stubMockRoutes(page: import("@playwright/test").Page) {
       return route.fulfill({
         status: 200,
         contentType: "application/json",
-        body: JSON.stringify({ id: "r1", method: "GET", path: "/api/users", enabled: false }),
+        body: JSON.stringify({
+          id: "r1",
+          method: "GET",
+          path: "/api/users",
+          enabled: false,
+        }),
       });
     }
     return route.continue();
@@ -126,7 +131,12 @@ test.describe("mock-route gallery", () => {
         return route.fulfill({
           status: 200,
           contentType: "application/json",
-          body: JSON.stringify({ id: "r1", method: "GET", path: "/api/users", enabled: false }),
+          body: JSON.stringify({
+            id: "r1",
+            method: "GET",
+            path: "/api/users",
+            enabled: false,
+          }),
         });
       }
       return route.continue();
@@ -240,7 +250,10 @@ test.describe("fixture switcher", () => {
     await page.waitForTimeout(300);
 
     expect(activateCalled).toBe(true);
-    expect(activateBody).toMatchObject({ route: "/api/users", fixture: "empty" });
+    expect(activateBody).toMatchObject({
+      route: "/api/users",
+      fixture: "empty",
+    });
   });
 
   test("active fixture status indicator is visible after load", async ({

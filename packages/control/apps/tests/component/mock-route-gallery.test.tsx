@@ -17,7 +17,9 @@ import {
 
 // ── Stub controller ──────────────────────────────────────────────────────────
 
-function makeController(overrides: Partial<MockRouteState> = {}): MockRouteController {
+function makeController(
+  overrides: Partial<MockRouteState> = {},
+): MockRouteController {
   const state: MockRouteState = {
     routes: [],
     loading: false,
@@ -27,7 +29,11 @@ function makeController(overrides: Partial<MockRouteState> = {}): MockRouteContr
   };
   const listeners = new Set<MockRouteListener>();
   const ctrl = {
-    getState: () => ({ ...state, routes: [...state.routes], toggling: new Set(state.toggling) }),
+    getState: () => ({
+      ...state,
+      routes: [...state.routes],
+      toggling: new Set(state.toggling),
+    }),
     subscribe: (l: MockRouteListener) => {
       listeners.add(l);
       l(ctrl.getState());
@@ -47,9 +53,7 @@ const ROUTES: readonly MockRoute[] = [
 
 describe("MockRouteGallery", () => {
   test("renders the gallery container", async () => {
-    const screen = render(
-      <MockRouteGallery controller={makeController()} />,
-    );
+    const screen = render(<MockRouteGallery controller={makeController()} />);
     await expect
       .element(screen.getByTestId("mock-route-gallery"))
       .toBeVisible();
@@ -59,18 +63,10 @@ describe("MockRouteGallery", () => {
     const screen = render(
       <MockRouteGallery controller={makeController({ routes: ROUTES })} />,
     );
-    await expect
-      .element(screen.getByTestId("mock-route-table"))
-      .toBeVisible();
-    await expect
-      .element(screen.getByTestId("mock-route-row-r1"))
-      .toBeVisible();
-    await expect
-      .element(screen.getByTestId("mock-route-row-r2"))
-      .toBeVisible();
-    await expect
-      .element(screen.getByTestId("mock-route-row-r3"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("mock-route-table")).toBeVisible();
+    await expect.element(screen.getByTestId("mock-route-row-r1")).toBeVisible();
+    await expect.element(screen.getByTestId("mock-route-row-r2")).toBeVisible();
+    await expect.element(screen.getByTestId("mock-route-row-r3")).toBeVisible();
   });
 
   test("each row shows method and path", async () => {
@@ -84,22 +80,23 @@ describe("MockRouteGallery", () => {
 
   test("shows empty-state when routes list is empty", async () => {
     const screen = render(
-      <MockRouteGallery controller={makeController({ routes: [], loading: false })} />,
+      <MockRouteGallery
+        controller={makeController({ routes: [], loading: false })}
+      />,
     );
-    await expect
-      .element(screen.getByTestId("mock-route-empty"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("mock-route-empty")).toBeVisible();
   });
 
   test("shows error state when controller reports an error", async () => {
     const screen = render(
       <MockRouteGallery
-        controller={makeController({ error: "Network unreachable", routes: [] })}
+        controller={makeController({
+          error: "Network unreachable",
+          routes: [],
+        })}
       />,
     );
-    await expect
-      .element(screen.getByTestId("mock-route-error"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("mock-route-error")).toBeVisible();
     await expect
       .element(screen.getByTestId("mock-route-error"))
       .toHaveTextContent("Network unreachable");
@@ -117,11 +114,7 @@ describe("MockRouteGallery", () => {
     const screen = render(
       <MockRouteGallery controller={makeController({ routes: ROUTES })} />,
     );
-    await expect
-      .element(screen.getByTestId("toggle-r1"))
-      .toBeVisible();
-    await expect
-      .element(screen.getByTestId("toggle-r2"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("toggle-r1")).toBeVisible();
+    await expect.element(screen.getByTestId("toggle-r2")).toBeVisible();
   });
 });

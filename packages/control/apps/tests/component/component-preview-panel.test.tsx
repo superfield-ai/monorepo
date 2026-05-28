@@ -16,9 +16,7 @@ describe("ComponentPreviewPanel", () => {
     await expect
       .element(screen.getByTestId("preview-view-selector"))
       .toBeVisible();
-    await expect
-      .element(screen.getByTestId("preview-view-wiki"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("preview-view-wiki")).toBeVisible();
     await expect
       .element(screen.getByTestId("preview-view-citations"))
       .toBeVisible();
@@ -32,9 +30,7 @@ describe("ComponentPreviewPanel", () => {
 
   test("wiki view is shown by default", async () => {
     const screen = render(<ComponentPreviewPanel />);
-    await expect
-      .element(screen.getByTestId("preview-content"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("preview-content")).toBeVisible();
     // The WikiRender article element should be present inside the content area.
     const article = screen.container.querySelector("article");
     expect(article).not.toBeNull();

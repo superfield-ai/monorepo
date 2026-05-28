@@ -58,9 +58,7 @@ describe("CitationHoverPopover", () => {
       />,
     );
     // No popover div in the DOM.
-    const popover = screen.container.querySelector(
-      ".fixed.z-50",
-    );
+    const popover = screen.container.querySelector(".fixed.z-50");
     expect(popover).toBeNull();
   });
 

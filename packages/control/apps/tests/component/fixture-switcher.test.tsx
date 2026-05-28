@@ -64,17 +64,13 @@ describe("FixtureSwitcher", () => {
   test("renders the switcher container", async () => {
     const { ctrl } = makeController();
     const screen = render(<FixtureSwitcher controller={ctrl} />);
-    await expect
-      .element(screen.getByTestId("fixture-switcher"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("fixture-switcher")).toBeVisible();
   });
 
   test("shows no-route placeholder when route is empty", async () => {
     const { ctrl } = makeController();
     const screen = render(<FixtureSwitcher controller={ctrl} />);
-    await expect
-      .element(screen.getByTestId("fixture-no-route"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("fixture-no-route")).toBeVisible();
   });
 
   test("route input is present and accepts text", async () => {
@@ -110,9 +106,7 @@ describe("FixtureSwitcher", () => {
       active: "default",
     });
     const screen = render(<FixtureSwitcher controller={ctrl} />);
-    await expect
-      .element(screen.getByTestId("fixture-list"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("fixture-list")).toBeVisible();
     await expect
       .element(screen.getByTestId("fixture-option-default"))
       .toBeVisible();
@@ -169,9 +163,7 @@ describe("FixtureSwitcher", () => {
       fixtures: [],
     });
     const screen = render(<FixtureSwitcher controller={ctrl} />);
-    await expect
-      .element(screen.getByTestId("fixture-error"))
-      .toBeVisible();
+    await expect.element(screen.getByTestId("fixture-error")).toBeVisible();
     await expect
       .element(screen.getByTestId("fixture-error"))
       .toHaveTextContent("Not found");
