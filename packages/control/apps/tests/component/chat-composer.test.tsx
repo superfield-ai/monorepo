@@ -9,11 +9,14 @@
  *  - Typing in textarea calls onChange with new value
  *
  * All tests use mock callbacks passed as props.
+ * Keyboard interactions use the userEvent API from @vitest/browser/context
+ * so events go through the browser's full event dispatch pipeline.
  */
 
 import React, { useState } from "react";
 import { render } from "vitest-browser-react";
 import { afterEach, expect, test, vi } from "vitest";
+import { userEvent } from "@vitest/browser/context";
 import { ChatComposer } from "../../src/components/chat/ChatComposer";
 
 afterEach(() => {
@@ -28,7 +31,7 @@ test("Enter key fires onSubmit callback", async () => {
   const onSubmit = vi.fn();
   const onChange = vi.fn();
 
-  const { getByTestId } = render(
+  const screen = render(
     <ChatComposer
       value="Hello world"
       onChange={onChange}
@@ -36,17 +39,9 @@ test("Enter key fires onSubmit callback", async () => {
     />,
   );
 
-  const textarea = getByTestId("chat-composer-input") as HTMLTextAreaElement;
-  textarea.focus();
-
-  // Simulate Enter key press
-  const enterEvent = new KeyboardEvent("keydown", {
-    key: "Enter",
-    code: "Enter",
-    bubbles: true,
-    cancelable: true,
-  });
-  textarea.dispatchEvent(enterEvent);
+  const textarea = screen.getByTestId("chat-composer-input");
+  await textarea.click();
+  await userEvent.keyboard("{Enter}");
 
   expect(onSubmit).toHaveBeenCalledTimes(1);
 });
@@ -59,7 +54,7 @@ test("Shift+Enter does NOT fire onSubmit (allows newline)", async () => {
   const onSubmit = vi.fn();
   const onChange = vi.fn();
 
-  const { getByTestId } = render(
+  const screen = render(
     <ChatComposer
       value="Hello world"
       onChange={onChange}
@@ -67,18 +62,9 @@ test("Shift+Enter does NOT fire onSubmit (allows newline)", async () => {
     />,
   );
 
-  const textarea = getByTestId("chat-composer-input") as HTMLTextAreaElement;
-  textarea.focus();
-
-  // Simulate Shift+Enter key press
-  const shiftEnterEvent = new KeyboardEvent("keydown", {
-    key: "Enter",
-    code: "Enter",
-    shiftKey: true,
-    bubbles: true,
-    cancelable: true,
-  });
-  textarea.dispatchEvent(shiftEnterEvent);
+  const textarea = screen.getByTestId("chat-composer-input");
+  await textarea.click();
+  await userEvent.keyboard("{Shift>}{Enter}{/Shift}");
 
   expect(onSubmit).not.toHaveBeenCalled();
 });
@@ -91,12 +77,12 @@ test("Submit button is disabled when value is empty", async () => {
   const onSubmit = vi.fn();
   const onChange = vi.fn();
 
-  const { getByTestId } = render(
+  const screen = render(
     <ChatComposer value="" onChange={onChange} onSubmit={onSubmit} />,
   );
 
-  const button = getByTestId("chat-composer-submit") as HTMLButtonElement;
-  expect(button.disabled).toBe(true);
+  const button = screen.getByTestId("chat-composer-submit");
+  await expect.element(button).toBeDisabled();
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -107,7 +93,7 @@ test("Submit button is disabled when disabled prop is true", async () => {
   const onSubmit = vi.fn();
   const onChange = vi.fn();
 
-  const { getByTestId } = render(
+  const screen = render(
     <ChatComposer
       value="Hello world"
       onChange={onChange}
@@ -116,8 +102,8 @@ test("Submit button is disabled when disabled prop is true", async () => {
     />,
   );
 
-  const button = getByTestId("chat-composer-submit") as HTMLButtonElement;
-  expect(button.disabled).toBe(true);
+  const button = screen.getByTestId("chat-composer-submit");
+  await expect.element(button).toBeDisabled();
 });
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -142,11 +128,10 @@ test("Typing in textarea calls onChange with new value", async () => {
     );
   };
 
-  const { getByTestId } = render(<TestWrapper />);
+  const screen = render(<TestWrapper />);
 
-  const textarea = getByTestId("chat-composer-input") as HTMLTextAreaElement;
-  textarea.value = "test";
-  textarea.dispatchEvent(new Event("change", { bubbles: true }));
+  const textarea = screen.getByTestId("chat-composer-input");
+  await userEvent.type(textarea, "test");
 
   expect(onChange).toHaveBeenCalled();
 });
