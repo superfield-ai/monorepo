@@ -96,3 +96,60 @@ test("shows empty state when there are no running issues", async () => {
     .element(screen.getByText("No running developer agents are available."))
     .toBeVisible();
 });
+
+test("accordion expands to show checklist when issue is selected", async () => {
+  // When selectedIssueNumber matches, the details element is open, showing checklist
+  const screen = render(
+    <IssueRail
+      issues={ISSUES}
+      slots={SLOTS}
+      selectedIssueNumber={42}
+      onSelectIssue={vi.fn()}
+    />,
+  );
+
+  await expect.element(screen.getByTestId("issue-rail")).toBeVisible();
+  // Checklist items from issue #42 should be visible when it's selected (open)
+  await expect
+    .element(screen.getByText("render assistant output"))
+    .toBeVisible();
+  await expect
+    .element(screen.getByText("keep submit button visible"))
+    .toBeVisible();
+});
+
+test("steer button fires onSteer callback with correct sessionId", async () => {
+  const onSteer = vi.fn();
+  const screen = render(
+    <IssueRail
+      issues={ISSUES}
+      slots={SLOTS}
+      selectedIssueNumber={42}
+      onSelectIssue={vi.fn()}
+      onSteer={onSteer}
+    />,
+  );
+
+  await expect.element(screen.getByTestId("issue-rail")).toBeVisible();
+  await screen.getByTestId("steer-btn-42").click();
+
+  expect(onSteer).toHaveBeenCalledWith("sess-42");
+});
+
+test("escalate button fires onEscalate callback with correct slot number", async () => {
+  const onEscalate = vi.fn();
+  const screen = render(
+    <IssueRail
+      issues={ISSUES}
+      slots={SLOTS}
+      selectedIssueNumber={42}
+      onSelectIssue={vi.fn()}
+      onEscalate={onEscalate}
+    />,
+  );
+
+  await expect.element(screen.getByTestId("issue-rail")).toBeVisible();
+  await screen.getByTestId("escalate-btn-42").click();
+
+  expect(onEscalate).toHaveBeenCalledWith(1);
+});
