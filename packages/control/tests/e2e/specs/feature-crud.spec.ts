@@ -180,9 +180,9 @@ test.describe("CREATE feature flow", () => {
       const url = route.request().url();
 
       if (method === "POST" && !url.match(/\/studio\/issues\/\d+/)) {
-        const data = JSON.parse(
-          (await route.request().postData()) ?? "{}",
-        ) as { title?: string };
+        const data = JSON.parse((await route.request().postData()) ?? "{}") as {
+          title?: string;
+        };
         const newIssue = {
           number: NEW_ISSUE_NUMBER,
           title: data.title ?? "untitled",
@@ -228,9 +228,7 @@ test.describe("CREATE feature flow", () => {
 
     // The detail header must show the new issue number
     await expect(
-      page
-        .getByTestId("feature-detail")
-        .getByText(`#${NEW_ISSUE_NUMBER}`),
+      page.getByTestId("feature-detail").getByText(`#${NEW_ISSUE_NUMBER}`),
     ).toBeVisible();
   });
 
@@ -407,9 +405,9 @@ test.describe("UPDATE feature flow", () => {
         method === "PATCH" &&
         url.includes(`/studio/issues/${EXISTING_ISSUE_NUMBER}`)
       ) {
-        const data = JSON.parse(
-          (await route.request().postData()) ?? "{}",
-        ) as { body?: string };
+        const data = JSON.parse((await route.request().postData()) ?? "{}") as {
+          body?: string;
+        };
         issueBody = data.body ?? issueBody;
         return route.fulfill({
           status: 200,
