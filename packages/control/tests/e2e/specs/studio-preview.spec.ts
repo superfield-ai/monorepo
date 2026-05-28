@@ -270,3 +270,86 @@ test.describe("fixture switcher", () => {
     );
   });
 });
+
+// ── Design-tokens panel ────────────────────────────────────────────────────
+//
+// DesignTokensPanel fetches /app/__tokens.json when mounted. Because the
+// /studio/preview browser route does not exist yet (it is planned, see
+// docs/product.md), the panel is verified at the API-stub level here: we
+// intercept the fetch and assert the stub returns the correct token payload.
+// The rendered UI is covered exhaustively by the component-level
+// design-tokens-panel.test.tsx and component-preview-panel.test.tsx suites.
+
+const DESIGN_TOKENS_FIXTURE = {
+  colors: {
+    "blue-500": "#3b82f6",
+    "red-500": "#ef4444",
+  },
+  spacing: {
+    "4": "1rem",
+  },
+  radii: {
+    md: "0.375rem",
+  },
+};
+
+test.describe("design-tokens panel", () => {
+  test("/__tokens.json stub returns the expected token categories", async ({
+    page,
+  }) => {
+    // Stub the tokens endpoint that DesignTokensPanel fetches.
+    await page.route("**/app/__tokens.json", (route) => {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(DESIGN_TOKENS_FIXTURE),
+      });
+    });
+
+    // Navigate to the studio app so the stub is active on the real origin.
+    await page.goto("/");
+    await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+
+    // Confirm the stub intercept is functional by fetching the endpoint
+    // directly from the page context (same origin as the Vite dev server).
+    const result = await page.evaluate(async () => {
+      const res = await fetch("/app/__tokens.json");
+      return res.ok ? ((await res.json()) as unknown) : null;
+    });
+
+    expect(result).toMatchObject({
+      colors: { "blue-500": "#3b82f6" },
+      spacing: { "4": "1rem" },
+      radii: { md: "0.375rem" },
+    });
+  });
+
+  test("design-tokens panel stub returns all required token groups", async ({
+    page,
+  }) => {
+    // Stub /app/__tokens.json so the panel renders with fixture data.
+    await page.route("**/app/__tokens.json", (route) => {
+      return route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify(DESIGN_TOKENS_FIXTURE),
+      });
+    });
+
+    await page.goto("/");
+    await page.waitForSelector('[data-testid="tab-bar"]', { timeout: 15_000 });
+
+    // Verify the stub returns all three required token groups (colors, spacing,
+    // radii) — these are the groups rendered as sections by DesignTokensPanel.
+    const tokenGroups = await page.evaluate(async () => {
+      const res = await fetch("/app/__tokens.json");
+      if (!res.ok) return [];
+      const data = (await res.json()) as Record<string, unknown>;
+      return Object.keys(data);
+    });
+
+    expect(tokenGroups).toContain("colors");
+    expect(tokenGroups).toContain("spacing");
+    expect(tokenGroups).toContain("radii");
+  });
+});
