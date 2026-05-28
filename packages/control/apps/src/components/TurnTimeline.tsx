@@ -178,11 +178,17 @@ interface TurnTimelineProps {
   readonly sessionId: string;
   /** Optional pre-loaded turns (for tests). */
   readonly turnsOverride?: readonly TurnSummary[];
+  /**
+   * How often (ms) to re-fetch turns from the server.
+   * Defaults to 5000 ms. Pass 0 to disable polling.
+   */
+  readonly pollIntervalMs?: number;
 }
 
 export function TurnTimeline({
   sessionId,
   turnsOverride,
+  pollIntervalMs = 5_000,
 }: TurnTimelineProps): JSX.Element {
   const [turns, setTurns] = useState<readonly TurnSummary[]>(
     turnsOverride ?? [],
@@ -199,9 +205,10 @@ export function TurnTimeline({
       setLoading(false);
       return;
     }
+
     let cancelled = false;
-    setLoading(true);
-    void (async () => {
+
+    async function fetchTurns(): Promise<void> {
       const result = await fetchJson<TurnsResponse>(
         `/studio/turns/${encodeURIComponent(sessionId)}`,
       );
@@ -213,11 +220,25 @@ export function TurnTimeline({
       }
       setError(null);
       setTurns(result.value.turns);
-    })();
+    }
+
+    setLoading(true);
+    void fetchTurns();
+
+    if (pollIntervalMs > 0) {
+      const timer = setInterval(() => {
+        void fetchTurns();
+      }, pollIntervalMs);
+      return () => {
+        cancelled = true;
+        clearInterval(timer);
+      };
+    }
+
     return () => {
       cancelled = true;
     };
-  }, [sessionId, turnsOverride]);
+  }, [sessionId, turnsOverride, pollIntervalMs]);
 
   if (error) {
     return (

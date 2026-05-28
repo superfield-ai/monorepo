@@ -176,8 +176,10 @@ test("pressing Enter in the steer textarea fires POST /studio/steer", async ({
   await page.waitForTimeout(500);
 
   expect(capturedBody).not.toBeNull();
-  expect(capturedBody?.context).toBe(STEER_MESSAGE);
-  expect(capturedBody?.sessionId).toBe(SESSION_ID);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  expect(capturedBody!.context).toBe(STEER_MESSAGE);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  expect(capturedBody!.sessionId).toBe(SESSION_ID);
 });
 
 // ── Scenario 3: STEER button click fires POST /studio/steer ─────────────────
@@ -210,8 +212,10 @@ test("clicking the STEER button fires POST /studio/steer", async ({ page }) => {
   await page.waitForTimeout(500);
 
   expect(capturedBody).not.toBeNull();
-  expect(capturedBody?.context).toBe(STEER_MESSAGE);
-  expect(capturedBody?.sessionId).toBe(SESSION_ID);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  expect(capturedBody!.context).toBe(STEER_MESSAGE);
+  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+  expect(capturedBody!.sessionId).toBe(SESSION_ID);
 });
 
 // ── Scenario 4: Textarea clears after Enter-key submit ───────────────────────
