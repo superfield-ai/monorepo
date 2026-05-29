@@ -31,6 +31,8 @@ interface IssueRailProps {
   slots: readonly SlotInfo[];
   selectedIssueNumber: number | null;
   onSelectIssue: (issue: DemoIssue) => void;
+  onSteer?: (sessionId: string) => void;
+  onEscalate?: (slot: number) => void;
 }
 
 function stateLabel(state: DemoIssue["state"]): string {
@@ -49,6 +51,8 @@ export function IssueRail({
   slots,
   selectedIssueNumber,
   onSelectIssue,
+  onSteer,
+  onEscalate,
 }: IssueRailProps) {
   const runningIssues =
     slots.length > 0
@@ -172,6 +176,30 @@ export function IssueRail({
                           issue.sessionId.slice(0, 10)}
                       </span>
                     </div>
+                    {(onSteer || onEscalate) && (
+                      <div className="mt-3 flex gap-2">
+                        {onSteer && (
+                          <button
+                            type="button"
+                            data-testid={`steer-btn-${issue.number}`}
+                            onClick={() => onSteer(issue.sessionId)}
+                            className="rounded border border-zinc-600 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-300 hover:border-emerald-500 hover:text-emerald-300"
+                          >
+                            Steer
+                          </button>
+                        )}
+                        {onEscalate && (
+                          <button
+                            type="button"
+                            data-testid={`escalate-btn-${issue.number}`}
+                            onClick={() => onEscalate(issue.slot)}
+                            className="rounded border border-zinc-600 px-3 py-1 font-mono text-[10px] uppercase tracking-[0.18em] text-zinc-300 hover:border-amber-500 hover:text-amber-300"
+                          >
+                            Escalate
+                          </button>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </details>
               );

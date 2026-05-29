@@ -37,6 +37,8 @@ function makeFeaturePaneControllerMock(
           "- [x] keep the submit button visible",
         ].join("\n"),
         sessionId: "sess-42",
+        source: "slot",
+        status: "active",
       },
     ],
     selectedIssueNumber: null,
@@ -80,6 +82,8 @@ function makeFeaturePaneControllerMock(
       setState({ selectedIssueNumber: issueNumber });
     }),
     steer: vi.fn(async (_text: string, _sessionId?: string) => {}),
+    createFeature: vi.fn(async (_title: string) => {}),
+    patchFeature: vi.fn(async (_issueNumber: number, _body: string) => {}),
   } as unknown as FeaturePaneController;
 
   return { controller, setState };
@@ -102,11 +106,9 @@ test("renders issue detail and forwards selected sessionId to steer", async () =
     .element(screen.getByText("render assistant output"))
     .toBeVisible();
 
-  const textarea = screen.getByPlaceholder(
-    /discuss changes to this feature spec/i,
-  );
+  const textarea = screen.getByPlaceholder(/steer the running agent/i);
   await textarea.fill("Tighten the button copy");
-  await screen.getByRole("button", { name: "SUBMIT" }).click();
+  await screen.getByRole("button", { name: "STEER" }).click();
 
   expect(controller.steer).toHaveBeenCalledWith(
     "Tighten the button copy",
@@ -123,4 +125,59 @@ test("renders list view and selects an issue when a row is clicked", async () =>
   await row.click();
 
   expect(controller.selectFeature).toHaveBeenCalledWith(42);
+});
+
+test("loading skeleton renders when loading=true", async () => {
+  const { controller } = makeFeaturePaneControllerMock({ loading: true });
+  const screen = render(<FeaturePane controller={controller} />);
+
+  // The loading indicator (↻ spinner) is visible inside the feature-list rail header
+  await expect.element(screen.getByTestId("feature-list")).toBeVisible();
+  await expect.element(screen.getByText("↻")).toBeVisible();
+});
+
+test("error banner renders with error message when error is set", async () => {
+  const { controller } = makeFeaturePaneControllerMock({
+    error: "Network request failed",
+  });
+  const screen = render(<FeaturePane controller={controller} />);
+
+  await expect
+    .element(screen.getByText("Network request failed"))
+    .toBeVisible();
+});
+
+test("empty rail state renders correct message when features=[]", async () => {
+  const { controller } = makeFeaturePaneControllerMock({
+    features: [],
+    loading: false,
+    error: null,
+  });
+  const screen = render(<FeaturePane controller={controller} />);
+
+  await expect.element(screen.getByText("NO FEATURES")).toBeVisible();
+});
+
+test("steer form clears after successful steer submission", async () => {
+  const { controller } = makeFeaturePaneControllerMock({
+    selectedIssueNumber: 42,
+  });
+
+  const screen = render(<FeaturePane controller={controller} />);
+
+  await expect.element(screen.getByTestId("feature-detail")).toBeVisible();
+
+  const textarea = screen.getByPlaceholder(/steer the running agent/i);
+  await textarea.fill("Make the button red");
+  await screen.getByRole("button", { name: "STEER" }).click();
+
+  // After submit, textarea should be cleared
+  const value = (textarea.element() as HTMLTextAreaElement).value;
+  expect(value).toBe("");
+
+  // steer was called with the correct args
+  expect(controller.steer).toHaveBeenCalledWith(
+    "Make the button red",
+    "sess-42",
+  );
 });
