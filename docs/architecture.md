@@ -13,10 +13,10 @@ Superfield builds and continuously improves net-new enterprise applications insi
 | Database (primary / unified store) | **Nexum** — company knowledge graph | One coherent store for operational facts, semantic knowledge (embeddings co-located with the rows they annotate), structured intent, and the causal links among them, under one schema, one clock, one trust model | PRD §1, §9; vision "What the Store Must Do" |
 | Version control / delivery plane | **Sharp** — agent-native VCS | A change is an isolated fork of the live state, validated, then merged; pull requests are gated deltas — the branch/PR without external-forge protocol overhead | PRD §5, §9; vision "No Assumed Priors" |
 | Validation compute / environment forking | **FastEnv** — ultrafast environment forking | Isolated environments forked from the live state on demand, locally or on federated machines when capacity is needed; provisioned → active → torn down | PRD §5, §6, §7 |
-| CI / validation | Jobs spawned on demand against the current baseline in the store (via FastEnv), not a standing server fleet | Self-sufficient core loop; no hard dependency on an external CI service | PRD §8, §9; vision "No Assumed Priors" |
+| CI / validation | **FastEnv** — replaces external CI infrastructure (e.g. GitHub Actions / hosted runners). Validation runs as jobs spawned on demand into forked environments against the current baseline in the store, not a standing server fleet or webhook-driven runner pool | Self-sufficient core loop; no hard dependency on an external CI service | PRD §8, §9; vision "No Assumed Priors" |
 | Observability | Runtime behavior, errors, and sessions written back into Nexum as event rows with foreign keys into the feature/requirement graph — not a separate APM | Closes the signal-to-correction loop inside the brain; no boundary crossing | PRD §5; vision "Self-Improving Software" |
-| Auth / identity | One shared enterprise SSO / IdP layer (OIDC/SAML class) across both surfaces, mapped to the role model | Unified authentication: identity and permissions consistent across the delivered app and the control panel | PRD §7, §9 *(vendor `[unanchored]`)* |
-| Agent execution | Large-language-model agent capability that reads, reasons, and writes against the brain | Agents are the actors that propose, validate, and ship changes | PRD §3, §7 *(vendor `[unanchored]`)* |
+| Auth / identity / security | Superfield-owned security stack (session, authorization, policy); federates to the enterprise's existing SSO/IdP (OIDC/SAML) as an authentication source where present | Unified auth across both surfaces, mapped to the role model; security is owned end-to-end, not outsourced — part of the moat | PRD §7, §9 |
+| Agent execution | Provider-neutral LLM abstraction; end users select their inference provider(s) per workspace (bring-your-own) | Agents are the actors that propose, validate, and ship changes; enterprises bring their own provider for residency and existing-contract reasons | PRD §3, §7 |
 | Systems-of-record integration | Read-only connectors to the enterprise's existing systems | Green-wedge: an app uses data the business maintains without modifying or replacing those systems | PRD §7, §9 |
 | Notifications | A notification transport that alerts a human on pending approval or high-severity signal | Policy-required approvals and signals must reach a human | PRD §7 *(vendor `[unanchored]`)* |
 | Infrastructure / hosting / deploy targets | The enterprise's chosen hosting environments; each workspace isolated from every other | Ship the application to the customer's targets; workspace isolation is launch-critical | PRD §7, §9 *(vendor/topology `[unanchored]`)* |
@@ -30,9 +30,9 @@ Layers intentionally omitted — not applicable or not anchored in any source: d
 |--------------------|----------|--------|
 | **Nexum** (`superfield-ai/nexum`) | Unified operational store — the company brain | PRD §1, §9; vision "Superfield" |
 | **Sharp** (`superfield-ai/sharp`) | Agent-native version control / delivery plane | PRD §5, §9; vision "Superfield" |
-| **FastEnv** (`superfield-ai/fastenv`) | Ultrafast isolated environment forking + validation compute | PRD §5, §7 |
-| Enterprise IdP (OIDC/SAML) | Identity and access management | PRD §7, §9 — `[unanchored]` (PRD specifies the capability, no vendor) |
-| LLM agent provider | Agent execution | PRD §7 — `[unanchored]` |
+| **FastEnv** (`superfield-ai/fastenv`) | Ultrafast isolated environment forking + validation compute; CI infrastructure (replaces GitHub Actions / hosted runners) | PRD §5, §7, §8 |
+| Enterprise IdP (federated) | External authentication source only (OIDC/SAML); Superfield owns session, authorization, and policy | PRD §7, §9 |
+| LLM inference provider(s) | Agent execution — provider-neutral, end-user-selectable (bring-your-own) | PRD §7 |
 | Notification transport | Human alerting | PRD §7 — `[unanchored]` |
 | Hosting / deploy target | Application hosting | PRD §7 — `[unanchored]` (per-customer choice) |
 
@@ -50,14 +50,18 @@ Layers intentionally omitted — not applicable or not anchored in any source: d
 - **Green-wedge adoption.** Enter on a net-new app requiring no change to systems of record and no migration; reads from systems of record are read-only. (PRD §9)
 - **No general-purpose analytics surface.** Nexum synthesizes a current view in service of deciding and steering software work; it is not a data warehouse or BI/observability platform for reporting unrelated to the development loop. (PRD §8)
 
-## 5. Open Decisions
+## 5. Decisions
 
-- **Nexum engine: adopt vs. build.** The thesis allows a commercial database that can hold operational facts, co-located embeddings, structured intent, and graph traversal under one schema and clock; if none exists, the store is built from lean primitives around the coherence guarantee. *Tradeoff:* time-to-coherence and operational maturity (adopt) vs. control over the guarantee (build). *Default:* build Nexum around the coherence guarantee, but evaluate any single commercial engine that can honor all four fact-kinds under one schema/clock before committing. (vision "What the Store Must Do")
-- **Identity provider.** PRD mandates one shared enterprise auth layer mapped to the role model but names no vendor. *Tradeoff:* enterprise SSO integration cost now vs. a weaker interim model. *Default:* integrate a standard enterprise IdP (OIDC/SAML) for both surfaces; treat this as launch-gating before any multi-tenant exposure. (PRD §7, §9)
-- **Agent execution provider.** Unanchored. *Default:* a frontier LLM provider with capacity for long-running reasoning/writing against the brain; keep the provider behind an abstraction so it is swappable.
-- **Federated compute topology.** PRD requires running validation on remote machines when local capacity is insufficient, but the federation substrate is unspecified. *Default:* FastEnv-forked environments dispatched to enterprise-owned or Superfield-managed remote capacity; topology chosen per deployment.
-- **Read boundary to systems of record.** Which data an app must read live versus copy into the brain, and how that boundary is governed, is an open product question (PRD §10). *Default:* read-only live reads, copying into the brain only where the loop requires co-location, governed by workspace access policy.
-- **Notification transport.** Unanchored, and product scope currently excludes Slack/webhook-style integrations. *Default:* surface approvals and signals in the control panel; defer an external transport until required.
+Resolved in an expert decision session (2026-05-30):
+
+- **Nexum: build the engine.** Build Nexum from lean primitives around the coherence guarantee, not as a thin layer over a commercial database — the moat is the hard parts (coherence, isolation, a trustworthy baseline), and defensible infrastructure is prioritized over speed-to-first-customer. *(D0, D1)*
+- **Authorization in the store.** Access control lives in Nexum as policy / row-level security that travels with the data, not in a separate authz system. *(D7)*
+- **Systems-of-record boundary — phased.** SoR data is a read-through, second-class projection under the green wedge (read-only; never modify or replace). The architecture must let that data **graduate to first-class/authoritative** as Superfield becomes the system of record (vision "Where This Goes"). The coherence guarantee is absolute for Superfield-authored facts; external SoR data is a projection Superfield eventually supplants. *(D2)*
+- **FastEnv compute in the customer's environment.** Validation/CI runs inside the customer VPC, not Superfield-managed central infrastructure — data residency, and eventually hosting authoritative data, demand it. *(D5)*
+- **Agent execution: provider-neutral, bring-your-own.** A provider-neutral LLM abstraction; end users select their inference provider(s) per workspace rather than coupling to one frontier model. *(D3)*
+
+- **Security stack: owned, with federated authentication.** Superfield owns the entire security stack — session, authorization (in Nexum), and policy. It federates to the enterprise's existing SSO/IdP (OIDC/SAML) as an authentication source where present, but does not outsource the security model to a bought auth vendor; security is part of the moat. *(D4)*
+- **Notifications: control-panel-only.** Approvals and high-severity signals surface in the control panel; an external notification transport (email/Slack/webhook) is deferred until a requirement forces it. *(D6)*
 
 ## 6. Source Coverage
 
