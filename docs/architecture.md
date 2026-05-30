@@ -42,7 +42,9 @@ Superfield is a direct replacement for the superfield-agents + shell script stac
 
 ## Superfield Blueprint
 
-The Superfield Blueprint is a compiled knowledge graph of design rules — architectural constraints, security principles, design patterns, checklists, and antipatterns — sourced from `dot-matrix-labs/superfield-blueprint` and tracked as a git subtree at `blueprint/`. The compiled graph lives at `blueprint/rules/graph.yaml` (1 231 nodes across ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, WORKER), with domain bodies under `blueprint/rules/blueprints/*.yaml` and TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
+The Superfield Blueprint is Superfield's fine-tuned dev agent model: an opinionated model trained on architectural constraints, security principles, design patterns, checklists, and antipatterns that encodes how to build software correctly. The rules are not a runtime config — they are baked into the model's weights.
+
+**Current implementation (interim).** The fine-tuned model is the target. Today the Blueprint is approximated as a compiled YAML rule graph sourced from `dot-matrix-labs/superfield-blueprint` and tracked as a git subtree at `blueprint/`. The compiled graph lives at `blueprint/rules/graph.yaml` (1 231 nodes across ARCH, AUTH, DATA, TEST, DEPLOY, ENV, PROCESS, UX, WORKER), with domain bodies under `blueprint/rules/blueprints/*.yaml` and TypeScript-specific implementation rules under `blueprint/rules/implementations/ts/`.
 
 **Current integration state:**
 
@@ -61,6 +63,14 @@ Each node in the graph carries:
 | `description` | Prose statement of the rule                                                         |
 | `links`       | Typed edges to related nodes (`depends_on`, `mitigates`, `implements`, etc.)        |
 | `deprecated`  | Whether the rule is still active                                                    |
+
+## Nexum — Company Knowledge Graph
+
+[`superfield-ai/nexum`](https://github.com/superfield-ai/nexum) is the unified operational store for all company knowledge: product vision, requirements, source code, issues, behavioral traces, errors, and the causal links among them — under one schema and one clock. Agents are first-class writers: they record observations, candidate corrections, and outcomes directly into the graph. It is not a log or a warehouse — it is the shared ground truth that every agent, human, and service reasons against without crossing a system boundary.
+
+Nexum is distinct from the Blueprint: where the Blueprint defines the rules agents follow (encoded in the fine-tuned model), Nexum is the live company brain they reason against. The Blueprint tells an agent *how* to build; Nexum tells it *what* to build and *what is currently true*.
+
+**Current state:** Nexum integration is Phase 2 / experimental-flagged. The Phase 1 substitute is the GitOps control plane (GitHub issues, PRs, and comments as the shared state store).
 
 ## GitHub Authentication
 
