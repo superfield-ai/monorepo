@@ -116,6 +116,18 @@ _Unified:_ the 500 is written as an event row the moment it fires, with foreign 
 
 ---
 
+## The View Must Drive the Work
+
+Companies are now reaching for a synthesized view of themselves — an agent-curated picture of what the business is, what it does, and how its parts connect. The instinct is right: a coherent view is what the unified store produces almost as a byproduct. But a view that only informs is inert. The agent-curated wiki dies the same death as the Confluence space nobody updates — not because it is wrong, but because understanding that drives nothing decays the moment it is written.
+
+The view earns its keep only when it drives execution. A coherent picture of the business surfaces the gap between what the business intends and what it actually does, and closing that gap is an operational project — most of which, in practice, are software: the tool that tracks the process, reconciles the two systems, automates the manual step. So the loop is not "understand the business." It is understand → surface the gap → drive the project → ship the software → let that software's usage feed back into the understanding. The synthesized view is the front of that loop, not a deliverable that stands alone. The software it produces is operated first by humans, whose usage becomes the next signal, and later by agents themselves.
+
+This is why the view and the loop are one architecture, not two products bolted together: both read and write the same ground truth, so the distance from "here is what is wrong" to "here is the deployed tool that addresses it" collapses to the speed the data updates — the same collapse this document argues for, now lifted from the maintenance of one app to the operation of the business.
+
+The claim is bounded. This is the software slice of operational improvement, not all of it; much of what a business must fix is process, policy, or people, and no store ships those. But the software slice is large, chronically underserved, and exactly the part a coherent store makes cheap enough to finally clear.
+
+---
+
 ## Going to Market: How This Enters an Enterprise
 
 The thesis says coherence must be chosen from the first line of code. The market says you cannot sell a large enterprise a rip-and-replace of the systems it already runs. Both are true, and the reconciliation is the go-to-market: you do not replace anything. You enter through a **green wedge** — a painpoint the business has no software for.
@@ -125,6 +137,20 @@ Every large enterprise carries an unserved build backlog: internal and departmen
 That is what makes entry _reliable_ rather than merely possible. The adoption decision is bounded: one net-new app, displacing nothing, disturbing nothing in production. The blast radius at landing is a single workspace. The same hard parts that form the moat — isolation that holds, access control that travels with the data, auditability of every agent action, a validation gate before any change ships — are what let a risk-averse enterprise say yes to the first app. Reliability is not a feature bolted on later; it is the price of the wedge.
 
 Then it expands. Each new app the enterprise requests joins the same brain, and the coherence compounds: the second app is cheaper and more legible than the first because they share one ground truth. Land on one unserved need, prove it, and let the backlog migrate inward — never as a forced cutover, always as the next greenfield app that was going to be built anyway.
+
+---
+
+## Where This Goes
+
+The wedge is one app. The architecture is not. Follow the loop forward and the destination is not a cheaper way to clear the backlog — it is a company whose software all lives in one brain, increasingly operated by the same agents that build it.
+
+The escalation is mechanical, not visionary. The same compounding that makes the second app cheaper than the first does not stop at the backlog: past some threshold the brain is no longer where a few departmental apps live — it is where the company's internal software lives, because building inside the brain is cheaper than building outside it. The fragmented stack stops being the default and becomes the legacy.
+
+Then the "operated by humans now, agents later" arc closes. Software that lives in the brain and improves itself can also be _run_ from the brain. An agent that reads the same current state a developer-agent reads can operate the software, not just write it — reconcile the ledger, triage the queue, run the workflow, answer from the same ground truth. The development loop and the operational loop are the same shape: read current state → decide under policy → act → record the outcome. The brain already runs the first. The second is the first pointed at operations instead of code.
+
+So the terminal state is a company whose _software-shaped_ operational roles — the read-decide-act loops, the reconciliations, the triage, the routing, the first-line response — are run by agents against the brain, with humans setting policy, steering intent, and owning the decisions that carry accountability. Not every role: the ones that need physical presence, genuine judgment under ambiguity, negotiation, or a human to answer for the outcome stay human. But the operational middle — people moving information between systems — is exactly what collapses when the systems become one brain and the loop runs at the speed the data updates.
+
+This is why coherence has to be chosen from the first line. You cannot retrofit a company's entire software estate and its operations onto a brain bolted together from four fragmented systems — the same staleness and boundary-crossing that makes a nightly warehouse useless for an hourly loop makes a fragmented stack useless for autonomous operation. The wedge is small on purpose. What it seeds is not.
 
 ---
 
