@@ -116,6 +116,18 @@ A user hits a 500 at checkout on a Tuesday and closes the browser.
 
 ---
 
+## Going to Market: How This Enters an Enterprise
+
+The thesis says coherence must be chosen from the first line of code. The market says you cannot sell a large enterprise a rip-and-replace of the systems it already runs. Both are true, and the reconciliation is the go-to-market: you do not replace anything. You enter through a **green wedge** — a painpoint the business has no software for.
+
+Every large enterprise carries an unserved build backlog: internal and departmental apps it needs but never builds, because each one loses the prioritization fight and is not individually worth the cost of building and maintaining in a fragmented stack. The work falls back to spreadsheets, manual process, and stalled tickets. There is no incumbent to displace, because there is no product — and the budget for it already exists. Each of those apps is, by definition, greenfield. So the unified store is built coherent from line one, exactly as the thesis demands, without touching a single system of record. Where an app needs data the business already maintains, it reads from those systems; it does not modify or replace them.
+
+That is what makes entry *reliable* rather than merely possible. The adoption decision is bounded: one net-new app, displacing nothing, disturbing nothing in production. The blast radius at landing is a single workspace. The same hard parts that form the moat — isolation that holds, access control that travels with the data, auditability of every agent action, a validation gate before any change ships — are what let a risk-averse enterprise say yes to the first app. Reliability is not a feature bolted on later; it is the price of the wedge.
+
+Then it expands. Each new app the enterprise requests joins the same brain, and the coherence compounds: the second app is cheaper and more legible than the first because they share one ground truth. Land on one unserved need, prove it, and let the backlog migrate inward — never as a forced cutover, always as the next greenfield app that was going to be built anyway.
+
+---
+
 ## Superfield
 
 Superfield implements this architecture in its runtime for self-improving applications. The knowledge graph, the planning state, the runtime behavior, the source code, and the improvement actions share one operational store. There is no Git remote, no CI fleet, no separate tracker: branches are isolated forks of the live state, pull requests are gated deltas, CI is a job spawned locally or on federated machines, and issues, specs, and project state are rows — all in the same brain. The agent IDE is the surface through which humans participate — by using the software and steering the inference, not by writing documents. The blueprint — the compiled graph of architectural rules, security patterns, and design constraints — is rows in the same database as the issues it governs and the code it constrains; when it changes, the change is a migration, and the reason a rule exists is a foreign key away from the rule.
