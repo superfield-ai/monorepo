@@ -12,3 +12,6 @@ packages/control/src/embedded-assets.gen.ts
 
 # Vitest browser test screenshots — captured per-run by @vitest/browser, not source.
 packages/control/apps/tests/**/__screenshots__/
+
+# Scheduled-task runtime lock — per-session state (sessionId/pid/timestamp), not source.
+.claude/scheduled_tasks.lock
