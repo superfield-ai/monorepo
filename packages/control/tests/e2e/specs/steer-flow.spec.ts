@@ -173,9 +173,7 @@ test("pressing Enter in the steer textarea fires POST /studio/steer", async ({
   await page.waitForTimeout(500);
 
   expect(capturedBody).not.toBeNull();
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   expect(capturedBody!.context).toBe(STEER_MESSAGE);
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   expect(capturedBody!.sessionId).toBe(SESSION_ID);
 });
 
@@ -209,9 +207,7 @@ test("clicking the STEER button fires POST /studio/steer", async ({ page }) => {
   await page.waitForTimeout(500);
 
   expect(capturedBody).not.toBeNull();
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   expect(capturedBody!.context).toBe(STEER_MESSAGE);
-  // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   expect(capturedBody!.sessionId).toBe(SESSION_ID);
 });
 

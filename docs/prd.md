@@ -6,7 +6,7 @@
 
 Every large enterprise carries an unserved build backlog: the internal and departmental software it needs but never builds. A team needs a tool to track a process, reconcile two systems, automate a manual workflow, or give a business unit a purpose-built app. Each request is real and funded in principle, but it loses the prioritization fight against the roadmap, so it never ships. The work falls back to spreadsheets, manual process, brittle no-code patches, or a ticket that sits in a queue for quarters. There is no off-the-shelf product to buy, because each of these apps is specific to the business. The demand is large, the budget for IT and automation exists, and the backlog only grows.
 
-The backlog persists because the traditional cost of building and *maintaining* a small bespoke application is too high to justify against its individual value. Building it the conventional way scatters its life across disconnected systems — source in one place, issues in another, validation on a server fleet, runtime errors in an observability tool, the spec in a document nobody updates. A human can cross those boundaries; an autonomous agent cannot, because it reads the stale fact with the same confidence as the fresh one. So the distance from a signal to a corrective change stays measured in days or weeks, and a small app is never worth that overhead. The backlog is the visible symptom of a structural cost problem.
+The backlog persists because the traditional cost of building and _maintaining_ a small bespoke application is too high to justify against its individual value. Building it the conventional way scatters its life across disconnected systems — source in one place, issues in another, validation on a server fleet, runtime errors in an observability tool, the spec in a document nobody updates. A human can cross those boundaries; an autonomous agent cannot, because it reads the stale fact with the same confidence as the fresh one. So the distance from a signal to a corrective change stays measured in days or weeks, and a small app is never worth that overhead. The backlog is the visible symptom of a structural cost problem.
 
 Superfield attacks the backlog by collapsing that cost. Each new app is born inside a single **company brain** — one coherent store holding its source code, changes, validation results, issues, specifications, documents, and runtime behavior together — and agents build and continuously improve it against that store, steered by the requesting team. Because each app is net-new, Superfield enters the enterprise as a **green wedge**: it builds software the business does not have and no incumbent system covers, displacing nothing and requiring no rip-and-replace. It lands on one unserved need, proves itself, and expands as more of the backlog moves into the brain — each additional app cheaper and more legible than the last because they share one coherent ground truth.
 
@@ -20,6 +20,7 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 ## 2. Goals and Success Metrics
 
 **Goals**
+
 - Let an enterprise ship the net-new internal and departmental apps it would otherwise leave in the backlog, at a cost per app low enough to justify building them.
 - Give each app a single, coherent source of truth that humans and agents reason against without crossing system boundaries.
 - Close the loop from signal to corrective action so it runs at the speed data updates, not at the speed of human hand-offs — making each app self-maintaining rather than a maintenance liability.
@@ -27,6 +28,7 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 - Enter on a single unserved need without rip-and-replace, and expand as more of the backlog moves into the brain.
 
 **Success metrics**
+
 - **Time to first app:** time from adoption to a first backlog app shipped and in use is measured in days, not quarters.
 - **Backlog throughput:** the number of previously-unserved apps an enterprise ships per quarter rises, and the per-app cost to build and maintain falls.
 - **Signal-to-correction time:** median time from a signal (a user behavior, an error) to a reviewed, deployable corrective change drops from days to minutes.
