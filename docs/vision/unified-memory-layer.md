@@ -75,6 +75,20 @@ This does redraw org lines: the schema team replaces the warehouse-and-ETL data 
 
 ---
 
+## No Assumed Priors
+
+If the schema is the product, then the development stack is not exempt from it. Git, GitHub, CI servers, and the issue tracker are usually treated as fixed ground — the priors every company inherits before writing a line. They are not ground. They are four more fragmented systems, each with its own store, clock, and trust model, built for a workflow that no longer applies: humans coordinating slow, asynchronous changes to a tree of text files.
+
+Look at what those tools actually are. A branch is a proposed delta to source. A pull request is that delta plus a review thread and a gate. An issue is a structured statement of intent. A project board is the relationships among those issues. A CI run is a validation of a delta against a baseline. Every one of these is already a first-class object in the unified store — a row with foreign keys into the code, the requirement, the error, and the agent that produced it. We have been describing them in this document the whole time under different names.
+
+So collapse them. **Source code lives in the database, not in a Git tree synced to a remote.** A change is an isolated environment forked from the live state, mutated, and validated before it merges back — the branch and the PR without the protocol overhead. **CI is a job spawned on demand**, locally or on federated machines, against the same store that holds the code and the baseline it validates against — not a standing fleet of servers polling a webhook. Issues, reviews, project state, specs, errors, strategy, product vision, and the source itself stop being seven systems stitched together by integrations and become one company brain. Source control and project management are the *seed* of the AI-native company; everything else builds out from there.
+
+This sounds maximal, and it is — but the surface is smaller than it looks. Most teams use perhaps a tenth of what these platforms offer; the rest is accommodation for a human-paced, multi-tool collaboration model that agents do not need. We are not rebuilding GitHub. We are melting the thin slice that actually carries work down to lean primitives native to the store — the saaspocalypse, where the integration tax, the sync lag, and the boundary-crossing all disappear because the boundaries do.
+
+Depending on the inherited stack is anachronistic for the same reason depending on a nightly warehouse is: it reintroduces, into the development loop, exactly the distance the unified store was built to remove. The point is agentic work that is fast and verifiable end to end — from spec to source to CI to deploy to the error it produces — without an agent ever leaving the brain to ask another system what is true. Tailored. Lean. Self-sufficient.
+
+---
+
 ## The Moat Is in the Hard Parts
 
 The obvious objection to one store is that it concentrates risk: a single blast radius, a larger security surface, harder multi-tenant isolation, real data-residency constraints — and the validation oracle the self-improvement loop depends on. These are not footnotes. They are the reason the architecture is rare.
@@ -104,6 +118,6 @@ A user hits a 500 at checkout on a Tuesday and closes the browser.
 
 ## Superfield
 
-Superfield implements this architecture in its runtime for self-improving applications. The knowledge graph, the planning state, the runtime behavior, and the improvement actions share one operational store. The agent IDE is the surface through which humans participate — by using the software and steering the inference, not by writing documents. The blueprint — the compiled graph of architectural rules, security patterns, and design constraints — is rows in the same database as the issues it governs and the code it constrains; when it changes, the change is a migration, and the reason a rule exists is a foreign key away from the rule.
+Superfield implements this architecture in its runtime for self-improving applications. The knowledge graph, the planning state, the runtime behavior, the source code, and the improvement actions share one operational store. There is no Git remote, no CI fleet, no separate tracker: branches are isolated forks of the live state, pull requests are gated deltas, CI is a job spawned locally or on federated machines, and issues, specs, and project state are rows — all in the same brain. The agent IDE is the surface through which humans participate — by using the software and steering the inference, not by writing documents. The blueprint — the compiled graph of architectural rules, security patterns, and design constraints — is rows in the same database as the issues it governs and the code it constrains; when it changes, the change is a migration, and the reason a rule exists is a foreign key away from the rule.
 
 We believe AI-native companies should build this way — not because it is elegant, but because the ones that do will compound their improvement loop, and the ones that do not will stay unable to close the distance between what they know and what they do.
