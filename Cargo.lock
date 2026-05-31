@@ -1630,6 +1630,19 @@ dependencies = [
 [[package]]
 name = "nexum"
 version = "0.1.0"
+dependencies = [
+ "hex",
+ "once_cell",
+ "regex",
+ "serde",
+ "sf-db",
+ "sf-embed",
+ "sha2",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "nom"

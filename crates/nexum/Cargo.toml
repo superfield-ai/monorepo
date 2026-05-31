@@ -1,6 +1,6 @@
 [package]
 name = "nexum"
-description = "Nexum component — company knowledge graph (stub)"
+description = "Nexum component — Rust ingestion pipeline on the shared substrate"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,3 +10,19 @@ repository.workspace = true
 [lib]
 name = "nexum"
 path = "src/lib.rs"
+
+[dependencies]
+sf-db    = { workspace = true }
+sf-embed = { workspace = true }
+sqlx     = { workspace = true }
+tokio    = { workspace = true }
+uuid     = { workspace = true }
+thiserror = { workspace = true }
+sha2      = "0.10"
+hex       = "0.4"
+regex     = "1"
+once_cell = "1"
+serde     = { version = "1", features = ["derive"] }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
