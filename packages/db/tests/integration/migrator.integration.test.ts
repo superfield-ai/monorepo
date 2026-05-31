@@ -43,7 +43,11 @@ function dockerAvailable(): boolean {
  * maps a port, but the port is only reachable on the Docker host — not from
  * within the CI container that runs the tests.
  */
-function tcpReachable(host: string, port: number, timeoutMs = 3000): Promise<boolean> {
+function tcpReachable(
+  host: string,
+  port: number,
+  timeoutMs = 3000,
+): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = createConnection({ host, port });
     const timer = setTimeout(() => {
@@ -68,8 +72,7 @@ describe("runMigrations — integration", () => {
 
   beforeAll(async () => {
     if (!dockerAvailable()) {
-      skipReason =
-        "docker not available — skipping migrator integration tests";
+      skipReason = "docker not available — skipping migrator integration tests";
       return;
     }
     try {
@@ -82,10 +85,7 @@ describe("runMigrations — integration", () => {
     // In Docker-in-Docker CI runners the container port may be reachable only
     // on the host, not from inside the job container itself.
     const urlObj = new URL(pg.url);
-    const reachable = await tcpReachable(
-      urlObj.hostname,
-      Number(urlObj.port),
-    );
+    const reachable = await tcpReachable(urlObj.hostname, Number(urlObj.port));
     if (!reachable) {
       await pg.stop();
       pg = undefined;
