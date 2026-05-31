@@ -70,9 +70,7 @@ pub enum CliError {
 pub enum Cmd {
     // --- Operator commands ---
     /// Create or get a Sharp repo by name.
-    RepoInit {
-        name: String,
-    },
+    RepoInit { name: String },
     /// List all Sharp repos.
     RepoList,
     /// Issue a session token for a workspace/user/role triple.
@@ -84,10 +82,7 @@ pub enum Cmd {
 
     // --- Agent commands ---
     /// Open a new agent episode against a repo.
-    EpisodeOpen {
-        repo_id: Uuid,
-        title: String,
-    },
+    EpisodeOpen { repo_id: Uuid, title: String },
     /// Append an event to an existing episode.
     EpisodeAppend {
         episode_id: Uuid,
@@ -95,13 +90,9 @@ pub enum Cmd {
         payload: serde_json::Value,
     },
     /// Finish (close) an episode.
-    EpisodeFinish {
-        episode_id: Uuid,
-    },
+    EpisodeFinish { episode_id: Uuid },
     /// List episodes for a repo.
-    EpisodeList {
-        repo_id: Uuid,
-    },
+    EpisodeList { repo_id: Uuid },
 }
 
 /// Parse `args` (the slice after the binary name) into a [`Cmd`].
@@ -117,9 +108,7 @@ pub fn parse(args: &[String]) -> Result<Cmd, CliError> {
         [a, b] if a == "repo" && b == "list" => Ok(Cmd::RepoList),
 
         // session issue <workspace-id> <user-id> <role>
-        [a, b, ws, uid, role_str]
-            if a == "session" && b == "issue" =>
-        {
+        [a, b, ws, uid, role_str] if a == "session" && b == "issue" => {
             let workspace_id = ws.parse::<Uuid>()?;
             let user_id = uid.parse::<Uuid>()?;
             let role = match role_str.as_str() {
@@ -133,7 +122,11 @@ pub fn parse(args: &[String]) -> Result<Cmd, CliError> {
                     )))
                 }
             };
-            Ok(Cmd::SessionIssue { workspace_id, user_id, role })
+            Ok(Cmd::SessionIssue {
+                workspace_id,
+                user_id,
+                role,
+            })
         }
 
         // episode open <repo-id> <title>
@@ -143,9 +136,7 @@ pub fn parse(args: &[String]) -> Result<Cmd, CliError> {
         }),
 
         // episode append <episode-id> <event-type> <payload-json>
-        [a, b, eid, ev_type, payload_json]
-            if a == "episode" && b == "append" =>
-        {
+        [a, b, eid, ev_type, payload_json] if a == "episode" && b == "append" => {
             Ok(Cmd::EpisodeAppend {
                 episode_id: eid.parse::<Uuid>()?,
                 event_type: ev_type.clone(),
@@ -175,15 +166,17 @@ pub async fn run(pool: &PgPool, cmd: Cmd) -> Result<(), CliError> {
     match cmd {
         Cmd::RepoInit { name } => operator::repo_init(pool, &name).await?,
         Cmd::RepoList => operator::repo_list(pool).await?,
-        Cmd::SessionIssue { workspace_id, user_id, role } => {
-            operator::session_issue(pool, workspace_id, user_id, role).await?
-        }
-        Cmd::EpisodeOpen { repo_id, title } => {
-            agent::episode_open(pool, repo_id, &title).await?
-        }
-        Cmd::EpisodeAppend { episode_id, event_type, payload } => {
-            agent::episode_append(pool, episode_id, &event_type, payload).await?
-        }
+        Cmd::SessionIssue {
+            workspace_id,
+            user_id,
+            role,
+        } => operator::session_issue(pool, workspace_id, user_id, role).await?,
+        Cmd::EpisodeOpen { repo_id, title } => agent::episode_open(pool, repo_id, &title).await?,
+        Cmd::EpisodeAppend {
+            episode_id,
+            event_type,
+            payload,
+        } => agent::episode_append(pool, episode_id, &event_type, payload).await?,
         Cmd::EpisodeFinish { episode_id } => agent::episode_finish(pool, episode_id).await?,
         Cmd::EpisodeList { repo_id } => agent::episode_list(pool, repo_id).await?,
     }
@@ -245,7 +238,11 @@ mod tests {
         let uid = "00000000-0000-0000-0000-000000000002";
         let cmd = parse(&args(&["session", "issue", ws, uid, "admin"])).unwrap();
         match cmd {
-            Cmd::SessionIssue { workspace_id, user_id, role } => {
+            Cmd::SessionIssue {
+                workspace_id,
+                user_id,
+                role,
+            } => {
                 assert_eq!(workspace_id.to_string(), ws);
                 assert_eq!(user_id.to_string(), uid);
                 assert_eq!(role, sf_auth::Role::Admin);
@@ -268,9 +265,7 @@ mod tests {
     fn parse_episode_open() {
         let repo = "00000000-0000-0000-0000-000000000003";
         let cmd = parse(&args(&["episode", "open", repo, "my-episode"])).unwrap();
-        assert!(
-            matches!(cmd, Cmd::EpisodeOpen { title, .. } if title == "my-episode")
-        );
+        assert!(matches!(cmd, Cmd::EpisodeOpen { title, .. } if title == "my-episode"));
     }
 
     #[test]
@@ -279,7 +274,11 @@ mod tests {
         let payload = r#"{"tool":"read_file"}"#;
         let cmd = parse(&args(&["episode", "append", eid, "tool_call", payload])).unwrap();
         match cmd {
-            Cmd::EpisodeAppend { event_type, payload, .. } => {
+            Cmd::EpisodeAppend {
+                event_type,
+                payload,
+                ..
+            } => {
                 assert_eq!(event_type, "tool_call");
                 assert_eq!(payload["tool"], "read_file");
             }
