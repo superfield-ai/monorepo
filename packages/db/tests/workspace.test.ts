@@ -9,10 +9,10 @@
  *  - migrateWorkspaceColumn backfills existing rows that lack a workspaceId
  */
 
-import { mkdirSync, mkdtempSync } from "node:fs";
+import { mkdtempSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   migrateWorkspaceColumn,
   openIssueStore,
@@ -31,7 +31,10 @@ function makeTmpDbPath(): string {
 }
 
 function makeIssueRecord(
-  overrides: Partial<LocalIssueRecord> & { number: number; workspaceId: string },
+  overrides: Partial<LocalIssueRecord> & {
+    number: number;
+    workspaceId: string;
+  },
 ): LocalIssueRecord {
   return {
     repo: "acme/app",
@@ -101,7 +104,9 @@ describe("AC-1: every row carries a non-null workspaceId", () => {
     const store = await openWorkspaceIssueStore("ws-alpha", dbPath);
 
     for (const num of [1, 2, 3]) {
-      await store.upsert(makeIssueRecord({ number: num, workspaceId: "ws-alpha" }));
+      await store.upsert(
+        makeIssueRecord({ number: num, workspaceId: "ws-alpha" }),
+      );
     }
 
     const all = await store.getAll();
@@ -151,10 +156,18 @@ describe("TP-1: two workspaces are isolated by key", () => {
 
     // Both workspaces write a record with the same issue number.
     await storeA.upsert(
-      makeIssueRecord({ number: 1, workspaceId: "ws-alpha", title: "Alpha issue 1" }),
+      makeIssueRecord({
+        number: 1,
+        workspaceId: "ws-alpha",
+        title: "Alpha issue 1",
+      }),
     );
     await storeB.upsert(
-      makeIssueRecord({ number: 1, workspaceId: "ws-beta", title: "Beta issue 1" }),
+      makeIssueRecord({
+        number: 1,
+        workspaceId: "ws-beta",
+        title: "Beta issue 1",
+      }),
     );
 
     const alpha1 = await storeA.get(1);
@@ -174,9 +187,15 @@ describe("TP-1: two workspaces are isolated by key", () => {
     const storeA = await openWorkspaceIssueStore("ws-alpha", dbPath);
     const storeB = await openWorkspaceIssueStore("ws-beta", dbPath);
 
-    await storeA.upsert(makeIssueRecord({ number: 10, workspaceId: "ws-alpha" }));
-    await storeA.upsert(makeIssueRecord({ number: 11, workspaceId: "ws-alpha" }));
-    await storeB.upsert(makeIssueRecord({ number: 20, workspaceId: "ws-beta" }));
+    await storeA.upsert(
+      makeIssueRecord({ number: 10, workspaceId: "ws-alpha" }),
+    );
+    await storeA.upsert(
+      makeIssueRecord({ number: 11, workspaceId: "ws-alpha" }),
+    );
+    await storeB.upsert(
+      makeIssueRecord({ number: 20, workspaceId: "ws-beta" }),
+    );
 
     const alphaAll = await storeA.getAll();
     const betaAll = await storeB.getAll();
@@ -194,7 +213,9 @@ describe("TP-1: two workspaces are isolated by key", () => {
     const storeB = await openWorkspaceIssueStore("ws-beta", dbPath);
 
     // Both write issue #5.
-    await storeA.upsert(makeIssueRecord({ number: 5, workspaceId: "ws-alpha" }));
+    await storeA.upsert(
+      makeIssueRecord({ number: 5, workspaceId: "ws-alpha" }),
+    );
     await storeB.upsert(makeIssueRecord({ number: 5, workspaceId: "ws-beta" }));
 
     // A removes its copy — B's copy must survive.
@@ -220,10 +241,16 @@ describe("TP-2: insert without workspace context fails", () => {
     // Base store: no workspace enforcement (pre-migration compatibility).
     const base = await openIssueStore(dbPath);
     // Casting to bypass TS strict check to simulate a legacy caller.
-    await base.upsert(
-      { repo: "r", number: 1, title: "t", body: "", status: "open",
-        acceptance: [], testPlan: [], updatedAt: new Date().toISOString() } as unknown as LocalIssueRecord,
-    );
+    await base.upsert({
+      repo: "r",
+      number: 1,
+      title: "t",
+      body: "",
+      status: "open",
+      acceptance: [],
+      testPlan: [],
+      updatedAt: new Date().toISOString(),
+    } as unknown as LocalIssueRecord);
 
     // Workspace-scoped store: writing with wrong workspace must fail.
     const store = await openWorkspaceIssueStore("ws-alpha", dbPath);
@@ -244,11 +271,16 @@ describe("migrateWorkspaceColumn", () => {
 
     // Write records without workspaceId using the base store.
     for (const num of [1, 2, 3]) {
-      await base.upsert(
-        { repo: "r", number: num, title: `Issue ${num}`, body: "",
-          status: "open", acceptance: [], testPlan: [],
-          updatedAt: new Date().toISOString() } as unknown as LocalIssueRecord,
-      );
+      await base.upsert({
+        repo: "r",
+        number: num,
+        title: `Issue ${num}`,
+        body: "",
+        status: "open",
+        acceptance: [],
+        testPlan: [],
+        updatedAt: new Date().toISOString(),
+      } as unknown as LocalIssueRecord);
     }
 
     const migrated = await migrateWorkspaceColumn(base, "ws-default");
@@ -264,13 +296,20 @@ describe("migrateWorkspaceColumn", () => {
     const dbPath = makeTmpDbPath();
     const base = await openIssueStore(dbPath);
 
-    await base.upsert(makeIssueRecord({ number: 1, workspaceId: "ws-existing" }));
-    // Also write a legacy row with no workspaceId.
     await base.upsert(
-      { repo: "r", number: 2, title: "Legacy", body: "",
-        status: "open", acceptance: [], testPlan: [],
-        updatedAt: new Date().toISOString() } as unknown as LocalIssueRecord,
+      makeIssueRecord({ number: 1, workspaceId: "ws-existing" }),
     );
+    // Also write a legacy row with no workspaceId.
+    await base.upsert({
+      repo: "r",
+      number: 2,
+      title: "Legacy",
+      body: "",
+      status: "open",
+      acceptance: [],
+      testPlan: [],
+      updatedAt: new Date().toISOString(),
+    } as unknown as LocalIssueRecord);
 
     const migrated = await migrateWorkspaceColumn(base, "ws-default");
     // Only the legacy row should be updated.

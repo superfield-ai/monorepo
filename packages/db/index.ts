@@ -92,7 +92,9 @@ export interface WorkspaceAwareIssueStore {
    *   bound workspace. Pass `issue` without `workspaceId` and the store will
    *   set it automatically.
    */
-  upsert(issue: Omit<LocalIssueRecord, "workspaceId"> & { workspaceId?: string }): Promise<void>;
+  upsert(
+    issue: Omit<LocalIssueRecord, "workspaceId"> & { workspaceId?: string },
+  ): Promise<void>;
   /** Patch a record by issue number within this workspace. */
   patch(
     number: number,
@@ -326,7 +328,10 @@ export async function openWorkspaceIssueStore(
     },
 
     async upsert(issue) {
-      if (issue.workspaceId !== undefined && issue.workspaceId !== workspaceId) {
+      if (
+        issue.workspaceId !== undefined &&
+        issue.workspaceId !== workspaceId
+      ) {
         throw new WorkspaceContextError(
           `Cannot write issue #${issue.number} to workspace "${workspaceId}": ` +
             `record belongs to workspace "${issue.workspaceId}"`,
