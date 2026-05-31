@@ -34,7 +34,10 @@ pub struct AppState(pub Arc<Inner>);
 impl AppState {
     /// Build an [`AppState`] from a shared pool and a session store.
     pub fn new(pool: PgPool, session_store: SessionStore) -> Self {
-        Self(Arc::new(Inner { pool, session_store }))
+        Self(Arc::new(Inner {
+            pool,
+            session_store,
+        }))
     }
 
     /// Access the inner pool.

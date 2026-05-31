@@ -13,11 +13,7 @@
 //! Additional routes (start/stop, logs SSE) will be added as the TypeScript
 //! orchestrator is progressively retired.
 
-use axum::{
-    response::IntoResponse,
-    routing::get,
-    Extension, Json, Router,
-};
+use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use serde_json::json;
 use sf_auth::AuthContext;
 
@@ -27,9 +23,7 @@ use crate::state::AppState;
 ///
 /// Returns a minimal status object.  The full implementation will include
 /// PID, uptime, and API reachability once the process manager is ported.
-pub async fn status(
-    Extension(ctx): Extension<AuthContext>,
-) -> impl IntoResponse {
+pub async fn status(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     Json(json!({
         "workspace_id": ctx.workspace_id,
         "process": "unknown",

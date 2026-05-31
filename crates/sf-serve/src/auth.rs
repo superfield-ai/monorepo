@@ -193,9 +193,7 @@ mod tests {
 
     #[test]
     fn no_token_returns_none() {
-        let req = Request::builder()
-            .body(axum::body::Body::empty())
-            .unwrap();
+        let req = Request::builder().body(axum::body::Body::empty()).unwrap();
         assert_eq!(extract_token(&req), None);
     }
 }

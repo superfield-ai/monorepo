@@ -15,11 +15,7 @@
 //! Each new handler must use [`sf_db::acquire_workspace`] to propagate
 //! workspace context for RLS.
 
-use axum::{
-    response::IntoResponse,
-    routing::get,
-    Extension, Json, Router,
-};
+use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use serde_json::json;
 use sf_auth::AuthContext;
 
@@ -29,9 +25,7 @@ use crate::state::AppState;
 ///
 /// Returns the authenticated principal's workspace and role so the browser
 /// UI can confirm the Rust backend is reachable and auth is active.
-pub async fn status(
-    Extension(ctx): Extension<AuthContext>,
-) -> impl IntoResponse {
+pub async fn status(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     Json(json!({
         "studio": true,
         "workspace_id": ctx.workspace_id,

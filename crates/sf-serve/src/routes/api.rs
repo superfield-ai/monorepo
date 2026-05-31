@@ -15,11 +15,7 @@
 //! workspace-propagation pattern used by all future handlers.
 
 use axum::{
-    extract::State,
-    http::StatusCode,
-    response::IntoResponse,
-    routing::get,
-    Extension, Json, Router,
+    extract::State, http::StatusCode, response::IntoResponse, routing::get, Extension, Json, Router,
 };
 use serde_json::json;
 use sf_auth::AuthContext;
@@ -30,9 +26,7 @@ use crate::state::AppState;
 ///
 /// Returns `200 OK` with the current workspace and user IDs to confirm that
 /// auth is working end-to-end.
-pub async fn status(
-    Extension(ctx): Extension<AuthContext>,
-) -> impl IntoResponse {
+pub async fn status(Extension(ctx): Extension<AuthContext>) -> impl IntoResponse {
     Json(json!({
         "status": "ok",
         "workspace_id": ctx.workspace_id,

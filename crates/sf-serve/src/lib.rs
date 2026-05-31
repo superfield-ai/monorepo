@@ -107,9 +107,7 @@ pub fn build_router(pool: PgPool, cfg: &ServeConfig) -> Router {
             auth::auth_middleware,
         ));
 
-    Router::new()
-        .merge(auth_routes)
-        .merge(protected)
+    Router::new().merge(auth_routes).merge(protected)
 }
 
 /// Bind to `cfg.bind_addr` and serve until the process is interrupted.
