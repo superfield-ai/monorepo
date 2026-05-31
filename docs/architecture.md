@@ -795,13 +795,69 @@ The `packages/db/nexum-graph.ts` module provides `traverseGraph()` (recursive CT
 
 ---
 
+## Governed Embedding Standard
+
+**Decision date:** 2026-05-31
+**Status:** Accepted — closes #360
+
+### Standard
+
+| Property        | Value                        |
+| --------------- | ---------------------------- |
+| **Model**       | `Xenova/all-MiniLM-L6-v2`   |
+| **Dimensions**  | 384                          |
+| **Runtime**     | Local inference via Xenova (ONNX) — no external API call |
+| **Distance**    | Cosine similarity            |
+| **Index type**  | HNSW (cosine) via pgvector   |
+
+All vector columns across every store **must** use 384-dimensional vectors produced by this model. No other embedding model or dimensionality is permitted without a superseding architecture decision.
+
+### Rationale
+
+- Nexum has shipped `blocks.embedding vector(384)` with `Xenova/all-MiniLM-L6-v2` as its production embedding layer. Standardising on the existing implementation avoids a re-embedding migration.
+- Local ONNX inference (Xenova) keeps all vector production inside the one-binary boundary. No external API key, no network call, no vendor dependency at inference time.
+- 384 dimensions provide adequate semantic resolution for document-block retrieval while keeping index size and query latency low.
+- A single vector space means a Sharp episode can join semantically to a Nexum block in one SQL query, without coordinate-system translation.
+
+Rejected alternatives:
+
+| Option                    | Why rejected                                                                         |
+| ------------------------- | ------------------------------------------------------------------------------------ |
+| OpenAI `text-embedding-3-small` (1536-dim) | External API dependency; breaks the one-binary constraint; costs per embedding; dimension mismatch with existing Nexum data requiring a full re-embed. |
+| OpenAI `text-embedding-ada-002` (1536-dim) | Same objections as above.                                                            |
+| A larger local model (768+ dim)           | Re-embedding all existing Nexum corpora; larger index; no demonstrated retrieval gain for code/document block workloads. |
+
+### Vector column inventory
+
+Every vector column across all stores must match the governed standard. Current inventory:
+
+| Component | Schema  | Table    | Column           | Declared dimension | Status                              |
+| --------- | ------- | -------- | ---------------- | ------------------ | ----------------------------------- |
+| Nexum     | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live |
+| Nexum     | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — stub, populated Phase 2 (issue #75) |
+| Sharp     | `sharp` | —        | —                | —                  | No vector columns yet; pgvector not installed |
+| CLI       | local   | —        | —                | —                  | No vector columns; lowdb JSON store |
+
+When Sharp or any future component adds a vector column it **must** declare `vector(384)` and reference this section.
+
+### Adoption rule for new stores
+
+Any migration that introduces a vector column must:
+
+1. Declare the column as `vector(384)`.
+2. Add an HNSW cosine index: `CREATE INDEX … USING hnsw (col vector_cosine_ops)`.
+3. Reference the governed model in a migration comment: `-- embedding model: Xenova/all-MiniLM-L6-v2, 384-dim`.
+
+---
+
 ## §7 Current Gaps
 
-| #   | Gap                                           | Target state                                                                  | Tracking                                                                                                                                             |
-| --- | --------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Schema-sharing boundary not codified          | Namespaced schemas per component as described above                           | Closed by #355                                                                                                                                       |
-| 2   | AGE shim runs on a second Postgres at `:5433` | AGE as in-instance extension on primary Postgres                              | Closed by #359 — recursive CTEs on `nexum.links` (see §6)                                                                                            |
-| 3   | No RLS policies anywhere                      | Per-schema RLS enabled; policies reference `auth.sessions`                    | Partially closed by #358 — migration stubs and session context wiring in `packages/db/`; full per-schema policies require component schemas to exist |
-| 4   | No cross-component migration runner           | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue                                                                                                             |
-| 5   | `episodes` schema not yet defined             | Schema and tables defined during orchestrator port                            | Open                                                                                                                                                 |
-| 6   | `auth` schema not yet defined                 | Schema and tables defined during auth port                                    | Open                                                                                                                                                 |
+| #   | Gap                                                  | Target state                                                                  | Tracking                                                                                                                                             |
+| --- | ---------------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Schema-sharing boundary not codified                 | Namespaced schemas per component as described above                           | Closed by #355                                                                                                                                       |
+| 2   | AGE shim runs on a second Postgres at `:5433`        | AGE as in-instance extension on primary Postgres                              | Closed by #359 — recursive CTEs on `nexum.links` (see §6)                                                                                           |
+| 3   | No RLS policies anywhere                             | Per-schema RLS enabled; policies reference `auth.sessions`                    | Partially closed by #358 — migration stubs and session context wiring in `packages/db/`; full per-schema policies require component schemas to exist |
+| 4   | No cross-component migration runner                  | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue                                                                                                             |
+| 5   | `episodes` schema not yet defined                    | Schema and tables defined during orchestrator port                            | Open                                                                                                                                                 |
+| 6   | `auth` schema not yet defined                        | Schema and tables defined during auth port                                    | Open                                                                                                                                                 |
+| 7   | No governed embedding standard across stores         | Single model and dimensionality declared; all vector columns conforming       | Closed by #360                                                                                                                                       |
