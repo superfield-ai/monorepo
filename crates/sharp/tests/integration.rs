@@ -570,9 +570,14 @@ fn build_linear_git_repo(root: &std::path::Path, commits: u32) -> Vec<String> {
             .expect("git add");
         Command::new("git")
             .args([
-                "-c", "user.name=Test",
-                "-c", "user.email=t@e.com",
-                "commit", "-q", "-m", &format!("commit {i}"),
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=t@e.com",
+                "commit",
+                "-q",
+                "-m",
+                &format!("commit {i}"),
             ])
             .current_dir(root)
             .status()
@@ -601,9 +606,22 @@ fn build_merged_git_repo(root: &std::path::Path) {
     std::fs::write(root.join("base.txt"), "base\n").unwrap();
     for args in [
         vec!["add", "-A"],
-        vec!["-c", "user.name=Test", "-c", "user.email=t@e.com", "commit", "-q", "-m", "base"],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=t@e.com",
+            "commit",
+            "-q",
+            "-m",
+            "base",
+        ],
     ] {
-        Command::new("git").args(&args).current_dir(root).status().expect("git cmd");
+        Command::new("git")
+            .args(&args)
+            .current_dir(root)
+            .status()
+            .expect("git cmd");
     }
 
     // Branch off.
@@ -615,9 +633,22 @@ fn build_merged_git_repo(root: &std::path::Path) {
     std::fs::write(root.join("feature.txt"), "feat\n").unwrap();
     for args in [
         vec!["add", "-A"],
-        vec!["-c", "user.name=Test", "-c", "user.email=t@e.com", "commit", "-q", "-m", "feat"],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=t@e.com",
+            "commit",
+            "-q",
+            "-m",
+            "feat",
+        ],
     ] {
-        Command::new("git").args(&args).current_dir(root).status().expect("git cmd");
+        Command::new("git")
+            .args(&args)
+            .current_dir(root)
+            .status()
+            .expect("git cmd");
     }
 
     // Back to main, make a diverging commit, then merge.
@@ -629,15 +660,35 @@ fn build_merged_git_repo(root: &std::path::Path) {
     std::fs::write(root.join("main2.txt"), "main2\n").unwrap();
     for args in [
         vec!["add", "-A"],
-        vec!["-c", "user.name=Test", "-c", "user.email=t@e.com", "commit", "-q", "-m", "main2"],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=t@e.com",
+            "commit",
+            "-q",
+            "-m",
+            "main2",
+        ],
     ] {
-        Command::new("git").args(&args).current_dir(root).status().expect("git cmd");
+        Command::new("git")
+            .args(&args)
+            .current_dir(root)
+            .status()
+            .expect("git cmd");
     }
     // Merge with explicit strategy to ensure merge commit.
     Command::new("git")
         .args([
-            "-c", "user.name=Test", "-c", "user.email=t@e.com",
-            "merge", "--no-ff", "-m", "Merge feature", "feature",
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=t@e.com",
+            "merge",
+            "--no-ff",
+            "-m",
+            "Merge feature",
+            "feature",
         ])
         .current_dir(root)
         .status()
@@ -653,7 +704,10 @@ async fn apply_git_interop_migration(pool: &sqlx::PgPool) {
         if stmt.is_empty() {
             continue;
         }
-        sqlx::query(stmt).execute(pool).await.expect("migration stmt");
+        sqlx::query(stmt)
+            .execute(pool)
+            .await
+            .expect("migration stmt");
     }
 }
 
@@ -678,8 +732,12 @@ async fn git_import_then_export_roundtrip() {
     assert_eq!(source_shas.len(), 3);
 
     // Import.
-    let r = repo::init(&pool, &unique_name("git-roundtrip")).await.expect("repo init");
-    let import = git_interop::import_git_repo(&pool, r.id, &src).await.expect("import");
+    let r = repo::init(&pool, &unique_name("git-roundtrip"))
+        .await
+        .expect("repo init");
+    let import = git_interop::import_git_repo(&pool, r.id, &src)
+        .await
+        .expect("import");
     assert!(
         import.objects_imported >= 3 * 2 + 3, // >=3 blobs + >=3 trees + 3 commits
         "expected at least 9 objects, got {}; warnings: {:?}",
@@ -690,20 +748,25 @@ async fn git_import_then_export_roundtrip() {
 
     // Export.
     let dest = tmp.path().join("exported.git");
-    let export = git_interop::export_git_repo(
-        &pool,
-        r.id,
-        "refs/heads/main",
-        &dest,
-    )
-    .await
-    .expect("export");
+    let export = git_interop::export_git_repo(&pool, r.id, "refs/heads/main", &dest)
+        .await
+        .expect("export");
     assert_eq!(export.commits_exported, 3, "expected 3 commits exported");
-    assert!(export.warnings.is_empty(), "unexpected warnings: {:?}", export.warnings);
+    assert!(
+        export.warnings.is_empty(),
+        "unexpected warnings: {:?}",
+        export.warnings
+    );
 
     // Verify exported repo via git rev-list.
     let rev_list = std::process::Command::new("git")
-        .args(["--git-dir", dest.to_str().unwrap(), "rev-list", "--reverse", "refs/heads/main"])
+        .args([
+            "--git-dir",
+            dest.to_str().unwrap(),
+            "rev-list",
+            "--reverse",
+            "refs/heads/main",
+        ])
         .output()
         .expect("git rev-list");
     assert_eq!(rev_list.status.code(), Some(0), "git rev-list failed");
@@ -736,8 +799,12 @@ async fn git_export_refuses_merged_branch() {
     build_merged_git_repo(&src);
 
     // Import the repo with the merge commit on main.
-    let r = repo::init(&pool, &unique_name("git-merged")).await.expect("repo init");
-    let import = git_interop::import_git_repo(&pool, r.id, &src).await.expect("import");
+    let r = repo::init(&pool, &unique_name("git-merged"))
+        .await
+        .expect("repo init");
+    let import = git_interop::import_git_repo(&pool, r.id, &src)
+        .await
+        .expect("import");
     assert!(
         import.objects_imported > 0,
         "expected some objects; warnings: {:?}",

@@ -149,24 +149,32 @@ fn read_loose_object(path: &Path) -> Result<(GitKind, Vec<u8>), GitInteropError>
     let compressed = std::fs::read(path)?;
     let mut decoder = ZlibDecoder::new(compressed.as_slice());
     let mut raw = Vec::new();
-    decoder.read_to_end(&mut raw).map_err(|e| GitInteropError::MalformedObject {
-        path: path.to_owned(),
-        reason: format!("zlib decompress failed: {e}"),
-    })?;
+    decoder
+        .read_to_end(&mut raw)
+        .map_err(|e| GitInteropError::MalformedObject {
+            path: path.to_owned(),
+            reason: format!("zlib decompress failed: {e}"),
+        })?;
 
     // Parse `<kind> <decimal-size>\0<payload>`.
-    let nul = raw.iter().position(|&b| b == 0).ok_or_else(|| GitInteropError::MalformedObject {
-        path: path.to_owned(),
-        reason: "missing NUL byte in object header".to_string(),
-    })?;
-    let header = std::str::from_utf8(&raw[..nul]).map_err(|e| GitInteropError::MalformedObject {
-        path: path.to_owned(),
-        reason: format!("non-UTF-8 header: {e}"),
-    })?;
-    let space = header.find(' ').ok_or_else(|| GitInteropError::MalformedObject {
-        path: path.to_owned(),
-        reason: "missing space in header".to_string(),
-    })?;
+    let nul = raw
+        .iter()
+        .position(|&b| b == 0)
+        .ok_or_else(|| GitInteropError::MalformedObject {
+            path: path.to_owned(),
+            reason: "missing NUL byte in object header".to_string(),
+        })?;
+    let header =
+        std::str::from_utf8(&raw[..nul]).map_err(|e| GitInteropError::MalformedObject {
+            path: path.to_owned(),
+            reason: format!("non-UTF-8 header: {e}"),
+        })?;
+    let space = header
+        .find(' ')
+        .ok_or_else(|| GitInteropError::MalformedObject {
+            path: path.to_owned(),
+            reason: "missing space in header".to_string(),
+        })?;
     let kind_str = &header[..space];
     let kind = GitKind::from_str(kind_str).ok_or_else(|| GitInteropError::MalformedObject {
         path: path.to_owned(),
@@ -306,10 +314,11 @@ fn read_pack_objects(pack_path: &Path) -> Result<Vec<(String, GitKind, Vec<u8>)>
         let offset = raw_offset as usize;
 
         // Read type+size-encoded header at offset.
-        let (kind_byte, inflated_size, header_len) = match read_pack_object_header(&pack_data, offset) {
-            Some(v) => v,
-            None => continue,
-        };
+        let (kind_byte, inflated_size, header_len) =
+            match read_pack_object_header(&pack_data, offset) {
+                Some(v) => v,
+                None => continue,
+            };
 
         // Object types: 1=commit, 2=tree, 3=blob, 4=tag, 6=ofs_delta, 7=ref_delta.
         // Delta types are resolved by git before reaching the object store; a
@@ -400,9 +409,8 @@ pub async fn import_git_repo(
     let mut result = ImportResult::default();
 
     // --- Collect objects from loose files ---
-    let loose = collect_loose_objects(&git_dir).map_err(|e| {
-        SharpError::GitInterop(format!("failed to list loose objects: {e}"))
-    })?;
+    let loose = collect_loose_objects(&git_dir)
+        .map_err(|e| SharpError::GitInterop(format!("failed to list loose objects: {e}")))?;
 
     for (expected_sha1, path) in &loose {
         match import_one_loose_object(pool, repo_id, expected_sha1, path).await {
@@ -435,10 +443,9 @@ pub async fn import_git_repo(
                         }
                     }
                 }
-                Err(e) => result.warnings.push(format!(
-                    "pack file {}: {e}",
-                    pack_path.display()
-                )),
+                Err(e) => result
+                    .warnings
+                    .push(format!("pack file {}: {e}", pack_path.display())),
             }
         }
     }
@@ -564,7 +571,9 @@ async fn mirror_refs_dir(
                 continue;
             }
             // Build ref name from the path relative to the git_dir/refs parent.
-            let rel = path.strip_prefix(base.parent().unwrap_or(base)).unwrap_or(&path);
+            let rel = path
+                .strip_prefix(base.parent().unwrap_or(base))
+                .unwrap_or(&path);
             let ref_name = rel.to_string_lossy().replace('\\', "/");
             match upsert_direct_ref(pool, repo_id, &ref_name, &sha1).await {
                 Ok(()) => result.refs_imported += 1,
@@ -575,12 +584,7 @@ async fn mirror_refs_dir(
 }
 
 /// Mirror packed-refs file.
-async fn mirror_packed_refs(
-    pool: &PgPool,
-    repo_id: Uuid,
-    path: &Path,
-    result: &mut ImportResult,
-) {
+async fn mirror_packed_refs(pool: &PgPool, repo_id: Uuid, path: &Path, result: &mut ImportResult) {
     let Ok(content) = std::fs::read_to_string(path) else {
         return;
     };
@@ -718,9 +722,8 @@ pub async fn linear_history(
 /// The commit payload has header lines followed by `\n\n` then the message.
 /// Parent lines look like `parent <sha1>`.
 fn parse_commit_parents(payload: &[u8]) -> Result<Vec<String>, SharpError> {
-    let text = std::str::from_utf8(payload).map_err(|e| {
-        SharpError::GitInterop(format!("commit payload is not valid UTF-8: {e}"))
-    })?;
+    let text = std::str::from_utf8(payload)
+        .map_err(|e| SharpError::GitInterop(format!("commit payload is not valid UTF-8: {e}")))?;
     let header_end = text.find("\n\n").unwrap_or(text.len());
     let headers = &text[..header_end];
     let mut parents = Vec::new();
@@ -733,11 +736,7 @@ fn parse_commit_parents(payload: &[u8]) -> Result<Vec<String>, SharpError> {
 }
 
 /// Resolve a ref name to its SHA-1, following symbolic refs one level.
-async fn resolve_ref(
-    pool: &PgPool,
-    repo_id: Uuid,
-    ref_name: &str,
-) -> Result<String, SharpError> {
+async fn resolve_ref(pool: &PgPool, repo_id: Uuid, ref_name: &str) -> Result<String, SharpError> {
     let row = sqlx::query(
         "SELECT sha1, symbolic_target FROM sharp.git_refs WHERE repo_id = $1 AND ref_name = $2",
     )
@@ -804,12 +803,11 @@ pub async fn export_git_repo(
 
     // 4. Collect all objects reachable from the tip via the commit graph.
     //    For v1 we export every object stored for this repo.
-    let sha1s: Vec<String> = sqlx::query_scalar(
-        "SELECT sha1 FROM sharp.git_objects WHERE repo_id = $1",
-    )
-    .bind(repo_id)
-    .fetch_all(pool)
-    .await?;
+    let sha1s: Vec<String> =
+        sqlx::query_scalar("SELECT sha1 FROM sharp.git_objects WHERE repo_id = $1")
+            .bind(repo_id)
+            .fetch_all(pool)
+            .await?;
 
     let mut objects_exported = 0usize;
 
@@ -835,18 +833,15 @@ pub async fn export_git_repo(
     // 5. Write the branch ref.
     let ref_path = destination.join(branch_ref);
     if let Some(parent) = ref_path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| {
-            SharpError::GitInterop(format!("create ref dir: {e}"))
-        })?;
+        std::fs::create_dir_all(parent)
+            .map_err(|e| SharpError::GitInterop(format!("create ref dir: {e}")))?;
     }
-    std::fs::write(&ref_path, format!("{tip_sha1}\n")).map_err(|e| {
-        SharpError::GitInterop(format!("write ref: {e}"))
-    })?;
+    std::fs::write(&ref_path, format!("{tip_sha1}\n"))
+        .map_err(|e| SharpError::GitInterop(format!("write ref: {e}")))?;
 
     // 6. Write HEAD.
-    std::fs::write(destination.join("HEAD"), format!("ref: {branch_ref}\n")).map_err(|e| {
-        SharpError::GitInterop(format!("write HEAD: {e}"))
-    })?;
+    std::fs::write(destination.join("HEAD"), format!("ref: {branch_ref}\n"))
+        .map_err(|e| SharpError::GitInterop(format!("write HEAD: {e}")))?;
 
     Ok(ExportResult {
         commits_exported: history.len(),
@@ -859,7 +854,13 @@ pub async fn export_git_repo(
 /// Initialise a minimal bare Git repository layout.
 fn init_bare_repo(dest: &Path) -> Result<(), std::io::Error> {
     // Standard bare repo structure.
-    for sub in &["objects", "objects/info", "objects/pack", "refs/heads", "refs/tags"] {
+    for sub in &[
+        "objects",
+        "objects/info",
+        "objects/pack",
+        "refs/heads",
+        "refs/tags",
+    ] {
         std::fs::create_dir_all(dest.join(sub))?;
     }
     // config
