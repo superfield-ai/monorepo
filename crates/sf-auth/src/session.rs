@@ -332,7 +332,10 @@ mod tests {
             .await
             .expect("issue failed");
 
-        let ctx = store.validate(session.token).await.expect("validate failed");
+        let ctx = store
+            .validate(session.token)
+            .await
+            .expect("validate failed");
 
         // The context principal_id must be the compound workspace/user key.
         let expected_principal = format!("{}/{}", ws, user);
