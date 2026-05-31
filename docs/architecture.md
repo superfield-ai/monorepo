@@ -684,3 +684,130 @@ Active agent sessions are stored in the forge as hidden comments on the issue be
 ```
 
 This comment is updated on each resumption and deleted when the issue closes. On startup, Superfield scans open issues for this comment to detect and resume in-progress sessions — the deadman switch. A stale session comment (agent gone, issue still open) is detected by comparing `startedAt` against a configurable timeout; the orchestrator re-claims and resumes.
+
+---
+
+## Single-Instance Database Schema Layout
+
+**Decision date:** 2026-05-30
+**Status:** Accepted
+
+### Decision
+
+All Rust components (Sharp, Nexum, auth, and any future component) share **one Postgres instance** and use **namespaced schemas** within that instance — one PostgreSQL schema per component. There is no second Postgres process and no separate database per component.
+
+Rejected alternatives:
+
+| Option | Why rejected |
+| ------ | ------------ |
+| One shared `public` schema, all tables flat | Table name collisions across components (`api_keys` appears in both Sharp and Nexum auth paths); migration ownership is ambiguous; RLS policies cannot be scoped per component without prefix conventions that are error-prone to enforce. |
+| Separate Postgres database per component | Cross-component joins require `dblink` or FDW, adding a network hop and precluding atomic transactions that span component boundaries; eliminates the join advantage of a single instance. |
+| Second Postgres process (Nexum's AGE shim at `:5433`) | Non-conforming with the one-binary one-instance architecture decision. The AGE graph extension must run inside the primary instance as an in-instance extension, not as a separate server. |
+
+### Schema namespace assignment
+
+Each component owns exactly one PostgreSQL schema. All tables, indexes, sequences, and functions for that component live in its schema. No component may create objects in another component's schema.
+
+| PostgreSQL schema | Owner component | Tables (current) |
+| ----------------- | --------------- | ---------------- |
+| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections` |
+| `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `corpus_access`, `job_queue` |
+| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port) |
+| `episodes`        | Orchestrator    | `episodes`, `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces) |
+
+**Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
+
+### Table naming convention
+
+Within each schema, table names are unqualified (no prefix). The schema name provides the namespace. Cross-component SQL always uses fully qualified `<schema>.<table>` references.
+
+```sql
+-- Correct: qualified reference from an orchestrator query
+SELECT e.id, b.content
+FROM   episodes.episodes   e
+JOIN   nexum.blocks        b ON b.id = e.source_block_id;
+
+-- Wrong: bare table name from outside the owning schema
+SELECT * FROM blocks;  -- which schema? ambiguous — never do this cross-component
+```
+
+### Migration ownership
+
+Each component owns its schema's migrations exclusively. Migration files are colocated with the component's source code:
+
+| Component | Migration path |
+| --------- | -------------- |
+| Sharp     | `superfield-ai/sharp/apps/server/migrations/` |
+| Nexum     | `superfield-ai/nexum/db/migrations/` |
+| Auth      | `superfield-ai/superfield-cli-ts/packages/auth/migrations/` (target) |
+| Episodes  | `superfield-ai/superfield-cli-ts/packages/orchestrator/migrations/` (target) |
+
+The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
+
+### Cross-component joins and RLS scoping
+
+**Joins are cheap because all schemas live in the same instance.** A query can join `sharp.objects` to `nexum.blocks` to `episodes.episode_events` in a single statement with no network round-trip. This is the primary motivation for the single-instance architecture.
+
+**RLS policies are scoped per schema.** When row-level security is introduced (not yet implemented — see §Current Gaps), each component's `ENABLE ROW LEVEL SECURITY` and policies apply to its own schema tables only. The `auth.sessions` table provides the identity context that all schemas' policies will reference via `current_setting('app.current_principal_id')`.
+
+#### Sample cross-component query
+
+The query below finds all Sharp commits that reference Nexum document blocks (cross-component semantic traceability — illustrates the join model under the namespaced layout):
+
+```sql
+-- Find Sharp commits touching files whose content is semantically linked to
+-- a given Nexum document block, joining across the sharp and nexum schemas.
+--
+-- This runs inside a single Postgres session with no FDW or dblink.
+-- Both schemas live in the same database on the same instance.
+
+SELECT
+    r.name                                          AS repo_name,
+    encode(cp.commit_id, 'hex')                     AS commit_sha,
+    cp.path                                         AS file_path,
+    b.content                                       AS linked_block_content,
+    l.rel_type                                      AS link_type
+FROM   sharp.commit_paths     cp
+JOIN   sharp.repos             r  ON r.id = cp.repo_id
+-- Match file path to a Nexum block's source_path via its parent document
+JOIN   nexum.documents         d  ON d.source_path = cp.path
+JOIN   nexum.document_versions dv ON dv.doc_id = d.id
+JOIN   nexum.version_blocks    vb ON vb.version_id = dv.id
+JOIN   nexum.blocks            b  ON b.id = vb.block_id
+-- Traverse Nexum semantic links originating from those blocks
+JOIN   nexum.links             l  ON l.src = b.id
+WHERE  l.layer    = 'semantic'
+  AND  l.confirmed IS NOT FALSE   -- include unreviewed and accepted links
+ORDER  BY r.name, commit_sha, cp.path;
+```
+
+This query compiles and executes correctly under the namespaced schema layout. It would require `dblink` or FDW if the components lived in separate Postgres databases.
+
+### AGE graph extension
+
+Nexum's Apache AGE graph shim (`nexum/db/migrations/0001_age_shim.sql`) references a second Postgres process on `:5433`. This is **non-conforming**. The target state is AGE loaded as an in-instance extension on the primary Postgres:
+
+```sql
+-- Target: AGE runs inside the primary instance, not a second server.
+CREATE EXTENSION IF NOT EXISTS age;
+LOAD 'age';
+SET search_path = ag_catalog, nexum, public;
+
+-- The nexum_links graph lives in the primary instance's ag_catalog.
+SELECT ag_catalog.create_graph('nexum_links');
+```
+
+Until the AGE shim is folded in, Nexum's graph traversal remains experimental and gated behind the `nexum` schema boundary.
+
+---
+
+## §7 Current Gaps
+
+| # | Gap | Target state | Tracking |
+|---|-----|--------------|----------|
+| 1 | Schema-sharing boundary not codified | Namespaced schemas per component as described above | Closed by #355 |
+| 2 | AGE shim runs on a second Postgres at `:5433` | AGE as in-instance extension on primary Postgres | Open — requires Nexum port |
+| 3 | No RLS policies anywhere | Per-schema RLS enabled; policies reference `auth.sessions` | Open — deferred to auth port |
+| 4 | No cross-component migration runner | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue |
+| 5 | `episodes` schema not yet defined | Schema and tables defined during orchestrator port | Open |
+| 6 | `auth` schema not yet defined | Schema and tables defined during auth port | Open |
