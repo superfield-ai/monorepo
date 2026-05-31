@@ -200,6 +200,23 @@ pub async fn connect_and_run(cmd: Cmd) -> Result<(), CliError> {
     run(&pool, cmd).await
 }
 
+/// CLI usage string printed on unrecognised commands.
+pub const USAGE: &str = "\
+superfield — Rust CLI over the shared store
+
+Operator commands:
+  repo init <name>                    Create or get a Sharp repo
+  repo list                           List all repos
+  session issue <ws-id> <uid> <role>  Issue a session token
+                                      role: admin|member|viewer
+
+Agent commands:
+  episode open <repo-id> <title>      Open a new episode
+  episode append <ep-id> <type> <json>  Append an event to an episode
+  episode finish <ep-id>              Finish an episode
+  episode list <repo-id>              List episodes for a repo
+";
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -303,20 +320,3 @@ mod tests {
         assert!(matches!(err, CliError::Usage(_)));
     }
 }
-
-/// CLI usage string printed on unrecognised commands.
-pub const USAGE: &str = "\
-superfield — Rust CLI over the shared store
-
-Operator commands:
-  repo init <name>                    Create or get a Sharp repo
-  repo list                           List all repos
-  session issue <ws-id> <uid> <role>  Issue a session token
-                                      role: admin|member|viewer
-
-Agent commands:
-  episode open <repo-id> <title>      Open a new episode
-  episode append <ep-id> <type> <json>  Append an event to an episode
-  episode finish <ep-id>              Finish an episode
-  episode list <repo-id>              List episodes for a repo
-";
