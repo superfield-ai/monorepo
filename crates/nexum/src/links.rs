@@ -19,34 +19,23 @@ struct Pattern {
     kind: &'static str,
 }
 
-static RE_SECTION_SYMBOL: Lazy<Regex> = Lazy::new(|| Regex::new(r"§\s*(\d+[\.\d]*)").unwrap());
-static RE_PARAGRAPH_SYMBOL: Lazy<Regex> = Lazy::new(|| Regex::new(r"¶\s*(\d+)").unwrap());
+static RE_SECTION_SYMBOL: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"§\s*(\d+[\.\d]*)").unwrap());
+static RE_PARAGRAPH_SYMBOL: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"¶\s*(\d+)").unwrap());
 static RE_SECTION_WORD: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"[Ss]ection\s+(\d+[\.\d]*)").unwrap());
-static RE_EXHIBIT: Lazy<Regex> = Lazy::new(|| Regex::new(r"[Ee]xhibit\s+([A-Z])").unwrap());
-static RE_SCHEDULE: Lazy<Regex> = Lazy::new(|| Regex::new(r"[Ss]chedule\s+(\d+)").unwrap());
+static RE_EXHIBIT: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[Ee]xhibit\s+([A-Z])").unwrap());
+static RE_SCHEDULE: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"[Ss]chedule\s+(\d+)").unwrap());
 
 static PATTERNS: &[Pattern] = &[
-    Pattern {
-        regex: &RE_SECTION_SYMBOL,
-        kind: "section",
-    },
-    Pattern {
-        regex: &RE_PARAGRAPH_SYMBOL,
-        kind: "paragraph",
-    },
-    Pattern {
-        regex: &RE_SECTION_WORD,
-        kind: "section",
-    },
-    Pattern {
-        regex: &RE_EXHIBIT,
-        kind: "exhibit",
-    },
-    Pattern {
-        regex: &RE_SCHEDULE,
-        kind: "schedule",
-    },
+    Pattern { regex: &RE_SECTION_SYMBOL,  kind: "section"   },
+    Pattern { regex: &RE_PARAGRAPH_SYMBOL, kind: "paragraph" },
+    Pattern { regex: &RE_SECTION_WORD,     kind: "section"   },
+    Pattern { regex: &RE_EXHIBIT,          kind: "exhibit"   },
+    Pattern { regex: &RE_SCHEDULE,         kind: "schedule"  },
 ];
 
 // ── Public API ────────────────────────────────────────────────────────────────

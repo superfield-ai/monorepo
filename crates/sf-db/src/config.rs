@@ -60,7 +60,9 @@ impl DbConfig {
                 }
             })?;
 
-        if !database_url.starts_with("postgres://") && !database_url.starts_with("postgresql://") {
+        if !database_url.starts_with("postgres://")
+            && !database_url.starts_with("postgresql://")
+        {
             return Err(ConfigError::InvalidDatabaseUrl(database_url));
         }
 
@@ -86,7 +88,9 @@ impl DbConfig {
     /// with `postgres://` or `postgresql://`.
     pub fn from_url(url: impl Into<String>) -> Result<Self, ConfigError> {
         let database_url = url.into();
-        if !database_url.starts_with("postgres://") && !database_url.starts_with("postgresql://") {
+        if !database_url.starts_with("postgres://")
+            && !database_url.starts_with("postgresql://")
+        {
             return Err(ConfigError::InvalidDatabaseUrl(database_url));
         }
         Ok(Self {

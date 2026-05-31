@@ -92,9 +92,10 @@ mod tests {
     /// listening.
     #[tokio::test]
     async fn connect_returns_error_for_unreachable_host() {
-        let cfg =
-            DbConfig::from_url("postgres://sf_test:sf_test@127.0.0.1:19999/sf_test_unreachable")
-                .unwrap();
+        let cfg = DbConfig::from_url(
+            "postgres://sf_test:sf_test@127.0.0.1:19999/sf_test_unreachable",
+        )
+        .unwrap();
         // sqlx may succeed in building the pool (lazy connect) or fail eagerly;
         // either way we just verify the call completes without a panic.
         // If the connection does fail we expect a sqlx error, not a panic.
@@ -147,10 +148,11 @@ mod tests {
             .await
             .expect("SET LOCAL failed");
 
-        let row: (String,) = sqlx::query_as("SELECT current_setting('app.current_principal_id')")
-            .fetch_one(&mut *tx)
-            .await
-            .expect("current_setting query failed");
+        let row: (String,) =
+            sqlx::query_as("SELECT current_setting('app.current_principal_id')")
+                .fetch_one(&mut *tx)
+                .await
+                .expect("current_setting query failed");
 
         assert_eq!(row.0, principal_id);
         tx.rollback().await.expect("rollback failed");

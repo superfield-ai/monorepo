@@ -106,9 +106,7 @@ pub async fn ingest_document(
     opts: IngestOptions,
 ) -> Result<IngestResult, IngestError> {
     if opts.title.is_empty() {
-        return Err(IngestError::InvalidOptions(
-            "title must not be empty".into(),
-        ));
+        return Err(IngestError::InvalidOptions("title must not be empty".into()));
     }
     if opts.content.is_empty() {
         return Err(IngestError::InvalidOptions(
@@ -241,12 +239,14 @@ pub async fn ingest_document(
 
         block_ids.push(block_id);
 
-        sqlx::query("INSERT INTO version_blocks (version_id, block_id, seq) VALUES ($1, $2, $3)")
-            .bind(version_id)
-            .bind(block_id)
-            .bind((i + 1) as i32)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO version_blocks (version_id, block_id, seq) VALUES ($1, $2, $3)",
+        )
+        .bind(version_id)
+        .bind(block_id)
+        .bind((i + 1) as i32)
+        .execute(&mut *tx)
+        .await?;
     }
 
     // Update current_version_id on the document.
@@ -507,10 +507,12 @@ mod tests {
 
     #[allow(dead_code)]
     async fn setup_test_corpus(pool: &PgPool) -> Uuid {
-        sqlx::query_scalar("INSERT INTO corpora (name) VALUES ($1) RETURNING id")
-            .bind(format!("test-{}", Uuid::new_v4()))
-            .fetch_one(pool)
-            .await
-            .expect("corpus insert failed")
+        sqlx::query_scalar(
+            "INSERT INTO corpora (name) VALUES ($1) RETURNING id",
+        )
+        .bind(format!("test-{}", Uuid::new_v4()))
+        .fetch_one(pool)
+        .await
+        .expect("corpus insert failed")
     }
 }
