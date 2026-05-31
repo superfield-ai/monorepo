@@ -319,3 +319,4 @@ mod tests {
         assert!(matches!(err, CliError::Usage(_)));
     }
 }
+
