@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/superfield",
+    "crates/sf-db",
     "crates/sharp",
     "crates/nexum",
     "crates/sf-cli",
@@ -17,9 +18,18 @@ license = "UNLICENSED"
 repository = "https://github.com/superfield-ai/superfield-cli-ts"
 
 [workspace.dependencies]
+# shared crates
+sf-db = { path = "crates/sf-db" }
+
 # component crates
 sharp = { path = "crates/sharp" }
 nexum = { path = "crates/nexum" }
 sf-cli = { path = "crates/sf-cli" }
 sf-serve = { path = "crates/sf-serve" }
 sf-deploy = { path = "crates/sf-deploy" }
+
+# third-party deps shared across crates
+sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "tls-rustls", "uuid", "chrono", "json"] }
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4"] }
+thiserror = "1"
