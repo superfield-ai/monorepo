@@ -1,0 +1,25 @@
+[package]
+name = "sf-auth"
+description = "Unified auth and session crate — session issue/validate, workspace+role context for RLS, OIDC/SAML federation seam"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sf_auth"
+path = "src/lib.rs"
+
+[dependencies]
+sf-db = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
