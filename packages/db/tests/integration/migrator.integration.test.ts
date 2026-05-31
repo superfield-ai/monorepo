@@ -17,6 +17,7 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { createConnection } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startPostgres, type PgContainer } from "../../pg-container.ts";
 import { runMigrations } from "../../migrator.ts";
@@ -34,6 +35,33 @@ function dockerAvailable(): boolean {
   }
 }
 
+/**
+ * Probe whether a TCP connection to host:port can be established within
+ * timeoutMs. Returns true on success, false on ECONNREFUSED or timeout.
+ *
+ * This guards against DinD environments where Docker starts the container and
+ * maps a port, but the port is only reachable on the Docker host — not from
+ * within the CI container that runs the tests.
+ */
+function tcpReachable(host: string, port: number, timeoutMs = 3000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = createConnection({ host, port });
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve(false);
+    }, timeoutMs);
+    sock.once("connect", () => {
+      clearTimeout(timer);
+      sock.destroy();
+      resolve(true);
+    });
+    sock.once("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
+  });
+}
+
 describe("runMigrations — integration", () => {
   let pg: PgContainer | undefined;
   let skipReason: string | undefined;
@@ -48,6 +76,21 @@ describe("runMigrations — integration", () => {
       pg = await startPostgres();
     } catch (err) {
       skipReason = `failed to start postgres container: ${(err as Error).message}`;
+      return;
+    }
+    // Verify the mapped port is actually reachable from this network namespace.
+    // In Docker-in-Docker CI runners the container port may be reachable only
+    // on the host, not from inside the job container itself.
+    const urlObj = new URL(pg.url);
+    const reachable = await tcpReachable(
+      urlObj.hostname,
+      Number(urlObj.port),
+    );
+    if (!reachable) {
+      await pg.stop();
+      pg = undefined;
+      skipReason =
+        "postgres container port is not reachable from this network namespace — skipping migrator integration tests (Docker-in-Docker limitation)";
     }
   }, 60_000);
 
