@@ -216,6 +216,14 @@ export async function openClaudeSessionStore(
 /**
  * Compatibility shim retained for bootstrap callers that still expect a
  * migrate step.
+ *
+ * Scout finding (#386): this shim is a deliberate no-op. The embedded
+ * lowdb store self-initializes on demand. The `databaseUrl` parameter
+ * is accepted for API compatibility only — no Postgres connection is
+ * opened here. The unified migration runner (substrate-foundations phase)
+ * will own real Postgres migrations; this package will not grow a runner.
+ *
+ * @see docs/scout/386-postgres-provisioning-migration-schemas.md
  */
 export async function migrate(_opts?: MigrateOptions): Promise<void> {
   // The embedded issue store initializes itself on demand.
