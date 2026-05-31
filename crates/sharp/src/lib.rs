@@ -1,32 +1,20 @@
-//! Sharp VCS core — objects, refs, commits, DAG, agent-episode schema,
-//! and Rust semantic merge via rust-analyzer.
+//! Sharp — agent-native VCS core and Rust semantic merge.
 //!
 //! This crate implements the Sharp version control system on the shared
-//! Postgres instance (all tables in the `sharp` schema) and provides
-//! Tier-1 semantic merge for Rust source files by orchestrating
-//! `rust-analyzer` as a subprocess and using `cargo check` as the
-//! structural verification gate.
+//! Postgres instance and the Tier-1 semantic merge for Rust source.
+//! All VCS tables live in the `sharp` schema.
 //!
 //! # Module layout
 //!
-//! ## VCS core
-//! - [`repo`]         — repo init and lookup (`sharp init`)
-//! - [`object`]       — content-addressed object store (`sharp add`)
-//! - [`commit`]       — commits, branches, and the DAG (`sharp commit`, `sharp branch`)
-//! - [`episode`]      — agent-episode lifecycle (open/append/finish/query)
-//! - [`git_interop`]  — Git import and linear export
-//!
-//! ## Rust semantic merge
-//! - [`rust_analyzer_client`] — subprocess orchestration of `rust-analyzer`
-//!   over the LSP protocol.
-//! - [`cargo_check`]          — run `cargo check --message-format=json` and
-//!   parse structured diagnostics.
-//! - [`semantic_merge`]       — Tier-1 merge algorithm that uses the above
-//!   two tools to resolve rename-vs-edit conflicts and refuse non-compiling
-//!   merges.
-//!
-//! ## Shared
-//! - [`error`]   — shared error type
+//! - [`repo`]                 — repo init and lookup (`sharp init`)
+//! - [`object`]               — content-addressed object store (`sharp add`)
+//! - [`commit`]               — commits, branches, and the DAG (`sharp commit`, `sharp branch`)
+//! - [`episode`]              — agent-episode lifecycle (open/append/finish/query)
+//! - [`git_interop`]          — Git import and linear export
+//! - [`rust_analyzer_client`] — subprocess orchestration of `rust-analyzer` over LSP
+//! - [`cargo_check`]          — run `cargo check --message-format=json` and parse diagnostics
+//! - [`semantic_merge`]       — Tier-1 merge algorithm (rename-aware + compile gate)
+//! - [`error`]                — shared error type
 //!
 //! # Schema
 //!
@@ -35,15 +23,14 @@
 //! - `0002_sharp_episode_schema.sql` — episodes, episode_events, episode_artifacts, episode_links
 //! - `0003_sharp_git_interop.sql`    — git_objects, git_refs (Git SHA-1 keyed store)
 //!
-//! # Self-hosting criticality
+//! # Self-hosting gate
 //!
-//! Sharp uses these capabilities to manage its own source.  Rust semantic
-//! merge is the required next language after TypeScript because the entire
-//! stack is being rewritten in Rust.  Deferring Rust support would break the
-//! no-non-compiling-merge guarantee for Sharp's own codebase.
+//! Sharp manages Superfield's own Rust source (the `crates/sharp` workspace)
+//! as its dogfood repo.  Any merge of Sharp's own code passes through the
+//! Rust semantic merge path, exercising the no-non-compiling-merge guarantee
+//! on production source.  See `docs/architecture.md` §Self-hosting gate.
 //!
-//! See `docs/architecture.md` §Single-Instance Database Schema Layout and
-//! §Sharp subsystem (Tier-1 Rust semantic merge).
+//! See `docs/architecture.md` §Single-Instance Database Schema Layout.
 
 pub mod cargo_check;
 pub mod commit;
