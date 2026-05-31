@@ -84,7 +84,8 @@ impl Default for StubTransport {
 
 impl DeployTransport for StubTransport {
     fn ship(&self, _config: &TargetConfig, _artifact: &BuildArtifact) -> Result<(), DeployError> {
-        self.ship_calls.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        self.ship_calls
+            .fetch_add(1, std::sync::atomic::Ordering::SeqCst);
         if let Some(msg) = &self.force_error {
             return Err(DeployError::Transport(msg.clone()));
         }

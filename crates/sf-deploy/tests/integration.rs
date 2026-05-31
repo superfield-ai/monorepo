@@ -9,8 +9,8 @@
 //! - Deploy to a local/stub target succeeds.
 //! - Invalid target config fails fast before any transport I/O.
 
-use sf_deploy::{deploy, BuildArtifact, DeployError, TargetConfig};
 use sf_deploy::transport::StubTransport;
+use sf_deploy::{deploy, BuildArtifact, DeployError, TargetConfig};
 use std::path::PathBuf;
 
 /// Returns the path to the current test binary, which is guaranteed to exist
@@ -32,8 +32,8 @@ fn deploy_to_stub_target_succeeds() {
         name: "superfield".to_string(),
     };
 
-    let result = deploy(&config, &artifact, &transport)
-        .expect("deploy to stub target must succeed");
+    let result =
+        deploy(&config, &artifact, &transport).expect("deploy to stub target must succeed");
 
     assert_eq!(result.target, "ci-stub");
     assert!(
@@ -46,7 +46,11 @@ fn deploy_to_stub_target_succeeds() {
         "summary should mention target name: {}",
         result.summary
     );
-    assert_eq!(transport.ship_count(), 1, "transport must be called exactly once");
+    assert_eq!(
+        transport.ship_count(),
+        1,
+        "transport must be called exactly once"
+    );
 }
 
 /// SSH target with all required fields passes validation and ships.
@@ -114,7 +118,11 @@ fn invalid_config_empty_name_fails_fast() {
         err
     );
     // Transport must NOT have been called.
-    assert_eq!(transport.ship_count(), 0, "transport must not be called on invalid config");
+    assert_eq!(
+        transport.ship_count(),
+        0,
+        "transport must not be called on invalid config"
+    );
 }
 
 /// SSH target missing `host` fails with `InvalidConfig`.

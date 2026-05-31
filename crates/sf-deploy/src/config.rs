@@ -124,7 +124,12 @@ fn require_field(
 mod tests {
     use super::*;
 
-    fn ssh_config(name: &str, host: Option<&str>, user: Option<&str>, dest_dir: Option<&str>) -> TargetConfig {
+    fn ssh_config(
+        name: &str,
+        host: Option<&str>,
+        user: Option<&str>,
+        dest_dir: Option<&str>,
+    ) -> TargetConfig {
         TargetConfig {
             name: name.to_string(),
             kind: TargetKind::Ssh,
@@ -162,9 +167,14 @@ mod tests {
 
     #[test]
     fn ssh_all_fields_ok() {
-        ssh_config("prod", Some("10.0.0.1"), Some("deploy"), Some("/opt/superfield"))
-            .validate()
-            .unwrap();
+        ssh_config(
+            "prod",
+            Some("10.0.0.1"),
+            Some("deploy"),
+            Some("/opt/superfield"),
+        )
+        .validate()
+        .unwrap();
     }
 
     #[test]
@@ -212,9 +222,13 @@ mod tests {
 
     #[test]
     fn k8s_missing_namespace_fails() {
-        let err = k8s_config("staging", None, Some("ghcr.io/superfield-ai/superfield:0.1.0"))
-            .validate()
-            .unwrap_err();
+        let err = k8s_config(
+            "staging",
+            None,
+            Some("ghcr.io/superfield-ai/superfield:0.1.0"),
+        )
+        .validate()
+        .unwrap_err();
         assert!(matches!(err, DeployError::InvalidConfig(_)));
     }
 

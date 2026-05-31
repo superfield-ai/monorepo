@@ -83,9 +83,6 @@ pub fn deploy(
 
     Ok(DeployResult {
         target: config.name.clone(),
-        summary: format!(
-            "deployed {} → {}",
-            artifact.name, config.name
-        ),
+        summary: format!("deployed {} → {}", artifact.name, config.name),
     })
 }
