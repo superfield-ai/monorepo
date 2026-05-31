@@ -14,7 +14,7 @@ PostgreSQL row-level security (RLS) session context wiring.
 - `migrations/0001_rls_workspace_isolation.sql` is the stub migration that
   enables RLS and installs per-operation `PERMISSIVE` policies on all
   workspace-keyed tables across the `sharp`, `nexum`, `episodes`, and `auth`
-  schemas.  Tables that do not yet exist are skipped gracefully.
+  schemas. Tables that do not yet exist are skipped gracefully.
 - `pg-container.ts` is the shared Postgres Docker helper; re-exported by
   `packages/control/tests/helpers/pg-container.ts`.
 
