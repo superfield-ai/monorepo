@@ -698,22 +698,22 @@ All Rust components (Sharp, Nexum, auth, and any future component) share **one P
 
 Rejected alternatives:
 
-| Option | Why rejected |
-| ------ | ------------ |
-| One shared `public` schema, all tables flat | Table name collisions across components (`api_keys` appears in both Sharp and Nexum auth paths); migration ownership is ambiguous; RLS policies cannot be scoped per component without prefix conventions that are error-prone to enforce. |
-| Separate Postgres database per component | Cross-component joins require `dblink` or FDW, adding a network hop and precluding atomic transactions that span component boundaries; eliminates the join advantage of a single instance. |
-| Second Postgres process (Nexum's AGE shim at `:5433`) | Non-conforming with the one-binary one-instance architecture decision. The AGE graph extension must run inside the primary instance as an in-instance extension, not as a separate server. |
+| Option                                                | Why rejected                                                                                                                                                                                                                               |
+| ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| One shared `public` schema, all tables flat           | Table name collisions across components (`api_keys` appears in both Sharp and Nexum auth paths); migration ownership is ambiguous; RLS policies cannot be scoped per component without prefix conventions that are error-prone to enforce. |
+| Separate Postgres database per component              | Cross-component joins require `dblink` or FDW, adding a network hop and precluding atomic transactions that span component boundaries; eliminates the join advantage of a single instance.                                                 |
+| Second Postgres process (Nexum's AGE shim at `:5433`) | Non-conforming with the one-binary one-instance architecture decision. The AGE graph extension must run inside the primary instance as an in-instance extension, not as a separate server.                                                 |
 
 ### Schema namespace assignment
 
 Each component owns exactly one PostgreSQL schema. All tables, indexes, sequences, and functions for that component live in its schema. No component may create objects in another component's schema.
 
-| PostgreSQL schema | Owner component | Tables (current) |
-| ----------------- | --------------- | ---------------- |
-| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections` |
+| PostgreSQL schema | Owner component | Tables (current)                                                                                                           |
+| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                   |
 | `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `corpus_access`, `job_queue` |
-| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port) |
-| `episodes`        | Orchestrator    | `episodes`, `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces) |
+| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                           |
+| `episodes`        | Orchestrator    | `episodes`, `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces)                           |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -735,11 +735,11 @@ SELECT * FROM blocks;  -- which schema? ambiguous — never do this cross-compon
 
 Each component owns its schema's migrations exclusively. Migration files are colocated with the component's source code:
 
-| Component | Migration path |
-| --------- | -------------- |
-| Sharp     | `superfield-ai/sharp/apps/server/migrations/` |
-| Nexum     | `superfield-ai/nexum/db/migrations/` |
-| Auth      | `superfield-ai/superfield-cli-ts/packages/auth/migrations/` (target) |
+| Component | Migration path                                                               |
+| --------- | ---------------------------------------------------------------------------- |
+| Sharp     | `superfield-ai/sharp/apps/server/migrations/`                                |
+| Nexum     | `superfield-ai/nexum/db/migrations/`                                         |
+| Auth      | `superfield-ai/superfield-cli-ts/packages/auth/migrations/` (target)         |
 | Episodes  | `superfield-ai/superfield-cli-ts/packages/orchestrator/migrations/` (target) |
 
 The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
@@ -803,11 +803,11 @@ Until the AGE shim is folded in, Nexum's graph traversal remains experimental an
 
 ## §7 Current Gaps
 
-| # | Gap | Target state | Tracking |
-|---|-----|--------------|----------|
-| 1 | Schema-sharing boundary not codified | Namespaced schemas per component as described above | Closed by #355 |
-| 2 | AGE shim runs on a second Postgres at `:5433` | AGE as in-instance extension on primary Postgres | Open — requires Nexum port |
-| 3 | No RLS policies anywhere | Per-schema RLS enabled; policies reference `auth.sessions` | Open — deferred to auth port |
-| 4 | No cross-component migration runner | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue |
-| 5 | `episodes` schema not yet defined | Schema and tables defined during orchestrator port | Open |
-| 6 | `auth` schema not yet defined | Schema and tables defined during auth port | Open |
+| #   | Gap                                           | Target state                                                                  | Tracking                                 |
+| --- | --------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------- |
+| 1   | Schema-sharing boundary not codified          | Namespaced schemas per component as described above                           | Closed by #355                           |
+| 2   | AGE shim runs on a second Postgres at `:5433` | AGE as in-instance extension on primary Postgres                              | Open — requires Nexum port               |
+| 3   | No RLS policies anywhere                      | Per-schema RLS enabled; policies reference `auth.sessions`                    | Open — deferred to auth port             |
+| 4   | No cross-component migration runner           | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue |
+| 5   | `episodes` schema not yet defined             | Schema and tables defined during orchestrator port                            | Open                                     |
+| 6   | `auth` schema not yet defined                 | Schema and tables defined during auth port                                    | Open                                     |
