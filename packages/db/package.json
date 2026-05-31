@@ -7,8 +7,9 @@
     "build": "tsc"
   },
   "dependencies": {
+    "@types/pg": "^8.20.0",
     "lowdb": "^7.0.1",
-    "postgres": "^3.4.9"
+    "pg": "^8.21.0"
   },
   "devDependencies": {
     "typescript": "^5.0.0"

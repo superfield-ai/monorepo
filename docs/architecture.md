@@ -803,11 +803,11 @@ Until the AGE shim is folded in, Nexum's graph traversal remains experimental an
 
 ## §7 Current Gaps
 
-| #   | Gap                                           | Target state                                                                  | Tracking                                 |
-| --- | --------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------- |
-| 1   | Schema-sharing boundary not codified          | Namespaced schemas per component as described above                           | Closed by #355                           |
-| 2   | AGE shim runs on a second Postgres at `:5433` | AGE as in-instance extension on primary Postgres                              | Open — requires Nexum port               |
-| 3   | No RLS policies anywhere                      | Per-schema RLS enabled; policies reference `auth.sessions`                    | Open — deferred to auth port             |
-| 4   | No cross-component migration runner           | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue |
-| 5   | `episodes` schema not yet defined             | Schema and tables defined during orchestrator port                            | Open                                     |
-| 6   | `auth` schema not yet defined                 | Schema and tables defined during auth port                                    | Open                                     |
+| #   | Gap                                           | Target state                                                                  | Tracking                                                                                                                                             |
+| --- | --------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Schema-sharing boundary not codified          | Namespaced schemas per component as described above                           | Closed by #355                                                                                                                                       |
+| 2   | AGE shim runs on a second Postgres at `:5433` | AGE as in-instance extension on primary Postgres                              | Open — requires Nexum port                                                                                                                           |
+| 3   | No RLS policies anywhere                      | Per-schema RLS enabled; policies reference `auth.sessions`                    | Partially closed by #358 — migration stubs and session context wiring in `packages/db/`; full per-schema policies require component schemas to exist |
+| 4   | No cross-component migration runner           | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue                                                                                                             |
+| 5   | `episodes` schema not yet defined             | Schema and tables defined during orchestrator port                            | Open                                                                                                                                                 |
+| 6   | `auth` schema not yet defined                 | Schema and tables defined during auth port                                    | Open                                                                                                                                                 |
