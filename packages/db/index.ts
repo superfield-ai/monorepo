@@ -502,3 +502,19 @@ export async function migrateWorkspaceColumn(
 
   return migrated;
 }
+
+// Nexum schema migration — creates nexum.* tables in the shared instance
+// and provides the data cutover path from the standalone Nexum DB.
+// @see packages/db/nexum-migration.ts
+// @see docs/architecture.md §6
+// @see issue #368
+export type {
+  QueryExecutor,
+  SchemaMigrationResult,
+  NexumDataCutoverOptions,
+  DataCutoverResult,
+} from "./nexum-migration.ts";
+export {
+  runNexumSchemaMigration,
+  runNexumDataCutover,
+} from "./nexum-migration.ts";
