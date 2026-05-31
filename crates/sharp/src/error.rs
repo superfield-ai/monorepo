@@ -32,6 +32,11 @@ pub enum SharpError {
     #[error("episode {0} is not open (state: {1})")]
     EpisodeNotOpen(uuid::Uuid, String),
 
+    // ── Git interop errors ───────────────────────────────────────────────────
+    /// A Git interoperability error (import or export).
+    #[error("git interop error: {0}")]
+    GitInterop(String),
+
     // ── Rust semantic merge errors ───────────────────────────────────────────
     /// The rust-analyzer subprocess could not be spawned or communicated with.
     #[error("rust-analyzer subprocess error: {0}")]
