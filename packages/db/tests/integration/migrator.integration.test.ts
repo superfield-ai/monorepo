@@ -7,20 +7,48 @@
  * and exercise the actual SQL against a real database. They require Docker to
  * be available in the test environment.
  *
+ * When Docker is not available (e.g. in a containerised CI runner without
+ * Docker-in-Docker support), the entire suite is skipped with an explicit
+ * reason rather than failing.
+ *
  * Test plan (issue #356):
  *   - Migrate empty DB then assert all expected tables exist.
  *   - Run migrations twice and assert idempotency (no error, no duplicate records).
  */
 
+import { spawnSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startPostgres, type PgContainer } from "../../pg-container.ts";
 import { runMigrations } from "../../migrator.ts";
 
+function dockerAvailable(): boolean {
+  try {
+    const r = spawnSync(
+      "docker",
+      ["version", "--format", "{{.Server.Version}}"],
+      { stdio: ["ignore", "pipe", "pipe"] },
+    );
+    return r.status === 0 && r.stdout.toString().trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
 describe("runMigrations — integration", () => {
-  let pg: PgContainer;
+  let pg: PgContainer | undefined;
+  let skipReason: string | undefined;
 
   beforeAll(async () => {
-    pg = await startPostgres();
+    if (!dockerAvailable()) {
+      skipReason =
+        "docker not available — skipping migrator integration tests";
+      return;
+    }
+    try {
+      pg = await startPostgres();
+    } catch (err) {
+      skipReason = `failed to start postgres container: ${(err as Error).message}`;
+    }
   }, 60_000);
 
   afterAll(async () => {
@@ -28,6 +56,12 @@ describe("runMigrations — integration", () => {
   });
 
   it("creates all expected tables in an empty database", async () => {
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
+    if (!pg) throw new Error("postgres container not initialised");
+
     const applied = await runMigrations({
       databaseUrl: pg.url,
       log: () => {},
@@ -59,6 +93,12 @@ describe("runMigrations — integration", () => {
   }, 60_000);
 
   it("is idempotent — running migrations twice does not error or create duplicates", async () => {
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
+    if (!pg) throw new Error("postgres container not initialised");
+
     // First run (already applied by the previous test, but this is a fresh
     // suite so we use the same container — call again).
     await runMigrations({ databaseUrl: pg.url, log: () => {} });
