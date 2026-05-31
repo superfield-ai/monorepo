@@ -8,6 +8,19 @@ import { JSONFilePreset } from "lowdb/node";
  * The embedded DB is the source of truth for feature issue state, subtasks,
  * and sync metadata. GitHub issues are projections generated from these local
  * records.
+ *
+ * ## Workspace isolation
+ *
+ * Every record carries a `workspaceId` that identifies the owning workspace.
+ * Writes without a workspace context are rejected at the store layer. This is
+ * the prerequisite for row-level security (RLS) when we graduate to a
+ * server-side store.
+ *
+ * Use `openWorkspaceIssueStore(filePath, workspaceId)` to get a workspace-
+ * scoped store. Writes from that store automatically stamp the given
+ * `workspaceId` and reject records belonging to a different workspace. Use
+ * `migrateWorkspaceColumn(store, defaultWorkspaceId)` once to backfill
+ * existing rows that pre-date workspace support.
  */
 
 export interface MigrateOptions {
@@ -20,6 +33,8 @@ export interface IssueTaskItem {
 }
 
 export interface LocalIssueRecord {
+  /** Workspace (tenant) that owns this record. Required; never null. */
+  workspaceId: string;
   repo: string;
   number: number;
   title: string;
@@ -53,6 +68,48 @@ export interface LocalIssueStore {
   remove(number: number): Promise<void>;
   replaceAll(issues: readonly LocalIssueRecord[]): Promise<void>;
   snapshot(): Promise<LocalIssueDb>;
+}
+
+/**
+ * A workspace-scoped view of the issue store.
+ *
+ * All writes are automatically stamped with the bound `workspaceId`. Attempts
+ * to upsert a record whose `workspaceId` does not match the bound workspace
+ * throw `WorkspaceContextError`. Reads are filtered to the bound workspace so
+ * one workspace cannot observe another workspace's records.
+ */
+export interface WorkspaceAwareIssueStore {
+  /** The workspace this store is bound to. */
+  readonly workspaceId: string;
+  /** Return all records that belong to this workspace. */
+  getAll(): Promise<LocalIssueRecord[]>;
+  /** Return a record by issue number, or undefined if it belongs to a different workspace. */
+  get(number: number): Promise<LocalIssueRecord | undefined>;
+  /**
+   * Insert or update a record scoped to this workspace.
+   *
+   * @throws {WorkspaceContextError} if `issue.workspaceId` does not match the
+   *   bound workspace. Pass `issue` without `workspaceId` and the store will
+   *   set it automatically.
+   */
+  upsert(issue: Omit<LocalIssueRecord, "workspaceId"> & { workspaceId?: string }): Promise<void>;
+  /** Patch a record by issue number within this workspace. */
+  patch(
+    number: number,
+    updater: (issue: LocalIssueRecord) => LocalIssueRecord,
+  ): Promise<LocalIssueRecord | undefined>;
+  /** Remove a record by issue number within this workspace. */
+  remove(number: number): Promise<void>;
+}
+
+/**
+ * Thrown when a write is attempted without the correct workspace context.
+ */
+export class WorkspaceContextError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "WorkspaceContextError";
+  }
 }
 
 export function resolveIssueDbPath(repoRoot = process.cwd()): string {
@@ -227,4 +284,112 @@ export async function openClaudeSessionStore(
  */
 export async function migrate(_opts?: MigrateOptions): Promise<void> {
   // The embedded issue store initializes itself on demand.
+}
+
+/**
+ * Open a workspace-scoped view of the issue store.
+ *
+ * The returned store automatically stamps every write with `workspaceId` and
+ * rejects writes belonging to a different workspace. Reads are filtered to the
+ * bound workspace so one workspace cannot observe another's records.
+ *
+ * @param workspaceId - The workspace to bind this store to. Must be a
+ *   non-empty string; throws `WorkspaceContextError` otherwise.
+ * @param filePath - Path to the backing JSON file (defaults to the project
+ *   default).
+ */
+export async function openWorkspaceIssueStore(
+  workspaceId: string,
+  filePath = resolveIssueDbPath(),
+): Promise<WorkspaceAwareIssueStore> {
+  if (!workspaceId || workspaceId.trim() === "") {
+    throw new WorkspaceContextError(
+      "workspaceId is required and must be non-empty",
+    );
+  }
+
+  const base = await openIssueStore(filePath);
+
+  return {
+    workspaceId,
+
+    async getAll() {
+      const all = await base.getAll();
+      return all.filter((issue) => issue.workspaceId === workspaceId);
+    },
+
+    async get(number) {
+      const issue = await base.get(number);
+      if (!issue) return undefined;
+      if (issue.workspaceId !== workspaceId) return undefined;
+      return issue;
+    },
+
+    async upsert(issue) {
+      if (issue.workspaceId !== undefined && issue.workspaceId !== workspaceId) {
+        throw new WorkspaceContextError(
+          `Cannot write issue #${issue.number} to workspace "${workspaceId}": ` +
+            `record belongs to workspace "${issue.workspaceId}"`,
+        );
+      }
+      await base.upsert({ ...issue, workspaceId });
+    },
+
+    async patch(number, updater) {
+      // Only patch if the record belongs to this workspace.
+      const current = await base.get(number);
+      if (!current || current.workspaceId !== workspaceId) return undefined;
+      return base.patch(number, (rec) => {
+        const updated = updater(rec);
+        if (updated.workspaceId !== workspaceId) {
+          throw new WorkspaceContextError(
+            `Patch updater must not change workspaceId (was "${workspaceId}", ` +
+              `got "${updated.workspaceId}")`,
+          );
+        }
+        return updated;
+      });
+    },
+
+    async remove(number) {
+      const current = await base.get(number);
+      if (!current || current.workspaceId !== workspaceId) return;
+      await base.remove(number);
+    },
+  };
+}
+
+/**
+ * Backfill `workspaceId` on all existing records that lack it.
+ *
+ * Call once during application startup or as part of a migration script.
+ * Rows that already have a `workspaceId` are left unchanged.
+ *
+ * @param store - The base (non-workspace-scoped) issue store.
+ * @param defaultWorkspaceId - The workspace to assign to rows with no
+ *   `workspaceId`. Must be a non-empty string.
+ * @returns The number of rows that were updated.
+ */
+export async function migrateWorkspaceColumn(
+  store: LocalIssueStore,
+  defaultWorkspaceId: string,
+): Promise<number> {
+  if (!defaultWorkspaceId || defaultWorkspaceId.trim() === "") {
+    throw new WorkspaceContextError(
+      "defaultWorkspaceId is required and must be non-empty",
+    );
+  }
+
+  const all = await store.getAll();
+  let migrated = 0;
+
+  for (const issue of all) {
+    // Records written before workspace support used an undefined workspaceId.
+    if (!issue.workspaceId) {
+      await store.upsert({ ...issue, workspaceId: defaultWorkspaceId });
+      migrated++;
+    }
+  }
+
+  return migrated;
 }
