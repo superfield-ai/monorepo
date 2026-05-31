@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/superfield",
+    "crates/sharp",
+    "crates/nexum",
+    "crates/sf-cli",
+    "crates/sf-serve",
+    "crates/sf-deploy",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "UNLICENSED"
+repository = "https://github.com/superfield-ai/superfield-cli-ts"
+
+[workspace.dependencies]
+# component crates
+sharp = { path = "crates/sharp" }
+nexum = { path = "crates/nexum" }
+sf-cli = { path = "crates/sf-cli" }
+sf-serve = { path = "crates/sf-serve" }
+sf-deploy = { path = "crates/sf-deploy" }

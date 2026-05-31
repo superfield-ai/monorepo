@@ -1,0 +1,12 @@
+[package]
+name = "sf-deploy"
+description = "Superfield deploy orchestration (stub)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sf_deploy"
+path = "src/lib.rs"
