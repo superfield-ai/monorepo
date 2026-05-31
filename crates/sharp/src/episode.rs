@@ -197,7 +197,10 @@ pub async fn events(pool: &PgPool, episode_id: Uuid) -> Result<Vec<EpisodeEvent>
     .fetch_all(pool)
     .await?;
 
-    rows.iter().map(row_to_event).collect::<Result<Vec<_>, _>>().map_err(SharpError::Db)
+    rows.iter()
+        .map(row_to_event)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(SharpError::Db)
 }
 
 /// Return all open episodes for a repo.

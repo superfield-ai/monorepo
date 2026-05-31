@@ -13,8 +13,8 @@
 //! - `episode_open_append_finish_query` — verifies that episode lifecycle
 //!   works end-to-end.
 
-use sharp::{commit, episode, object, repo};
 use sf_db::{connect, DbConfig};
+use sharp::{commit, episode, object, repo};
 use uuid::Uuid;
 
 /// Helper: unique repo name per test run.
@@ -44,14 +44,9 @@ async fn init_add_commit_roundtrip() {
 
     // Add a blob object.
     let content = b"Hello, Sharp!";
-    let blob_sha = object::store(
-        &pool,
-        r.id,
-        object::ObjectType::Blob,
-        content,
-    )
-    .await
-    .expect("object store failed");
+    let blob_sha = object::store(&pool, r.id, object::ObjectType::Blob, content)
+        .await
+        .expect("object store failed");
 
     // Verify sha256.
     assert_eq!(blob_sha, sharp::object::sha256_hex(content));
@@ -111,9 +106,7 @@ async fn init_add_commit_roundtrip() {
     assert_eq!(head2, commit2_sha);
 
     // Log should have two entries.
-    let history = commit::log(&pool, r.id)
-        .await
-        .expect("log failed");
+    let history = commit::log(&pool, r.id).await.expect("log failed");
     assert_eq!(history.len(), 2);
     // Most recent first.
     assert_eq!(history[0].commit_sha, commit2_sha);
@@ -173,9 +166,7 @@ async fn episode_open_append_finish_query() {
     assert_eq!(ev2.seq, 1);
 
     // Query events — should be in order.
-    let evs = episode::events(&pool, ep.id)
-        .await
-        .expect("events failed");
+    let evs = episode::events(&pool, ep.id).await.expect("events failed");
     assert_eq!(evs.len(), 2);
     assert_eq!(evs[0].seq, 0);
     assert_eq!(evs[1].seq, 1);
@@ -187,9 +178,7 @@ async fn episode_open_append_finish_query() {
     assert!(open_eps.iter().any(|e| e.id == ep.id));
 
     // Finish the episode.
-    let finished = episode::finish(&pool, ep.id)
-        .await
-        .expect("finish failed");
+    let finished = episode::finish(&pool, ep.id).await.expect("finish failed");
     assert_eq!(finished.state, "finished");
     assert!(finished.finished_at.is_some());
 

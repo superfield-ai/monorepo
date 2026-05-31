@@ -64,8 +64,8 @@ pub async fn commit(
         "message": message,
         "author": author,
     });
-    let data = serde_json::to_vec(&payload)
-        .expect("serde_json::to_vec never fails for a simple Value");
+    let data =
+        serde_json::to_vec(&payload).expect("serde_json::to_vec never fails for a simple Value");
 
     let commit_sha = object::store(pool, repo_id, ObjectType::Commit, &data).await?;
 
@@ -158,20 +158,14 @@ pub async fn create_branch(
 /// # Errors
 ///
 /// Returns [`SharpError::RefNotFound`] when the branch does not exist.
-pub async fn branch_head(
-    pool: &PgPool,
-    repo_id: Uuid,
-    branch: &str,
-) -> Result<String, SharpError> {
+pub async fn branch_head(pool: &PgPool, repo_id: Uuid, branch: &str) -> Result<String, SharpError> {
     let ref_name = format!("refs/heads/{branch}");
-    let row = sqlx::query(
-        "SELECT target_sha FROM sharp.refs WHERE repo_id = $1 AND ref_name = $2",
-    )
-    .bind(repo_id)
-    .bind(&ref_name)
-    .fetch_optional(pool)
-    .await?
-    .ok_or_else(|| SharpError::RefNotFound(ref_name))?;
+    let row = sqlx::query("SELECT target_sha FROM sharp.refs WHERE repo_id = $1 AND ref_name = $2")
+        .bind(repo_id)
+        .bind(&ref_name)
+        .fetch_optional(pool)
+        .await?
+        .ok_or_else(|| SharpError::RefNotFound(ref_name))?;
 
     let sha: String = row.try_get("target_sha")?;
     Ok(sha)
