@@ -1,7 +1,4 @@
 import { resolve } from "node:path";
-import { ApiState } from "@superfield/core/api-state";
-import { startApiServer } from "@superfield/core/api-server";
-import type { Logger } from "@superfield/core/logger";
 
 /**
  * @file control.ts
@@ -15,14 +12,11 @@ import type { Logger } from "@superfield/core/logger";
  *   --path      Superfield project root (SUPERFIELD_REPO_ROOT). Default: cwd.
  *   --api-url   Superfield API base URL. Default: http://127.0.0.1:7837.
  *
- * Starts the studio HTTP server from @superfield/control. Does not start
- * any dev loops. Does not read ~/.superfield/config.yaml. The only external
- * dependency is the superfield API server at --api-url (used for agent turns
- * and steering). If the API is unreachable at startup a warning is logged and
- * the server starts anyway.
+ * Builds the browser UI then delegates to the `sf-serve` Rust binary for all
+ * serving. No Node/Bun backend process is started. The Rust binary owns the
+ * HTTP server, WebSocket, static asset serving, and API endpoints.
  *
- * The browser UI bundle is rebuilt before startup so `CONTROL_ASSETS_DIR`
- * can remain optional in debug flows.
+ * See: docs/architecture.md — §Control Webapp and §7 Current Gaps (#7).
  */
 
 const CONTROL_WEB_APP_DIR = resolve(import.meta.dirname, "../../control/apps");
@@ -31,23 +25,41 @@ const CONTROL_WEB_DIST_DIR = resolve(
   "../../control/apps/dist",
 );
 
+/**
+ * Resolved path to the `sf-serve` Rust binary that replaces the Bun control
+ * server. Set via SF_SERVE_BIN env var, or defaults to `sf-serve` on PATH.
+ *
+ * Issue #377 ships this binary; issue #378 wires the CLI to it.
+ */
+function resolveSfServeBin(): string {
+  return process.env.SF_SERVE_BIN ?? "sf-serve";
+}
+
 export interface ControlCommandDeps {
   log?: (msg: string) => void;
   warn?: (msg: string) => void;
   exit?: (code: number) => never;
-  /** Injected fetch for health-check (tests). */
-  _fetch?: typeof fetch;
   /** Injected browser bundle builder (tests). */
   _buildControlWeb?: () => Promise<void>;
-  /** Injected API server starter (tests). */
-  _startApiServer?: (opts: {
-    host?: string;
-    port?: number;
-    state: ApiState;
-    logger: Logger;
-  }) => ReturnType<typeof startApiServer>;
-  /** Injected control starter (tests — avoids dynamic import). */
-  _startControl?: () => Promise<void>;
+  /**
+   * Injected Rust backend starter (tests — avoids spawning a real binary).
+   *
+   * Production default: spawns `sf-serve` with env vars set by controlCommand.
+   * The promise resolves when the process exits (i.e. never under normal
+   * operation — the process stays alive until SIGINT/SIGTERM).
+   */
+  _startSfServe?: (opts: SfServeOpts) => Promise<void>;
+}
+
+export interface SfServeOpts {
+  /** Port sf-serve should bind on (maps to CONTROL_PORT env var). */
+  port: number;
+  /** Absolute path to the built browser UI static assets. */
+  assetsDir: string;
+  /** Superfield project root (SUPERFIELD_REPO_ROOT). */
+  projectRoot?: string;
+  /** Superfield dev-loop API URL (SUPERFIELD_API_URL). */
+  apiUrl: string;
 }
 
 export function parseControlArgs(args: string[]): {
@@ -97,15 +109,15 @@ export function controlUsage(): string {
   return `
 superfield control [--port <n>] [--path <path>] [--api-url <url>]
 
-  Start the studio HTTP server.
+  Start the studio HTTP server (served by the Rust sf-serve backend).
 
   --port      Studio server port. Default: 7000.
   --path      Superfield project root (SUPERFIELD_REPO_ROOT). Default: cwd.
   --api-url   Superfield API base URL. Default: http://127.0.0.1:7837.
 
-  By default the command starts the local API server so the webapp can receive
-  turns and steer requests immediately. If --api-url points at a non-local
-  server, that remote API is used instead.
+  The browser UI is built locally (Vite), then served by the sf-serve Rust
+  binary. No Node/Bun backend process is started. Set SF_SERVE_BIN to
+  override the binary path.
 `.trim();
 }
 
@@ -116,7 +128,7 @@ export async function controlCommand(
   const log = deps.log ?? ((m: string) => console.log(m));
   const warn = deps.warn ?? ((m: string) => console.warn(m));
   const exit = deps.exit ?? ((code: number) => process.exit(code) as never);
-  const _fetch = deps._fetch ?? globalThis.fetch;
+
   const _buildControlWeb =
     deps._buildControlWeb ??
     (async () => {
@@ -132,15 +144,32 @@ export async function controlCommand(
         );
       }
     });
-  const _startControl =
-    deps._startControl ??
-    (async () => {
-      const { startControl } = await import("@superfield/control");
-      await startControl();
+
+  const _startSfServe =
+    deps._startSfServe ??
+    (async (opts: SfServeOpts) => {
+      const sfServeBin = resolveSfServeBin();
+      const proc = Bun.spawn([sfServeBin], {
+        env: {
+          ...process.env,
+          CONTROL_PORT: String(opts.port),
+          CONTROL_ASSETS_DIR: opts.assetsDir,
+          SUPERFIELD_API_URL: opts.apiUrl,
+          ...(opts.projectRoot
+            ? {
+                SUPERFIELD_REPO_ROOT: opts.projectRoot,
+                CONTROL_SOURCE_DIR: opts.projectRoot,
+              }
+            : {}),
+        },
+        stdout: "inherit",
+        stderr: "inherit",
+      });
+      const exitCode = await proc.exited;
+      if (exitCode !== 0) {
+        throw new Error(`sf-serve exited with code ${exitCode}`);
+      }
     });
-  const _startApiServer =
-    deps._startApiServer ??
-    ((opts: Parameters<typeof startApiServer>[0]) => startApiServer(opts));
 
   const parsed = parseControlArgs(args);
 
@@ -158,8 +187,16 @@ export async function controlCommand(
 
   await _buildControlWeb();
 
-  // Apply CLI overrides to env vars before importing @superfield/control so
-  // that loadConfig() picks them up.
+  const port = parsed.port ?? parseInt(process.env.CONTROL_PORT ?? "7000", 10);
+  const projectRoot = parsed.path ?? process.env.SUPERFIELD_REPO_ROOT;
+  const apiUrl =
+    parsed.apiUrl ??
+    process.env.SUPERFIELD_API_URL ??
+    "http://127.0.0.1:7837";
+  const assetsDir = process.env.CONTROL_ASSETS_DIR ?? CONTROL_WEB_DIST_DIR;
+
+  // Propagate to environment so any child process or library reads consistent
+  // values. sf-serve also inherits these via the env passed to Bun.spawn above.
   if (parsed.port !== undefined) {
     process.env.CONTROL_PORT = String(parsed.port);
   }
@@ -171,44 +208,5 @@ export async function controlCommand(
     process.env.SUPERFIELD_API_URL = parsed.apiUrl;
   }
 
-  if (!process.env.CONTROL_ASSETS_DIR) {
-    process.env.CONTROL_ASSETS_DIR = CONTROL_WEB_DIST_DIR;
-  }
-
-  const apiUrlOverride = parsed.apiUrl ?? process.env.SUPERFIELD_API_URL;
-  const apiUrl = apiUrlOverride ?? "http://127.0.0.1:7837";
-
-  if (apiUrlOverride === undefined) {
-    _startApiServer({
-      host: "127.0.0.1",
-      port: 7837,
-      state: new ApiState(),
-      logger: {
-        currentLevel: "info",
-        emit: (level, message) => {
-          if (level === "warn") warn(`[studio] ${message}`);
-          else console.log(`[studio] ${message}`);
-        },
-      },
-    });
-  } else {
-    // Remote API or unparsable URL: keep the existing startup probe so we still
-    // warn operators if the target is unavailable.
-    try {
-      const res = await _fetch(`${apiUrl}/health`, {
-        signal: AbortSignal.timeout(2000),
-      });
-      if (!res.ok) {
-        warn(
-          `[studio] Warning: API at ${apiUrl}/health returned HTTP ${res.status}. Agent turns may fail.`,
-        );
-      }
-    } catch {
-      warn(
-        `[studio] Warning: API unreachable at ${apiUrl}. Agent turns may fail until it is running.`,
-      );
-    }
-  }
-
-  await _startControl();
+  await _startSfServe({ port, assetsDir, projectRoot, apiUrl });
 }

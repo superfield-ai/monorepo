@@ -1,13 +1,11 @@
 import type { ChildProcess } from "node:child_process";
-import type { Server } from "node:http";
 
 export default async function globalTeardown() {
   const proc = (globalThis as Record<string, unknown>).__studioProc as
     | ChildProcess
     | undefined;
-  const server = (globalThis as Record<string, unknown>).__apiServer as
-    | Server
-    | undefined;
+  // __apiServer is intentionally absent — no Node API server is started.
+  // The sf-serve Rust binary handles all serving (issue #378 / #377).
   const origPath = (globalThis as Record<string, unknown>).__origPath as
     | string
     | undefined;
@@ -16,7 +14,6 @@ export default async function globalTeardown() {
 
   const exitCode = proc?.exitCode;
   proc?.kill("SIGTERM");
-  server?.close();
 
   if (origPath !== undefined) {
     process.env.PATH = origPath;

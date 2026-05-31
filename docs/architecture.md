@@ -546,7 +546,9 @@ The `superfield control` subcommand starts a browser UI on `:7000` that drives a
 ```
 superfield control  (:7000)
   │
-  ├── HTTP server + WebSocket  (browser UI, studio turns)
+  ├── sf-serve  (Rust binary — HTTP server + WebSocket, static assets, API routes)
+  │     browser UI static assets (built by Vite, served from CONTROL_ASSETS_DIR)
+  │     studio API endpoints  (/studio/*, /orchestrator/*, /api/*)
   │
   ├── DevLoopProcess           (child: superfield start <repo>)
   │     plan / dev / doc loops
@@ -554,12 +556,19 @@ superfield control  (:7000)
   │           │
   │           └── HTTP (analytics read, steer write) ←── orchestrator view
   │
-  └── Routes:
+  └── Routes (all served by sf-serve):
         /                      — ControlPanel (chat + iframe)
         /studio/orchestrator   — OrchestratorView
         /studio/preview        — ComponentPreviewPanel + tokens + mocks
         /studio/deploy         — DeployView (Phase 9)
 ```
+
+`superfield control` builds the browser UI (Vite) then delegates all serving to
+the `sf-serve` Rust binary. No Node/Bun backend process is started. The binary
+path is resolved via `SF_SERVE_BIN` env var, or `sf-serve` on PATH.
+
+**Current state (gap #7):** `sf-serve` is not yet built. The CLI wiring is in
+place (issue #378); the binary ships in issue #377.
 
 `superfield start` is spawned as a child of `superfield control` when the user clicks Start in the orchestrator. Control holds the `ChildProcess`, monitors it, and terminates it on Stop or shutdown. If a dev loop is already reachable at `--api-url` (default `http://127.0.0.1:7837`), control attaches to it without spawning.
 
@@ -605,20 +614,28 @@ Routes under `/studio/*` (except `/studio/chat/stream`, `/studio/cluster/events`
 
 ### Modules
 
-| File                                          | Role                                                                |
-| --------------------------------------------- | ------------------------------------------------------------------- |
-| `packages/control/src/index.ts`               | `startControl(opts?)` — server entry                                |
-| `packages/control/src/router.ts`              | HTTP route dispatch                                                 |
-| `packages/control/src/control-ws.ts`          | Bun WebSocket handler (chat turns, steers)                          |
-| `packages/control/src/agent.ts`               | `runAgent()` — calls `POST <api-url>/studio/run`                    |
-| `packages/control/src/claude-session.ts`      | `streamTurn()` — pipes SSE from `/studio/run` to the browser        |
-| `packages/control/src/orchestrator.ts`        | `/orchestrator/*` endpoints                                         |
-| `packages/control/src/dev-loop-process.ts`    | Child process lifecycle for `superfield start`                      |
-| `packages/control/src/cluster-status-sse.ts`  | `/studio/cluster/events` aggregator                                 |
-| `packages/control/src/hot-swap.ts`            | Component hot-reload                                                |
-| `packages/control/src/design-mode-context.ts` | Studio-mode feature flag                                            |
-| `packages/control/apps/src/components/`       | React UI (ControlPanel, OrchestratorView, ComponentPreviewPanel, …) |
-| `packages/control/apps/src/controllers/`      | Browser-side controllers (Chat, ClusterStatus, Orchestrator, …)     |
+**Target state (issue #377 + #378):** the Bun server modules (`packages/control/src/`) are superseded by the `sf-serve` Rust binary. The browser UI modules remain.
+
+| File                                     | Role                                                                            |
+| ---------------------------------------- | ------------------------------------------------------------------------------- |
+| `packages/cli/commands/control.ts`       | CLI entry — builds UI, resolves `sf-serve` binary, spawns it with env vars      |
+| `packages/control/apps/src/components/`  | React UI (ControlPanel, OrchestratorView, ComponentPreviewPanel, …) — unchanged |
+| `packages/control/apps/src/controllers/` | Browser-side controllers (Chat, ClusterStatus, Orchestrator, …) — unchanged     |
+
+**Retained (pending Rust port — gap #7):**
+
+| File                                          | Role                                                              |
+| --------------------------------------------- | ----------------------------------------------------------------- |
+| `packages/control/src/index.ts`               | `startControl(opts?)` — Bun server entry (superseded by sf-serve) |
+| `packages/control/src/router.ts`              | HTTP route dispatch (superseded by sf-serve)                      |
+| `packages/control/src/control-ws.ts`          | Bun WebSocket handler (superseded by sf-serve)                    |
+| `packages/control/src/agent.ts`               | `runAgent()` — calls `POST <api-url>/studio/run`                  |
+| `packages/control/src/claude-session.ts`      | `streamTurn()` — pipes SSE from `/studio/run` to the browser      |
+| `packages/control/src/orchestrator.ts`        | `/orchestrator/*` endpoints                                       |
+| `packages/control/src/dev-loop-process.ts`    | Child process lifecycle for `superfield start`                    |
+| `packages/control/src/cluster-status-sse.ts`  | `/studio/cluster/events` aggregator                               |
+| `packages/control/src/hot-swap.ts`            | Component hot-reload                                              |
+| `packages/control/src/design-mode-context.ts` | Studio-mode feature flag                                          |
 
 ### Superfield core extension
 
@@ -905,18 +922,18 @@ Sharp manages Superfield's own Rust source (`crates/sharp`) as its primary dogfo
 
 ## §7 Current Gaps
 
-| #   | Gap                                                                      | Target state                                                                                                | Tracking                                                                                                                                             |
-| --- | ------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Schema-sharing boundary not codified                                     | Namespaced schemas per component as described above                                                         | Closed by #355                                                                                                                                       |
-| 2   | AGE shim runs on a second Postgres at `:5433`                            | AGE as in-instance extension on primary Postgres                                                            | Closed by #359 — recursive CTEs on `nexum.links` (see §6)                                                                                            |
-| 3   | No RLS policies anywhere                                                 | Per-schema RLS enabled; policies reference `auth.sessions`                                                  | Partially closed by #358 — migration stubs and session context wiring in `packages/db/`; full per-schema policies require component schemas to exist |
-| 4   | No cross-component migration runner                                      | Single runner applies all component migrations in dependency order at startup                               | Open — tracked in migration-runner issue                                                                                                             |
-| 5   | `episodes` schema not yet defined                                        | Schema and tables defined during orchestrator port                                                          | Open                                                                                                                                                 |
-| 6   | `auth` schema not yet defined                                            | Schema and tables defined during auth port                                                                  | Closed by #364                                                                                                                                       |
-| 7   | No governed embedding standard across stores                             | Single model and dimensionality declared; all vector columns conforming                                     | Closed by #360                                                                                                                                       |
-| 8   | Rust workspace crate boundaries not mapped                               | Runtime/entrypoint inventory, shared-concern map, proposed crate layout                                     | Closed by #387 — see `docs/scout/387-existing-service-runtimes-and-shared-boundaries.md`                                                             |
-| 9   | Embedding crate (`sf-embed`) not wired into component crates             | `nexum` and `sharp` depend on `sf-embed` for all vector columns                                             | Closed by #363 (crate exists; consumers pending)                                                                                                     |
-| 10  | Sharp TypeScript semantic analysis (tsserver subprocess) not implemented | `packages/sharp` — `TsserverClient` orchestrates `tsserver` for rename enumeration and semantic diagnostics | Closed by #371                                                                                                                                       |
-| 11  | Rust semantic merge not implemented                                      | `crates/sharp` Tier-1 merge via rust-analyzer + cargo check gate                                            | Closed by #372                                                                                                                                       |
-| 12  | Sharp self-hosting gate not yet live                                     | Sharp manages Superfield Rust source end-to-end in production                                               | Closed by #374                                                                                                                                       |
-| 13  | `sf-serve` route surface is partial                                      | Full route parity with TypeScript control server (`/studio/*`, `/orchestrator/*`, chat SSE, rollback, etc.) | Open — tracked in #377 / #378                                                                                                                        |
+| #   | Gap                                                                      | Target state                                                                                                                                 | Tracking                                                                                                                                             |
+| --- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | Schema-sharing boundary not codified                                     | Namespaced schemas per component as described above                                                                                          | Closed by #355                                                                                                                                       |
+| 2   | AGE shim runs on a second Postgres at `:5433`                            | AGE as in-instance extension on primary Postgres                                                                                             | Closed by #359 — recursive CTEs on `nexum.links` (see §6)                                                                                            |
+| 3   | No RLS policies anywhere                                                 | Per-schema RLS enabled; policies reference `auth.sessions`                                                                                   | Partially closed by #358 — migration stubs and session context wiring in `packages/db/`; full per-schema policies require component schemas to exist |
+| 4   | No cross-component migration runner                                      | Single runner applies all component migrations in dependency order at startup                                                                | Open — tracked in migration-runner issue                                                                                                             |
+| 5   | `episodes` schema not yet defined                                        | Schema and tables defined during orchestrator port                                                                                           | Open                                                                                                                                                 |
+| 6   | `auth` schema not yet defined                                            | Schema and tables defined during auth port                                                                                                   | Closed by #364                                                                                                                                       |
+| 7   | No governed embedding standard across stores                             | Single model and dimensionality declared; all vector columns conforming                                                                      | Closed by #360                                                                                                                                       |
+| 8   | Rust workspace crate boundaries not mapped                               | Runtime/entrypoint inventory, shared-concern map, proposed crate layout                                                                      | Closed by #387 — see `docs/scout/387-existing-service-runtimes-and-shared-boundaries.md`                                                             |
+| 9   | Embedding crate (`sf-embed`) not wired into component crates             | `nexum` and `sharp` depend on `sf-embed` for all vector columns                                                                              | Closed by #363 (crate exists; consumers pending)                                                                                                     |
+| 10  | Sharp TypeScript semantic analysis (tsserver subprocess) not implemented | `packages/sharp` — `TsserverClient` orchestrates `tsserver` for rename enumeration and semantic diagnostics                                  | Closed by #371                                                                                                                                       |
+| 11  | Rust semantic merge not implemented                                      | `crates/sharp` Tier-1 merge via rust-analyzer + cargo check gate                                                                             | Closed by #372                                                                                                                                       |
+| 12  | Sharp self-hosting gate not yet live                                     | Sharp manages Superfield Rust source end-to-end in production                                                                                | Closed by #374                                                                                                                                       |
+| 13  | `sf-serve` Rust serving binary not yet built                             | Rust binary replaces Bun control server + Node API server; CLI delegates via `SF_SERVE_BIN` or PATH; browser UI (TypeScript/React) stays web | Closed by #377 (serving backend), #378 (CLI wiring)                                                                                                  |
