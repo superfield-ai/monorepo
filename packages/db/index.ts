@@ -23,6 +23,24 @@ import { JSONFilePreset } from "lowdb/node";
  * existing rows that pre-date workspace support.
  */
 
+/**
+ * Governed embedding standard for all Superfield stores.
+ *
+ * All vector columns across every store must declare `vector(384)` and use
+ * vectors produced by this model. No other embedding model or dimensionality
+ * is permitted without a superseding architecture decision.
+ *
+ * @see docs/architecture.md §Governed Embedding Standard (closes #360)
+ */
+export const GOVERNED_EMBEDDING = {
+  model: "Xenova/all-MiniLM-L6-v2" as const,
+  dimensions: 384 as const,
+  distanceFunction: "cosine" as const,
+  indexType: "hnsw" as const,
+} as const;
+
+export type GovernedEmbeddingModel = typeof GOVERNED_EMBEDDING.model;
+
 export interface MigrateOptions {
   databaseUrl?: string;
 }
