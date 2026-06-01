@@ -21,12 +21,12 @@ FastEnv's host-side control plane is implemented across three packages:
 
 ### 1. `packages/firecracker/` — Firecracker microVM lifecycle
 
-| File            | Responsibility                                                                                       |
-| --------------- | ---------------------------------------------------------------------------------------------------- |
-| `provision.ts`  | Downloads and caches the Firecracker binary (`v1.12.0`) and guest kernel into `~/.superfield/`       |
-| `api.ts`        | HTTP-over-Unix-socket client for the Firecracker management API (boot source, drives, snapshot, etc) |
-| `vm.ts`         | `buildVmSnapshot()` and `restoreVm()` — full VM lifecycle from boot through snapshot restore         |
-| `virtiofsd.ts`  | Spawns `virtiofsd` for host-guest filesystem sharing via virtio-fs                                   |
+| File           | Responsibility                                                                                       |
+| -------------- | ---------------------------------------------------------------------------------------------------- |
+| `provision.ts` | Downloads and caches the Firecracker binary (`v1.12.0`) and guest kernel into `~/.superfield/`       |
+| `api.ts`       | HTTP-over-Unix-socket client for the Firecracker management API (boot source, drives, snapshot, etc) |
+| `vm.ts`        | `buildVmSnapshot()` and `restoreVm()` — full VM lifecycle from boot through snapshot restore         |
+| `virtiofsd.ts` | Spawns `virtiofsd` for host-guest filesystem sharing via virtio-fs                                   |
 
 **Firecracker process model today (single-host only):**
 
@@ -52,11 +52,11 @@ daemon, no job queue, no inter-host routing, and no VM-ID registry.
 
 ### 2. `packages/cli/lib/fastenv.ts` — containerd workspace forking shim
 
-| Function          | Responsibility                                                    |
-| ----------------- | ----------------------------------------------------------------- |
-| `forkWorkspace()` | `fastenv fork --base <image> --name <id>` — COW overlayfs fork   |
+| Function             | Responsibility                                                 |
+| -------------------- | -------------------------------------------------------------- |
+| `forkWorkspace()`    | `fastenv fork --base <image> --name <id>` — COW overlayfs fork |
 | `getForkMountPath()` | `fastenv mount-path <id>` — returns host overlayfs merged path |
-| `discardFork()`   | `fastenv discard <id>` — best-effort cleanup; never throws        |
+| `discardFork()`      | `fastenv discard <id>` — best-effort cleanup; never throws     |
 
 The shim delegates entirely to the `fastenv` binary
 ([superfield-ai/fastenv](https://github.com/superfield-ai/fastenv)). The CLI
@@ -82,7 +82,9 @@ The `ci` command is the current user-facing surface for FastEnv. It wires
 ```typescript
 // prepareFastenvWorkspace + restoreVm integration wired in once
 // the workflow parser (#241) is available and the fastenv binary ships.
-console.log(`[ci] workspace forking via fastenv is staged — binary not yet available`);
+console.log(
+  `[ci] workspace forking via fastenv is staged — binary not yet available`,
+);
 ```
 
 ---
@@ -130,11 +132,11 @@ not via a crun binary directly.
 The current single-host control plane has three natural extension seams for
 multi-host scheduling:
 
-| Seam | Location | What changes for multi-host |
-| ---- | -------- | --------------------------- |
-| VM dispatch | `packages/firecracker/vm.ts` — `buildVmSnapshot()` / `restoreVm()` | Currently calls `spawn()` directly on the local process. Multi-host would replace `spawn()` with a remote dispatch call (SSH, gRPC, or HTTP API on the target host). |
-| Workspace fork | `packages/cli/lib/fastenv.ts` — `forkWorkspace()` | Currently calls `fastenv fork` locally. Multi-host would need fastenv running on the target host and a way to reference it. |
-| Job identity | `packages/cli/commands/ci.ts` — random `forkId` per run | No job registry exists. Multi-host scheduling needs a durable job ID namespace and status store. |
+| Seam           | Location                                                           | What changes for multi-host                                                                                                                                          |
+| -------------- | ------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| VM dispatch    | `packages/firecracker/vm.ts` — `buildVmSnapshot()` / `restoreVm()` | Currently calls `spawn()` directly on the local process. Multi-host would replace `spawn()` with a remote dispatch call (SSH, gRPC, or HTTP API on the target host). |
+| Workspace fork | `packages/cli/lib/fastenv.ts` — `forkWorkspace()`                  | Currently calls `fastenv fork` locally. Multi-host would need fastenv running on the target host and a way to reference it.                                          |
+| Job identity   | `packages/cli/commands/ci.ts` — random `forkId` per run            | No job registry exists. Multi-host scheduling needs a durable job ID namespace and status store.                                                                     |
 
 **Recommended multi-host seam location:** a `DispatchTarget` interface wrapping
 `spawn()` + `execFileAsync()` in `vm.ts` and `fastenv.ts`. The default
@@ -178,40 +180,40 @@ and episodes schemas — in a single process.
 Before issue #385 can be implemented, the following objectives must be stated
 and accepted:
 
-| Objective | Current state | Target (to be defined in #385) |
-| --------- | ------------- | ----------------------------- |
-| **RPO** (Recovery Point Objective) | Undefined | e.g. ≤ 5 minutes |
-| **RTO** (Recovery Time Objective) | Undefined | e.g. ≤ 15 minutes |
-| **Standby lag** | None — no standby | e.g. ≤ 30 s streaming replication lag |
-| **Backup frequency** | None | e.g. daily snapshot + WAL archiving |
-| **Restore smoke test** | None | e.g. weekly automated restore verification |
+| Objective                          | Current state     | Target (to be defined in #385)             |
+| ---------------------------------- | ----------------- | ------------------------------------------ |
+| **RPO** (Recovery Point Objective) | Undefined         | e.g. ≤ 5 minutes                           |
+| **RTO** (Recovery Time Objective)  | Undefined         | e.g. ≤ 15 minutes                          |
+| **Standby lag**                    | None — no standby | e.g. ≤ 30 s streaming replication lag      |
+| **Backup frequency**               | None              | e.g. daily snapshot + WAL archiving        |
+| **Restore smoke test**             | None              | e.g. weekly automated restore verification |
 
 ---
 
 ## Integration Points Discovered
 
-| Point | Location | Notes |
-| ----- | -------- | ----- |
-| `spawn()` call in VM lifecycle | `packages/firecracker/vm.ts:startFirecrackerProcess()` | Single-host dispatch seam. Multi-host dispatch replaces this. |
-| `execFileAsync` call for fastenv | `packages/cli/lib/fastenv.ts:forkWorkspace()` and peers | Single-host workspace fork seam. |
-| Random `forkId` generation | `packages/cli/commands/ci.ts:prepareFastenvWorkspace()` | No persistence — job identity is ephemeral. Multi-host needs durable job IDs. |
-| `local-path` PVC in K8s template | `packages/core/templates/k8s/postgres.yaml.tpl` | Node-local storage; does not survive node failure. Replacement needed for reliable substrate. |
-| No eBPF hooks | Entire codebase | Zero eBPF/bpf/crun surface exists. #384 starts from scratch. |
-| No backup procedure | Entire codebase | Zero pg_dump, WAL archiving, or pgBackRest configuration exists. #385 starts from scratch. |
+| Point                            | Location                                                | Notes                                                                                         |
+| -------------------------------- | ------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| `spawn()` call in VM lifecycle   | `packages/firecracker/vm.ts:startFirecrackerProcess()`  | Single-host dispatch seam. Multi-host dispatch replaces this.                                 |
+| `execFileAsync` call for fastenv | `packages/cli/lib/fastenv.ts:forkWorkspace()` and peers | Single-host workspace fork seam.                                                              |
+| Random `forkId` generation       | `packages/cli/commands/ci.ts:prepareFastenvWorkspace()` | No persistence — job identity is ephemeral. Multi-host needs durable job IDs.                 |
+| `local-path` PVC in K8s template | `packages/core/templates/k8s/postgres.yaml.tpl`         | Node-local storage; does not survive node failure. Replacement needed for reliable substrate. |
+| No eBPF hooks                    | Entire codebase                                         | Zero eBPF/bpf/crun surface exists. #384 starts from scratch.                                  |
+| No backup procedure              | Entire codebase                                         | Zero pg_dump, WAL archiving, or pgBackRest configuration exists. #385 starts from scratch.    |
 
 ---
 
 ## Risks
 
-| Risk | Severity | Details |
-| ---- | -------- | ------- |
-| **No job registry** | High | FastEnv forks and VMs have no persistent identity store. A host crash loses all active job state. Multi-host scheduling requires durable job IDs before any dispatch can be retried. |
-| **virtiofsd not on $PATH** | Medium | Confirmed in scout #281: virtiofsd is only available at `/snap/lxd/38800/bin/virtiofsd` on the self-hosted runner. Any multi-host node must also have virtiofsd provisioned. |
-| **local-path PVC** | High | Node-local Postgres storage does not survive node failure. Must be replaced with network-attached or replicated storage before reliability objectives can be met. |
-| **No numeric reliability targets** | High | PRD says "enterprise expectations" but defines no RPO/RTO. Without concrete targets, #385 cannot be accepted. Scout recommends defining RPO ≤ 5 min / RTO ≤ 15 min as a starting point. |
-| **eBPF surface undefined** | Medium | The architecture document does not specify what eBPF events are expected or how they will be consumed. #384 must define this before implementation begins. |
-| **fastenv binary not yet shipped** | Medium | The workspace forking path in `ci.ts` is explicitly marked as staged pending the fastenv binary. Multi-host scheduling cannot be tested without this binary being available on all target hosts. |
-| **crun definition unclear** | Medium | "Promote crun from stub to real" in #384 is ambiguous. If it means `containers/crun` as a replacement for runc in fastenv's containerd configuration, that is an internal fastenv concern, not a CLI concern. Clarification needed before #384 begins. |
+| Risk                               | Severity | Details                                                                                                                                                                                                                                                |
+| ---------------------------------- | -------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **No job registry**                | High     | FastEnv forks and VMs have no persistent identity store. A host crash loses all active job state. Multi-host scheduling requires durable job IDs before any dispatch can be retried.                                                                   |
+| **virtiofsd not on $PATH**         | Medium   | Confirmed in scout #281: virtiofsd is only available at `/snap/lxd/38800/bin/virtiofsd` on the self-hosted runner. Any multi-host node must also have virtiofsd provisioned.                                                                           |
+| **local-path PVC**                 | High     | Node-local Postgres storage does not survive node failure. Must be replaced with network-attached or replicated storage before reliability objectives can be met.                                                                                      |
+| **No numeric reliability targets** | High     | PRD says "enterprise expectations" but defines no RPO/RTO. Without concrete targets, #385 cannot be accepted. Scout recommends defining RPO ≤ 5 min / RTO ≤ 15 min as a starting point.                                                                |
+| **eBPF surface undefined**         | Medium   | The architecture document does not specify what eBPF events are expected or how they will be consumed. #384 must define this before implementation begins.                                                                                             |
+| **fastenv binary not yet shipped** | Medium   | The workspace forking path in `ci.ts` is explicitly marked as staged pending the fastenv binary. Multi-host scheduling cannot be tested without this binary being available on all target hosts.                                                       |
+| **crun definition unclear**        | Medium   | "Promote crun from stub to real" in #384 is ambiguous. If it means `containers/crun` as a replacement for runc in fastenv's containerd configuration, that is an internal fastenv concern, not a CLI concern. Clarification needed before #384 begins. |
 
 ---
 
@@ -238,7 +240,7 @@ and accepted:
   before replication or backup makes sense.
 - The first deliverable for #385 should be defining and documenting RPO/RTO
   targets, then choosing an implementation (streaming replication via `pg_basebackup`
-  + WAL archiving, or a managed service backup API).
+  - WAL archiving, or a managed service backup API).
 - Key stub seam to define: a `SubstrateBackup` interface (or equivalent) that
   records backup completion events into the `episodes` schema.
 
