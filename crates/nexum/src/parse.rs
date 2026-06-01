@@ -101,8 +101,7 @@ fn parse_markdown(content: &str) -> Vec<Block> {
         if let Some(rest) = line.strip_prefix('#') {
             // Count the leading '#' characters (including the first one).
             let mut hashes = 1usize;
-            let mut chars = rest.chars();
-            while let Some(c) = chars.next() {
+            for c in rest.chars() {
                 if c == '#' {
                     hashes += 1;
                 } else {
