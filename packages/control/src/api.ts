@@ -152,7 +152,11 @@ export async function handleIssueRequest(
 
     const now = new Date().toISOString();
     const repoEnv = process.env.GITHUB_REPO ?? "local/local";
+    // Workspace identity: prefer an explicit env override, fall back to the
+    // repo identifier so every repo is its own isolated workspace.
+    const workspaceId = process.env.SUPERFIELD_WORKSPACE_ID ?? repoEnv;
     const record: LocalIssueRecord = {
+      workspaceId,
       repo: repoEnv,
       number: hasNumber ? (body.number as number) : maxLocal + 1,
       title: body.title?.trim() ?? `Issue #${body.number}`,
