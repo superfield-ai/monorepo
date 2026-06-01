@@ -10,3 +10,6 @@ repository.workspace = true
 [lib]
 name = "sharp"
 path = "src/lib.rs"
+
+[dependencies]
+thiserror.workspace = true
