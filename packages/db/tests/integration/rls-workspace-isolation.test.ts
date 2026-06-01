@@ -73,13 +73,14 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
   beforeAll(async (ctx) => {
     try {
       pg = await startPostgres();
-    } catch (err) {
+      // Admin connection (superuser — bypasses RLS by default as owner).
+      adminClient = await connect(pg!.url);
+    } catch {
+      await pg?.stop();
+      pg = undefined;
       ctx.skip();
       return;
     }
-
-    // Admin connection (superuser — bypasses RLS by default as owner).
-    adminClient = await connect(pg!.url);
 
     // Create the privileged superfield_admin role with BYPASSRLS.
     // This is the correct mechanism for admin bypass — a PERMISSIVE policy
