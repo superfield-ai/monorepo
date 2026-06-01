@@ -41,6 +41,92 @@ export const GOVERNED_EMBEDDING = {
 
 export type GovernedEmbeddingModel = typeof GOVERNED_EMBEDDING.model;
 
+/**
+ * Proposed Rust workspace crate boundaries for the single-binary migration.
+ *
+ * Each entry names a Cargo crate and the shared concern it will own once the
+ * Rust workspace absorbs Sharp, Nexum, FastEnv, and the CLI orchestration
+ * core.  This stub documents the target layout so that downstream feature
+ * issues can reference concrete crate names when writing seams.
+ *
+ * The `db` crate listed here owns:
+ *  - The unified migration runner (versioned SQL, `schema_migrations` table,
+ *    transactions — modelled on Sharp's existing runner)
+ *  - One `PgPool` shared across all component crates
+ *  - `CREATE SCHEMA IF NOT EXISTS <component>` as the first migration step
+ *
+ * @see docs/scout/387-existing-service-runtimes-and-shared-boundaries.md
+ */
+export interface RustWorkspaceCrate {
+  /** Cargo crate name inside the workspace. */
+  name: string;
+  /** The shared concern this crate owns. */
+  concern: string;
+  /** PostgreSQL schema this crate owns (undefined for non-DB crates). */
+  pgSchema?: string;
+}
+
+/**
+ * Target Rust workspace crate plan (issue #387 scout).
+ *
+ * Not used at runtime — acts as a typed anchor so the scout findings are
+ * reachable from TypeScript tooling and doc generators.
+ *
+ * @see docs/scout/387-existing-service-runtimes-and-shared-boundaries.md
+ */
+export const RUST_WORKSPACE_PLAN: readonly RustWorkspaceCrate[] = [
+  {
+    name: "db",
+    concern: "unified migration runner + connection pool",
+    pgSchema: undefined,
+  },
+  {
+    name: "config",
+    concern: "config file read/write, env overlay, SUPERFIELD_DEV flag",
+    pgSchema: undefined,
+  },
+  {
+    name: "auth",
+    concern: "sessions, oauth_tokens, app_installations",
+    pgSchema: "auth",
+  },
+  {
+    name: "embeddings",
+    concern: "Xenova/all-MiniLM-L6-v2 ONNX inference (384-dim cosine)",
+    pgSchema: undefined,
+  },
+  {
+    name: "sharp",
+    concern: "agent-native VCS: repos, objects, refs, commits, projections",
+    pgSchema: "sharp",
+  },
+  {
+    name: "nexum",
+    concern: "knowledge graph: corpora, documents, blocks, links",
+    pgSchema: "nexum",
+  },
+  {
+    name: "episodes",
+    concern: "orchestrator behavioral traces",
+    pgSchema: "episodes",
+  },
+  {
+    name: "fastenv",
+    concern: "OCI copy-on-write workspace forking (containerd overlayfs)",
+    pgSchema: undefined,
+  },
+  {
+    name: "api",
+    concern: "HTTP API server replacing Node http servers in Sharp and Nexum",
+    pgSchema: undefined,
+  },
+  {
+    name: "cli",
+    concern: "Clap entrypoint, command dispatch, feature flags",
+    pgSchema: undefined,
+  },
+] as const;
+
 export interface MigrateOptions {
   databaseUrl?: string;
 }
