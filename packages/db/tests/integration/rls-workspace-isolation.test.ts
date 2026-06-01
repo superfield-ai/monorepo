@@ -36,21 +36,39 @@ import {
 
 function dockerAvailable(): boolean {
   try {
-    const r = spawnSync("docker", ["version", "--format", "{{.Server.Version}}"], {
-      stdio: ["ignore", "pipe", "pipe"],
-    });
+    const r = spawnSync(
+      "docker",
+      ["version", "--format", "{{.Server.Version}}"],
+      {
+        stdio: ["ignore", "pipe", "pipe"],
+      },
+    );
     return r.status === 0 && r.stdout.toString().trim().length > 0;
   } catch {
     return false;
   }
 }
 
-function tcpReachable(host: string, port: number, timeoutMs = 3000): Promise<boolean> {
+function tcpReachable(
+  host: string,
+  port: number,
+  timeoutMs = 3000,
+): Promise<boolean> {
   return new Promise((resolve) => {
     const sock = createConnection({ host, port });
-    const timer = setTimeout(() => { sock.destroy(); resolve(false); }, timeoutMs);
-    sock.once("connect", () => { clearTimeout(timer); sock.destroy(); resolve(true); });
-    sock.once("error", () => { clearTimeout(timer); resolve(false); });
+    const timer = setTimeout(() => {
+      sock.destroy();
+      resolve(false);
+    }, timeoutMs);
+    sock.once("connect", () => {
+      clearTimeout(timer);
+      sock.destroy();
+      resolve(true);
+    });
+    sock.once("error", () => {
+      clearTimeout(timer);
+      resolve(false);
+    });
   });
 }
 
@@ -108,7 +126,8 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
     if (!(await tcpReachable(urlObj.hostname, Number(urlObj.port)))) {
       await pg.stop();
       pg = undefined;
-      skipReason = "postgres container port not reachable (Docker-in-Docker) — skipping";
+      skipReason =
+        "postgres container port not reachable (Docker-in-Docker) — skipping";
       return;
     }
     // Admin connection (superuser — bypasses RLS by default as owner).
