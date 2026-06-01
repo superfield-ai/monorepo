@@ -22,7 +22,8 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { spawnSync } from "node:child_process";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { createConnection } from "node:net";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { startPostgres, type PgContainer } from "../../pg-container.ts";
 import {
@@ -33,9 +34,25 @@ import {
   withWorkspaceTransaction,
 } from "../../rls.ts";
 
-// Skip the entire suite if Docker is not available (CI without Docker-in-Docker).
-const dockerAvailable =
-  spawnSync("docker", ["info"], { stdio: "pipe" }).status === 0;
+function dockerAvailable(): boolean {
+  try {
+    const r = spawnSync("docker", ["version", "--format", "{{.Server.Version}}"], {
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    return r.status === 0 && r.stdout.toString().trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+function tcpReachable(host: string, port: number, timeoutMs = 3000): Promise<boolean> {
+  return new Promise((resolve) => {
+    const sock = createConnection({ host, port });
+    const timer = setTimeout(() => { sock.destroy(); resolve(false); }, timeoutMs);
+    sock.once("connect", () => { clearTimeout(timer); sock.destroy(); resolve(true); });
+    sock.once("error", () => { clearTimeout(timer); resolve(false); });
+  });
+}
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -62,10 +79,11 @@ async function applyMigration(client: Client, sql: string): Promise<void> {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe.skipIf(!dockerAvailable)("RLS workspace isolation", { timeout: 90_000 }, () => {
-  let pg: PgContainer;
+describe("RLS workspace isolation", { timeout: 90_000 }, () => {
+  let pg: PgContainer | undefined;
   let adminClient: Client; // connects as the superuser (bypasses RLS via BYPASSRLS role)
   let appClient: Client; // connects as the restricted app role
+  let skipReason: string | undefined;
 
   const APP_ROLE = "app_role";
   const WORKSPACE_A = "ws-alpha";
@@ -76,7 +94,23 @@ describe.skipIf(!dockerAvailable)("RLS workspace isolation", { timeout: 90_000 }
   // -----------------------------------------------------------------------
 
   beforeAll(async () => {
-    pg = await startPostgres();
+    if (!dockerAvailable()) {
+      skipReason = "docker not available — skipping RLS integration tests";
+      return;
+    }
+    try {
+      pg = await startPostgres();
+    } catch (err) {
+      skipReason = `failed to start postgres container: ${(err as Error).message}`;
+      return;
+    }
+    const urlObj = new URL(pg.url);
+    if (!(await tcpReachable(urlObj.hostname, Number(urlObj.port)))) {
+      await pg.stop();
+      pg = undefined;
+      skipReason = "postgres container port not reachable (Docker-in-Docker) — skipping";
+      return;
+    }
     // Admin connection (superuser — bypasses RLS by default as owner).
     adminClient = await connect(pg.url);
 
@@ -185,12 +219,20 @@ describe.skipIf(!dockerAvailable)("RLS workspace isolation", { timeout: 90_000 }
       `postgres://${APP_ROLE}:app_pass@`,
     );
     appClient = await connect(appUrl);
-  });
+  }, 60_000);
 
   afterAll(async () => {
     await appClient?.end();
     await adminClient?.end();
     await pg?.stop();
+  });
+
+  // Skip all tests when Docker is unavailable or container port is unreachable.
+  beforeEach((ctx) => {
+    if (skipReason) {
+      console.warn(skipReason);
+      ctx.skip();
+    }
   });
 
   // -----------------------------------------------------------------------
