@@ -1,0 +1,12 @@
+[package]
+name = "nexum"
+description = "Nexum component — company knowledge graph (stub)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "nexum"
+path = "src/lib.rs"

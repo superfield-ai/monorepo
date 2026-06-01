@@ -1,0 +1,19 @@
+[package]
+name = "superfield"
+description = "Superfield single-binary entrypoint"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "superfield"
+path = "src/main.rs"
+
+[dependencies]
+sharp = { workspace = true }
+nexum = { workspace = true }
+sf-cli = { workspace = true }
+sf-serve = { workspace = true }
+sf-deploy = { workspace = true }
