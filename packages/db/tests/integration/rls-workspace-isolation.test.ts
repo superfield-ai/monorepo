@@ -21,6 +21,7 @@
 
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { startPostgres, type PgContainer } from "../../pg-container.ts";
@@ -31,6 +32,10 @@ import {
   setWorkspaceContext,
   withWorkspaceTransaction,
 } from "../../rls.ts";
+
+// Skip the entire suite if Docker is not available (CI without Docker-in-Docker).
+const dockerAvailable =
+  spawnSync("docker", ["info"], { stdio: "pipe" }).status === 0;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -57,8 +62,8 @@ async function applyMigration(client: Client, sql: string): Promise<void> {
 // Suite
 // ---------------------------------------------------------------------------
 
-describe("RLS workspace isolation", { timeout: 90_000 }, () => {
-  let pg: PgContainer | undefined;
+describe.skipIf(!dockerAvailable)("RLS workspace isolation", { timeout: 90_000 }, () => {
+  let pg: PgContainer;
   let adminClient: Client; // connects as the superuser (bypasses RLS via BYPASSRLS role)
   let appClient: Client; // connects as the restricted app role
 
@@ -70,17 +75,10 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
   // Setup: start postgres, create roles, create test table, enable RLS.
   // -----------------------------------------------------------------------
 
-  beforeAll(async (ctx) => {
-    try {
-      pg = await startPostgres();
-      // Admin connection (superuser — bypasses RLS by default as owner).
-      adminClient = await connect(pg!.url);
-    } catch {
-      await pg?.stop();
-      pg = undefined;
-      ctx.skip();
-      return;
-    }
+  beforeAll(async () => {
+    pg = await startPostgres();
+    // Admin connection (superuser — bypasses RLS by default as owner).
+    adminClient = await connect(pg.url);
 
     // Create the privileged superfield_admin role with BYPASSRLS.
     // This is the correct mechanism for admin bypass — a PERMISSIVE policy
@@ -182,7 +180,7 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
       `);
 
     // App-role connection (restricted, no BYPASSRLS).
-    const appUrl = pg!.url.replace(
+    const appUrl = pg.url.replace(
       /postgres:\/\/[^:]+:[^@]+@/,
       `postgres://${APP_ROLE}:app_pass@`,
     );
@@ -213,7 +211,7 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
     });
 
     it("sets app.workspace_id on the session", async () => {
-      const client = await connect(pg!.url);
+      const client = await connect(pg.url);
       try {
         await client.query("BEGIN");
         await setWorkspaceContext(client, WORKSPACE_A, { transaction: true });
@@ -226,7 +224,7 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
     });
 
     it("SET LOCAL is cleared after transaction ROLLBACK", async () => {
-      const client = await connect(pg!.url);
+      const client = await connect(pg.url);
       try {
         await client.query("BEGIN");
         await setWorkspaceContext(client, WORKSPACE_A, { transaction: true });
@@ -240,7 +238,7 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
     });
 
     it("clearWorkspaceContext resets the session variable", async () => {
-      const client = await connect(pg!.url);
+      const client = await connect(pg.url);
       try {
         await setWorkspaceContext(client, WORKSPACE_A, {
           transaction: false,
@@ -343,7 +341,7 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
 
   describe("BYPASS: privileged role bypasses RLS", () => {
     it("superfield_admin (BYPASSRLS, via SET ROLE) can see all rows without workspace context", async () => {
-      const adminConn = await connect(pg!.url);
+      const adminConn = await connect(pg.url);
       try {
         // Elevate to superfield_admin — BYPASSRLS skips all RLS checks.
         await adminConn.query("SET ROLE superfield_admin");
@@ -359,7 +357,7 @@ describe("RLS workspace isolation", { timeout: 90_000 }, () => {
     });
 
     it("default app role without workspace context sees zero rows (safe default)", async () => {
-      const freshAppUrl = pg!.url.replace(
+      const freshAppUrl = pg.url.replace(
         /postgres:\/\/[^:]+:[^@]+@/,
         `postgres://${APP_ROLE}:app_pass@`,
       );
