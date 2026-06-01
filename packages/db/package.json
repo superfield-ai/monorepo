@@ -8,9 +8,11 @@
   },
   "dependencies": {
     "lowdb": "^7.0.1",
+    "pg": "^8.21.0",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
+    "@types/pg": "^8.20.0",
     "typescript": "^5.0.0"
   }
 }
