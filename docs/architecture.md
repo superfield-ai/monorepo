@@ -785,19 +785,13 @@ This query compiles and executes correctly under the namespaced schema layout. I
 
 ### AGE graph extension
 
-Nexum's Apache AGE graph shim (`nexum/db/migrations/0001_age_shim.sql`) references a second Postgres process on `:5433`. This is **non-conforming**. The target state is AGE loaded as an in-instance extension on the primary Postgres:
+The Apache AGE graph shim (`nexum/db/migrations/0001_age_shim.sql`) that previously required a second Postgres process on `:5433` has been removed. Graph traversal now runs on the primary Postgres instance using recursive CTEs over the `nexum.links` table.
 
-```sql
--- Target: AGE runs inside the primary instance, not a second server.
-CREATE EXTENSION IF NOT EXISTS age;
-LOAD 'age';
-SET search_path = ag_catalog, nexum, public;
+**Decision:** Recursive CTEs over `nexum.links` rather than AGE-in-instance.
 
--- The nexum_links graph lives in the primary instance's ag_catalog.
-SELECT ag_catalog.create_graph('nexum_links');
-```
+Apache AGE requires a patched Postgres build; the standard `postgres:16` image used throughout this stack does not ship it. Recursive CTEs over `nexum.links` deliver equivalent multi-hop traversal on any stock Postgres 14+ instance with no patched binary, no compose service, and no second port. AGE-in-instance remains the long-term option if Cypher query volume demands it, but recursive CTEs satisfy current parity and close the architectural gap.
 
-Until the AGE shim is folded in, Nexum's graph traversal remains experimental and gated behind the `nexum` schema boundary.
+The `packages/db/nexum-graph.ts` module provides `traverseGraph()` (recursive CTE), `isGraphReady()`, and `NEXUM_GRAPH_SETUP_SQL`. Integration tests in `packages/db/tests/nexum-graph.test.ts` verify multi-hop traversal against a single containerised Postgres instance.
 
 ---
 
@@ -806,7 +800,7 @@ Until the AGE shim is folded in, Nexum's graph traversal remains experimental an
 | #   | Gap                                           | Target state                                                                  | Tracking                                                                                                                                             |
 | --- | --------------------------------------------- | ----------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1   | Schema-sharing boundary not codified          | Namespaced schemas per component as described above                           | Closed by #355                                                                                                                                       |
-| 2   | AGE shim runs on a second Postgres at `:5433` | AGE as in-instance extension on primary Postgres                              | Open — requires Nexum port                                                                                                                           |
+| 2   | AGE shim runs on a second Postgres at `:5433` | AGE as in-instance extension on primary Postgres                              | Closed by #359 — recursive CTEs on `nexum.links` (see §6)                                                                                            |
 | 3   | No RLS policies anywhere                      | Per-schema RLS enabled; policies reference `auth.sessions`                    | Partially closed by #358 — migration stubs and session context wiring in `packages/db/`; full per-schema policies require component schemas to exist |
 | 4   | No cross-component migration runner           | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue                                                                                                             |
 | 5   | `episodes` schema not yet defined             | Schema and tables defined during orchestrator port                            | Open                                                                                                                                                 |
