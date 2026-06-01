@@ -739,7 +739,7 @@ Each component owns its schema's migrations exclusively. Migration files are col
 | --------- | ---------------------------------------------------------------------------- |
 | Sharp     | `superfield-ai/sharp/apps/server/migrations/`                                |
 | Nexum     | `superfield-ai/nexum/db/migrations/`                                         |
-| Auth      | `superfield-ai/superfield-cli-ts/packages/auth/migrations/` (target)         |
+| Auth      | `crates/sf-auth/src/migrations/` (Rust crate)                                |
 | Episodes  | `superfield-ai/superfield-cli-ts/packages/orchestrator/migrations/` (target) |
 
 The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
@@ -859,7 +859,7 @@ Any migration that introduces a vector column must:
 | 3   | No RLS policies anywhere                                     | Per-schema RLS enabled; policies reference `auth.sessions`                    | Partially closed by #358 — migration stubs and session context wiring in `packages/db/`; full per-schema policies require component schemas to exist |
 | 4   | No cross-component migration runner                          | Single runner applies all component migrations in dependency order at startup | Open — tracked in migration-runner issue                                                                                                             |
 | 5   | `episodes` schema not yet defined                            | Schema and tables defined during orchestrator port                            | Open                                                                                                                                                 |
-| 6   | `auth` schema not yet defined                                | Schema and tables defined during auth port                                    | Open                                                                                                                                                 |
+| 6   | `auth` schema not yet defined                                | Schema and tables defined during auth port                                    | Closed by #364                                                                                                                                       |
 | 7   | No governed embedding standard across stores                 | Single model and dimensionality declared; all vector columns conforming       | Closed by #360                                                                                                                                       |
 | 8   | Rust workspace crate boundaries not mapped                   | Runtime/entrypoint inventory, shared-concern map, proposed crate layout       | Closed by #387 — see `docs/scout/387-existing-service-runtimes-and-shared-boundaries.md`                                                             |
 | 9   | Embedding crate (`sf-embed`) not wired into component crates | `nexum` and `sharp` depend on `sf-embed` for all vector columns               | Closed by #363 (crate exists; consumers pending)                                                                                                     |
