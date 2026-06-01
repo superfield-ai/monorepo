@@ -15,7 +15,7 @@
  * @see docs/architecture.md §6 AGE graph extension
  */
 
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { Client } from "pg";
 import { startPostgres, type PgContainer } from "../pg-container";
 import {
@@ -79,14 +79,15 @@ async function seedGraph(client: Client): Promise<void> {
 describe("nexum graph traversal — single Postgres instance", () => {
   let pg: PgContainer | undefined;
   let client: Client;
+  let skipReason: string | undefined;
 
-  beforeAll(async (ctx) => {
+  beforeAll(async () => {
     // Start exactly ONE Postgres container. The test verifies graph traversal
     // without starting any second instance (no :5433, no AGE shim container).
     try {
       pg = await startPostgres();
-    } catch {
-      ctx.skip();
+    } catch (err) {
+      skipReason = `docker unavailable — skipping nexum graph tests: ${(err as Error).message}`;
       return;
     }
     client = await openClient(pg!.url);
@@ -95,9 +96,17 @@ describe("nexum graph traversal — single Postgres instance", () => {
     await seedGraph(client);
   }, 60_000);
 
+  beforeEach((ctx) => {
+    if (skipReason) {
+      console.warn(skipReason);
+      ctx.skip();
+    }
+  });
+
   afterAll(async () => {
+    if (!pg) return;
     await client.end();
-    await pg!.stop();
+    await pg.stop();
   });
 
   it("graph schema is present on the single instance", async () => {
