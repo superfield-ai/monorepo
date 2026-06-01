@@ -8,6 +8,7 @@ members = [
     "crates/sf-cli",
     "crates/sf-serve",
     "crates/sf-deploy",
+    "crates/sf-embed",
 ]
 
 [workspace.package]
@@ -27,6 +28,7 @@ nexum = { path = "crates/nexum" }
 sf-cli = { path = "crates/sf-cli" }
 sf-serve = { path = "crates/sf-serve" }
 sf-deploy = { path = "crates/sf-deploy" }
+sf-embed = { path = "crates/sf-embed" }
 
 # third-party deps shared across crates
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "tls-rustls", "uuid", "chrono", "json"] }
