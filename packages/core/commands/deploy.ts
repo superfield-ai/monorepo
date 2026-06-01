@@ -22,9 +22,30 @@ import {
   UserInputError,
 } from "../errors.ts";
 
+/**
+ * Known deploy phases: provision infrastructure, then deploy workloads.
+ *
+ * Scout finding (#388): current deployment targets are k3d local and GCP
+ * Cloud Run. Runtime signal sources (pod logs, k8s events, CI deploy status,
+ * health probes) have no episode-ingestion path yet. Issues #380-#382 will
+ * build the deploy/rollback and signal-capture layer.
+ *
+ * @see docs/scout/388-deployment-targets-and-runtime-error-sources.md
+ */
 export const DEPLOY_PHASES = ["provision", "deploy"] as const;
 
 export type DeployPhase = (typeof DEPLOY_PHASES)[number];
+
+/**
+ * Stub: runtime-signal source descriptor — placeholder for issue #381.
+ *
+ * @see docs/scout/388-deployment-targets-and-runtime-error-sources.md §Runtime-Signal Sources
+ */
+export interface RuntimeSignalSource {
+  name: string;
+  description: string;
+  implemented: false;
+}
 
 export interface DeployPhaseModel {
   name: DeployPhase;
