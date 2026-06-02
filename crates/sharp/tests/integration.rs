@@ -1,4 +1,6 @@
-//! Integration tests for the Sharp VCS core and episode schema.
+//! Integration tests for the Sharp VCS core, episode schema, and Rust semantic merge.
+//!
+//! # VCS core tests
 //!
 //! These tests require a live Postgres instance with the Sharp schema already
 //! applied (run migrations from `crates/sharp/migrations/` first).
@@ -6,21 +8,70 @@
 //! Run with:
 //!   DATABASE_URL=postgres://... cargo test -p sharp -- --include-ignored integration
 //!
-//! # Test coverage
+//! # Semantic merge tests
 //!
-//! - `init_add_commit_roundtrip` — verifies that init/add/commit persists to
-//!   the shared instance and that the branch head is updated.
-//! - `episode_open_append_finish_query` — verifies that episode lifecycle
-//!   works end-to-end.
+//! These tests exercise the full Tier-1 semantic merge pipeline:
+//!
+//! 1. **Differential test** — Sharp resolves a rename-vs-edit conflict that
+//!    git would mishandle (merge `main.rs` where "ours" renames `compute_value`
+//!    to `calculate_result` and "theirs" edits the body of `compute_value`).
+//!
+//! 2. **Compilation gate** — a merge whose output would not compile is refused
+//!    before it can be committed.
+//!
+//! Tests that require a live `rust-analyzer` and `cargo` are gated with
+//! `#[ignore]` so they do not break CI environments that lack those tools.
+//! Run them with:
+//!
+//! ```text
+//! cargo test -- --ignored
+//! ```
+//!
+//! §architecture.md — Sharp subsystem (Tier-1 Rust semantic merge)
 
 use sf_db::{connect, DbConfig};
+use sharp::cargo_check::{run_cargo_check, CheckResult};
+use sharp::semantic_merge::{semantic_merge_rust, three_way_merge, FileVersion, MergeOptions};
 use sharp::{commit, episode, object, repo};
+use std::path::PathBuf;
+use tempfile::TempDir;
 use uuid::Uuid;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 /// Helper: unique repo name per test run.
 fn unique_name(prefix: &str) -> String {
     format!("{}-{}", prefix, Uuid::new_v4().as_simple())
 }
+
+/// Create a temporary Cargo project with the given `src/main.rs` content.
+/// Returns the temp dir (caller must keep it alive) and the path to
+/// `src/main.rs`.
+fn make_temp_project(src: &str) -> (TempDir, PathBuf) {
+    let dir = TempDir::new().expect("tempdir");
+    let cargo_toml = dir.path().join("Cargo.toml");
+    std::fs::write(
+        &cargo_toml,
+        r#"[package]
+name = "test-project"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "test-project"
+path = "src/main.rs"
+"#,
+    )
+    .expect("write Cargo.toml");
+
+    let src_dir = dir.path().join("src");
+    std::fs::create_dir_all(&src_dir).expect("create src");
+    let main_rs = src_dir.join("main.rs");
+    std::fs::write(&main_rs, src).expect("write main.rs");
+    (dir, main_rs)
+}
+
+// ── VCS core integration tests ────────────────────────────────────────────────
 
 /// Integration test: init / add / commit roundtrip persists to the shared instance.
 ///
@@ -206,5 +257,282 @@ async fn episode_open_append_finish_query() {
     assert!(
         matches!(err2, Err(sharp::SharpError::EpisodeNotOpen(id, _)) if id == ep.id),
         "expected EpisodeNotOpen on append, got {err2:?}"
+    );
+}
+
+// ── Semantic merge unit tests (no external tools) ────────────────────────────
+
+/// The 3-way textual merge takes "ours" when only our side changed.
+#[test]
+fn three_way_merge_ours_wins_when_base_matches_theirs() {
+    let base = "fn compute_value(x: i32) -> i32 {\n    x * 2\n}\n";
+    let ours = "fn calculate_result(x: i32) -> i32 {\n    x * 2\n}\n";
+    let theirs = "fn compute_value(x: i32) -> i32 {\n    x * 2\n}\n"; // unchanged
+    let merged = three_way_merge(base, ours, theirs);
+    assert_eq!(merged, ours, "ours should win when theirs == base");
+}
+
+/// The 3-way textual merge takes "theirs" when only their side changed.
+#[test]
+fn three_way_merge_theirs_wins_when_base_matches_ours() {
+    let base = "fn compute_value(x: i32) -> i32 {\n    x * 2\n}\n";
+    let ours = "fn compute_value(x: i32) -> i32 {\n    x * 2\n}\n"; // unchanged
+    let theirs = "fn compute_value(x: i32) -> i32 {\n    x * 3\n}\n";
+    let merged = three_way_merge(base, ours, theirs);
+    assert_eq!(merged, theirs, "theirs should win when ours == base");
+}
+
+/// When both sides agree, the result is that common version.
+#[test]
+fn three_way_merge_identical_both_sides() {
+    let base = "fn f() {}\n";
+    let both = "fn g() {}\n";
+    assert_eq!(three_way_merge(base, both, both), both);
+}
+
+/// When both sides disagree on the same line, conflict markers are emitted.
+#[test]
+fn three_way_merge_conflict_markers_on_line_divergence() {
+    let base = "fn f() { 1 }\n";
+    let ours = "fn f() { 2 }\n";
+    let theirs = "fn f() { 3 }\n";
+    let merged = three_way_merge(base, ours, theirs);
+    assert!(
+        merged.contains("<<<<<<<"),
+        "conflict marker expected: {merged}"
+    );
+}
+
+// ── Semantic merge integration tests (require cargo + rust-analyzer) ─────────
+
+/// **Differential test**: Sharp beats git on a Rust rename/edit fixture.
+///
+/// Scenario:
+/// - base:   `compute_value(x: i32) -> i32 { x * 2 }` called from `main`
+/// - ours:   rename `compute_value` → `calculate_result` everywhere
+/// - theirs: change the body `x * 2` → `x * 3` (still uses old name)
+///
+/// Git would produce a textual conflict or a silently broken result.
+/// Sharp should:
+/// 1. Detect the rename via rust-analyzer.
+/// 2. Propagate the rename to theirs' edit site.
+/// 3. Produce a merged file that compiles and uses the new name.
+#[tokio::test]
+#[ignore = "requires live rust-analyzer + cargo"]
+async fn sharp_beats_git_on_rename_edit_fixture() {
+    let base_src = r#"fn compute_value(x: i32) -> i32 {
+    x * 2
+}
+
+fn main() {
+    let result = compute_value(21);
+    println!("result = {result}");
+}
+"#;
+
+    let ours_src = r#"fn calculate_result(x: i32) -> i32 {
+    x * 2
+}
+
+fn main() {
+    let result = calculate_result(21);
+    println!("result = {result}");
+}
+"#;
+
+    let theirs_src = r#"fn compute_value(x: i32) -> i32 {
+    x * 3
+}
+
+fn main() {
+    let result = compute_value(21);
+    println!("result = {result}");
+}
+"#;
+
+    // Create the workspace with the "ours" version already written
+    // (semantic_merge_rust writes merged output in-place).
+    let (dir, main_rs) = make_temp_project(ours_src);
+
+    let base = vec![FileVersion {
+        path: main_rs.clone(),
+        content: base_src.to_string(),
+    }];
+    let ours = vec![FileVersion {
+        path: main_rs.clone(),
+        content: ours_src.to_string(),
+    }];
+    let theirs = vec![FileVersion {
+        path: main_rs.clone(),
+        content: theirs_src.to_string(),
+    }];
+
+    let opts = MergeOptions {
+        workspace_root: dir.path().to_path_buf(),
+        rust_analyzer_path: None,
+        ra_timeout_ms: 90_000,
+    };
+
+    let result = semantic_merge_rust(&base, &ours, &theirs, &opts)
+        .await
+        .expect("merge should succeed");
+
+    // Verify the merged file uses the new name and the edited body.
+    let merged_content = &result.files[0].content;
+    assert!(
+        merged_content.contains("calculate_result"),
+        "merged file should use the new name 'calculate_result': {merged_content}"
+    );
+    assert!(
+        !merged_content.contains("compute_value"),
+        "merged file should not contain the old name 'compute_value': {merged_content}"
+    );
+    assert!(
+        merged_content.contains("x * 3"),
+        "merged file should retain theirs' body edit (x * 3): {merged_content}"
+    );
+
+    // Verify the result compiles.
+    let check = run_cargo_check(dir.path())
+        .await
+        .expect("cargo check should succeed");
+    assert!(
+        check.success,
+        "merged result should compile: {:?}",
+        check.errors
+    );
+}
+
+/// **Compilation gate**: a non-compiling merge is blocked.
+///
+/// We directly synthesize a merge result with a type error and verify that
+/// `cargo check` detects it and the gate refuses the merge.
+#[tokio::test]
+#[ignore = "requires live cargo"]
+async fn non_compiling_merge_is_blocked() {
+    // Source with an intentional type error: passing a string where i32 expected.
+    let bad_src = r#"fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
+
+fn main() {
+    let _ = add("not a number", 2);
+}
+"#;
+
+    let (dir, _main_rs) = make_temp_project(bad_src);
+
+    let check: CheckResult = run_cargo_check(dir.path())
+        .await
+        .expect("cargo check should run (even if it fails)");
+
+    assert!(
+        !check.success,
+        "cargo check should report failure for type-error source"
+    );
+    assert!(
+        !check.errors.is_empty(),
+        "at least one compiler error expected"
+    );
+
+    let formatted = check.format_errors();
+    assert!(
+        formatted.contains("E0308") || formatted.to_lowercase().contains("mismatched"),
+        "expected E0308 or 'mismatched' in errors: {formatted}"
+    );
+}
+
+/// **Compilation gate via semantic_merge_rust**: a merge whose output would
+/// not compile is refused with `SharpError::MergeRefused`.
+#[tokio::test]
+#[ignore = "requires live rust-analyzer + cargo"]
+async fn semantic_merge_refuses_non_compiling_output() {
+    // ours deliberately introduces a type error.
+    let base_src = "fn main() { let _x: i32 = 1; }\n";
+    let ours_src = "fn main() { let _x: i32 = \"type error here\"; }\n";
+    let theirs_src = "fn main() { let _x: i32 = 1; }\n"; // theirs unchanged
+
+    let (dir, main_rs) = make_temp_project(ours_src);
+
+    let base = vec![FileVersion {
+        path: main_rs.clone(),
+        content: base_src.to_string(),
+    }];
+    let ours = vec![FileVersion {
+        path: main_rs.clone(),
+        content: ours_src.to_string(),
+    }];
+    let theirs = vec![FileVersion {
+        path: main_rs.clone(),
+        content: theirs_src.to_string(),
+    }];
+
+    let opts = MergeOptions {
+        workspace_root: dir.path().to_path_buf(),
+        rust_analyzer_path: None,
+        ra_timeout_ms: 90_000,
+    };
+
+    let result = semantic_merge_rust(&base, &ours, &theirs, &opts).await;
+
+    assert!(
+        result.is_err(),
+        "non-compiling merge should be refused; got Ok"
+    );
+
+    let err = result.unwrap_err();
+    let err_str = err.to_string();
+    assert!(
+        err_str.contains("merge refused") || err_str.contains("cargo check"),
+        "error should mention merge refusal or cargo check: {err_str}"
+    );
+}
+
+/// Verify rust-analyzer finds rename locations for a known symbol.
+///
+/// Opens the rename fixture's `main.rs` and asks for references to the
+/// `compute_value` symbol.  Expects ≥ 2 locations (definition + call site).
+#[tokio::test]
+#[ignore = "requires live rust-analyzer"]
+async fn rust_analyzer_finds_rename_locations() {
+    use sharp::rust_analyzer_client::{RustAnalyzerClient, RustAnalyzerClientOptions};
+
+    let fixture_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rename-fixture");
+    let main_rs = fixture_dir.join("src/main.rs");
+
+    let src = std::fs::read_to_string(&main_rs).expect("read fixture");
+
+    let mut client = RustAnalyzerClient::new(RustAnalyzerClientOptions {
+        workspace_root: fixture_dir.clone(),
+        timeout_ms: 90_000,
+        ..Default::default()
+    })
+    .expect("create client");
+
+    client.start().await.expect("start");
+    client.open_file(&main_rs, &src).await.expect("open_file");
+
+    // `compute_value` is defined on line 6 (0-based line 5), starting at col 3.
+    // The definition is `fn compute_value(x: i32) -> i32 {`
+    //                        ^ col 3 (0-based)
+    let locations = client
+        .get_rename_locations(&main_rs, 5, 3, true)
+        .await
+        .expect("get_rename_locations");
+
+    client.stop().await.expect("stop");
+
+    assert!(
+        locations.len() >= 2,
+        "expected ≥ 2 rename locations (definition + call site), got {}: {locations:#?}",
+        locations.len()
+    );
+
+    // At least one location should be in main.rs.
+    let in_main = locations.iter().filter(|l| l.file == main_rs).count();
+    assert!(
+        in_main >= 2,
+        "expected ≥ 2 locations in main.rs, got {in_main}: {locations:#?}"
     );
 }

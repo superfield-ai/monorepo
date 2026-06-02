@@ -1,12 +1,13 @@
-//! Error types for the Sharp VCS core.
+//! Error types for the Sharp crate — VCS core and semantic merge.
 //!
-//! See `docs/architecture.md` §Sharp schema.
+//! See `docs/architecture.md` §Sharp schema and §Sharp subsystem (Tier-1 Rust semantic merge).
 
 use thiserror::Error;
 
-/// Errors that can be returned by Sharp VCS operations.
+/// Errors that can be returned by Sharp VCS and semantic-merge operations.
 #[derive(Debug, Error)]
 pub enum SharpError {
+    // ── VCS core errors ──────────────────────────────────────────────────────
     /// A database error from sqlx.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -30,4 +31,38 @@ pub enum SharpError {
     /// An episode is in the wrong state for the requested operation.
     #[error("episode {0} is not open (state: {1})")]
     EpisodeNotOpen(uuid::Uuid, String),
+
+    // ── Rust semantic merge errors ───────────────────────────────────────────
+    /// The rust-analyzer subprocess could not be spawned or communicated with.
+    #[error("rust-analyzer subprocess error: {0}")]
+    RustAnalyzerProcess(String),
+
+    /// A JSON-RPC message could not be serialized or deserialized.
+    #[error("JSON-RPC protocol error: {0}")]
+    Protocol(String),
+
+    /// The LSP request timed out waiting for a response.
+    #[error("LSP request timed out after {timeout_ms}ms for method '{method}'")]
+    Timeout { method: String, timeout_ms: u64 },
+
+    /// The cargo check command failed, indicating the merge would not compile.
+    #[error("cargo check failed: {0}")]
+    CargoCheckFailed(String),
+
+    /// The cargo check subprocess could not be spawned or communicated with.
+    #[error("cargo check process error: {0}")]
+    CargoCheckProcess(String),
+
+    /// A merge was refused because it would produce non-compiling output.
+    #[error("merge refused: non-compiling result detected\n{diagnostics}")]
+    MergeRefused { diagnostics: String },
+
+    // ── Shared low-level errors ──────────────────────────────────────────────
+    /// I/O error.
+    #[error("I/O error: {0}")]
+    Io(#[from] std::io::Error),
+
+    /// JSON error.
+    #[error("JSON error: {0}")]
+    Json(#[from] serde_json::Error),
 }

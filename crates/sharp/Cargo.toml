@@ -1,6 +1,6 @@
 [package]
 name = "sharp"
-description = "Sharp VCS core — objects, refs, commits, DAG, and agent-episode schema"
+description = "Sharp VCS core and Rust semantic merge — objects, refs, commits, DAG, agent-episode schema, and rust-analyzer-backed merge with cargo check gate"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -25,3 +25,4 @@ serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
+tempfile = { workspace = true }

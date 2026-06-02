@@ -850,6 +850,44 @@ Any migration that introduces a vector column must:
 
 ---
 
+## Sharp — Tier-1 Rust Semantic Merge
+
+Sharp performs semantic merge for Rust source files using **rust-analyzer** as a subprocess (analogous to how `tsserver` is orchestrated for TypeScript). This is self-hosting-critical: Sharp must semantically merge its own and the stack's Rust source under the no-non-compiling-merge guarantee.
+
+### Components (`crates/sharp`)
+
+| Module                 | Role                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rust_analyzer_client` | LSP subprocess orchestrator — spawns `rust-analyzer`, performs the initialize handshake, and exposes `get_rename_locations(file, line, col, include_decl)` |
+| `cargo_check`          | Structural verification gate — runs `cargo check --message-format=json` and parses compiler errors                                                         |
+| `semantic_merge`       | Tier-1 merge algorithm — rename detection, 3-way textual baseline, cargo check gate                                                                        |
+| `error`                | Shared `SharpError` type                                                                                                                                   |
+
+### Merge algorithm (Tier-1)
+
+1. **Rename detection** — for each file changed on "ours" relative to base, ask rust-analyzer (via `textDocument/references`) for the rename-location set of every symbol whose identifier changed. If the same symbol is renamed on "ours" and edited on "theirs", the rename wins and all reference locations are propagated.
+2. **Textual baseline** — apply a 3-way line-level merge. The rename-aware pass resolves rename-vs-edit conflicts before the textual merge runs, so the textual merge is clean for renamed symbols.
+3. **Verification gate** — run `cargo check` on the merged workspace. A non-zero exit → `SharpError::MergeRefused` with structured diagnostics. No merge that fails to compile reaches storage.
+
+### rust-analyzer subprocess protocol
+
+rust-analyzer speaks LSP (JSON-RPC 2.0) over stdin/stdout with `Content-Length` framing. The client:
+
+1. Spawns `rust-analyzer` with `stdin/stdout` piped.
+2. Sends `initialize` with `rootUri` set to the Cargo workspace root.
+3. Waits for the `initialize` response, then sends `initialized`.
+4. Sends `textDocument/didOpen` for each file to analyze.
+5. Sends `textDocument/references` to enumerate rename locations.
+6. Sends `shutdown` + `exit` when done.
+
+The binary is located via `PATH` first, then `rustup which rust-analyzer` as a fallback.
+
+### Self-hosting criticality
+
+The entire stack is being rewritten in Rust. Sharp must semantically merge Rust to manage its own source. Deferring Rust support would break the no-non-compiling-merge guarantee for Sharp's own codebase. Rust is the required next language after TypeScript (implemented in #371).
+
+---
+
 ## §7 Current Gaps
 
 | #   | Gap                                                                      | Target state                                                                                                | Tracking                                                                                                                                             |
@@ -864,3 +902,4 @@ Any migration that introduces a vector column must:
 | 8   | Rust workspace crate boundaries not mapped                               | Runtime/entrypoint inventory, shared-concern map, proposed crate layout                                     | Closed by #387 — see `docs/scout/387-existing-service-runtimes-and-shared-boundaries.md`                                                             |
 | 9   | Embedding crate (`sf-embed`) not wired into component crates             | `nexum` and `sharp` depend on `sf-embed` for all vector columns                                             | Closed by #363 (crate exists; consumers pending)                                                                                                     |
 | 10  | Sharp TypeScript semantic analysis (tsserver subprocess) not implemented | `packages/sharp` — `TsserverClient` orchestrates `tsserver` for rename enumeration and semantic diagnostics | Closed by #371                                                                                                                                       |
+| 11  | Rust semantic merge not implemented                                      | `crates/sharp` Tier-1 merge via rust-analyzer + cargo check gate                                            | Closed by #372                                                                                                                                       |
