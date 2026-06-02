@@ -1,0 +1,14 @@
+{
+  "name": "@superfield/sharp",
+  "private": true,
+  "main": "index.ts",
+  "type": "module",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "typescript": "^5.0.0"
+  }
+}
