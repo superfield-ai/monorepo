@@ -190,13 +190,19 @@ pub async fn fulltext_search(
 
     Ok(rows
         .into_iter()
-        .map(|(block_id, content, score, doc_id, title, external_id)| BlockResult {
-            block_id,
-            content,
-            score,
-            document: DocRef { id: doc_id, title, external_id },
-            origin: None,
-        })
+        .map(
+            |(block_id, content, score, doc_id, title, external_id)| BlockResult {
+                block_id,
+                content,
+                score,
+                document: DocRef {
+                    id: doc_id,
+                    title,
+                    external_id,
+                },
+                origin: None,
+            },
+        )
         .collect())
 }
 
@@ -227,7 +233,13 @@ pub async fn semantic_search(
     let limit = opts.limit.min(100) as i64;
 
     let vec = embedder.embed_one(&opts.query_text)?;
-    let vec_str = format!("[{}]", vec.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+    let vec_str = format!(
+        "[{}]",
+        vec.iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
 
     let rows: Vec<(Uuid, String, f64, Uuid, String, Option<String>)> = sqlx::query_as(
         r#"
@@ -250,13 +262,19 @@ pub async fn semantic_search(
 
     Ok(rows
         .into_iter()
-        .map(|(block_id, content, score, doc_id, title, external_id)| BlockResult {
-            block_id,
-            content,
-            score,
-            document: DocRef { id: doc_id, title, external_id },
-            origin: None,
-        })
+        .map(
+            |(block_id, content, score, doc_id, title, external_id)| BlockResult {
+                block_id,
+                content,
+                score,
+                document: DocRef {
+                    id: doc_id,
+                    title,
+                    external_id,
+                },
+                origin: None,
+            },
+        )
         .collect())
 }
 
@@ -330,13 +348,12 @@ pub async fn graph_search(
         layers = layers_literal,
     );
 
-    let rows: Vec<(Uuid, String, i32, String, Uuid, String, Option<String>)> =
-        sqlx::query_as(&sql)
-            .bind(opts.seed_block_id)
-            .bind(max_hops)
-            .bind(limit)
-            .fetch_all(pool)
-            .await?;
+    let rows: Vec<(Uuid, String, i32, String, Uuid, String, Option<String>)> = sqlx::query_as(&sql)
+        .bind(opts.seed_block_id)
+        .bind(max_hops)
+        .bind(limit)
+        .fetch_all(pool)
+        .await?;
 
     Ok(rows
         .into_iter()
@@ -346,7 +363,11 @@ pub async fn graph_search(
                 content,
                 depth,
                 rel_type,
-                document: DocRef { id: doc_id, title, external_id },
+                document: DocRef {
+                    id: doc_id,
+                    title,
+                    external_id,
+                },
             },
         )
         .collect())
@@ -395,7 +416,10 @@ pub async fn hybrid_search(
 
     let mut results: Vec<BlockResult> = semantic_results
         .into_iter()
-        .map(|r| BlockResult { origin: Some("semantic".into()), ..r })
+        .map(|r| BlockResult {
+            origin: Some("semantic".into()),
+            ..r
+        })
         .collect();
 
     // Step 2: one-hop graph expansion.
@@ -549,7 +573,13 @@ mod tests {
 
         let corpus_id = seed_test_corpus(&pool).await;
         let doc_id = seed_test_document(&pool, corpus_id, "Semantic search test").await;
-        seed_test_block_with_embedding(&pool, doc_id, "Rust is a systems programming language", &embedder).await;
+        seed_test_block_with_embedding(
+            &pool,
+            doc_id,
+            "Rust is a systems programming language",
+            &embedder,
+        )
+        .await;
 
         let results = semantic_search(
             &pool,
@@ -645,7 +675,11 @@ mod tests {
         // No duplicate block IDs.
         let ids: Vec<Uuid> = results.iter().map(|r| r.block_id).collect();
         let unique: std::collections::HashSet<Uuid> = ids.iter().cloned().collect();
-        assert_eq!(ids.len(), unique.len(), "hybrid results should be deduplicated");
+        assert_eq!(
+            ids.len(),
+            unique.len(),
+            "hybrid results should be deduplicated"
+        );
 
         // At least the semantic result is present.
         assert!(
@@ -655,7 +689,10 @@ mod tests {
 
         // The graph neighbour is present and tagged 'graph'.
         let graph_hit = results.iter().find(|r| r.block_id == dst_id);
-        assert!(graph_hit.is_some(), "graph neighbour should appear in hybrid results");
+        assert!(
+            graph_hit.is_some(),
+            "graph neighbour should appear in hybrid results"
+        );
         assert_eq!(
             graph_hit.unwrap().origin.as_deref(),
             Some("graph"),
@@ -725,7 +762,13 @@ mod tests {
         embedder: &Embedder,
     ) -> Uuid {
         let vec = embedder.embed_one(content).expect("embed failed");
-        let vec_str = format!("[{}]", vec.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(","));
+        let vec_str = format!(
+            "[{}]",
+            vec.iter()
+                .map(|v| v.to_string())
+                .collect::<Vec<_>>()
+                .join(",")
+        );
         sqlx::query_scalar(
             r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type, embedding, tsv)
                VALUES ($1, $2, $3, 'paragraph', $4::vector, to_tsvector('english', $2)) RETURNING id"#,
