@@ -1,16 +1,21 @@
 //! Integration tests for `sf-deploy`.
 //!
-//! These tests exercise the full [`sf_deploy::deploy()`] path against a
-//! [`StubTransport`] so they require no real infrastructure (no SSH host, no
-//! Kubernetes cluster).
+//! These tests exercise the full [`sf_deploy::deploy()`] and
+//! [`sf_deploy::rollback()`] paths against a [`StubTransport`] so they require
+//! no real infrastructure (no SSH host, no Kubernetes cluster).
 //!
-//! # Test plan (issue #379)
+//! # Test plan (issue #379 + #380)
 //!
 //! - Deploy to a local/stub target succeeds.
 //! - Invalid target config fails fast before any transport I/O.
+//! - Deploy transitions lifecycle from Pending to Live.
+//! - Rollback transitions lifecycle from Live to RolledBack.
+//! - Rollback restores the prior version identifier.
 
 use sf_deploy::transport::StubTransport;
-use sf_deploy::{deploy, BuildArtifact, DeployError, TargetConfig};
+use sf_deploy::{
+    deploy, rollback, BuildArtifact, DeployError, DeploymentLifecycleState, TargetConfig,
+};
 use std::path::PathBuf;
 
 /// Returns the path to the current test binary, which is guaranteed to exist
@@ -254,4 +259,95 @@ fn config_serde_round_trip() {
     assert_eq!(restored.host, config.host);
     assert_eq!(restored.user, config.user);
     assert_eq!(restored.dest_dir, config.dest_dir);
+}
+
+// ── Acceptance criteria: lifecycle states (issue #380) ───────────────────────
+
+/// Deploy transitions the lifecycle record from Pending → Live.
+///
+/// This is the primary acceptance criterion: "a validated change deploys and
+/// reaches a live state."
+#[test]
+fn deploy_transitions_lifecycle_pending_to_live() {
+    let transport = StubTransport::new();
+    let config = TargetConfig::stub("prod");
+    let artifact = BuildArtifact {
+        path: existing_path(),
+        name: "superfield".to_string(),
+    };
+
+    let result = deploy(&config, &artifact, &transport).expect("deploy must succeed");
+
+    assert_eq!(
+        result.record.state,
+        DeploymentLifecycleState::Live,
+        "lifecycle state must be Live after deploy; got {:?}",
+        result.record.state
+    );
+    assert_eq!(result.record.target, "prod");
+    assert_eq!(result.record.artifact_name, "superfield");
+    assert_eq!(transport.ship_count(), 1);
+}
+
+/// Rollback transitions the lifecycle record from Live → RolledBack and
+/// returns the prior version identifier.
+///
+/// This is the second acceptance criterion: "rollback restores the prior live
+/// version."
+#[test]
+fn rollback_transitions_lifecycle_to_rolled_back() {
+    let mut transport = StubTransport::new();
+    transport.rollback_version = Some("superfield@sha256:abc123".to_string());
+
+    let config = TargetConfig::stub("prod");
+    let artifact = BuildArtifact {
+        path: existing_path(),
+        name: "superfield".to_string(),
+    };
+
+    // First deploy — get the live record.
+    let deploy_result = deploy(&config, &artifact, &transport).expect("deploy must succeed");
+    assert_eq!(deploy_result.record.state, DeploymentLifecycleState::Live);
+
+    // Now rollback using the live record.
+    let rollback_result =
+        rollback(deploy_result.record, &transport).expect("rollback must succeed");
+
+    assert_eq!(
+        rollback_result.record.state,
+        DeploymentLifecycleState::RolledBack,
+        "lifecycle state must be RolledBack after rollback; got {:?}",
+        rollback_result.record.state
+    );
+    assert_eq!(
+        rollback_result.restored_version, "superfield@sha256:abc123",
+        "restored_version must match what the transport reported"
+    );
+    assert_eq!(rollback_result.target, "prod");
+    assert_eq!(transport.rollback_count(), 1);
+}
+
+/// A failed rollback (transport error) leaves the record unchanged and
+/// propagates `DeployError::Transport`.
+#[test]
+fn rollback_transport_failure_propagates() {
+    let transport = StubTransport::failing("cluster unreachable");
+    let config = TargetConfig::stub("prod");
+    let artifact = BuildArtifact {
+        path: existing_path(),
+        name: "superfield".to_string(),
+    };
+
+    // Build a live record directly via deploy with a fresh (succeeding) transport.
+    let ok_transport = StubTransport::new();
+    let deploy_result =
+        deploy(&config, &artifact, &ok_transport).expect("initial deploy must succeed");
+
+    // Now attempt rollback with the failing transport.
+    let err = rollback(deploy_result.record, &transport).unwrap_err();
+    assert!(
+        matches!(err, DeployError::Transport(_)),
+        "expected Transport error from rollback; got: {:?}",
+        err
+    );
 }
