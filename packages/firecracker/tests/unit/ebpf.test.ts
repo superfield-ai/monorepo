@@ -110,17 +110,10 @@ describe("attachEbpf", () => {
     // We can't easily mock util.promisify inside the module, so we test the
     // error path (binary not found) to confirm arg-passing code runs.
     // A proper test uses a stub binary via binaryPath.
-    const mockOutput = JSON.stringify({
-      projectId: "proj-abc",
-      name: "ci-network-policy",
-      attachPoint: "tc-ingress:tap0",
-      loadedAt: "2026-06-01T12:00:00Z",
-      tcHandle: "tc:tap0:ingress",
-      pinPath: null,
-    });
 
-    // Stub the binary with a shell one-liner that prints the mock JSON.
-    // This is a no-op if /bin/sh is absent — the test is marked safe-to-skip.
+    // Stub the binary with /bin/sh. sh invoked without -c <cmd> will fail with
+    // a non-zero exit, which the error-handling branch catches and falls back
+    // to an empty-output parseAttachOutput result.
     const fakebin = "/bin/sh";
     const result = await attachEbpf(testSpec, {
       // Use sh -c 'echo <json>' to avoid needing a real fastenv binary.
