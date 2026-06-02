@@ -1,0 +1,100 @@
+-- Nexum schema migration — 0002: data cutover from standalone Nexum DB
+--
+-- This file documents the cutover queries that move rows from the standalone
+-- Nexum Postgres (DATABASE_URL=postgresql://nexum:nexum@localhost:5432/nexum)
+-- into the shared instance under the `nexum` schema with a workspace key.
+--
+-- IMPORTANT: This is a STUB migration. The actual cutover requires:
+--   1. The standalone Nexum DB to be accessible via a foreign data wrapper or
+--      pg_dump/restore into a staging schema.
+--   2. A workspace key to be assigned (supplied at cutover time via a script
+--      parameter — never hard-coded here).
+--   3. The unified migration runner (tracked separately) to orchestrate the
+--      cutover as a named, versioned, transactional step.
+--
+-- The queries below are correct in structure and semantics. They are executed
+-- by the nexum-migration TypeScript module (packages/db/nexum-migration.ts),
+-- not applied directly by this file, so that the workspace_key parameter can
+-- be safely bound via query parameters (no string interpolation).
+--
+-- References:
+--   docs/architecture.md §6 (namespaced schemas)
+--   docs/architecture.md §7 gap #3 (RLS — not yet implemented)
+--   docs/scout/386-postgres-provisioning-migration-schemas.md
+--   issue #368 (this migration)
+--
+-- RLS note (§7 gap #3): RLS policies on nexum.* tables are deferred until
+-- the auth schema is defined (issue #364). The workspace_key column is
+-- present on all rows from this migration forward, so enabling RLS later
+-- is a non-destructive ALTER TABLE + CREATE POLICY step.
+
+-- The cutover script (nexum-migration.ts::runNexumDataCutover) executes the
+-- following logical steps against the shared instance using $1 as workspace_key:
+--
+-- Step 1: corpora
+--   INSERT INTO nexum.corpora (id, workspace_key, name, description, meta, created_at)
+--   SELECT id, $1, name, description, meta, created_at
+--   FROM   staging_nexum.corpora
+--   ON CONFLICT (id) DO NOTHING;
+--
+-- Step 2: documents
+--   INSERT INTO nexum.documents
+--     (id, workspace_key, corpus_id, title, source_path, source_format, external_id, meta, created_at)
+--   SELECT id, $1, corpus_id, title, source_path, source_format, external_id, meta, created_at
+--   FROM   staging_nexum.documents
+--   ON CONFLICT (id) DO NOTHING;
+--
+-- Step 3: document_versions
+--   INSERT INTO nexum.document_versions
+--     (id, workspace_key, doc_id, version_num, label, status, ingested_at, meta)
+--   SELECT id, $1, doc_id, version_num, label, status, ingested_at, meta
+--   FROM   staging_nexum.document_versions
+--   ON CONFLICT (id) DO NOTHING;
+--
+-- Step 4: blocks
+--   INSERT INTO nexum.blocks
+--     (id, workspace_key, doc_id, content, content_hash, block_type,
+--      level, line_start, line_end, eid, parent_block_id, embedding, meta)
+--   SELECT id, $1, doc_id, content, content_hash, block_type,
+--          level, line_start, line_end, eid, parent_block_id, embedding, meta
+--   FROM   staging_nexum.blocks
+--   ON CONFLICT (id) DO NOTHING;
+--
+-- Step 5: version_blocks
+--   INSERT INTO nexum.version_blocks (version_id, block_id, seq)
+--   SELECT version_id, block_id, seq
+--   FROM   staging_nexum.version_blocks
+--   ON CONFLICT (version_id, block_id) DO NOTHING;
+--
+-- Step 6: links
+--   INSERT INTO nexum.links
+--     (id, workspace_key, src, dst, layer, rel_type, weight,
+--      confirmed, provenance, edge_embedding, created_at)
+--   SELECT id, $1, src, dst, layer, rel_type, weight,
+--          confirmed, provenance, edge_embedding, created_at
+--   FROM   staging_nexum.links
+--   ON CONFLICT (id) DO NOTHING;
+--
+-- Step 7: entities
+--   INSERT INTO nexum.entities
+--     (id, workspace_key, type, name, api_key_hash, scopes, created_at)
+--   SELECT id, $1, type, name, api_key_hash, scopes, created_at
+--   FROM   staging_nexum.entities
+--   ON CONFLICT (id) DO NOTHING;
+--
+-- Step 8: corpus_access
+--   INSERT INTO nexum.corpus_access (entity_id, corpus_id, scopes)
+--   SELECT entity_id, corpus_id, scopes
+--   FROM   staging_nexum.corpus_access
+--   ON CONFLICT (entity_id, corpus_id) DO NOTHING;
+--
+-- Step 9: job_queue (pending only — running/done/failed jobs are not migrated)
+--   INSERT INTO nexum.job_queue
+--     (id, workspace_key, job_type, payload, status, attempts, created_at)
+--   SELECT id, $1, job_type, payload, status, attempts, created_at
+--   FROM   staging_nexum.job_queue
+--   WHERE  status = 'pending'
+--   ON CONFLICT (id) DO NOTHING;
+--
+-- All steps run inside a single transaction. On any error the transaction is
+-- rolled back and the shared instance is left unchanged.
