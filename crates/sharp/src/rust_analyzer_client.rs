@@ -53,7 +53,7 @@ use std::path::{Path, PathBuf};
 use std::process::Stdio;
 use tokio::io::{AsyncBufReadExt, AsyncReadExt, AsyncWriteExt, BufReader};
 use tokio::process::{Child, ChildStdin, ChildStdout};
-use tokio::time::{Duration, timeout};
+use tokio::time::{timeout, Duration};
 
 // ── LSP types ──────────────────────────────────────────────────────────────
 
@@ -385,7 +385,12 @@ impl RustAnalyzerClient {
         id
     }
 
-    async fn send_request(&mut self, id: u64, method: &str, params: Value) -> Result<(), SharpError> {
+    async fn send_request(
+        &mut self,
+        id: u64,
+        method: &str,
+        params: Value,
+    ) -> Result<(), SharpError> {
         let msg = JsonRpcRequest {
             jsonrpc: "2.0".into(),
             id,
@@ -511,9 +516,7 @@ fn path_to_uri(path: &Path) -> String {
     let abs = if path.is_absolute() {
         path.to_path_buf()
     } else {
-        std::env::current_dir()
-            .unwrap_or_default()
-            .join(path)
+        std::env::current_dir().unwrap_or_default().join(path)
     };
     format!("file://{}", abs.display())
 }

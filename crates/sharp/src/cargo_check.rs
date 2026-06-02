@@ -87,9 +87,7 @@ pub async fn run_cargo_check(workspace_root: &Path) -> Result<CheckResult, Sharp
         .stderr(Stdio::piped())
         .output()
         .await
-        .map_err(|e| {
-            SharpError::CargoCheckProcess(format!("failed to spawn cargo check: {e}"))
-        })?;
+        .map_err(|e| SharpError::CargoCheckProcess(format!("failed to spawn cargo check: {e}")))?;
 
     let mut errors: Vec<CompilerError> = Vec::new();
 

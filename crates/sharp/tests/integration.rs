@@ -32,7 +32,7 @@
 use sf_db::{connect, DbConfig};
 use sharp::{commit, episode, object, repo};
 use sharp::cargo_check::{run_cargo_check, CheckResult};
-use sharp::semantic_merge::{FileVersion, MergeOptions, semantic_merge_rust, three_way_merge};
+use sharp::semantic_merge::{semantic_merge_rust, three_way_merge, FileVersion, MergeOptions};
 use std::path::PathBuf;
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -396,7 +396,11 @@ fn main() {
     let check = run_cargo_check(dir.path())
         .await
         .expect("cargo check should succeed");
-    assert!(check.success, "merged result should compile: {:?}", check.errors);
+    assert!(
+        check.success,
+        "merged result should compile: {:?}",
+        check.errors
+    );
 }
 
 /// **Compilation gate**: a non-compiling merge is blocked.
@@ -493,8 +497,8 @@ async fn semantic_merge_refuses_non_compiling_output() {
 async fn rust_analyzer_finds_rename_locations() {
     use sharp::rust_analyzer_client::{RustAnalyzerClient, RustAnalyzerClientOptions};
 
-    let fixture_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures/rename-fixture");
+    let fixture_dir =
+        std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/rename-fixture");
     let main_rs = fixture_dir.join("src/main.rs");
 
     let src = std::fs::read_to_string(&main_rs).expect("read fixture");

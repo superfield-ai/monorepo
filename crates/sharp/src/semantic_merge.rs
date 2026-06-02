@@ -31,7 +31,7 @@
 
 use crate::cargo_check::run_cargo_check;
 use crate::error::SharpError;
-use crate::rust_analyzer_client::{RustAnalyzerClient, RustAnalyzerClientOptions, RenameLocation};
+use crate::rust_analyzer_client::{RenameLocation, RustAnalyzerClient, RustAnalyzerClientOptions};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
@@ -113,12 +113,22 @@ pub async fn semantic_merge_rust(
     opts: &MergeOptions,
 ) -> Result<MergeResult, SharpError> {
     // Index by path for easy lookup.
-    let base_map: HashMap<&Path, &str> = base.iter().map(|f| (f.path.as_path(), f.content.as_str())).collect();
-    let ours_map: HashMap<&Path, &str> = ours.iter().map(|f| (f.path.as_path(), f.content.as_str())).collect();
-    let theirs_map: HashMap<&Path, &str> = theirs.iter().map(|f| (f.path.as_path(), f.content.as_str())).collect();
+    let base_map: HashMap<&Path, &str> = base
+        .iter()
+        .map(|f| (f.path.as_path(), f.content.as_str()))
+        .collect();
+    let ours_map: HashMap<&Path, &str> = ours
+        .iter()
+        .map(|f| (f.path.as_path(), f.content.as_str()))
+        .collect();
+    let theirs_map: HashMap<&Path, &str> = theirs
+        .iter()
+        .map(|f| (f.path.as_path(), f.content.as_str()))
+        .collect();
 
     // Collect all paths across all versions.
-    let all_paths: std::collections::HashSet<&Path> = base_map.keys()
+    let all_paths: std::collections::HashSet<&Path> = base_map
+        .keys()
         .chain(ours_map.keys())
         .chain(theirs_map.keys())
         .copied()
@@ -188,7 +198,8 @@ pub async fn semantic_merge_rust(
             // Simple string replacement of the old name with the new name.
             // In production this would be span-aware; for the Tier-1 pass a
             // conservative whole-word replacement is sufficient.
-            updated_theirs = replace_whole_word(&updated_theirs, &rename.old_name, &rename.new_name);
+            updated_theirs =
+                replace_whole_word(&updated_theirs, &rename.old_name, &rename.new_name);
         }
 
         // 3-way textual merge.
@@ -245,10 +256,7 @@ async fn start_ra_client(opts: &MergeOptions) -> Result<RustAnalyzerClient, Shar
 ///
 /// This is a heuristic diff: we align lines, then scan each line for the
 /// first identifier that differs at the same character offset.
-fn find_renamed_identifiers(
-    base: &str,
-    new: &str,
-) -> Vec<(u32, u32, String, String)> {
+fn find_renamed_identifiers(base: &str, new: &str) -> Vec<(u32, u32, String, String)> {
     let mut results = Vec::new();
     let base_lines: Vec<&str> = base.lines().collect();
     let new_lines: Vec<&str> = new.lines().collect();
@@ -307,7 +315,7 @@ fn is_identifier(s: &str) -> bool {
     !s.is_empty()
         && s.chars()
             .next()
-            .map_or(false, |c| c.is_alphabetic() || c == '_')
+            .is_some_and(|c| c.is_alphabetic() || c == '_')
         && s.chars().all(|c| c.is_alphanumeric() || c == '_')
 }
 
@@ -318,10 +326,11 @@ fn replace_whole_word(text: &str, old: &str, new: &str) -> String {
     while let Some(pos) = rest.find(old) {
         // Check word boundaries.
         let before = pos.checked_sub(1).map(|i| rest.as_bytes()[i] as char);
-        let after = rest.get(pos + old.len()..pos + old.len() + 1)
+        let after = rest
+            .get(pos + old.len()..pos + old.len() + 1)
             .map(|s| s.chars().next().unwrap());
-        let before_ok = before.map_or(true, |c| !c.is_alphanumeric() && c != '_');
-        let after_ok = after.map_or(true, |c| !c.is_alphanumeric() && c != '_');
+        let before_ok = before.is_none_or(|c| !c.is_alphanumeric() && c != '_');
+        let after_ok = after.is_none_or(|c| !c.is_alphanumeric() && c != '_');
         result.push_str(&rest[..pos]);
         if before_ok && after_ok {
             result.push_str(new);
@@ -377,11 +386,11 @@ pub fn three_way_merge(base: &str, ours: &str, theirs: &str) -> String {
             output.push(o.to_string());
         } else {
             // Both sides changed — conflict marker (should be rare after rename propagation).
-            output.push(format!("<<<<<<< ours"));
+            output.push("<<<<<<< ours".to_string());
             output.push(o.to_string());
-            output.push(format!("======="));
+            output.push("=======".to_string());
             output.push(t.to_string());
-            output.push(format!(">>>>>>> theirs"));
+            output.push(">>>>>>> theirs".to_string());
         }
     }
 
