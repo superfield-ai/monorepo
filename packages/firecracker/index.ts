@@ -19,6 +19,13 @@
  *   - virtiofsd binary (must be provisioned separately; see VIRTIOFSD_PATH env)
  *
  * See: docs/scout/281-oci-firecracker-toolchain.md
+ *
+ * Scout finding (#389): the current control plane is entirely single-host with
+ * no multi-host scheduling, no eBPF monitoring, and no crun integration. The
+ * substrate Postgres has no automated backup or replication. Issues #384-#385
+ * will build the federated compute and reliability layer.
+ *
+ * @see docs/scout/389-fastenv-host-control-plane-and-substrate-reliability.md
  */
 
 export {
@@ -54,3 +61,15 @@ export type {
   RestoreOptions,
   RunningVm,
 } from "./vm.ts";
+
+/**
+ * Stub: multi-host scheduling seam — placeholder for issue #384.
+ *
+ * Today the control plane is entirely single-host (Unix-socket per process).
+ * This interface marks the integration boundary for the federated scheduler.
+ *
+ * @see docs/scout/389-fastenv-host-control-plane-and-substrate-reliability.md §Host Control Plane
+ */
+export interface HostScheduler {
+  readonly implemented: false;
+}
