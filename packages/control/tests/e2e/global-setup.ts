@@ -1,15 +1,17 @@
 /**
- * Playwright global setup — builds the browser UI and spawns the sf-serve
- * Rust backend before any test runs.
+ * Playwright global setup — spawns the TypeScript control server (Bun) before
+ * any test runs.
  *
- * The serving backend is the Rust `sf-serve` binary (issue #377). No
- * Node/Bun API server is started — all routing is handled by sf-serve.
+ * The control server is started by calling `startControl()` from
+ * `@superfield/control` directly, bypassing the CLI `controlCommand` which
+ * delegates to the `sf-serve` Rust binary. The Rust binary is not yet
+ * available as a standalone executable (gap #7 in docs/architecture.md §7 —
+ * tracked in issue #377/#378). Until the binary ships, the E2E harness drives
+ * the TypeScript control server that handles all routes the specs depend on,
+ * including `/api/auth/register`, static-asset serving, and WebSocket.
  *
- * Requires:
- *   1. The web app already built: bun run --cwd packages/control/apps build
- *   2. The sf-serve binary available at SF_SERVE_BIN or on PATH.
- *
- * See: docs/architecture.md — §Control Webapp, §7 gap #7.
+ * Requires the web app to already be built:
+ *   bun run --cwd packages/control/apps build
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { join, delimiter, resolve } from "node:path";
@@ -62,50 +64,61 @@ export default async function globalSetup() {
   const origPath = process.env.PATH ?? "";
   process.env.PATH = `${FIXTURES_DIR}${delimiter}${origPath}`;
 
-  // Resolve the sf-serve binary. SF_SERVE_BIN overrides the PATH lookup so
-  // CI can point at the binary built from the Rust workspace.
-  const sfServeBin = process.env.SF_SERVE_BIN ?? "sf-serve";
+  // Spawn the TypeScript control server as a Bun child process.
+  // Calls startControl() directly from @superfield/control, bypassing the CLI
+  // controlCommand (which delegates to the not-yet-available sf-serve binary).
+  // Use full path to bun since Playwright runs in Node.js which may have a
+  // different PATH than the shell.
+  const bunBin = process.env.BUN_INSTALL
+    ? join(process.env.BUN_INSTALL, "bin", "bun")
+    : join(realHome ?? "/root", ".bun", "bin", "bun");
 
-  // Spawn the sf-serve Rust backend. It builds no Node/Bun processes — the
-  // CLI binary handles HTTP serving, WebSocket, static assets, and API routes.
-  const studioProc: ChildProcess = spawn(sfServeBin, [], {
-    env: {
-      ...process.env,
-      CONTROL_PORT: String(CONTROL_PORT),
-      CONTROL_ASSETS_DIR: WEB_DIST,
-      SUPERFIELD_REPO_ROOT: REPO_ROOT,
-      CONTROL_SOURCE_DIR: REPO_ROOT,
-      // Suppress verbose startup logs in CI output.
-      CONTROL_VERBOSE: "0",
+  const studioProc: ChildProcess = spawn(
+    bunBin,
+    [
+      "--eval",
+      `const { startControl } = await import("${resolve(REPO_ROOT, "packages/control/src/index.ts")}"); await startControl();`,
+    ],
+    {
+      env: {
+        ...process.env,
+        CONTROL_PORT: String(CONTROL_PORT),
+        CONTROL_ASSETS_DIR: WEB_DIST,
+        // Suppress verbose startup logs in CI output.
+        CONTROL_VERBOSE: "0",
+      },
+      stdio: "pipe",
+      cwd: REPO_ROOT,
     },
-    stdio: "pipe",
-    cwd: REPO_ROOT,
-  });
+  );
 
-  // Capture all output to a file so crashes are diagnosable from CI artifacts.
+  // Capture all studio output to a file so crashes are diagnosable from CI
+  // artifacts. The file path is stashed in globalThis so global-teardown can
+  // surface it on failure.
   const studioLogPath = resolve(testRoot, "studio-e2e.log");
   const studioLogStream = createWriteStream(studioLogPath, { flags: "w" });
   const writeLog = (prefix: string, d: Buffer): void => {
     const line = `${prefix} ${d}`;
     studioLogStream.write(line);
+    // Also forward to the test runner so failures are visible inline.
     process.stderr.write(line);
   };
-  studioProc.stdout?.on("data", (d: Buffer) => writeLog("[sf-serve out]", d));
-  studioProc.stderr?.on("data", (d: Buffer) => writeLog("[sf-serve err]", d));
+  studioProc.stdout?.on("data", (d: Buffer) => writeLog("[studio out]", d));
+  studioProc.stderr?.on("data", (d: Buffer) => writeLog("[studio err]", d));
   studioProc.on("exit", (code, signal) => {
     studioLogStream.write(
-      `[sf-serve exit] code=${String(code)} signal=${String(signal)}\n`,
+      `[studio exit] code=${String(code)} signal=${String(signal)}\n`,
     );
     studioLogStream.end();
   });
 
   await waitFor(`http://127.0.0.1:${CONTROL_PORT}/health`).catch(() => {
+    // /health may not exist on the studio server; fall back to root.
     return waitFor(`http://127.0.0.1:${CONTROL_PORT}/`);
   });
 
   // Stash handles for globalTeardown.
   (globalThis as Record<string, unknown>).__studioProc = studioProc;
-  // __apiServer is intentionally absent — no Node API server is started.
   (globalThis as Record<string, unknown>).__origPath = origPath;
   (globalThis as Record<string, unknown>).__studioLogPath = studioLogPath;
 }

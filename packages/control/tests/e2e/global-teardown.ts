@@ -4,8 +4,8 @@ export default async function globalTeardown() {
   const proc = (globalThis as Record<string, unknown>).__studioProc as
     | ChildProcess
     | undefined;
-  // __apiServer is intentionally absent — no Node API server is started.
-  // The sf-serve Rust binary handles all serving (issue #378 / #377).
+  // No in-process API server to tear down — the TypeScript control server
+  // (Bun child process) handles all routes including auth.
   const origPath = (globalThis as Record<string, unknown>).__origPath as
     | string
     | undefined;
