@@ -41,6 +41,10 @@ function getHostGatewayIp(): string | null {
 export async function ensureCluster(): Promise<void> {
   const hostGateway = getHostGatewayIp();
 
+  // Tear down any stale cluster from a previous run on a shared CI runner.
+  // k3d cluster delete is idempotent (exits 0 if the cluster doesn't exist).
+  spawnSync("k3d", ["cluster", "delete", CLUSTER_NAME], { stdio: "pipe" });
+
   // Create registry (idempotent)
   spawnSync("k3d", ["registry", "create", REGISTRY_NAME, "--port", "5000"], {
     stdio: "pipe",
