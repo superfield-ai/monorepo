@@ -10,6 +10,7 @@
 //! - [`object`]               — content-addressed object store (`sharp add`)
 //! - [`commit`]               — commits, branches, and the DAG (`sharp commit`, `sharp branch`)
 //! - [`episode`]              — agent-episode lifecycle (open/append/finish/query)
+//! - [`runtime_signal`]       — production error and behavioral signal capture (issue #381)
 //! - [`git_interop`]          — Git import and linear export
 //! - [`rust_analyzer_client`] — subprocess orchestration of `rust-analyzer` over LSP
 //! - [`cargo_check`]          — run `cargo check --message-format=json` and parse diagnostics
@@ -19,9 +20,10 @@
 //! # Schema
 //!
 //! SQL migrations live in `crates/sharp/migrations/`:
-//! - `0001_sharp_vcs_schema.sql`     — repos, objects, refs, commit_metadata, commit_paths
-//! - `0002_sharp_episode_schema.sql` — episodes, episode_events, episode_artifacts, episode_links
-//! - `0003_sharp_git_interop.sql`    — git_objects, git_refs (Git SHA-1 keyed store)
+//! - `0001_sharp_vcs_schema.sql`       — repos, objects, refs, commit_metadata, commit_paths
+//! - `0002_sharp_episode_schema.sql`   — episodes, episode_events, episode_artifacts, episode_links
+//! - `0003_sharp_git_interop.sql`      — git_objects, git_refs (Git SHA-1 keyed store)
+//! - `0004_sharp_runtime_signal.sql`   — runtime_signals (production error capture, issue #381)
 //!
 //! # Self-hosting gate
 //!
@@ -39,6 +41,7 @@ pub mod error;
 pub mod git_interop;
 pub mod object;
 pub mod repo;
+pub mod runtime_signal;
 pub mod rust_analyzer_client;
 pub mod semantic_merge;
 

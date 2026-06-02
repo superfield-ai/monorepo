@@ -52,6 +52,7 @@
 
 use sf_db::{connect, DbConfig};
 use sharp::cargo_check::{run_cargo_check, CheckResult};
+use sharp::runtime_signal::{self, SignalKind};
 use sharp::semantic_merge::{semantic_merge_rust, three_way_merge, FileVersion, MergeOptions};
 use sharp::{commit, episode, git_interop, object, repo};
 use std::path::PathBuf;
@@ -278,6 +279,223 @@ async fn episode_open_append_finish_query() {
     assert!(
         matches!(err2, Err(sharp::SharpError::EpisodeNotOpen(id, _)) if id == ep.id),
         "expected EpisodeNotOpen on append, got {err2:?}"
+    );
+}
+
+// ── Runtime signal integration tests ─────────────────────────────────────────
+
+/// Apply the runtime signal SQL migration on the test database.
+async fn apply_runtime_signal_migration(pool: &sqlx::PgPool) {
+    let sql = include_str!("../migrations/0004_sharp_runtime_signal.sql");
+    for stmt in sql.split(';') {
+        let stmt = stmt.trim();
+        if stmt.is_empty() {
+            continue;
+        }
+        sqlx::query(stmt)
+            .execute(pool)
+            .await
+            .expect("runtime signal migration stmt");
+    }
+}
+
+/// Integration test: a production error is recorded as episode signal linked
+/// to its deployment.
+///
+/// Acceptance criterion from issue #381:
+/// "A production error is recorded as episode signal linked to its deployment."
+///
+/// Verifies:
+/// 1. `runtime_signal::record()` persists a signal row.
+/// 2. The signal is linked to both the episode and the deployment ID.
+/// 3. `query_by_deployment()` returns the signal.
+/// 4. A matching `"runtime_signal"` event is appended to the episode log.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL and applied Sharp migrations including 0004"]
+async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
+    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
+    let pool = connect(&cfg).await.expect("pool creation failed");
+    apply_runtime_signal_migration(&pool).await;
+
+    // Create a repo + open episode to attach the signal to.
+    let repo_name = unique_name("signal-test-repo");
+    let r = repo::init(&pool, &repo_name)
+        .await
+        .expect("repo init failed");
+    let ep = episode::open(&pool, r.id, "prod deploy session")
+        .await
+        .expect("episode open failed");
+
+    let deployment_id = format!("deploy-{}", Uuid::new_v4().as_simple());
+
+    // Record a production crash.
+    let sig = runtime_signal::record(
+        &pool,
+        ep.id,
+        Some(&deployment_id),
+        SignalKind::Crash,
+        "pod/api-server",
+        "OOMKilled: container exceeded memory limit",
+        serde_json::json!({ "namespace": "prod", "pod": "api-server-abc" }),
+    )
+    .await
+    .expect("record failed");
+
+    assert_eq!(sig.episode_id, ep.id);
+    assert_eq!(sig.deployment_id.as_deref(), Some(deployment_id.as_str()));
+    assert_eq!(sig.signal_kind, "crash");
+    assert_eq!(sig.source, "pod/api-server");
+    assert!(sig.message.contains("OOMKilled"));
+
+    // Acceptance criterion: signal is queryable from the store by deployment.
+    let by_deploy = runtime_signal::query_by_deployment(&pool, &deployment_id)
+        .await
+        .expect("query_by_deployment failed");
+    assert_eq!(
+        by_deploy.len(),
+        1,
+        "expected exactly one signal for deployment"
+    );
+    assert_eq!(by_deploy[0].id, sig.id);
+
+    // The signal should also appear in the episode event log.
+    let events = episode::events(&pool, ep.id)
+        .await
+        .expect("events query failed");
+    let runtime_events: Vec<_> = events
+        .iter()
+        .filter(|e| e.event_type == "runtime_signal")
+        .collect();
+    assert_eq!(
+        runtime_events.len(),
+        1,
+        "expected one runtime_signal event in episode log"
+    );
+    assert_eq!(
+        runtime_events[0].payload["signal_kind"].as_str(),
+        Some("crash")
+    );
+}
+
+/// Integration test: behavioral signal is queryable from the store.
+///
+/// Acceptance criterion from issue #381:
+/// "Behavioral signal is queryable from the store."
+///
+/// Verifies:
+/// 1. Multiple signals across two deployments can be recorded.
+/// 2. `query_by_deployment()` returns only signals for the requested deployment.
+/// 3. `query_by_episode()` returns all signals for an episode.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL and applied Sharp migrations including 0004"]
+async fn behavioral_signal_is_queryable_from_store() {
+    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
+    let pool = connect(&cfg).await.expect("pool creation failed");
+    apply_runtime_signal_migration(&pool).await;
+
+    let repo_name = unique_name("behavior-test-repo");
+    let r = repo::init(&pool, &repo_name)
+        .await
+        .expect("repo init failed");
+    let ep = episode::open(&pool, r.id, "behavior signal session")
+        .await
+        .expect("episode open failed");
+
+    let deploy_a = format!("deploy-a-{}", Uuid::new_v4().as_simple());
+    let deploy_b = format!("deploy-b-{}", Uuid::new_v4().as_simple());
+
+    // Record a behavior signal for deploy A.
+    runtime_signal::record(
+        &pool,
+        ep.id,
+        Some(&deploy_a),
+        SignalKind::Behavior,
+        "healthz",
+        "P99 latency spiked to 3200ms after deploy",
+        serde_json::json!({ "p99_ms": 3200, "baseline_ms": 120 }),
+    )
+    .await
+    .expect("record behavior signal A failed");
+
+    // Record an error signal for deploy B.
+    runtime_signal::record(
+        &pool,
+        ep.id,
+        Some(&deploy_b),
+        SignalKind::Error,
+        "pod/worker",
+        "unhandled exception: NullPointerException at Worker.run:42",
+        serde_json::json!({ "stack": "NullPointerException\n  at Worker.run:42" }),
+    )
+    .await
+    .expect("record error signal B failed");
+
+    // A signal with no deployment_id (unknown origin).
+    runtime_signal::record(
+        &pool,
+        ep.id,
+        None,
+        SignalKind::HealthFailure,
+        "healthz",
+        "/healthz returned 503",
+        serde_json::json!({}),
+    )
+    .await
+    .expect("record health_failure failed");
+
+    // query_by_deployment returns only deploy_a's signal.
+    let a_signals = runtime_signal::query_by_deployment(&pool, &deploy_a)
+        .await
+        .expect("query deploy_a failed");
+    assert_eq!(a_signals.len(), 1);
+    assert_eq!(a_signals[0].signal_kind, "behavior");
+
+    let b_signals = runtime_signal::query_by_deployment(&pool, &deploy_b)
+        .await
+        .expect("query deploy_b failed");
+    assert_eq!(b_signals.len(), 1);
+    assert_eq!(b_signals[0].signal_kind, "error");
+
+    // query_by_episode returns all three signals.
+    let ep_signals = runtime_signal::query_by_episode(&pool, ep.id)
+        .await
+        .expect("query_by_episode failed");
+    assert_eq!(
+        ep_signals.len(),
+        3,
+        "expected all three signals in episode query"
+    );
+
+    // Signals should be ordered by recorded_at ascending.
+    assert_eq!(ep_signals[0].signal_kind, "behavior");
+    assert_eq!(ep_signals[1].signal_kind, "error");
+    assert_eq!(ep_signals[2].signal_kind, "health_failure");
+}
+
+/// Integration test: recording a signal against a non-existent episode returns
+/// EpisodeNotFound.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL and applied Sharp migrations including 0004"]
+async fn record_signal_against_missing_episode_returns_not_found() {
+    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
+    let pool = connect(&cfg).await.expect("pool creation failed");
+    apply_runtime_signal_migration(&pool).await;
+
+    let missing_id = Uuid::new_v4();
+    let err = runtime_signal::record(
+        &pool,
+        missing_id,
+        None,
+        SignalKind::Error,
+        "pod/api",
+        "test error",
+        serde_json::json!({}),
+    )
+    .await;
+
+    assert!(
+        matches!(err, Err(sharp::SharpError::EpisodeNotFound(id)) if id == missing_id),
+        "expected EpisodeNotFound, got {err:?}"
     );
 }
 
