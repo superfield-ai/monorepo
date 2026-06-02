@@ -8,7 +8,6 @@ use thiserror::Error;
 #[derive(Debug, Error)]
 pub enum SharpError {
     // ── VCS core errors ──────────────────────────────────────────────────────
-
     /// A database error from sqlx.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -34,7 +33,6 @@ pub enum SharpError {
     EpisodeNotOpen(uuid::Uuid, String),
 
     // ── Rust semantic merge errors ───────────────────────────────────────────
-
     /// The rust-analyzer subprocess could not be spawned or communicated with.
     #[error("rust-analyzer subprocess error: {0}")]
     RustAnalyzerProcess(String),
@@ -60,7 +58,6 @@ pub enum SharpError {
     MergeRefused { diagnostics: String },
 
     // ── Shared low-level errors ──────────────────────────────────────────────
-
     /// I/O error.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
