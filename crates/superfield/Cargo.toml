@@ -17,3 +17,4 @@ nexum = { workspace = true }
 sf-cli = { workspace = true }
 sf-serve = { workspace = true }
 sf-deploy = { workspace = true }
+tokio.workspace = true

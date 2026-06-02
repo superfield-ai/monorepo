@@ -226,3 +226,29 @@ pub async fn list_open(pool: &PgPool, repo_id: Uuid) -> Result<Vec<Episode>, Sha
         .collect::<Result<Vec<_>, _>>()
         .map_err(SharpError::Db)
 }
+
+/// Return all episodes for a repo (any state), most recently opened first.
+///
+/// Used by `sf-cli`'s `episode list` command.
+///
+/// # Errors
+///
+/// Returns [`SharpError::Db`] on a database error.
+pub async fn list_for_repo(pool: &PgPool, repo_id: Uuid) -> Result<Vec<Episode>, SharpError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, repo_id, title, state, opened_at, finished_at, metadata
+        FROM   sharp.episodes
+        WHERE  repo_id = $1
+        ORDER  BY opened_at DESC
+        "#,
+    )
+    .bind(repo_id)
+    .fetch_all(pool)
+    .await?;
+
+    rows.iter()
+        .map(row_to_episode)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(SharpError::Db)
+}

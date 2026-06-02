@@ -2457,6 +2457,17 @@ dependencies = [
 [[package]]
 name = "sf-cli"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sf-auth",
+ "sf-db",
+ "sharp",
+ "sqlx",
+ "thiserror 1.0.69",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "sf-db"
@@ -2870,6 +2881,7 @@ dependencies = [
  "sf-deploy",
  "sf-serve",
  "sharp",
+ "tokio",
 ]
 
 [[package]]
