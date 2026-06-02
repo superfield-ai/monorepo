@@ -24,43 +24,40 @@ function makeDeps(
     log: vi.fn(),
     warn: vi.fn(),
     exit: vi.fn() as unknown as ControlCommandDeps["exit"],
-    // Real fetch — we want the actual TCP probe against 127.0.0.1:1 to fail.
-    _fetch: globalThis.fetch,
     _buildControlWeb: vi.fn().mockResolvedValue(undefined),
-    _startControl: vi.fn().mockResolvedValue(undefined),
+    // _startSfServe resolves immediately — the binary is not available in CI.
+    _startSfServe: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
 
-d("controlCommand integration: template + closed API port", () => {
+d("controlCommand integration: template path wiring", () => {
   const TEMPLATE_REPO = findTemplatePath()!;
   afterEach(() => {
     delete process.env.SUPERFIELD_REPO_ROOT;
     delete process.env.CONTROL_SOURCE_DIR;
     delete process.env.SUPERFIELD_API_URL;
     delete process.env.CONTROL_PORT;
+    delete process.env.CONTROL_ASSETS_DIR;
   });
 
-  it("warns 'unreachable', calls _startControl once, applies env vars", async () => {
+  it("calls _startSfServe once with the template project root, applies env vars", async () => {
     const deps = makeDeps();
     await controlCommand(
-      ["--path", TEMPLATE_REPO, "--api-url", "http://127.0.0.1:1"],
+      ["--path", TEMPLATE_REPO, "--api-url", "http://127.0.0.1:7837"],
       deps,
     );
 
-    const warnMock = deps.warn as ReturnType<typeof vi.fn>;
-    const calls = warnMock.mock.calls.map((c) => String(c[0]));
-    expect(calls.some((m) => m.includes("unreachable"))).toBe(true);
-
+    expect(deps.warn).not.toHaveBeenCalled();
     expect(deps._buildControlWeb).toHaveBeenCalledTimes(1);
-    expect(deps._startControl).toHaveBeenCalledTimes(1);
+    expect(deps._startSfServe).toHaveBeenCalledTimes(1);
+    expect(deps._startSfServe).toHaveBeenCalledWith(
+      expect.objectContaining({ projectRoot: TEMPLATE_REPO }),
+    );
 
     expect(process.env.SUPERFIELD_REPO_ROOT).toBe(TEMPLATE_REPO);
     expect(process.env.CONTROL_SOURCE_DIR).toBe(TEMPLATE_REPO);
-    expect(process.env.SUPERFIELD_API_URL).toBe("http://127.0.0.1:1");
-    expect(process.env.CONTROL_ASSETS_DIR).toContain(
-      "packages/control/apps/dist",
-    );
+    expect(process.env.SUPERFIELD_API_URL).toBe("http://127.0.0.1:7837");
   });
 
   it("--port 7123 sets CONTROL_PORT env var to '7123'", async () => {
@@ -72,12 +69,15 @@ d("controlCommand integration: template + closed API port", () => {
         "--path",
         TEMPLATE_REPO,
         "--api-url",
-        "http://127.0.0.1:1",
+        "http://127.0.0.1:7837",
       ],
       deps,
     );
 
     expect(deps._buildControlWeb).toHaveBeenCalledTimes(1);
     expect(process.env.CONTROL_PORT).toBe("7123");
+    expect(deps._startSfServe).toHaveBeenCalledWith(
+      expect.objectContaining({ port: 7123 }),
+    );
   });
 });

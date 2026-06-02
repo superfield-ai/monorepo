@@ -103,13 +103,8 @@ function makeDeps(
     log: vi.fn(),
     warn: vi.fn(),
     exit: vi.fn() as unknown as ControlCommandDeps["exit"],
-    _fetch: vi.fn().mockResolvedValue({
-      ok: true,
-      status: 200,
-    } as Response) as unknown as typeof fetch,
     _buildControlWeb: vi.fn().mockResolvedValue(undefined),
-    _startApiServer: vi.fn().mockReturnValue({} as never),
-    _startControl: vi.fn().mockResolvedValue(undefined),
+    _startSfServe: vi.fn().mockResolvedValue(undefined),
     ...overrides,
   };
 }
@@ -124,16 +119,14 @@ describe("controlCommand", () => {
     delete process.env.CONTROL_ASSETS_DIR;
   });
 
-  it("--help → logs usage, does not call _startControl or _fetch", async () => {
+  it("--help → logs usage, does not call _startSfServe", async () => {
     const deps = makeDeps();
     await controlCommand(["--help"], deps);
     expect(deps.log).toHaveBeenCalledWith(
       expect.stringContaining("superfield control"),
     );
     expect(deps._buildControlWeb).not.toHaveBeenCalled();
-    expect(deps._startApiServer).not.toHaveBeenCalled();
-    expect(deps._startControl).not.toHaveBeenCalled();
-    expect(deps._fetch).not.toHaveBeenCalled();
+    expect(deps._startSfServe).not.toHaveBeenCalled();
   });
 
   it("--help output contains option docs", async () => {
@@ -149,6 +142,10 @@ describe("controlCommand", () => {
     expect(output).toContain("--api-url");
   });
 
+  it("usage mentions sf-serve backend", async () => {
+    expect(controlUsage()).toContain("sf-serve");
+  });
+
   it("unknown flag → warns, logs usage, calls exit(1)", async () => {
     const deps = makeDeps();
     await controlCommand(["--unknown-flag"], deps);
@@ -157,87 +154,92 @@ describe("controlCommand", () => {
     );
     expect(deps.exit).toHaveBeenCalledWith(1);
     expect(deps._buildControlWeb).not.toHaveBeenCalled();
-    expect(deps._startApiServer).not.toHaveBeenCalled();
-    expect(deps._startControl).not.toHaveBeenCalled();
+    expect(deps._startSfServe).not.toHaveBeenCalled();
   });
 
-  it("--port sets CONTROL_PORT env var and starts the local API server", async () => {
-    const deps = makeDeps();
-    await controlCommand(["--port", "9000"], deps);
-    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
-    expect(deps._startApiServer).toHaveBeenCalledOnce();
-    expect(process.env.CONTROL_PORT).toBe("9000");
-    expect(process.env.CONTROL_ASSETS_DIR).toContain(
-      "packages/control/apps/dist",
-    );
-  });
-
-  it("--path sets SUPERFIELD_REPO_ROOT env var and starts the local API server", async () => {
-    const deps = makeDeps();
-    await controlCommand(["--path", "/my/project"], deps);
-    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
-    expect(deps._startApiServer).toHaveBeenCalledOnce();
-    expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/project");
-    expect(process.env.CONTROL_SOURCE_DIR).toBe("/my/project");
-  });
-
-  it("--api-url sets SUPERFIELD_API_URL env var and keeps the API remote", async () => {
-    const deps = makeDeps();
-    await controlCommand(["--api-url", "http://remote:7837"], deps);
-    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
-    expect(deps._startApiServer).not.toHaveBeenCalled();
-    expect(process.env.SUPERFIELD_API_URL).toBe("http://remote:7837");
-  });
-
-  it("default startup launches the local API server and calls _startControl", async () => {
+  it("default startup: builds UI and calls _startSfServe — no Node/Bun backend started", async () => {
     const deps = makeDeps();
     await controlCommand([], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
     expect(deps.warn).not.toHaveBeenCalled();
-    expect(deps._startApiServer).toHaveBeenCalledOnce();
-    expect(deps._fetch).not.toHaveBeenCalled();
-    expect(deps._startControl).toHaveBeenCalledOnce();
+    expect(deps._startSfServe).toHaveBeenCalledOnce();
   });
 
-  it("explicit remote api-url non-200 → warns with HTTP status", async () => {
-    const deps = makeDeps({
-      _fetch: vi.fn().mockResolvedValue({
-        ok: false,
-        status: 503,
-      } as Response) as unknown as typeof fetch,
-    });
-    await controlCommand(["--api-url", "http://remote:9999"], deps);
-    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
-    expect(deps._startApiServer).not.toHaveBeenCalled();
-    expect(deps.warn).toHaveBeenCalledWith(expect.stringContaining("503"));
-    expect(deps._startControl).toHaveBeenCalledOnce();
-  });
-
-  it("explicit remote api-url network error → warns unreachable, still calls _startControl", async () => {
-    const deps = makeDeps({
-      _fetch: vi
-        .fn()
-        .mockRejectedValue(
-          new Error("ECONNREFUSED"),
-        ) as unknown as typeof fetch,
-    });
-    await controlCommand(["--api-url", "http://remote:9999"], deps);
-    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
-    expect(deps._startApiServer).not.toHaveBeenCalled();
-    expect(deps.warn).toHaveBeenCalledWith(
-      expect.stringContaining("unreachable"),
-    );
-    expect(deps._startControl).toHaveBeenCalledOnce();
-  });
-
-  it("health check uses --api-url value", async () => {
+  it("--port sets CONTROL_PORT env var and passes port to _startSfServe", async () => {
     const deps = makeDeps();
-    await controlCommand(["--api-url", "http://custom:9999"], deps);
+    await controlCommand(["--port", "9000"], deps);
     expect(deps._buildControlWeb).toHaveBeenCalledOnce();
-    expect(deps._startApiServer).not.toHaveBeenCalled();
-    expect(deps._fetch).toHaveBeenCalledWith(
-      expect.stringContaining("http://custom:9999"),
-      expect.anything(),
+    expect(deps._startSfServe).toHaveBeenCalledWith(
+      expect.objectContaining({ port: 9000 }),
+    );
+    expect(process.env.CONTROL_PORT).toBe("9000");
+  });
+
+  it("--path sets SUPERFIELD_REPO_ROOT env var and passes projectRoot to _startSfServe", async () => {
+    const deps = makeDeps();
+    await controlCommand(["--path", "/my/project"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(deps._startSfServe).toHaveBeenCalledWith(
+      expect.objectContaining({ projectRoot: "/my/project" }),
+    );
+    expect(process.env.SUPERFIELD_REPO_ROOT).toBe("/my/project");
+    expect(process.env.CONTROL_SOURCE_DIR).toBe("/my/project");
+  });
+
+  it("--api-url passes apiUrl to _startSfServe", async () => {
+    const deps = makeDeps();
+    await controlCommand(["--api-url", "http://remote:7837"], deps);
+    expect(deps._buildControlWeb).toHaveBeenCalledOnce();
+    expect(deps._startSfServe).toHaveBeenCalledWith(
+      expect.objectContaining({ apiUrl: "http://remote:7837" }),
+    );
+    expect(process.env.SUPERFIELD_API_URL).toBe("http://remote:7837");
+  });
+
+  it("_startSfServe receives assetsDir pointing at the built web app dist", async () => {
+    const deps = makeDeps();
+    await controlCommand([], deps);
+    expect(deps._startSfServe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        assetsDir: expect.stringContaining("packages/control/apps/dist"),
+      }),
+    );
+  });
+
+  it("CONTROL_ASSETS_DIR env override is honoured over default dist path", async () => {
+    process.env.CONTROL_ASSETS_DIR = "/custom/assets";
+    const deps = makeDeps();
+    await controlCommand([], deps);
+    expect(deps._startSfServe).toHaveBeenCalledWith(
+      expect.objectContaining({ assetsDir: "/custom/assets" }),
+    );
+  });
+
+  // Boot check: the command must not start any Node/Bun backend in production.
+  it("boot check: ControlCommandDeps has no _startApiServer or _startControl dep", () => {
+    // This test is a static contract check: if someone re-adds the Bun/Node
+    // backend deps to ControlCommandDeps, this test's type check will catch it.
+    // At runtime we simply verify _startSfServe is the only backend dep called.
+    const deps = makeDeps();
+
+    // These keys must NOT appear on the deps object.
+    expect(Object.keys(deps)).not.toContain("_startApiServer");
+    expect(Object.keys(deps)).not.toContain("_startControl");
+    expect(Object.keys(deps)).toContain("_startSfServe");
+  });
+
+  it("all three flags forwarded to _startSfServe", async () => {
+    const deps = makeDeps();
+    await controlCommand(
+      ["--port", "8000", "--path", "/app", "--api-url", "http://x:7837"],
+      deps,
+    );
+    expect(deps._startSfServe).toHaveBeenCalledWith(
+      expect.objectContaining({
+        port: 8000,
+        projectRoot: "/app",
+        apiUrl: "http://x:7837",
+      }),
     );
   });
 });

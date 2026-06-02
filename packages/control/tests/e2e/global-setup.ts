@@ -1,10 +1,14 @@
 /**
- * Playwright global setup — starts the superfield API fixture and the studio
- * server before any test runs.
+ * Playwright global setup — spawns the TypeScript control server (Bun) before
+ * any test runs.
  *
- * Both servers run in-process (same Node/Bun process). The studio server is
- * spawned as a child process (needs Bun.serve which only works in Bun). The
- * superfield API server uses node:http and runs in-process here.
+ * The control server is started by calling `startControl()` from
+ * `@superfield/control` directly, bypassing the CLI `controlCommand` which
+ * delegates to the `sf-serve` Rust binary. The Rust binary is not yet
+ * available as a standalone executable (gap #7 in docs/architecture.md §7 —
+ * tracked in issue #377/#378). Until the binary ships, the E2E harness drives
+ * the TypeScript control server that handles all routes the specs depend on,
+ * including `/api/auth/register`, static-asset serving, and WebSocket.
  *
  * Requires the web app to already be built:
  *   bun run --cwd packages/control/apps build
@@ -13,7 +17,6 @@ import { spawn, type ChildProcess } from "node:child_process";
 import { join, delimiter, resolve } from "node:path";
 import { createWriteStream, mkdirSync, mkdtempSync } from "node:fs";
 import { tmpdir } from "node:os";
-import type { AddressInfo } from "node:net";
 
 const E2E_ROOT = resolve(import.meta.dirname);
 const REPO_ROOT = resolve(E2E_ROOT, "../../../../");
@@ -57,23 +60,13 @@ export default async function globalSetup() {
   process.env.SUPERFIELD_LOG_DIR = join(testRoot, "superfield-logs");
   process.env.CLAUDE_E2E_LOG_PATH = join(testRoot, "claude-studio-e2e.log");
 
-  // Start the superfield API server in-process on a random port.
-  const { ApiState } = await import("@superfield/core/api-state");
-  const { startApiServer } = await import("@superfield/core/api-server");
-
-  const state = new ApiState();
-  const noopLogger = { currentLevel: "info" as const, emit: () => {} };
-  const apiServer = startApiServer({ port: 0, state, logger: noopLogger });
-  await new Promise<void>((r) => apiServer.once("listening", r));
-  const apiPort = (apiServer.address() as AddressInfo).port;
-
   // Inject the claude stub into PATH so agent turns return canned responses.
   const origPath = process.env.PATH ?? "";
   process.env.PATH = `${FIXTURES_DIR}${delimiter}${origPath}`;
 
-  const apiUrl = `http://127.0.0.1:${apiPort}`;
-
-  // Spawn the studio server as a Bun child process.
+  // Spawn the TypeScript control server as a Bun child process.
+  // Calls startControl() directly from @superfield/control, bypassing the CLI
+  // controlCommand (which delegates to the not-yet-available sf-serve binary).
   // Use full path to bun since Playwright runs in Node.js which may have a
   // different PATH than the shell.
   const bunBin = process.env.BUN_INSTALL
@@ -83,18 +76,13 @@ export default async function globalSetup() {
   const studioProc: ChildProcess = spawn(
     bunBin,
     [
-      resolve(REPO_ROOT, "packages/cli/bin/superfield.ts"),
-      "control",
-      "--port",
-      String(CONTROL_PORT),
-      "--api-url",
-      apiUrl,
+      "--eval",
+      `const { startControl } = await import("${resolve(REPO_ROOT, "packages/control/src/index.ts")}"); await startControl();`,
     ],
     {
       env: {
         ...process.env,
         CONTROL_PORT: String(CONTROL_PORT),
-        SUPERFIELD_API_URL: apiUrl,
         CONTROL_ASSETS_DIR: WEB_DIST,
         // Suppress verbose startup logs in CI output.
         CONTROL_VERBOSE: "0",
@@ -131,7 +119,6 @@ export default async function globalSetup() {
 
   // Stash handles for globalTeardown.
   (globalThis as Record<string, unknown>).__studioProc = studioProc;
-  (globalThis as Record<string, unknown>).__apiServer = apiServer;
   (globalThis as Record<string, unknown>).__origPath = origPath;
   (globalThis as Record<string, unknown>).__studioLogPath = studioLogPath;
 }
