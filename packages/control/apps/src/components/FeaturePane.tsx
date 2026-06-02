@@ -199,8 +199,11 @@ function FeatureRail({
         )}
       </div>
 
-      {/* Rail list */}
-      <div style={{ flex: 1, overflowY: "auto" }}>
+      {/* Rail list — tabIndex={0} satisfies the scrollable-region-focusable
+          a11y rule: keyboard users can Tab into the list and scroll with
+          arrow keys. Without this, axe flags the overflow:auto container as
+          inaccessible (serious violation). */}
+      <div style={{ flex: 1, overflowY: "auto" }} tabIndex={0}>
         {error && (
           <div
             style={{
