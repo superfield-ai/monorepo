@@ -1,6 +1,6 @@
 [package]
 name = "nexum"
-description = "Nexum component — Rust ingestion pipeline on the shared substrate"
+description = "Nexum component — Rust ingestion pipeline and query layer on the shared substrate"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
