@@ -49,6 +49,7 @@ Agent commands:
 Deploy commands:
   deploy validate <config-json>       Validate a target config
   deploy ship <config-json> <path>    Ship a build to a target (stub)
+  deploy rollback <record-json>       Roll back the target to the prior version (stub)
 
 Other:
   noop                                Smoke-test — exits with code 0
@@ -63,6 +64,10 @@ Usage:
 
   superfield deploy ship <config-json> <artifact-path>
       Validate config and ship the artifact to the target (stub transport).
+
+  superfield deploy rollback <record-json>
+      Roll back the target to its prior version using a deployment record JSON.
+      The record is the serialised DeploymentRecord returned by a previous ship.
 
 Target config JSON fields:
   name       string   — target name, e.g. \"prod\"
@@ -212,9 +217,11 @@ async fn run_serve(args: &[String]) {
 ///   validate <config-json>  — validate a target config and print OK / error
 ///   ship <config-json> <artifact-path> — validate config and simulate a ship
 ///                                        (stub transport; no real I/O)
+///   rollback <record-json>  — roll back the target to the prior version
+///                             using a serialised DeploymentRecord
 fn run_deploy(args: &[String]) {
     use sf_deploy::transport::StubTransport;
-    use sf_deploy::{deploy, BuildArtifact, TargetConfig};
+    use sf_deploy::{deploy, rollback, BuildArtifact, DeploymentRecord, TargetConfig};
     use std::path::PathBuf;
 
     match args {
@@ -253,6 +260,26 @@ fn run_deploy(args: &[String]) {
                 Ok(result) => println!("{}", result.summary),
                 Err(e) => {
                     eprintln!("superfield deploy ship: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+
+        // deploy rollback <record-json>
+        [sub, json] if sub == "rollback" => {
+            let record: DeploymentRecord = match serde_json::from_str(json.as_str()) {
+                Ok(r) => r,
+                Err(e) => {
+                    eprintln!("superfield deploy rollback: JSON parse error: {}", e);
+                    process::exit(1);
+                }
+            };
+            let target = record.target.clone();
+            let transport = StubTransport::new();
+            match rollback(record, &transport) {
+                Ok(result) => println!("rolled back {} → {}", target, result.restored_version),
+                Err(e) => {
+                    eprintln!("superfield deploy rollback: {}", e);
                     process::exit(1);
                 }
             }
