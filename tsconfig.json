@@ -24,5 +24,9 @@
       "@superfield/fastenv/*": ["packages/fastenv/*.ts"]
     }
   },
-  "exclude": ["node_modules", "packages/control/apps"]
+  "exclude": [
+    "node_modules",
+    "packages/control/apps",
+    "packages/sharp/tests/integration/fixtures"
+  ]
 }

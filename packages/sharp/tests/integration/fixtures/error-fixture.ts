@@ -5,6 +5,5 @@ function add(a: number, b: number): number {
   return a + b;
 }
 
-// @ts-expect-error — intentional type error: tsserver should report error 2345
-const result = add(1, "two");
+const result = add(1, "two"); // intentional type mismatch — tsserver integration test fixture
 console.log(result);
