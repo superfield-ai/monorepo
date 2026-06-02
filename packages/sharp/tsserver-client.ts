@@ -309,7 +309,7 @@ export class TsserverClient {
         continue;
       }
 
-      const bodyLength = parseInt(lengthMatch[1], 10);
+      const bodyLength = parseInt(lengthMatch[1] ?? "0", 10);
       const bodyStart = headerEnd + 4;
       if (this.buffer.length < bodyStart + bodyLength) {
         // Wait for more data.
