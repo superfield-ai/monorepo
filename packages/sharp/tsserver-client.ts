@@ -274,7 +274,12 @@ export class TsserverClient {
 
   private sendRaw(seq: number, command: string, args: unknown): void {
     if (!this.proc) throw new Error("TsserverClient not started");
-    const msg = JSON.stringify({ seq, type: "request", command, arguments: args });
+    const msg = JSON.stringify({
+      seq,
+      type: "request",
+      command,
+      arguments: args,
+    });
     this.proc.stdin!.write(msg + "\n");
   }
 
@@ -370,7 +375,13 @@ function resolveTsserver(): string {
   // Walk up from this file's directory to find node_modules/typescript/bin/tsserver
   let dir = path.dirname(new URL(import.meta.url).pathname);
   for (let i = 0; i < 10; i++) {
-    const candidate = path.join(dir, "node_modules", "typescript", "bin", "tsserver");
+    const candidate = path.join(
+      dir,
+      "node_modules",
+      "typescript",
+      "bin",
+      "tsserver",
+    );
     if (fs.existsSync(candidate)) return candidate;
     const parent = path.dirname(dir);
     if (parent === dir) break;

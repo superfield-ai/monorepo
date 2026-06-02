@@ -25,7 +25,10 @@ function resolveTsserver(): string {
   const candidates = [
     // Bun workspaces hoist node_modules to the repo root.
     path.resolve(__dirname, "../../../../node_modules/typescript/bin/tsserver"),
-    path.resolve(__dirname, "../../../../../node_modules/typescript/bin/tsserver"),
+    path.resolve(
+      __dirname,
+      "../../../../../node_modules/typescript/bin/tsserver",
+    ),
     // Development machine fallback (main cli checkout).
     "/home/lucas/superfield/cli/node_modules/typescript/bin/tsserver",
   ];
