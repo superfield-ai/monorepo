@@ -190,9 +190,7 @@ export async function controlCommand(
   const port = parsed.port ?? parseInt(process.env.CONTROL_PORT ?? "7000", 10);
   const projectRoot = parsed.path ?? process.env.SUPERFIELD_REPO_ROOT;
   const apiUrl =
-    parsed.apiUrl ??
-    process.env.SUPERFIELD_API_URL ??
-    "http://127.0.0.1:7837";
+    parsed.apiUrl ?? process.env.SUPERFIELD_API_URL ?? "http://127.0.0.1:7837";
   const assetsDir = process.env.CONTROL_ASSETS_DIR ?? CONTROL_WEB_DIST_DIR;
 
   // Propagate to environment so any child process or library reads consistent
