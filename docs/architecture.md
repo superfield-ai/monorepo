@@ -856,15 +856,15 @@ Sharp performs semantic merge for Rust source files using **rust-analyzer** as a
 
 ### Components (`crates/sharp`)
 
-| Module                  | Role                                                                                                                                                       |
-| ----------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `repo` / `object` / `commit` | VCS core — objects, refs, commits, and the DAG on the `sharp` schema                                                                                 |
-| `episode`               | Agent-episode lifecycle — open, append, finish, query                                                                                                     |
-| `git_interop`           | Git import (SHA-1 keyed store) and linear-only export                                                                                                     |
-| `rust_analyzer_client`  | LSP subprocess orchestrator — spawns `rust-analyzer`, performs the initialize handshake, and exposes `get_rename_locations(file, line, col, include_decl)` |
-| `cargo_check`           | Structural verification gate — runs `cargo check --message-format=json` and parses compiler errors                                                         |
-| `semantic_merge`        | Tier-1 merge algorithm — rename detection, 3-way textual baseline, cargo check gate                                                                        |
-| `error`                 | Shared `SharpError` type                                                                                                                                   |
+| Module                       | Role                                                                                                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repo` / `object` / `commit` | VCS core — objects, refs, commits, and the DAG on the `sharp` schema                                                                                       |
+| `episode`                    | Agent-episode lifecycle — open, append, finish, query                                                                                                      |
+| `git_interop`                | Git import (SHA-1 keyed store) and linear-only export                                                                                                      |
+| `rust_analyzer_client`       | LSP subprocess orchestrator — spawns `rust-analyzer`, performs the initialize handshake, and exposes `get_rename_locations(file, line, col, include_decl)` |
+| `cargo_check`                | Structural verification gate — runs `cargo check --message-format=json` and parses compiler errors                                                         |
+| `semantic_merge`             | Tier-1 merge algorithm — rename detection, 3-way textual baseline, cargo check gate                                                                        |
+| `error`                      | Shared `SharpError` type                                                                                                                                   |
 
 ### Merge algorithm (Tier-1)
 
@@ -895,11 +895,11 @@ Sharp manages Superfield's own Rust source (`crates/sharp`) as its primary dogfo
 
 #### Test coverage
 
-| Test                                               | What it proves                                                                     | Requires                              |
-| -------------------------------------------------- | ---------------------------------------------------------------------------------- | ------------------------------------- |
-| `self_hosting_gate_semantic_merge_on_sharp_source` | Rename propagation + 3-way merge resolves rename-vs-edit cleanly on Sharp source   | Nothing — pure Rust, runs in CI       |
-| `self_hosting_gate_compile_gate_refuses_bad_merge` | Compile gate detects and refuses a non-compiling merge output                      | `cargo` on PATH                       |
-| `self_hosting_gate_with_episode`                   | Full end-to-end: VCS store + episode recording + semantic merge                    | `DATABASE_URL`, applied migrations, `cargo` |
+| Test                                               | What it proves                                                                   | Requires                                    |
+| -------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------- |
+| `self_hosting_gate_semantic_merge_on_sharp_source` | Rename propagation + 3-way merge resolves rename-vs-edit cleanly on Sharp source | Nothing — pure Rust, runs in CI             |
+| `self_hosting_gate_compile_gate_refuses_bad_merge` | Compile gate detects and refuses a non-compiling merge output                    | `cargo` on PATH                             |
+| `self_hosting_gate_with_episode`                   | Full end-to-end: VCS store + episode recording + semantic merge                  | `DATABASE_URL`, applied migrations, `cargo` |
 
 ---
 
