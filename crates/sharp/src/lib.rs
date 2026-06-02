@@ -10,10 +10,11 @@
 //! # Module layout
 //!
 //! ## VCS core
-//! - [`repo`]    — repo init and lookup (`sharp init`)
-//! - [`object`]  — content-addressed object store (`sharp add`)
-//! - [`commit`]  — commits, branches, and the DAG (`sharp commit`, `sharp branch`)
-//! - [`episode`] — agent-episode lifecycle (open/append/finish/query)
+//! - [`repo`]         — repo init and lookup (`sharp init`)
+//! - [`object`]       — content-addressed object store (`sharp add`)
+//! - [`commit`]       — commits, branches, and the DAG (`sharp commit`, `sharp branch`)
+//! - [`episode`]      — agent-episode lifecycle (open/append/finish/query)
+//! - [`git_interop`]  — Git import and linear export
 //!
 //! ## Rust semantic merge
 //! - [`rust_analyzer_client`] — subprocess orchestration of `rust-analyzer`
@@ -32,6 +33,7 @@
 //! SQL migrations live in `crates/sharp/migrations/`:
 //! - `0001_sharp_vcs_schema.sql`     — repos, objects, refs, commit_metadata, commit_paths
 //! - `0002_sharp_episode_schema.sql` — episodes, episode_events, episode_artifacts, episode_links
+//! - `0003_sharp_git_interop.sql`    — git_objects, git_refs (Git SHA-1 keyed store)
 //!
 //! # Self-hosting criticality
 //!
@@ -47,6 +49,7 @@ pub mod cargo_check;
 pub mod commit;
 pub mod episode;
 pub mod error;
+pub mod git_interop;
 pub mod object;
 pub mod repo;
 pub mod rust_analyzer_client;

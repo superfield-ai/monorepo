@@ -28,11 +28,18 @@
 //! ```
 //!
 //! §architecture.md — Sharp subsystem (Tier-1 Rust semantic merge)
+//!
+//! # Git interop tests
+//!
+//! - `git_import_then_export_roundtrip` — imports a 3-commit linear git repo;
+//!   exports it; verifies exported SHA-1s are byte-identical to the source.
+//! - `git_export_refuses_merged_branch` — verifies that export of a branch
+//!   with a merge commit returns an error with guidance.
 
 use sf_db::{connect, DbConfig};
 use sharp::cargo_check::{run_cargo_check, CheckResult};
 use sharp::semantic_merge::{semantic_merge_rust, three_way_merge, FileVersion, MergeOptions};
-use sharp::{commit, episode, object, repo};
+use sharp::{commit, episode, git_interop, object, repo};
 use std::path::PathBuf;
 use tempfile::TempDir;
 use uuid::Uuid;
@@ -534,5 +541,284 @@ async fn rust_analyzer_finds_rename_locations() {
     assert!(
         in_main >= 2,
         "expected ≥ 2 locations in main.rs, got {in_main}: {locations:#?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
+// Git interop integration tests
+// ---------------------------------------------------------------------------
+
+/// Build a small git repo with N linear commits, returning the list of
+/// commit SHA-1s from oldest to newest.
+fn build_linear_git_repo(root: &std::path::Path, commits: u32) -> Vec<String> {
+    use std::process::Command;
+
+    Command::new("git")
+        .args(["init", "--quiet", "--initial-branch=main"])
+        .arg(root)
+        .status()
+        .expect("git init");
+
+    let mut shas = Vec::new();
+    for i in 1..=commits {
+        let content = format!("content {i}\n");
+        std::fs::write(root.join(format!("f{i}.txt")), content).expect("write file");
+        Command::new("git")
+            .args(["add", "-A"])
+            .current_dir(root)
+            .status()
+            .expect("git add");
+        Command::new("git")
+            .args([
+                "-c",
+                "user.name=Test",
+                "-c",
+                "user.email=t@e.com",
+                "commit",
+                "-q",
+                "-m",
+                &format!("commit {i}"),
+            ])
+            .current_dir(root)
+            .status()
+            .expect("git commit");
+        let out = Command::new("git")
+            .args(["rev-parse", "HEAD"])
+            .current_dir(root)
+            .output()
+            .expect("git rev-parse");
+        shas.push(String::from_utf8(out.stdout).unwrap().trim().to_string());
+    }
+    shas
+}
+
+/// Build a git repo with a merge commit on `main`.
+fn build_merged_git_repo(root: &std::path::Path) {
+    use std::process::Command;
+
+    Command::new("git")
+        .args(["init", "--quiet", "--initial-branch=main"])
+        .arg(root)
+        .status()
+        .expect("git init");
+
+    // Initial commit.
+    std::fs::write(root.join("base.txt"), "base\n").unwrap();
+    for args in [
+        vec!["add", "-A"],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=t@e.com",
+            "commit",
+            "-q",
+            "-m",
+            "base",
+        ],
+    ] {
+        Command::new("git")
+            .args(&args)
+            .current_dir(root)
+            .status()
+            .expect("git cmd");
+    }
+
+    // Branch off.
+    Command::new("git")
+        .args(["checkout", "-q", "-b", "feature"])
+        .current_dir(root)
+        .status()
+        .expect("checkout branch");
+    std::fs::write(root.join("feature.txt"), "feat\n").unwrap();
+    for args in [
+        vec!["add", "-A"],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=t@e.com",
+            "commit",
+            "-q",
+            "-m",
+            "feat",
+        ],
+    ] {
+        Command::new("git")
+            .args(&args)
+            .current_dir(root)
+            .status()
+            .expect("git cmd");
+    }
+
+    // Back to main, make a diverging commit, then merge.
+    Command::new("git")
+        .args(["checkout", "-q", "main"])
+        .current_dir(root)
+        .status()
+        .expect("checkout main");
+    std::fs::write(root.join("main2.txt"), "main2\n").unwrap();
+    for args in [
+        vec!["add", "-A"],
+        vec![
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=t@e.com",
+            "commit",
+            "-q",
+            "-m",
+            "main2",
+        ],
+    ] {
+        Command::new("git")
+            .args(&args)
+            .current_dir(root)
+            .status()
+            .expect("git cmd");
+    }
+    // Merge with explicit strategy to ensure merge commit.
+    Command::new("git")
+        .args([
+            "-c",
+            "user.name=Test",
+            "-c",
+            "user.email=t@e.com",
+            "merge",
+            "--no-ff",
+            "-m",
+            "Merge feature",
+            "feature",
+        ])
+        .current_dir(root)
+        .status()
+        .expect("git merge");
+}
+
+/// Apply the git-interop SQL migration (`0003_sharp_git_interop.sql`) on the
+/// test database so the integration tests can run in isolation.
+async fn apply_git_interop_migration(pool: &sqlx::PgPool) {
+    let sql = include_str!("../migrations/0003_sharp_git_interop.sql");
+    for stmt in sql.split(';') {
+        let stmt = stmt.trim();
+        if stmt.is_empty() {
+            continue;
+        }
+        sqlx::query(stmt)
+            .execute(pool)
+            .await
+            .expect("migration stmt");
+    }
+}
+
+/// Integration test: import a 3-commit linear git repo, then export it.
+///
+/// Verifies:
+/// 1. Import ingests at least `blobs + trees + commits` objects.
+/// 2. HEAD is mirrored correctly.
+/// 3. Export produces a valid bare repo whose `rev-list` output matches the
+///    original SHA-1s exactly (byte-identical commits).
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL, git, and applied Sharp migrations including 0003"]
+async fn git_import_then_export_roundtrip() {
+    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
+    let pool = connect(&cfg).await.expect("pool");
+    apply_git_interop_migration(&pool).await;
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let src = tmp.path().join("src");
+    std::fs::create_dir_all(&src).unwrap();
+    let source_shas = build_linear_git_repo(&src, 3);
+    assert_eq!(source_shas.len(), 3);
+
+    // Import.
+    let r = repo::init(&pool, &unique_name("git-roundtrip"))
+        .await
+        .expect("repo init");
+    let import = git_interop::import_git_repo(&pool, r.id, &src)
+        .await
+        .expect("import");
+    assert!(
+        import.objects_imported >= 3 * 2 + 3, // >=3 blobs + >=3 trees + 3 commits
+        "expected at least 9 objects, got {}; warnings: {:?}",
+        import.objects_imported,
+        import.warnings,
+    );
+    assert_eq!(import.head.as_deref(), Some("refs/heads/main"));
+
+    // Export.
+    let dest = tmp.path().join("exported.git");
+    let export = git_interop::export_git_repo(&pool, r.id, "refs/heads/main", &dest)
+        .await
+        .expect("export");
+    assert_eq!(export.commits_exported, 3, "expected 3 commits exported");
+    assert!(
+        export.warnings.is_empty(),
+        "unexpected warnings: {:?}",
+        export.warnings
+    );
+
+    // Verify exported repo via git rev-list.
+    let rev_list = std::process::Command::new("git")
+        .args([
+            "--git-dir",
+            dest.to_str().unwrap(),
+            "rev-list",
+            "--reverse",
+            "refs/heads/main",
+        ])
+        .output()
+        .expect("git rev-list");
+    assert_eq!(rev_list.status.code(), Some(0), "git rev-list failed");
+    let exported_shas: Vec<String> = String::from_utf8(rev_list.stdout)
+        .unwrap()
+        .trim()
+        .lines()
+        .map(str::to_string)
+        .collect();
+    assert_eq!(
+        exported_shas, source_shas,
+        "exported SHA-1s must be byte-identical to source"
+    );
+}
+
+/// Integration test: export of a branch with a merge commit is refused.
+///
+/// Verifies that `export_git_repo` returns an error containing "non-linear"
+/// when the tip has two parents (a merge commit), with actionable guidance.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL, git, and applied Sharp migrations including 0003"]
+async fn git_export_refuses_merged_branch() {
+    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
+    let pool = connect(&cfg).await.expect("pool");
+    apply_git_interop_migration(&pool).await;
+
+    let tmp = tempfile::tempdir().expect("tempdir");
+    let src = tmp.path().join("merged-src");
+    std::fs::create_dir_all(&src).unwrap();
+    build_merged_git_repo(&src);
+
+    // Import the repo with the merge commit on main.
+    let r = repo::init(&pool, &unique_name("git-merged"))
+        .await
+        .expect("repo init");
+    let import = git_interop::import_git_repo(&pool, r.id, &src)
+        .await
+        .expect("import");
+    assert!(
+        import.objects_imported > 0,
+        "expected some objects; warnings: {:?}",
+        import.warnings
+    );
+
+    // Export must fail with a non-linear error.
+    let dest = tmp.path().join("exported-merged.git");
+    let result = git_interop::export_git_repo(&pool, r.id, "refs/heads/main", &dest).await;
+    assert!(result.is_err(), "expected error for non-linear branch");
+    let err = result.unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("non-linear"),
+        "error message should mention non-linear; got: {msg}"
     );
 }
