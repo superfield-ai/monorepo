@@ -1,6 +1,6 @@
 [package]
 name = "sf-deploy"
-description = "Superfield deploy orchestration (stub)"
+description = "Superfield deploy orchestration — target config, validation, and build shipping"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -10,3 +10,11 @@ repository.workspace = true
 [lib]
 name = "sf_deploy"
 path = "src/lib.rs"
+
+[dependencies]
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true }

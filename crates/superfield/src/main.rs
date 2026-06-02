@@ -22,6 +22,7 @@
 //! | `repo`     | `sf_cli` operator commands  | Manage Sharp repos                  |
 //! | `session`  | `sf_cli` operator commands  | Manage auth sessions                |
 //! | `episode`  | `sf_cli` agent commands     | Manage agent episodes               |
+//! | `deploy`   | [`sf_deploy`]               | Deploy a build to a target          |
 //! | `noop`     | (built-in)                  | Smoke-test — exits cleanly          |
 
 use std::process;
@@ -45,8 +46,32 @@ Agent commands:
   episode finish <episode-id>         Close an episode
   episode list <repo-id>              List episodes for a repo
 
+Deploy commands:
+  deploy validate <config-json>       Validate a target config
+  deploy ship <config-json> <path>    Ship a build to a target (stub)
+
 Other:
   noop                                Smoke-test — exits with code 0
+";
+
+const DEPLOY_USAGE: &str = "\
+superfield deploy — Rust deploy tooling
+
+Usage:
+  superfield deploy validate <config-json>
+      Validate a target config JSON (no I/O).
+
+  superfield deploy ship <config-json> <artifact-path>
+      Validate config and ship the artifact to the target (stub transport).
+
+Target config JSON fields:
+  name       string   — target name, e.g. \"prod\"
+  kind       string   — \"stub\" | \"ssh\" | \"kubernetes\"
+  host       string?  — SSH host (required for ssh)
+  user       string?  — SSH user (required for ssh)
+  dest_dir   string?  — remote path (required for ssh)
+  namespace  string?  — k8s namespace (required for kubernetes)
+  image      string?  — OCI image ref (required for kubernetes)
 ";
 
 #[tokio::main]
@@ -65,6 +90,12 @@ async fn main() {
         || args.first().map(String::as_str) == Some("-h")
     {
         print!("{}", USAGE);
+        process::exit(0);
+    }
+
+    // Route deploy subcommand to sf-deploy.
+    if args.first().map(String::as_str) == Some("deploy") {
+        run_deploy(&args[1..]);
         process::exit(0);
     }
 
@@ -172,5 +203,64 @@ async fn run_serve(args: &[String]) {
     if let Err(e) = sf_serve::serve(pool, serve_cfg).await {
         eprintln!("superfield serve: {}", e);
         process::exit(1);
+    }
+}
+
+/// Handle `superfield deploy <subcommand> ...` arguments.
+///
+/// Subcommands:
+///   validate <config-json>  — validate a target config and print OK / error
+///   ship <config-json> <artifact-path> — validate config and simulate a ship
+///                                        (stub transport; no real I/O)
+fn run_deploy(args: &[String]) {
+    use sf_deploy::transport::StubTransport;
+    use sf_deploy::{deploy, BuildArtifact, TargetConfig};
+    use std::path::PathBuf;
+
+    match args {
+        // deploy validate <json>
+        [sub, json] if sub == "validate" => {
+            match serde_json::from_str::<TargetConfig>(json.as_str()) {
+                Err(e) => {
+                    eprintln!("superfield deploy validate: JSON parse error: {}", e);
+                    process::exit(1);
+                }
+                Ok(cfg) => match cfg.validate() {
+                    Ok(()) => println!("config ok: target '{}'", cfg.name),
+                    Err(e) => {
+                        eprintln!("superfield deploy validate: {}", e);
+                        process::exit(1);
+                    }
+                },
+            }
+        }
+
+        // deploy ship <json> <artifact-path>
+        [sub, json, path] if sub == "ship" => {
+            let cfg: TargetConfig = match serde_json::from_str(json.as_str()) {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("superfield deploy ship: JSON parse error: {}", e);
+                    process::exit(1);
+                }
+            };
+            let artifact = BuildArtifact {
+                path: PathBuf::from(path),
+                name: "superfield".to_string(),
+            };
+            let transport = StubTransport::new();
+            match deploy(&cfg, &artifact, &transport) {
+                Ok(result) => println!("{}", result.summary),
+                Err(e) => {
+                    eprintln!("superfield deploy ship: {}", e);
+                    process::exit(1);
+                }
+            }
+        }
+
+        _ => {
+            eprintln!("{}", DEPLOY_USAGE);
+            process::exit(1);
+        }
     }
 }
