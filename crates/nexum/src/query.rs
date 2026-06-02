@@ -28,6 +28,10 @@ use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
 
+// Internal row types used with sqlx::query_as to avoid clippy's complex-type warning.
+type BlockRow = (Uuid, String, f64, Uuid, String, Option<String>);
+type GraphRow = (Uuid, String, i32, String, Uuid, String, Option<String>);
+
 // ── Errors ────────────────────────────────────────────────────────────────────
 
 /// Errors that can occur during a query.
@@ -168,7 +172,7 @@ pub async fn fulltext_search(
 
     let limit = opts.limit.min(100) as i64;
 
-    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<String>)> = sqlx::query_as(
+    let rows: Vec<BlockRow> = sqlx::query_as(
         r#"
         SELECT b.id, b.content,
                ts_rank(b.tsv, plainto_tsquery('english', $1))::double precision AS score,
@@ -241,7 +245,7 @@ pub async fn semantic_search(
             .join(",")
     );
 
-    let rows: Vec<(Uuid, String, f64, Uuid, String, Option<String>)> = sqlx::query_as(
+    let rows: Vec<BlockRow> = sqlx::query_as(
         r#"
         SELECT b.id, b.content,
                (1.0 - (b.embedding <=> $1::vector))::double precision AS score,
@@ -348,7 +352,7 @@ pub async fn graph_search(
         layers = layers_literal,
     );
 
-    let rows: Vec<(Uuid, String, i32, String, Uuid, String, Option<String>)> = sqlx::query_as(&sql)
+    let rows: Vec<GraphRow> = sqlx::query_as(&sql)
         .bind(opts.seed_block_id)
         .bind(max_hops)
         .bind(limit)
@@ -397,7 +401,7 @@ pub async fn hybrid_search(
         ));
     }
 
-    let limit = opts.limit.min(100) as u32;
+    let limit = opts.limit.min(100);
 
     // Step 1: semantic top-10 seed.
     let semantic_results = semantic_search(
@@ -507,7 +511,7 @@ mod tests {
 
     #[test]
     fn graph_layers_literal_escapes_single_quotes() {
-        let layers = vec!["stru'ct".to_string()];
+        let layers = ["stru'ct".to_string()];
         let lit = format!(
             "ARRAY[{}]",
             layers
