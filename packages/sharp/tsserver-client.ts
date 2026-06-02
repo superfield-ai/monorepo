@@ -23,7 +23,8 @@
  * §architecture.md — Sharp subsystem (language-server-backed analysis)
  */
 
-import { spawn, ChildProcess } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
+import type { Writable } from "node:stream";
 import * as path from "node:path";
 import * as fs from "node:fs";
 
@@ -93,6 +94,7 @@ export class TsserverClient {
   private readonly timeoutMs: number;
 
   private proc: ChildProcess | null = null;
+  private procStdin: Writable | null = null;
   private seq = 0;
   private pending = new Map<number, PendingRequest>();
   /** Accumulated stdout data not yet parsed into a complete message. */
@@ -113,10 +115,17 @@ export class TsserverClient {
       stdio: ["pipe", "pipe", "pipe"],
     });
 
-    this.proc.stdout!.setEncoding("utf8");
-    this.proc.stdout!.on("data", (chunk: string) => this.onData(chunk));
+    const { stdout, stderr, stdin } = this.proc;
+    if (!stdout || !stderr || !stdin) {
+      throw new Error("tsserver process stdio streams unavailable");
+    }
 
-    this.proc.stderr!.on("data", () => {
+    this.procStdin = stdin;
+
+    stdout.setEncoding("utf8");
+    stdout.on("data", (chunk: string) => this.onData(chunk));
+
+    stderr.on("data", () => {
       /* tsserver writes startup noise to stderr — ignore */
     });
 
@@ -136,6 +145,7 @@ export class TsserverClient {
     if (!this.proc) return;
     const proc = this.proc;
     this.proc = null;
+    this.procStdin = null;
     proc.kill();
     await new Promise<void>((resolve) => proc.on("close", resolve));
     this.rejectAll(new Error("TsserverClient stopped"));
@@ -273,14 +283,14 @@ export class TsserverClient {
   }
 
   private sendRaw(seq: number, command: string, args: unknown): void {
-    if (!this.proc) throw new Error("TsserverClient not started");
+    if (!this.procStdin) throw new Error("TsserverClient not started");
     const msg = JSON.stringify({
       seq,
       type: "request",
       command,
       arguments: args,
     });
-    this.proc.stdin!.write(msg + "\n");
+    this.procStdin.write(msg + "\n");
   }
 
   /**
