@@ -856,12 +856,15 @@ Sharp performs semantic merge for Rust source files using **rust-analyzer** as a
 
 ### Components (`crates/sharp`)
 
-| Module                 | Role                                                                                                                                                       |
-| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `rust_analyzer_client` | LSP subprocess orchestrator — spawns `rust-analyzer`, performs the initialize handshake, and exposes `get_rename_locations(file, line, col, include_decl)` |
-| `cargo_check`          | Structural verification gate — runs `cargo check --message-format=json` and parses compiler errors                                                         |
-| `semantic_merge`       | Tier-1 merge algorithm — rename detection, 3-way textual baseline, cargo check gate                                                                        |
-| `error`                | Shared `SharpError` type                                                                                                                                   |
+| Module                       | Role                                                                                                                                                       |
+| ---------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `repo` / `object` / `commit` | VCS core — objects, refs, commits, and the DAG on the `sharp` schema                                                                                       |
+| `episode`                    | Agent-episode lifecycle — open, append, finish, query                                                                                                      |
+| `git_interop`                | Git import (SHA-1 keyed store) and linear-only export                                                                                                      |
+| `rust_analyzer_client`       | LSP subprocess orchestrator — spawns `rust-analyzer`, performs the initialize handshake, and exposes `get_rename_locations(file, line, col, include_decl)` |
+| `cargo_check`                | Structural verification gate — runs `cargo check --message-format=json` and parses compiler errors                                                         |
+| `semantic_merge`             | Tier-1 merge algorithm — rename detection, 3-way textual baseline, cargo check gate                                                                        |
+| `error`                      | Shared `SharpError` type                                                                                                                                   |
 
 ### Merge algorithm (Tier-1)
 
@@ -882,9 +885,21 @@ rust-analyzer speaks LSP (JSON-RPC 2.0) over stdin/stdout with `Content-Length` 
 
 The binary is located via `PATH` first, then `rustup which rust-analyzer` as a fallback.
 
-### Self-hosting criticality
+### Self-hosting gate
 
-The entire stack is being rewritten in Rust. Sharp must semantically merge Rust to manage its own source. Deferring Rust support would break the no-non-compiling-merge guarantee for Sharp's own codebase. Rust is the required next language after TypeScript (implemented in #371).
+Sharp manages Superfield's own Rust source (`crates/sharp`) as its primary dogfood repository. Any merge of Sharp's own code passes through the Rust semantic merge path, exercising the no-non-compiling-merge guarantee on production source.
+
+1. **Onboarding** — the `crates/sharp` workspace is registered as a Sharp repo via `repo::init`.
+2. **Merge routing** — every merge of Sharp's own Rust source passes through `semantic_merge_rust`, which orchestrates `rust-analyzer` for rename enumeration and `cargo check` for structural verification.
+3. **Episode recording** — each merge opens an episode (`episode::open`), appends a `merge_result` event (renames propagated, files merged, compile gate outcome), then finishes the episode.
+
+#### Test coverage
+
+| Test                                               | What it proves                                                                   | Requires                                    |
+| -------------------------------------------------- | -------------------------------------------------------------------------------- | ------------------------------------------- |
+| `self_hosting_gate_semantic_merge_on_sharp_source` | Rename propagation + 3-way merge resolves rename-vs-edit cleanly on Sharp source | Nothing — pure Rust, runs in CI             |
+| `self_hosting_gate_compile_gate_refuses_bad_merge` | Compile gate detects and refuses a non-compiling merge output                    | `cargo` on PATH                             |
+| `self_hosting_gate_with_episode`                   | Full end-to-end: VCS store + episode recording + semantic merge                  | `DATABASE_URL`, applied migrations, `cargo` |
 
 ---
 
@@ -903,3 +918,4 @@ The entire stack is being rewritten in Rust. Sharp must semantically merge Rust 
 | 9   | Embedding crate (`sf-embed`) not wired into component crates             | `nexum` and `sharp` depend on `sf-embed` for all vector columns                                             | Closed by #363 (crate exists; consumers pending)                                                                                                     |
 | 10  | Sharp TypeScript semantic analysis (tsserver subprocess) not implemented | `packages/sharp` — `TsserverClient` orchestrates `tsserver` for rename enumeration and semantic diagnostics | Closed by #371                                                                                                                                       |
 | 11  | Rust semantic merge not implemented                                      | `crates/sharp` Tier-1 merge via rust-analyzer + cargo check gate                                            | Closed by #372                                                                                                                                       |
+| 12  | Sharp self-hosting gate not yet live                                     | Sharp manages Superfield Rust source end-to-end in production                                               | Closed by #374                                                                                                                                       |

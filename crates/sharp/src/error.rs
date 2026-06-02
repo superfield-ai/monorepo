@@ -1,13 +1,13 @@
-//! Error types for the Sharp crate — VCS core and semantic merge.
+//! Error types for the Sharp crate — VCS core, semantic merge, and analysis.
 //!
-//! See `docs/architecture.md` §Sharp schema and §Sharp subsystem (Tier-1 Rust semantic merge).
+//! See `docs/architecture.md` §Sharp schema and §Sharp subsystem.
 
 use thiserror::Error;
 
-/// Errors that can be returned by Sharp VCS and semantic-merge operations.
+/// Errors that can be returned by Sharp operations.
 #[derive(Debug, Error)]
 pub enum SharpError {
-    // ── VCS core errors ──────────────────────────────────────────────────────
+    // ── VCS core errors ───────────────────────────────────────────────────────
     /// A database error from sqlx.
     #[error("database error: {0}")]
     Db(#[from] sqlx::Error),
@@ -37,7 +37,7 @@ pub enum SharpError {
     #[error("git interop error: {0}")]
     GitInterop(String),
 
-    // ── Rust semantic merge errors ───────────────────────────────────────────
+    // ── Semantic merge errors ─────────────────────────────────────────────────
     /// The rust-analyzer subprocess could not be spawned or communicated with.
     #[error("rust-analyzer subprocess error: {0}")]
     RustAnalyzerProcess(String),
@@ -62,7 +62,6 @@ pub enum SharpError {
     #[error("merge refused: non-compiling result detected\n{diagnostics}")]
     MergeRefused { diagnostics: String },
 
-    // ── Shared low-level errors ──────────────────────────────────────────────
     /// I/O error.
     #[error("I/O error: {0}")]
     Io(#[from] std::io::Error),
