@@ -856,12 +856,12 @@ Sharp performs semantic merge for Rust source files using **rust-analyzer** as a
 
 ### Components (`crates/sharp`)
 
-| Module                   | Role                                                                                      |
-| ------------------------ | ----------------------------------------------------------------------------------------- |
-| `rust_analyzer_client`   | LSP subprocess orchestrator — spawns `rust-analyzer`, performs the initialize handshake, and exposes `get_rename_locations(file, line, col, include_decl)` |
-| `cargo_check`            | Structural verification gate — runs `cargo check --message-format=json` and parses compiler errors |
-| `semantic_merge`         | Tier-1 merge algorithm — rename detection, 3-way textual baseline, cargo check gate       |
-| `error`                  | Shared `SharpError` type                                                                  |
+| Module                 | Role                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `rust_analyzer_client` | LSP subprocess orchestrator — spawns `rust-analyzer`, performs the initialize handshake, and exposes `get_rename_locations(file, line, col, include_decl)` |
+| `cargo_check`          | Structural verification gate — runs `cargo check --message-format=json` and parses compiler errors                                                         |
+| `semantic_merge`       | Tier-1 merge algorithm — rename detection, 3-way textual baseline, cargo check gate                                                                        |
+| `error`                | Shared `SharpError` type                                                                                                                                   |
 
 ### Merge algorithm (Tier-1)
 
@@ -872,6 +872,7 @@ Sharp performs semantic merge for Rust source files using **rust-analyzer** as a
 ### rust-analyzer subprocess protocol
 
 rust-analyzer speaks LSP (JSON-RPC 2.0) over stdin/stdout with `Content-Length` framing. The client:
+
 1. Spawns `rust-analyzer` with `stdin/stdout` piped.
 2. Sends `initialize` with `rootUri` set to the Cargo workspace root.
 3. Waits for the `initialize` response, then sends `initialized`.
@@ -901,4 +902,4 @@ The entire stack is being rewritten in Rust. Sharp must semantically merge Rust 
 | 8   | Rust workspace crate boundaries not mapped                               | Runtime/entrypoint inventory, shared-concern map, proposed crate layout                                     | Closed by #387 — see `docs/scout/387-existing-service-runtimes-and-shared-boundaries.md`                                                             |
 | 9   | Embedding crate (`sf-embed`) not wired into component crates             | `nexum` and `sharp` depend on `sf-embed` for all vector columns                                             | Closed by #363 (crate exists; consumers pending)                                                                                                     |
 | 10  | Sharp TypeScript semantic analysis (tsserver subprocess) not implemented | `packages/sharp` — `TsserverClient` orchestrates `tsserver` for rename enumeration and semantic diagnostics | Closed by #371                                                                                                                                       |
-| 11  | Rust semantic merge not implemented                                      | `crates/sharp` Tier-1 merge via rust-analyzer + cargo check gate                                           | Closed by #372                                                                                                                                       |
+| 11  | Rust semantic merge not implemented                                      | `crates/sharp` Tier-1 merge via rust-analyzer + cargo check gate                                            | Closed by #372                                                                                                                                       |
