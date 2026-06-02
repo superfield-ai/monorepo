@@ -43,7 +43,8 @@ function makeFakeExecutor(
 
   const executor: QueryExecutor = {
     query: querySpy,
-    transaction: async <T>(fn: (tx: QueryExecutor) => Promise<T>) => fn(executor),
+    transaction: async <T>(fn: (tx: QueryExecutor) => Promise<T>) =>
+      fn(executor),
   };
 
   return Object.assign(executor, { querySpy });
@@ -89,7 +90,7 @@ describe("runNexumSchemaMigration — schema migration runner (#368)", () => {
 
     // Every applied file must be recorded via INSERT INTO nexum.schema_migrations
     const insertCalls = executor.querySpy.mock.calls.filter(
-      ([sql]: [string]) =>
+      ([sql]: unknown[]) =>
         typeof sql === "string" &&
         sql.includes("INSERT INTO nexum.schema_migrations"),
     );
@@ -109,10 +110,7 @@ describe("runNexumSchemaMigration — schema migration runner (#368)", () => {
 
   it("is fully idempotent: re-running after all applied returns empty applied[]", async () => {
     // Pre-populate both known migration versions.
-    const executor = makeExecutorWithApplied([
-      "0001",
-      "0002",
-    ]);
+    const executor = makeExecutorWithApplied(["0001", "0002"]);
 
     const result = await runNexumSchemaMigration(executor);
 
@@ -150,7 +148,7 @@ describe("runNexumSchemaMigration — schema migration runner (#368)", () => {
         }
         return Promise.resolve({ rows: [] });
       }),
-      transaction: txSpy,
+      transaction: txSpy as QueryExecutor["transaction"],
     };
 
     const result = await runNexumSchemaMigration(executor);
@@ -176,7 +174,7 @@ describe("runNexumDataCutover — data migration with workspace key (#368)", () 
 
     // Every query that inserts rows must supply the workspaceKey as $1.
     const insertCalls = executor.querySpy.mock.calls.filter(
-      ([sql]: [string]) =>
+      ([sql]: unknown[]) =>
         typeof sql === "string" && sql.includes("INSERT INTO nexum."),
     );
     expect(insertCalls.length).toBeGreaterThan(0);
@@ -197,7 +195,7 @@ describe("runNexumDataCutover — data migration with workspace key (#368)", () 
     });
 
     const insertCalls = executor.querySpy.mock.calls.filter(
-      ([sql]: [string]) =>
+      ([sql]: unknown[]) =>
         typeof sql === "string" && sql.includes("INSERT INTO nexum."),
     );
     for (const [sql] of insertCalls) {
@@ -215,7 +213,7 @@ describe("runNexumDataCutover — data migration with workspace key (#368)", () 
     });
 
     const jobQueueInsert = executor.querySpy.mock.calls.find(
-      ([sql]: [string]) =>
+      ([sql]: unknown[]) =>
         typeof sql === "string" && sql.includes("nexum.job_queue"),
     );
     expect(jobQueueInsert).toBeDefined();
@@ -227,7 +225,9 @@ describe("runNexumDataCutover — data migration with workspace key (#368)", () 
 
     const executor: QueryExecutor = {
       query: vi.fn(() => Promise.resolve({ rows: [] })),
-      transaction: async <T>(fn: (tx: QueryExecutor) => Promise<T>): Promise<T> => {
+      transaction: async <T>(
+        fn: (tx: QueryExecutor) => Promise<T>,
+      ): Promise<T> => {
         txCallCount++;
         const inner = makeFakeExecutor();
         return fn(inner);
@@ -248,7 +248,9 @@ describe("runNexumDataCutover — data migration with workspace key (#368)", () 
 
     const executor: QueryExecutor = {
       query: vi.fn(() => Promise.resolve({ rows: [] })),
-      transaction: async <T>(fn: (tx: QueryExecutor) => Promise<T>): Promise<T> => {
+      transaction: async <T>(
+        fn: (tx: QueryExecutor) => Promise<T>,
+      ): Promise<T> => {
         const inner: QueryExecutor = {
           query: vi.fn(() => {
             callCount++;
@@ -258,9 +260,8 @@ describe("runNexumDataCutover — data migration with workspace key (#368)", () 
             }
             return Promise.resolve({ rows: [] });
           }),
-          transaction: async <U>(
-            innerFn: (tx: QueryExecutor) => Promise<U>,
-          ) => innerFn(inner),
+          transaction: async <U>(innerFn: (tx: QueryExecutor) => Promise<U>) =>
+            innerFn(inner),
         };
         return fn(inner);
       },
@@ -281,7 +282,7 @@ describe("runNexumDataCutover — data migration with workspace key (#368)", () 
 
     // The last non-INSERT query should be the FK update.
     const updateCall = executor.querySpy.mock.calls.find(
-      ([sql]: [string]) =>
+      ([sql]: unknown[]) =>
         typeof sql === "string" && sql.includes("SET    current_version_id"),
     );
     expect(updateCall).toBeDefined();
