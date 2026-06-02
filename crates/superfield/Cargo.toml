@@ -14,6 +14,7 @@ path = "src/main.rs"
 [dependencies]
 sharp = { workspace = true }
 nexum = { workspace = true }
+sf-db = { workspace = true }
 sf-cli = { workspace = true }
 sf-serve = { workspace = true }
 sf-deploy = { workspace = true }
