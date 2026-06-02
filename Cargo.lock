@@ -2516,10 +2516,12 @@ name = "sharp"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "flate2",
  "hex",
  "serde",
  "serde_json",
  "sf-db",
+ "sha1",
  "sha2",
  "sqlx",
  "tempfile",
