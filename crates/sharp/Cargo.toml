@@ -1,6 +1,6 @@
 [package]
 name = "sharp"
-description = "Sharp component — git objects and code-intelligence (stub)"
+description = "Sharp VCS core — objects, refs, commits, DAG, and agent-episode schema"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -12,4 +12,16 @@ name = "sharp"
 path = "src/lib.rs"
 
 [dependencies]
-thiserror.workspace = true
+sf-db = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+uuid = { workspace = true }
+thiserror = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
