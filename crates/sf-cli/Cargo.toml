@@ -14,6 +14,7 @@ path = "src/lib.rs"
 [dependencies]
 sf-db.workspace = true
 sf-auth.workspace = true
+sf-deploy.workspace = true
 sharp.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
