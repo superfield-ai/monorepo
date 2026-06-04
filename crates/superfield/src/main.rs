@@ -51,6 +51,12 @@ Deploy commands:
   deploy ship <config-json> <path>    Ship a build to a target (stub)
   deploy rollback <record-json>       Roll back the target to the prior version (stub)
 
+Deploy-operator commands (backed by sf-deploy):
+  deploy-env <config-json> <artifact-path>
+                                      Deploy artifact to a target env
+  rollback-env <record-json>          Roll back target to prior version
+  doctor <config-json>                Validate target config (no I/O)
+
 Other:
   noop                                Smoke-test — exits with code 0
 ";
