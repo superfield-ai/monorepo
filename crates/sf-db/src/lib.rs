@@ -20,6 +20,9 @@ pub mod backup;
 pub mod config;
 pub mod pool;
 
-pub use backup::{BackupError, BackupEvent, BackupOutcome, NoopSubstrateBackup, SubstrateBackup};
+pub use backup::{
+    pg_basebackup_args, wal_archive_command_template, BackupError, BackupEvent, BackupOutcome,
+    NoopSubstrateBackup, PgBackup, SubstrateBackup,
+};
 pub use config::DbConfig;
 pub use pool::{acquire_workspace, connect};

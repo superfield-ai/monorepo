@@ -923,7 +923,7 @@ Sharp manages Superfield's own Rust source (`crates/sharp`) as its primary dogfo
 ## Substrate Reliability
 
 **Decision date:** 2026-06-02
-**Status:** Accepted — closes #385
+**Status:** Closed — implemented in PR #423
 
 ### Recovery Objectives
 

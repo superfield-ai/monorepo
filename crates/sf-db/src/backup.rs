@@ -39,6 +39,7 @@
 //! design.
 
 use std::future::Future;
+use std::path::PathBuf;
 use std::pin::Pin;
 use std::time::SystemTime;
 
@@ -111,6 +112,193 @@ pub enum BackupError {
     #[error("backup subsystem not configured: {0}")]
     NotConfigured(String),
 }
+
+// ---------------------------------------------------------------------------
+// PgBackup — real Postgres-backed implementation
+// ---------------------------------------------------------------------------
+
+/// Postgres-backed implementation of [`SubstrateBackup`].
+///
+/// Persists backup events to the `substrate.backups` table created by
+/// migration `0002_substrate_backups.sql`. Requires the `substrate` schema
+/// and the `backups` table to already exist (apply the migration first).
+///
+/// ```sql
+/// CREATE SCHEMA IF NOT EXISTS substrate;
+/// CREATE TABLE IF NOT EXISTS substrate.backups (
+///     id           UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+///     completed_at TIMESTAMPTZ NOT NULL,
+///     location     TEXT NOT NULL,
+///     outcome      TEXT NOT NULL,
+///     start_lsn    TEXT
+/// );
+/// ```
+pub struct PgBackup {
+    pool: sqlx::PgPool,
+    backup_dir: PathBuf,
+}
+
+impl PgBackup {
+    /// Create a new [`PgBackup`] backed by `pool`, storing artifacts under
+    /// `backup_dir`.
+    pub fn new(pool: sqlx::PgPool, backup_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            pool,
+            backup_dir: backup_dir.into(),
+        }
+    }
+
+    /// Return the configured backup directory (e.g. for passing to
+    /// `pg_basebackup`).
+    pub fn backup_dir(&self) -> &PathBuf {
+        &self.backup_dir
+    }
+}
+
+impl SubstrateBackup for PgBackup {
+    fn record(&self, event: BackupEvent) -> BoxFuture<'_, Result<(), BackupError>> {
+        Box::pin(async move {
+            let completed_at: chrono::DateTime<chrono::Utc> = event.completed_at.into();
+            let outcome_str = match &event.outcome {
+                BackupOutcome::Success => "success".to_string(),
+                BackupOutcome::Failure(msg) => format!("failure:{}", msg),
+            };
+
+            sqlx::query(
+                r#"
+                INSERT INTO substrate.backups (completed_at, location, outcome, start_lsn)
+                VALUES ($1, $2, $3, $4)
+                ON CONFLICT DO NOTHING
+                "#,
+            )
+            .bind(completed_at)
+            .bind(&event.location)
+            .bind(&outcome_str)
+            .bind(&event.start_lsn)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| match &e {
+                sqlx::Error::Database(db_err) => {
+                    // "42P01" is the SQLSTATE for "undefined_table".
+                    if db_err.code().as_deref() == Some("42P01") {
+                        BackupError::NotConfigured(format!(
+                            "substrate.backups table does not exist: {}",
+                            db_err.message()
+                        ))
+                    } else {
+                        BackupError::Database(e)
+                    }
+                }
+                _ => BackupError::Database(e),
+            })?;
+
+            Ok(())
+        })
+    }
+
+    fn latest(&self) -> BoxFuture<'_, Result<Option<BackupEvent>, BackupError>> {
+        Box::pin(async move {
+            let row = sqlx::query_as::<_, BackupRow>(
+                r#"
+                SELECT completed_at, location, outcome, start_lsn
+                FROM substrate.backups
+                ORDER BY completed_at DESC
+                LIMIT 1
+                "#,
+            )
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| match &e {
+                sqlx::Error::Database(db_err) => {
+                    if db_err.code().as_deref() == Some("42P01") {
+                        BackupError::NotConfigured(format!(
+                            "substrate.backups table does not exist: {}",
+                            db_err.message()
+                        ))
+                    } else {
+                        BackupError::Database(e)
+                    }
+                }
+                _ => BackupError::Database(e),
+            })?;
+
+            Ok(row.map(|r| {
+                let outcome = if r.outcome == "success" {
+                    BackupOutcome::Success
+                } else {
+                    let msg = r.outcome.strip_prefix("failure:").unwrap_or(&r.outcome);
+                    BackupOutcome::Failure(msg.to_string())
+                };
+                BackupEvent {
+                    completed_at: r.completed_at.into(),
+                    location: r.location,
+                    outcome,
+                    start_lsn: r.start_lsn,
+                }
+            }))
+        })
+    }
+}
+
+/// Internal row type for fetching from `substrate.backups`.
+#[derive(sqlx::FromRow)]
+struct BackupRow {
+    completed_at: chrono::DateTime<chrono::Utc>,
+    location: String,
+    outcome: String,
+    start_lsn: Option<String>,
+}
+
+// ---------------------------------------------------------------------------
+// WAL archive and pg_basebackup helpers
+// ---------------------------------------------------------------------------
+
+/// Return the standard `archive_command` template for a WAL archive directory.
+///
+/// The returned string uses the Postgres `%p` (WAL file path) and `%f`
+/// (WAL file name) substitution tokens:
+///
+/// ```text
+/// cp %p <archive_dir>/%f
+/// ```
+///
+/// This is suitable for setting `archive_command` in `postgresql.conf`.
+/// For production use, replace `cp` with a command that copies to durable
+/// object storage (e.g. `gsutil cp %p gs://sf-wal-archive/<env>/%f`).
+pub fn wal_archive_command_template(archive_dir: &str) -> String {
+    format!("cp %p {archive_dir}/%f")
+}
+
+/// Return arguments for a `pg_basebackup` invocation that writes a tar+gzip
+/// backup with WAL streamed in parallel.
+///
+/// Equivalent to:
+/// ```text
+/// pg_basebackup -D <target_dir> -h <host> -p <port> -Ft -z --wal-method=stream
+/// ```
+///
+/// # Arguments
+///
+/// * `target_dir` — local directory to write the backup into.
+/// * `host` — Postgres hostname or socket directory.
+/// * `port` — Postgres port number.
+pub fn pg_basebackup_args(target_dir: &str, host: &str, port: u16) -> Vec<String> {
+    vec![
+        "-D".to_string(),
+        target_dir.to_string(),
+        "-h".to_string(),
+        host.to_string(),
+        "-p".to_string(),
+        port.to_string(),
+        "-Ft".to_string(),
+        "-z".to_string(),
+        "--wal-method=stream".to_string(),
+    ]
+}
+
+// ---------------------------------------------------------------------------
+// No-op implementation
+// ---------------------------------------------------------------------------
 
 /// No-op implementation of [`SubstrateBackup`] for tests and stub wiring.
 ///
