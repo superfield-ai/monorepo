@@ -13,6 +13,9 @@
 //! - **[`agent`]** — agent-episode lifecycle (`episode open`, `episode append`,
 //!   `episode finish`, `episode list`).  Agent commands record the full history
 //!   of an agent editing session in Sharp's episode schema.
+//! - **[`deploy_ops`]** — deploy-operator commands (`deploy-env`, `rollback-env`,
+//!   `doctor`).  These are backed by [`sf_deploy`] without requiring any
+//!   TypeScript/Node runtime, GCP SDK, or GitHub client.
 //!
 //! # Architecture
 //!
@@ -23,6 +26,7 @@
 //! `PgPool` once, then dispatches the parsed [`Cmd`] here via [`run`].
 
 pub mod agent;
+pub mod deploy_ops;
 pub mod error;
 pub mod operator;
 
@@ -49,6 +53,10 @@ pub enum CliError {
     /// An agent-command error.
     #[error("agent error: {0}")]
     Agent(#[from] agent::AgentError),
+
+    /// A deploy-operator command error.
+    #[error("deploy-ops error: {0}")]
+    DeployOps(#[from] deploy_ops::DeployOpsError),
 
     /// A UUID parse error.
     #[error("invalid UUID: {0}")]
@@ -93,6 +101,27 @@ pub enum Cmd {
     EpisodeFinish { episode_id: Uuid },
     /// List episodes for a repo.
     EpisodeList { repo_id: Uuid },
+
+    // --- Deploy-operator commands ---
+    /// Deploy an artifact to a target environment (backed by sf-deploy).
+    ///
+    /// Equivalent to the TypeScript `deploy-env` command.  Args are a target
+    /// config JSON and the path to the artifact.
+    DeployEnv {
+        config_json: String,
+        artifact_path: String,
+    },
+    /// Roll back a target to its prior version (backed by sf-deploy).
+    ///
+    /// Equivalent to the TypeScript `rollback-env` command.  The arg is a
+    /// serialised [`sf_deploy::DeploymentRecord`] JSON produced by a previous
+    /// `deploy-env` call.
+    RollbackEnv { record_json: String },
+    /// Run preflight validation on a target config (backed by sf-deploy).
+    ///
+    /// Equivalent to the TypeScript `doctor` command's config-validation pass.
+    /// Does not perform any network I/O.
+    Doctor { config_json: String },
 }
 
 /// Parse `args` (the slice after the binary name) into a [`Cmd`].
@@ -154,6 +183,22 @@ pub fn parse(args: &[String]) -> Result<Cmd, CliError> {
             repo_id: repo.parse::<Uuid>()?,
         }),
 
+        // deploy-env <config-json> <artifact-path>
+        [a, config_json, artifact_path] if a == "deploy-env" => Ok(Cmd::DeployEnv {
+            config_json: config_json.clone(),
+            artifact_path: artifact_path.clone(),
+        }),
+
+        // rollback-env <record-json>
+        [a, record_json] if a == "rollback-env" => Ok(Cmd::RollbackEnv {
+            record_json: record_json.clone(),
+        }),
+
+        // doctor <config-json>
+        [a, config_json] if a == "doctor" => Ok(Cmd::Doctor {
+            config_json: config_json.clone(),
+        }),
+
         _ => Err(CliError::Usage(USAGE.to_string())),
     }
 }
@@ -179,6 +224,15 @@ pub async fn run(pool: &PgPool, cmd: Cmd) -> Result<(), CliError> {
         } => agent::episode_append(pool, episode_id, &event_type, payload).await?,
         Cmd::EpisodeFinish { episode_id } => agent::episode_finish(pool, episode_id).await?,
         Cmd::EpisodeList { repo_id } => agent::episode_list(pool, repo_id).await?,
+
+        // Deploy-operator commands are synchronous; the pool is not used but
+        // the signature stays uniform so `run` remains the single dispatch point.
+        Cmd::DeployEnv {
+            config_json,
+            artifact_path,
+        } => deploy_ops::deploy_env(&config_json, &artifact_path)?,
+        Cmd::RollbackEnv { record_json } => deploy_ops::rollback_env(&record_json)?,
+        Cmd::Doctor { config_json } => deploy_ops::doctor(&config_json)?,
     }
     Ok(())
 }
@@ -208,6 +262,12 @@ Agent commands:
   episode append <ep-id> <type> <json>  Append an event to an episode
   episode finish <ep-id>              Finish an episode
   episode list <repo-id>              List episodes for a repo
+
+Deploy-operator commands (backed by sf-deploy):
+  deploy-env <config-json> <artifact-path>
+                                      Deploy artifact to a target env
+  rollback-env <record-json>          Roll back target to prior version
+  doctor <config-json>                Validate target config (no I/O)
 ";
 
 #[cfg(test)]
