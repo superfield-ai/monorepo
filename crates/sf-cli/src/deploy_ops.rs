@@ -23,11 +23,7 @@
 //! `operator.rs` to keep the operator module focused on Sharp repo/session
 //! management.
 
-use sf_deploy::{
-    config::TargetConfig,
-    transport::StubTransport,
-    DeploymentRecord,
-};
+use sf_deploy::{config::TargetConfig, transport::StubTransport, DeploymentRecord};
 use std::path::PathBuf;
 use thiserror::Error;
 
