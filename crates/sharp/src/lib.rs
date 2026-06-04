@@ -12,10 +12,11 @@
 //! - [`episode`]              — agent-episode lifecycle (open/append/finish/query)
 //! - [`runtime_signal`]       — production error and behavioral signal capture (issue #381)
 //! - [`git_interop`]          — Git import and linear export
-//! - [`rust_analyzer_client`] — subprocess orchestration of `rust-analyzer` over LSP
-//! - [`cargo_check`]          — run `cargo check --message-format=json` and parse diagnostics
-//! - [`semantic_merge`]       — Tier-1 merge algorithm (rename-aware + compile gate)
-//! - [`error`]                — shared error type
+//! - [`rust_analyzer_client`]   — subprocess orchestration of `rust-analyzer` over LSP
+//! - [`tsserver_bridge_client`] — subprocess orchestration of `tsserver-bridge` via JSON-RPC
+//! - [`cargo_check`]            — run `cargo check --message-format=json` and parse diagnostics
+//! - [`semantic_merge`]         — Tier-1 merge algorithm (rename-aware + compile gate)
+//! - [`error`]                  — shared error type
 //!
 //! # Schema
 //!
@@ -44,5 +45,6 @@ pub mod repo;
 pub mod runtime_signal;
 pub mod rust_analyzer_client;
 pub mod semantic_merge;
+pub mod tsserver_bridge_client;
 
 pub use error::SharpError;

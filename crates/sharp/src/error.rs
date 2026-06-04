@@ -42,6 +42,10 @@ pub enum SharpError {
     #[error("rust-analyzer subprocess error: {0}")]
     RustAnalyzerProcess(String),
 
+    /// The tsserver-bridge subprocess could not be spawned or communicated with.
+    #[error("tsserver-bridge subprocess error: {0}")]
+    TsserverBridgeProcess(String),
+
     /// A JSON-RPC message could not be serialized or deserialized.
     #[error("JSON-RPC protocol error: {0}")]
     Protocol(String),
