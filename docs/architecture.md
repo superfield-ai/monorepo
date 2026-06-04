@@ -920,6 +920,69 @@ Sharp manages Superfield's own Rust source (`crates/sharp`) as its primary dogfo
 
 ---
 
+## Substrate Reliability
+
+**Decision date:** 2026-06-02
+**Status:** Closed — implemented in PR #423
+
+### Recovery Objectives
+
+| Metric                      | Target       | Notes                                                                    |
+| --------------------------- | ------------ | ------------------------------------------------------------------------ |
+| **RPO** (Recovery Point)    | ≤ 5 minutes  | WAL archiving interval; last archived segment defines the recovery point |
+| **RTO** (Recovery Time)     | ≤ 15 minutes | Restore from daily base backup + replay WAL to the target LSN            |
+| **Standby replication lag** | ≤ 30 seconds | Streaming replication to one hot standby                                 |
+| **Base backup frequency**   | Daily        | `pg_basebackup` snapshot to durable object storage                       |
+
+These are the minimum targets the shared Postgres instance must meet to satisfy the enterprise availability requirement in the PRD. They are the starting point; stricter targets require multi-region replication and are deferred to a later phase.
+
+### Architecture
+
+The reliability stack has three layers:
+
+1. **Streaming replication (hot standby)** — one synchronous or near-synchronous standby replica. The primary is configured with `wal_level = replica`, `max_wal_senders ≥ 2`, and `hot_standby = on` on the standby. Replication lag is monitored via `pg_stat_replication.replay_lag`. Standby lag ≤ 30 s is the alerting threshold.
+
+2. **WAL archiving** — `archive_mode = on`; the `archive_command` copies each completed WAL segment to durable object storage (`gs://sf-wal-archive/<env>/`). Combined with the daily base backup, this enables point-in-time recovery to any LSN within the retention window (target: 7 days).
+
+3. **Daily base backup** — a `pg_basebackup` job runs against the primary and writes a consistent filesystem snapshot to `gs://sf-backups/<env>/YYYY-MM-DD/`. The job is scheduled as a Kubernetes CronJob (see `packages/core/templates/k8s/postgres-backup-cronjob.yaml.tpl` — not yet authored; this is the next implementation step).
+
+### Restore Procedure
+
+To recover the shared Postgres instance to time `T`:
+
+1. Stop traffic to the primary (take the service `ClusterIP` out of rotation or scale the primary StatefulSet to 0 replicas).
+2. Start a new Postgres pod with the same PVC class but a fresh `PGDATA` directory.
+3. Restore the most recent daily base backup: `pg_restore` from `gs://sf-backups/<env>/YYYY-MM-DD/` into `PGDATA`.
+4. Set `restore_command` in `postgresql.conf` to fetch WAL segments from `gs://sf-wal-archive/<env>/%f`.
+5. Set `recovery_target_time = 'YYYY-MM-DD HH:MM:SS'` (or `recovery_target_lsn`) to pin the target.
+6. Start Postgres; it replays WAL until the target is reached, then enters normal mode.
+7. Verify integrity: run the standard migration health check (`cargo run -p sf-cli -- db status`) and confirm the `schema_migrations` table is intact.
+8. Restore traffic by updating the `ClusterIP` service selector.
+
+Total elapsed time should be under the 15-minute RTO. Steps 3–5 (WAL fetch + replay) dominate; the 5-minute RPO bounds the maximum data loss.
+
+### Seam: `SubstrateBackup`
+
+The `sf-db` crate defines [`SubstrateBackup`] (`crates/sf-db/src/backup.rs`): a trait that operations tooling implements to record backup-completion events. The no-op stub [`NoopSubstrateBackup`] satisfies the interface in tests and in components that have not yet wired a real implementation.
+
+A real implementation will:
+
+1. Receive a [`BackupEvent`] from the CronJob runner on successful `pg_basebackup` completion.
+2. Insert a row into a `substrate.backup_events` table (schema to be defined).
+3. Expose the latest event via [`SubstrateBackup::latest`] for health check queries.
+
+### K8s template seams
+
+`packages/core/templates/k8s/postgres.yaml.tpl` has been annotated with three `SEAM:` markers:
+
+| Location                       | What must change for production                                                           |
+| ------------------------------ | ----------------------------------------------------------------------------------------- |
+| `replicas: 1`                  | Set to `2` and wire standby `primary_conninfo` once the replication secret is provisioned |
+| `POSTGRES_REPLICATION_*`       | Inject replication credentials from a k8s Secret                                          |
+| `storageClassName: local-path` | Replace with a durable cloud block-storage class (`standard-rwo`, `gp3-csi`, etc.)        |
+
+---
+
 ## §7 Current Gaps
 
 | #   | Gap                                                                      | Target state                                                                                                                                                                                 | Tracking                                                                                                                                             |
@@ -939,3 +1002,4 @@ Sharp manages Superfield's own Rust source (`crates/sharp`) as its primary dogfo
 | 13  | `sf-serve` Rust serving binary not yet built                             | Rust binary replaces Bun control server + Node API server; CLI delegates via `SF_SERVE_BIN` or PATH; browser UI (TypeScript/React) stays web                                                 | Closed by #377 (serving backend), #378 (CLI wiring)                                                                                                  |
 | 14  | `episodes` schema ownership ambiguous                                    | Sharp's `0005__episodes.sql` puts episode tables in the `sharp` schema; target architecture assigns a separate `episodes` schema to the orchestrator — resolve before #381 writes any signal | Open — #381 must decide                                                                                                                              |
 | 15  | No runtime-error-to-episode ingestion seam                               | A `LogIngestor` interface (wrapping `SshKubeRunner.exec` for `kubectl logs`) must be defined before any runtime signal capture can be implemented                                            | Open — #381                                                                                                                                          |
+| 16  | No substrate backup, replication, or recovery targets defined            | RPO ≤ 5 min / RTO ≤ 15 min; streaming replication to hot standby; daily base backup + WAL archiving; `SubstrateBackup` seam in `sf-db`; SEAM markers in K8s template                         | Closed by #385 — see §Substrate Reliability                                                                                                          |
