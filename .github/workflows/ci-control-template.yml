@@ -7,7 +7,7 @@ on:
       - "packages/control/**"
       - "packages/control-core/**"
       - "packages/cli/commands/control.ts"
-      - "packages/cli/tests/integration/template-server-boot.test.ts"
+      - "crates/sf-serve/**"
       - "docs/control-template-integration.md"
       - ".github/workflows/ci-control-template.yml"
   pull_request:
@@ -16,7 +16,7 @@ on:
       - "packages/control/**"
       - "packages/control-core/**"
       - "packages/cli/commands/control.ts"
-      - "packages/cli/tests/integration/template-server-boot.test.ts"
+      - "crates/sf-serve/**"
       - "docs/control-template-integration.md"
       - ".github/workflows/ci-control-template.yml"
   workflow_dispatch:
@@ -34,58 +34,23 @@ env:
   TEMPLATE_REF: 9c803f9b6690511c6d3947e2083f65eaa0ea3fa6
 
 jobs:
-  template-integration:
-    name: Integration tests against pinned template
-    runs-on: [self-hosted, Linux, X64]
-    container:
-      image: ghcr.io/superfield-ai/ci-runner:latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - name: Checkout cli
-        uses: actions/checkout@v4
-        with:
-          path: cli
-          submodules: recursive
-          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
-
-      - name: Checkout template at pinned commit
-        uses: actions/checkout@v4
-        with:
-          repository: ${{ env.TEMPLATE_REPO }}
-          ref: ${{ env.TEMPLATE_REF }}
-          path: template
-          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
-
-      - name: Install cli deps
-        working-directory: cli
-        run: bun install --frozen-lockfile
-
-      - name: Generate embedded-assets stub
-        working-directory: cli
-        run: bun packages/control/scripts/embed-assets.ts
-
-      - name: Run template integration tests
-        working-directory: cli
-        env:
-          TEMPLATE_REPO_PATH: ${{ github.workspace }}/template
-          CONTROL_WEB_SERVICE_NAME: superfield-app
-        run: |
-          bun --bun vitest run \
-            packages/control/tests/integration/template-config-discovery.test.ts \
-            packages/control/tests/integration/template-config-fallback.test.ts \
-            packages/control/tests/integration/template-routes-no-cluster.test.ts \
-            packages/control/tests/integration/template-auth-roundtrip.test.ts \
-            packages/control/tests/integration/template-repo-root-resolution.test.ts \
-            packages/control/tests/integration/template-malformed-k8s.test.ts \
-            packages/cli/tests/integration/template-server-boot.test.ts
-
   template-e2e:
-    name: Playwright pages coverage against pinned template
+    name: Playwright pages coverage against pinned template (Rust backend)
     runs-on: [self-hosted, Linux, X64]
     container:
       image: ghcr.io/superfield-ai/ci-runner:latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: superfield
+          POSTGRES_PASSWORD: superfield
+          POSTGRES_DB: superfield
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
     defaults:
       run:
         shell: bash
@@ -117,9 +82,9 @@ jobs:
         working-directory: cli
         run: bun run --cwd packages/control/apps build
 
-      - name: Generate embedded assets
+      - name: Build Rust superfield binary
         working-directory: cli
-        run: bun packages/control/scripts/embed-assets.ts
+        run: cargo build -p superfield --release
 
       - name: Run template Playwright specs
         working-directory: cli
@@ -127,6 +92,8 @@ jobs:
           SUPERFIELD_REPO_ROOT: ${{ github.workspace }}/template
           TEMPLATE_REPO_PATH: ${{ github.workspace }}/template
           CONTROL_WEB_SERVICE_NAME: superfield-app
+          DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
+          SF_SERVE_BIN: ./target/release/superfield
         run: |
           bun x playwright test \
             --config=packages/control/tests/e2e/playwright.config.ts \

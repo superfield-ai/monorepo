@@ -1,18 +1,7 @@
 {
   "name": "@superfield/control",
   "private": true,
-  "main": "src/index.ts",
   "type": "module",
-  "scripts": {
-    "start": "bun run src/index.ts",
-    "build": "bun build src/index.ts --target=bun --outdir=dist"
-  },
-  "dependencies": {
-    "@superfield/core": "workspace:*"
-  },
-  "devDependencies": {
-    "@types/bun": "latest",
-    "typescript": "^5.0.0",
-    "vitest": "^2.0.0"
-  }
+  "version": "0.0.0",
+  "description": "Studio control-plane browser UI (assets only — served by the Rust sf-serve binary)"
 }

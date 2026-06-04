@@ -30,8 +30,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
-      - name: Generate embedded-assets stub
-        run: bun packages/control/scripts/embed-assets.ts
       - run: bun run typecheck
 
   lint:

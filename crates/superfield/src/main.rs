@@ -204,9 +204,16 @@ async fn run_serve(args: &[String]) {
         }
     };
 
+    // Read CONTROL_ASSETS_DIR from the environment — set by the TypeScript CLI
+    // control command after building the browser UI (packages/control/apps).
+    let assets_dir = std::env::var("CONTROL_ASSETS_DIR")
+        .ok()
+        .map(std::path::PathBuf::from);
+
     let serve_cfg = sf_serve::ServeConfig {
         bind_addr,
         session_ttl_secs: session_ttl,
+        assets_dir,
     };
 
     eprintln!("superfield serve: listening on {}", bind_addr);
