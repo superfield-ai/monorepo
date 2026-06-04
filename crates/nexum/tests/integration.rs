@@ -25,12 +25,12 @@
 //!    error→session→user→requirement→code chain, call
 //!    `error_to_cause_chain`, assert no missing hops.
 
+use nexum::dedup::content_hash;
+use nexum::parse::Format;
 use nexum::{
     error_to_cause_chain, fulltext_search, graph_search, ingest_document, semantic_search,
     FullTextOptions, GraphOptions, IngestOptions, SemanticOptions,
 };
-use nexum::dedup::content_hash;
-use nexum::parse::Format;
 use sf_embed::Embedder;
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -239,8 +239,7 @@ async fn test_ingest_round_trip() {
     .expect("block count query failed");
 
     assert_eq!(
-        count,
-        result.block_count as i64,
+        count, result.block_count as i64,
         "nexum.blocks row count must match block_count"
     );
     assert_eq!(
@@ -453,8 +452,12 @@ async fn test_causal_chain_full_five_node_chain() {
         serde_json::json!({"message": format!("test-error-{}", run_tag)}),
     )
     .await;
-    let session_id =
-        insert_entity(&pool, "session", serde_json::json!({"run": run_tag.clone()})).await;
+    let session_id = insert_entity(
+        &pool,
+        "session",
+        serde_json::json!({"run": run_tag.clone()}),
+    )
+    .await;
     let user_id = insert_entity(
         &pool,
         "user",
@@ -505,7 +508,10 @@ async fn test_causal_chain_full_five_node_chain() {
         user_id,
         "user node must match the seeded user entity"
     );
-    assert!(chain.requirement.is_some(), "requirement hop must be resolved");
+    assert!(
+        chain.requirement.is_some(),
+        "requirement hop must be resolved"
+    );
     assert_eq!(
         chain.requirement.as_ref().unwrap().id,
         req_id,
@@ -538,8 +544,12 @@ async fn test_causal_chain_partial_reports_missing_hops() {
         serde_json::json!({"message": format!("partial-error-{}", run_tag)}),
     )
     .await;
-    let session_id =
-        insert_entity(&pool, "session", serde_json::json!({"run": run_tag.clone()})).await;
+    let session_id = insert_entity(
+        &pool,
+        "session",
+        serde_json::json!({"run": run_tag.clone()}),
+    )
+    .await;
 
     // Only the error→session hop; no user/requirement/code links.
     insert_relation(&pool, error_id, session_id, "caused_in").await;
