@@ -26,4 +26,7 @@ serde      = { version = "1", features = ["derive"] }
 serde_json = { workspace = true }
 
 [dev-dependencies]
-tokio = { workspace = true, features = ["full", "test-util"] }
+sf-db    = { workspace = true }
+sf-embed = { workspace = true }
+tokio    = { workspace = true, features = ["full", "test-util"] }
+uuid     = { workspace = true }
