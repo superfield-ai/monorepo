@@ -48,8 +48,6 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-        ports:
-          - 5432:5432
     defaults:
       run:
         shell: bash
