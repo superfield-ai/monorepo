@@ -12,6 +12,7 @@
 //! - [`episode`]              — agent-episode lifecycle (open/append/finish/query)
 //! - [`runtime_signal`]       — production error and behavioral signal capture (issue #381)
 //! - [`git_interop`]          — Git import and linear export
+//! - [`merge_flow`]           — self-hosting gate: production merge pipeline (onboard + merge + episode)
 //! - [`rust_analyzer_client`]   — subprocess orchestration of `rust-analyzer` over LSP
 //! - [`tsserver_bridge_client`] — subprocess orchestration of `tsserver-bridge` via JSON-RPC
 //! - [`cargo_check`]            — run `cargo check --message-format=json` and parse diagnostics
@@ -40,6 +41,7 @@ pub mod commit;
 pub mod episode;
 pub mod error;
 pub mod git_interop;
+pub mod merge_flow;
 pub mod object;
 pub mod repo;
 pub mod runtime_signal;
