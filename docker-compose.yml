@@ -1,0 +1,51 @@
+# Superfield dev environment — single Postgres instance
+#
+# Architecture reference: docs/adr-schema-boundary.md — one Postgres instance,
+# namespaced schemas per component (sharp, nexum, auth, substrate).
+#
+# Usage:
+#   docker compose up -d db           # start Postgres
+#   docker compose run --rm migrate   # apply all migrations
+#   docker compose down               # stop and remove containers
+#
+# DATABASE_URL for local development:
+#   postgres://superfield:superfield@localhost:5432/superfield
+#
+# To override configuration, create a docker-compose.override.yml or set
+# environment variables before running docker compose.
+
+services:
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: superfield
+      POSTGRES_PASSWORD: superfield
+      POSTGRES_DB: superfield
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U superfield -d superfield"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  migrate:
+    # Run migrations against the dev Postgres instance.
+    # docker compose run --rm migrate
+    image: oven/bun:1
+    working_dir: /app
+    environment:
+      DATABASE_URL: postgres://superfield:superfield@db:5432/superfield
+    volumes:
+      - .:/app:ro
+    command: ["bun", "packages/db/migrate.ts", "up"]
+    depends_on:
+      db:
+        condition: service_healthy
+
+volumes:
+  pgdata:
