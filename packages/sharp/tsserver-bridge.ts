@@ -223,7 +223,9 @@ function detectRenames(
     const added = afterNames.filter((n) => !beforeNames.includes(n));
     if (removed.length === 1 && added.length === 1) {
       out.push({
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- length checked above
         old_name: removed[0]!,
+        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion -- length checked above
         new_name: added[0]!,
         kind,
       });
@@ -350,7 +352,10 @@ function handleAnalyze(params: unknown): unknown {
     !("base_content" in params) ||
     !("new_content" in params)
   ) {
-    throw { code: INVALID_PARAMS, message: "analyze requires base_content and new_content" };
+    throw {
+      code: INVALID_PARAMS,
+      message: "analyze requires base_content and new_content",
+    };
   }
 
   const { base_content, new_content } = params as {
@@ -359,7 +364,10 @@ function handleAnalyze(params: unknown): unknown {
   };
 
   if (typeof base_content !== "string" || typeof new_content !== "string") {
-    throw { code: INVALID_PARAMS, message: "base_content and new_content must be strings" };
+    throw {
+      code: INVALID_PARAMS,
+      message: "base_content and new_content must be strings",
+    };
   }
 
   const before = extractExportedSymbols(base_content);
@@ -376,7 +384,10 @@ function handleApply(params: unknown): unknown {
     !("content" in params) ||
     !("renames" in params)
   ) {
-    throw { code: INVALID_PARAMS, message: "apply requires content and renames" };
+    throw {
+      code: INVALID_PARAMS,
+      message: "apply requires content and renames",
+    };
   }
 
   const { content, renames } = params as {
@@ -439,7 +450,10 @@ function processRequest(line: string): boolean {
       sendResponse({
         jsonrpc: "2.0",
         id: req.id,
-        error: { code: METHOD_NOT_FOUND, message: `Method not found: ${req.method}` },
+        error: {
+          code: METHOD_NOT_FOUND,
+          message: `Method not found: ${req.method}`,
+        },
       });
       return true;
     }

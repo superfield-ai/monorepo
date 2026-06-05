@@ -16,10 +16,7 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const BRIDGE_SCRIPT = path.resolve(
-  __dirname,
-  "../../tsserver-bridge.ts",
-);
+const BRIDGE_SCRIPT = path.resolve(__dirname, "../../tsserver-bridge.ts");
 
 // ---------------------------------------------------------------------------
 // Bridge subprocess helpers
@@ -123,11 +120,15 @@ describe("tsserver-bridge — analyze", () => {
 
   it("detects a function rename", async () => {
     const resp = await bridge.send("analyze", {
-      base_content: "export function greet(name: string): string { return name; }",
-      new_content: "export function hello(name: string): string { return name; }",
+      base_content:
+        "export function greet(name: string): string { return name; }",
+      new_content:
+        "export function hello(name: string): string { return name; }",
     });
     expect(resp.error).toBeUndefined();
-    const result = resp.result as { renames: Array<{ old_name: string; new_name: string; kind: string }> };
+    const result = resp.result as {
+      renames: Array<{ old_name: string; new_name: string; kind: string }>;
+    };
     expect(result.renames).toHaveLength(1);
     expect(result.renames[0]).toMatchObject({
       old_name: "greet",
@@ -141,7 +142,9 @@ describe("tsserver-bridge — analyze", () => {
       base_content: "export class HttpClient {}",
       new_content: "export class ApiClient {}",
     });
-    const result = resp.result as { renames: Array<{ old_name: string; new_name: string; kind: string }> };
+    const result = resp.result as {
+      renames: Array<{ old_name: string; new_name: string; kind: string }>;
+    };
     expect(result.renames).toHaveLength(1);
     expect(result.renames[0]).toMatchObject({
       old_name: "HttpClient",
