@@ -88,6 +88,8 @@ jobs:
         run: bun x playwright install chromium
       - name: Build control web app
         run: bun run build:control-web
+      - name: Install C toolchain (required by Rust build scripts)
+        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build Rust superfield binary
