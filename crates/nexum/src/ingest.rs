@@ -6,15 +6,16 @@
 //!
 //! # Database schema assumptions
 //!
-//! The pipeline writes to the following tables (defined in the Nexum
-//! `db/schema.sql` and expected to exist in the shared Postgres instance):
+//! The pipeline writes to the following tables in the `nexum` schema (defined
+//! in `crates/nexum/migrations/0001_nexum_schema.sql` and expected to exist
+//! in the shared Postgres instance):
 //!
-//! - `documents` — one row per logical document identity.
-//! - `document_versions` — one row per ingestion of a document.
-//! - `blocks` — content-addressed block rows; unchanged blocks are shared
+//! - `nexum.documents` — one row per logical document identity.
+//! - `nexum.document_versions` — one row per ingestion of a document.
+//! - `nexum.blocks` — content-addressed block rows; unchanged blocks are shared
 //!   across versions.
-//! - `version_blocks` — ordered junction between versions and their blocks.
-//! - `links` — structural citation links between blocks.
+//! - `nexum.version_blocks` — ordered junction between versions and their blocks.
+//! - `nexum.links` — structural citation links between blocks.
 //!
 //! # Dedup semantics (version parity)
 //!

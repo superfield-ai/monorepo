@@ -16,8 +16,8 @@
 //!
 //! # Graph substrate
 //!
-//! All entities live in the `entities` table (public schema), related by rows
-//! in `relations`.  Entity type values match the `type` column:
+//! All entities live in the `nexum.entities` table, related by rows
+//! in `nexum.relations`.  Entity type values match the `type` column:
 //! `"error"`, `"session"`, `"user"`, `"requirement"`, `"code"`.
 //!
 //! Relation type values that this query follows:
