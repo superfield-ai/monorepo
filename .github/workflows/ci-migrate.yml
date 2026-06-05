@@ -36,7 +36,9 @@ jobs:
       image: ghcr.io/superfield-ai/ci-runner:latest
     services:
       postgres:
-        image: postgres:16
+        # pgvector/pgvector:pg16 includes the vector extension required by
+        # the nexum schema migration (embedding vector(384) columns).
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: superfield
           POSTGRES_PASSWORD: superfield
