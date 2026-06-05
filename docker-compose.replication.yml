@@ -1,0 +1,103 @@
+# Postgres Streaming Replication — local testing (issue #459)
+#
+# Starts a primary and one hot-standby replica for integration testing of:
+#   - Streaming replication (WAL receiver → primary WAL sender)
+#   - Standby promotion drill
+#   - Backup restore drill
+#
+# Usage:
+#   docker compose -f docker-compose.replication.yml up -d
+#   # run tests
+#   docker compose -f docker-compose.replication.yml down -v
+#
+# Recovery objectives verified by this stack:
+#   Standby replication lag ≤ 30 seconds
+#   Streaming replication: primary writes propagate to standby
+#
+# See docs/architecture.md §Substrate Reliability.
+
+services:
+  postgres-primary:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: superfield
+      # Configure primary for streaming replication.
+      POSTGRES_REPLICATION_USER: replicator
+      POSTGRES_REPLICATION_PASSWORD: replicator_secret
+    command:
+      - postgres
+      - -c
+      - wal_level=replica
+      - -c
+      - max_wal_senders=5
+      - -c
+      - max_replication_slots=5
+      - -c
+      - wal_keep_size=64MB
+      - -c
+      - archive_mode=on
+      - -c
+      - "archive_command=cp %p /var/lib/postgresql/wal_archive/%f"
+      - -c
+      - hot_standby=on
+    ports:
+      - "5440:5432"
+    volumes:
+      - primary-data:/var/lib/postgresql/data
+      - wal-archive:/var/lib/postgresql/wal_archive
+      - ./tests/fixtures/replication/primary-init.sql:/docker-entrypoint-initdb.d/01-replication-user.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # The standby is bootstrapped via pg_basebackup from the primary.
+  postgres-standby:
+    image: postgres:16-alpine
+    environment:
+      PGPASSWORD: replicator_secret
+    depends_on:
+      postgres-primary:
+        condition: service_healthy
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        set -eu
+        # Wait for primary and take a base backup.
+        until pg_isready -h postgres-primary -p 5432 -U postgres; do
+          echo "Waiting for primary..."; sleep 2
+        done
+        rm -rf /var/lib/postgresql/data/*
+        pg_basebackup \
+          -h postgres-primary \
+          -p 5432 \
+          -U replicator \
+          -D /var/lib/postgresql/data \
+          -Fp \
+          --wal-method=stream \
+          --progress \
+          -R
+        chown -R postgres:postgres /var/lib/postgresql/data
+        exec su-exec postgres postgres \
+          -c hot_standby=on \
+          -c primary_conninfo="host=postgres-primary port=5432 user=replicator password=replicator_secret application_name=standby1"
+    ports:
+      - "5441:5432"
+    volumes:
+      - standby-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+volumes:
+  primary-data:
+  standby-data:
+  wal-archive:
