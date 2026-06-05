@@ -88,6 +88,8 @@ jobs:
         run: bun x playwright install chromium
       - name: Build control web app
         run: bun run build:control-web
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Build Rust superfield binary
         run: cargo build -p superfield --release
       - name: E2E tests (Rust sf-serve backend + Postgres)
@@ -113,5 +115,7 @@ jobs:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
+      - name: Install Playwright chromium browser
+        run: bun x playwright install chromium --with-deps
       - name: Unit tests
         run: bun --bun vitest run packages/control/apps/tests

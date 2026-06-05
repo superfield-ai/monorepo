@@ -82,6 +82,8 @@ jobs:
         working-directory: cli
         run: bun run --cwd packages/control/apps build
 
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
       - name: Build Rust superfield binary
         working-directory: cli
         run: cargo build -p superfield --release

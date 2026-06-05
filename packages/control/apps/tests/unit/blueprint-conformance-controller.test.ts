@@ -132,7 +132,7 @@ describe("BlueprintConformanceController", () => {
     ctrl.start();
 
     // The start() call triggers an immediate load()
-    await vi.runAllTilesAsync();
+    await vi.runAllTimersAsync();
     const callsAfterStart = fetchMock.mock.calls.length;
     expect(callsAfterStart).toBeGreaterThanOrEqual(1);
 
@@ -158,7 +158,7 @@ describe("BlueprintConformanceController", () => {
     ctrl.start();
 
     // Drain the immediate load
-    await vi.runAllTilesAsync();
+    await vi.runAllTimersAsync();
     const callsBeforeStop = fetchMock.mock.calls.length;
 
     ctrl.stop();
@@ -181,7 +181,7 @@ describe("BlueprintConformanceController", () => {
     ctrl.start();
 
     // Drain immediate load
-    await vi.runAllTilesAsync();
+    await vi.runAllTimersAsync();
     const callsAfterStart = fetchMock.mock.calls.length;
 
     // Advance time significantly — should not trigger any additional fetch
