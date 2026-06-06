@@ -14,7 +14,7 @@
  * @see issue #430
  */
 
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   clearWorkspaceContext,
   getWorkspaceContext,
@@ -29,9 +29,10 @@ import {
 // ---------------------------------------------------------------------------
 
 /** Capture every SQL statement sent to the mock client. */
-function makeClient(
-  overrides: Partial<{ rows: unknown[] }> = {},
-): { client: PgQueryable; queries: string[] } {
+function makeClient(overrides: Partial<{ rows: unknown[] }> = {}): {
+  client: PgQueryable;
+  queries: string[];
+} {
   const queries: string[] = [];
   const client: PgQueryable = {
     async query(sql: string) {
