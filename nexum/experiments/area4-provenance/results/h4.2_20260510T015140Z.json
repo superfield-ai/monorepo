@@ -1,0 +1,71 @@
+{
+  "extra": {
+    "corpus": "synthetic",
+    "embed_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "n_contracts": 30,
+    "n_questions_per_hop": 25
+  },
+  "gate": "H4.2",
+  "hypothesis": "H4.2",
+  "metrics": {
+    "h4_2_supported": true,
+    "min_hops_where_graph_wins": 2,
+    "n_questions_total": 100,
+    "per_hop": {
+      "2": {
+        "delta": 0.44,
+        "graph_accuracy": 0.64,
+        "graph_better": true,
+        "n_questions": 25,
+        "vanilla_accuracy": 0.2
+      },
+      "3": {
+        "delta": 0.48,
+        "graph_accuracy": 0.68,
+        "graph_better": true,
+        "n_questions": 25,
+        "vanilla_accuracy": 0.2
+      },
+      "4": {
+        "delta": 0.64,
+        "graph_accuracy": 0.92,
+        "graph_better": true,
+        "n_questions": 25,
+        "vanilla_accuracy": 0.28
+      },
+      "5": {
+        "delta": 0.6,
+        "graph_accuracy": 0.8,
+        "graph_better": true,
+        "n_questions": 25,
+        "vanilla_accuracy": 0.2
+      }
+    },
+    "wall_time_sec": 7.22
+  },
+  "notes": "Synthetic 30-contract corpus with explicit cross-document reference chains. Vanilla = top-k cosine only; graph = top-k cosine + typed-link traversal up to n_hops. Both share embedder sentence-transformers/all-MiniLM-L6-v2.",
+  "pass": true,
+  "results_path": "/home/lucas/tmp/agent-worktrees/nexum/feat-11-area-4-provenance-and-compositional-reasoning-h4/experiments/area4-provenance/results/h4.2_20260510T015140Z.json",
+  "runtime": {
+    "accelerator": {
+      "available": true,
+      "device": "cpu"
+    },
+    "cpu": "x86_64",
+    "cpu_count": 40,
+    "env": {},
+    "gate": "H4.2",
+    "git_sha": "e1f2e2b",
+    "hostname": "libra-explorer-01",
+    "hypothesis": "H4.2",
+    "image_digest": null,
+    "platform": "Linux-5.15.0-173-generic-x86_64-with-glibc2.35",
+    "python_version": "3.10.12",
+    "ram_bytes": 67162193920,
+    "seed": 42,
+    "started_at_iso": "2026-05-10T01:51:39Z",
+    "started_at_unix": 1778377899.9825876,
+    "torch_version": "2.11.0+cu130"
+  },
+  "schema_version": 1
+}

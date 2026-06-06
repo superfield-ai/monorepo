@@ -1,0 +1,28 @@
+{
+  "name": "nexum",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "test": "node --test",
+    "test:integration": "node --test tests/integration/",
+    "migrate": "tsx src/db/migrate.ts",
+    "seed": "tsx scripts/seed.ts",
+    "fetch-model": "tsx scripts/fetch-model.ts"
+  },
+  "dependencies": {
+    "@xenova/transformers": "^2",
+    "mammoth": "^1",
+    "pg": "^8"
+  },
+  "devDependencies": {
+    "@types/node": "^20",
+    "@types/pg": "^8",
+    "testcontainers": "^10",
+    "tsx": "^4",
+    "typescript": "^5"
+  }
+}

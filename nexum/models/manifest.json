@@ -1,0 +1,109 @@
+{
+  "$comment": [
+    "Issue #105: pinned local CPU model identity for the default LocalCpuInferenceClient.",
+    "",
+    "Selection. The original issue title pinned 'Phi-3-mini Q4_0 GGUF' as the aspirational target with a TinyLlama-class fallback. Two reasons drove the actual selection below:",
+    "  1. CI cold-start + one classifyLink call must complete in under 2 minutes on a single CI core (issue #105 acceptance criterion).",
+    "  2. The repo's runtime model toolchain is @xenova/transformers (already a project dependency for embeddings); switching to a llama.cpp/GGUF path requires a separate native-binary integration that was deferred.",
+    "",
+    "For link classification (5-class: supports / contradicts / elaborates / overrides / is-exception-to / none) we do NOT need a full instruction-tuned LLM. A small NLI-based zero-shot classifier is the right primitive: it directly scores 'does premise X entail label hypothesis Y?' which is exactly the link-relation question. The selected model (Xenova/nli-deberta-v3-xsmall) is ~88 MB ONNX-quantized, sub-second per pair on CPU, fits the 2-minute cold-start + one-call budget with margin, and runs in-process under the existing transformers.js pipeline so no new dependency is needed.",
+    "",
+    "Verifying. Run `npm run fetch-model`. The script downloads each file from `url` if missing under models/cache/<huggingface_id>/, verifies the SHA-256 against this manifest, and aborts on mismatch. A no-op on a warm cache.",
+    "Updating. Bump `revision` to a new HF commit, re-run the fetch script with `--update` to recompute the SHAs, and commit the resulting manifest.json plus models/MODEL_LOCKFILE.md."
+  ],
+  "default": "nli-deberta-v3-xsmall",
+  "models": {
+    "nli-deberta-v3-xsmall": {
+      "purpose": "Zero-shot NLI classifier used by LocalCpuInferenceClient.classifyLink to score the 5 SIGNALS relation labels (supports / contradicts / elaborates / overrides / is-exception-to) as hypotheses against a block-pair premise.",
+      "huggingface_id": "Xenova/nli-deberta-v3-xsmall",
+      "revision": "2a4f614a701367a02d51389039afc998faeda637",
+      "format": "onnx-int8",
+      "approximate_total_bytes": 99371591,
+      "files": [
+        {
+          "path": "config.json",
+          "url": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/2a4f614a701367a02d51389039afc998faeda637/config.json",
+          "sha256": "ec0bd14cc28640326474399cd61d38ccd52b64900228799d0f81debda8c4bc53",
+          "bytes": 1038
+        },
+        {
+          "path": "tokenizer.json",
+          "url": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/2a4f614a701367a02d51389039afc998faeda637/tokenizer.json",
+          "sha256": "a86f883318afa11c8c10466f1bf4efaeb6ded28a52cbe57217a8fa0d0a2a87df",
+          "bytes": 8656551
+        },
+        {
+          "path": "tokenizer_config.json",
+          "url": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/2a4f614a701367a02d51389039afc998faeda637/tokenizer_config.json",
+          "sha256": "d8d3bb123b99317634d5ee3d1d2d8b2ddb01510a0654687fc2639a5347a7291f",
+          "bytes": 384
+        },
+        {
+          "path": "special_tokens_map.json",
+          "url": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/2a4f614a701367a02d51389039afc998faeda637/special_tokens_map.json",
+          "sha256": "311de3f4eed9d76a43bf0d71f10e62e086ca65ccce9f15d5da0d2098bf519ecc",
+          "bytes": 173
+        },
+        {
+          "path": "added_tokens.json",
+          "url": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/2a4f614a701367a02d51389039afc998faeda637/added_tokens.json",
+          "sha256": "dc046d04c9b0ada7ae6f1dc89c465801799acdf0c9a6aab8c15a1b2d5ca4e91f",
+          "bytes": 23
+        },
+        {
+          "path": "spm.model",
+          "url": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/2a4f614a701367a02d51389039afc998faeda637/spm.model",
+          "sha256": "c679fbf93643d19aab7ee10c0b99e460bdbc02fedf34b92b05af343b4af586fd",
+          "bytes": 2464616
+        },
+        {
+          "path": "quantize_config.json",
+          "url": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/2a4f614a701367a02d51389039afc998faeda637/quantize_config.json",
+          "sha256": "97ed567b73503b8d9d373d5a4124243fe6c11aef0fac5f26c2cf9ab661a116cc",
+          "bytes": 1193
+        },
+        {
+          "path": "onnx/model_quantized.onnx",
+          "url": "https://huggingface.co/Xenova/nli-deberta-v3-xsmall/resolve/2a4f614a701367a02d51389039afc998faeda637/onnx/model_quantized.onnx",
+          "sha256": "3fac2500c45c75af42c7711de0d1b93d59577456100208be0dc1f9e8811946b6",
+          "bytes": 87246587
+        }
+      ]
+    }
+  },
+  "fallback_ladder": [
+    {
+      "id": "phi-3-mini-q4_0-gguf",
+      "huggingface_id": "microsoft/Phi-3-mini-4k-instruct-gguf",
+      "file": "Phi-3-mini-4k-instruct-q4.gguf",
+      "approximate_bytes": 2400000000,
+      "rejected_reason": "Cold-start download alone exceeds the 2-minute single-CI-core budget. Also requires a llama.cpp native binary integration outside the in-process @xenova/transformers toolchain."
+    },
+    {
+      "id": "tinyllama-q4_0-gguf",
+      "huggingface_id": "TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF",
+      "file": "tinyllama-1.1b-chat-v1.0.Q4_0.gguf",
+      "approximate_bytes": 640000000,
+      "rejected_reason": "640 MB cold-cache download plus native llama.cpp build still over budget on the standard CI runner; same toolchain mismatch as Phi-3."
+    },
+    {
+      "id": "nli-deberta-v3-xsmall",
+      "rejected_reason": null,
+      "selected": true
+    },
+    {
+      "id": "distilbart-mnli-12-1",
+      "huggingface_id": "Xenova/distilbart-mnli-12-1",
+      "approximate_bytes": 120000000,
+      "rejected_reason": "Larger than nli-deberta-v3-xsmall; held in reserve as a quality-bump fallback."
+    },
+    {
+      "id": "mobilebert-uncased-mnli",
+      "huggingface_id": "Xenova/mobilebert-uncased-mnli",
+      "approximate_bytes": 90000000,
+      "rejected_reason": "Comparable size to deberta-v3-xsmall but lower-quality on cross-encoder NLI benchmarks; held in reserve as a footprint fallback."
+    }
+  ],
+  "cache_dir_env": "NEXUM_MODEL_CACHE_DIR",
+  "cache_dir_default": "models/cache"
+}

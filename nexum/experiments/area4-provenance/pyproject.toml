@@ -1,0 +1,22 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "area4-provenance"
+version = "0.1.0"
+description = "Area 4: Provenance and compositional reasoning — attribution audit, multi-hop benchmark, auditability comparison"
+requires-python = ">=3.10"
+dependencies = [
+    "requests",
+    "numpy",
+    "tqdm",
+    "anthropic>=0.25.0",
+    "datasets>=2.19.0",
+]
+
+[project.optional-dependencies]
+dev = ["pytest", "pytest-mock"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -1,0 +1,80 @@
+{
+  "extra": {
+    "raw_results_path": "experiments/area7-differentiable-graph/results/area7_full_25k.json"
+  },
+  "gate": "A7",
+  "hypothesis": "H7.full",
+  "metrics": {
+    "config": {
+      "embedding_dim": 128,
+      "eval_every": 100,
+      "live_graph_latency_ms": 50.0,
+      "lr": 0.001,
+      "n_blocks": 25000,
+      "n_steps": 1500,
+      "onnx_path": "results/area7_full_25k.onnx",
+      "output": "results/area7_full_25k.json",
+      "seed": 42,
+      "skip_staleness_curve": false,
+      "skip_throughput": false
+    },
+    "h7_1": {
+      "final_clause_accuracy": 0.7139999866485596,
+      "final_contradiction_accuracy": 0.8980000019073486,
+      "improvement_clause": 0.13999998569488525,
+      "improvement_contradiction": 0.38599997758865356,
+      "pass": true,
+      "wall_clock_sec": 265.4208140540868
+    },
+    "h7_3": {
+      "accuracy_delta": 0.0,
+      "max_logit_diff": 3.814697265625e-06,
+      "onnx_accuracy": 0.876,
+      "onnx_model_size_mb": 3.0608901977539062,
+      "pass": true,
+      "pytorch_accuracy": 0.876
+    },
+    "h7_4": {
+      "decay_curves_plotted": true,
+      "pass": true,
+      "rates_blocks_per_day": [
+        10,
+        100,
+        1000,
+        10000
+      ]
+    },
+    "h7_5": {
+      "live_graph_p50_ms": 50.0,
+      "onnx_p50_ms": 0.04778546281158924,
+      "onnx_p99_ms": 0.07630746811628342,
+      "pass": true,
+      "throughput_ratio": 1046.3433240595018
+    }
+  },
+  "notes": "Area 7 integrated full run at 25,000 blocks / 1,500 steps. Plan spec calls for 100K blocks; this run is a smaller-scale honest validation that the integrated pipeline (training -> ONNX export -> staleness simulation -> throughput benchmark) is end-to-end functional. Each sub-hypothesis pass criterion was met at the run scale; scale gap to 100K is documented in the area7 README and the H7.* hypothesis files.",
+  "pass": true,
+  "results_path": "/home/lucas/tmp/agent-worktrees/nexum/feat-18-area-7-differentiable-graph-model-full-run-after/experiments/area7-differentiable-graph/results/a7_20260510T025605Z.json",
+  "runtime": {
+    "accelerator": {
+      "available": true,
+      "device": "cpu"
+    },
+    "cpu": "x86_64",
+    "cpu_count": 40,
+    "env": {},
+    "gate": "A7",
+    "git_sha": "cda0fb1",
+    "hostname": "libra-explorer-01",
+    "hypothesis": "H7.full",
+    "image_digest": null,
+    "platform": "Linux-5.15.0-173-generic-x86_64-with-glibc2.35",
+    "python_version": "3.10.12",
+    "ram_bytes": 67162193920,
+    "seed": 42,
+    "started_at_iso": "2026-05-10T02:56:05Z",
+    "started_at_unix": 1778381765.8651984,
+    "torch_version": "2.11.0+cu130"
+  },
+  "schema_version": 1
+}

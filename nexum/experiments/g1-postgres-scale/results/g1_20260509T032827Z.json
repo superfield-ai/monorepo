@@ -1,0 +1,98 @@
+{
+  "gate": "G1",
+  "hypothesis": "H1.1",
+  "metrics": {
+    "acceptance": {
+      "overall_pass": false,
+      "p99_threshold_ms": 500.0,
+      "pass_latency": false,
+      "pass_recall": true,
+      "recall_at_10_min": 0.9
+    },
+    "benchmark": {
+      "corpus_id": "500K",
+      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+      "fulltext": {
+        "mean_ms": 589.7403274988756,
+        "p50_ms": 657.8459159936756,
+        "p99_ms": 1501.0870983079076
+      },
+      "graph_traversal": {
+        "2_hop": {
+          "p50_ms": 1037.5552456825972,
+          "p99_ms": 1173.0571974208583
+        },
+        "4_hop": {
+          "p50_ms": 2506.160354241729,
+          "p99_ms": 2743.8899293448776
+        },
+        "6_hop": {
+          "p50_ms": 5947.164830518886,
+          "p99_ms": 7516.483715251089
+        }
+      },
+      "n_blocks_in_corpus": 500000,
+      "pass_g1_latency": false,
+      "pass_g1_p99_threshold_ms": 500.0,
+      "recall": {
+        "brute_force_p50_ms": 821.8630640767515,
+        "brute_force_p99_ms": 1128.6410107230772,
+        "mean_recall_at_10": 0.95,
+        "n_queries_used": 30,
+        "p10_recall_at_10": 0.9,
+        "p50_recall_at_10": 1.0
+      },
+      "semantic": {
+        "ef_search": 40,
+        "mean_ms": 18.17024204879999,
+        "p50_ms": 17.466322984546423,
+        "p95_ms": 28.55447037145495,
+        "p99_ms": 34.27178791724149
+      }
+    },
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+    "hnsw_index": {
+      "build_seconds": null,
+      "index_size_bytes": 1023303680,
+      "reused_existing": true
+    },
+    "ingest": {
+      "embed_seconds": 1077.516,
+      "embedding_dim": 384,
+      "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
+      "embedding_storage_bytes": 768000000,
+      "ingest_time_seconds": 3777.685,
+      "n_blocks": 500000,
+      "n_documents": 1000,
+      "n_links": 5000000,
+      "storage_bytes": 4213514240
+    },
+    "n_blocks": 500000,
+    "scale_label": "500K"
+  },
+  "notes": "issue #4 G1 verification \u2014 real all-MiniLM-L6-v2 embeddings at 500K blocks (largest feasible scale within agent budget; 5M deferred as a follow-up gate spike)",
+  "pass": false,
+  "results_path": "/home/lucas/tmp/agent-worktrees/nexum/feat-4-g1-postgres-scale-floor-h1-1-after-correctness-c/experiments/g1-postgres-scale/results/g1_20260509T032827Z.json",
+  "runtime": {
+    "accelerator": {
+      "available": true,
+      "device": "cpu"
+    },
+    "cpu": "x86_64",
+    "cpu_count": 40,
+    "env": {},
+    "gate": "G1",
+    "git_sha": "45e264d",
+    "hostname": "libra-explorer-01",
+    "hypothesis": "H1.1",
+    "image_digest": null,
+    "platform": "Linux-5.15.0-173-generic-x86_64-with-glibc2.35",
+    "python_version": "3.10.12",
+    "ram_bytes": 67162193920,
+    "seed": 42,
+    "started_at_iso": "2026-05-09T03:28:27Z",
+    "started_at_unix": 1778297307.8437612,
+    "torch_version": "2.11.0+cu130"
+  },
+  "schema_version": 1
+}
