@@ -31,8 +31,8 @@
 use std::time::SystemTime;
 
 use sf_db::backup::{
-    BackupEvent, BackupOutcome, NoopSubstrateBackup, PgBackup, SubstrateBackup,
-    pg_basebackup_args, wal_archive_command_template,
+    pg_basebackup_args, wal_archive_command_template, BackupEvent, BackupOutcome,
+    NoopSubstrateBackup, PgBackup, SubstrateBackup,
 };
 
 // ---------------------------------------------------------------------------
@@ -147,8 +147,7 @@ async fn recovery_drill_backup_event_round_trip() {
     let backup = PgBackup::new(pool.clone(), "/tmp/sf-recovery-drill");
 
     let event = BackupEvent {
-        completed_at: SystemTime::UNIX_EPOCH
-            + std::time::Duration::from_secs(1_750_100_000),
+        completed_at: SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1_750_100_000),
         location: "gs://sf-backups/dev/2026-06-05/base.tar.gz".to_string(),
         outcome: BackupOutcome::Success,
         start_lsn: Some("0/3A000000".to_string()),
@@ -212,10 +211,13 @@ async fn write_primary_visible_on_standby() {
     .expect("create canary table on primary");
 
     // Insert a sentinel row.
-    let sentinel = format!("repl-drill-{}", SystemTime::now()
-        .duration_since(SystemTime::UNIX_EPOCH)
-        .unwrap()
-        .as_secs());
+    let sentinel = format!(
+        "repl-drill-{}",
+        SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs()
+    );
 
     sqlx::query("INSERT INTO replication_canary (val) VALUES ($1)")
         .bind(&sentinel)
@@ -226,13 +228,12 @@ async fn write_primary_visible_on_standby() {
     // Poll the standby for up to 30 seconds (≤ standby lag target).
     let mut found = false;
     for _ in 0..30 {
-        let row: Option<(String,)> = sqlx::query_as(
-            "SELECT val FROM replication_canary WHERE val = $1 LIMIT 1",
-        )
-        .bind(&sentinel)
-        .fetch_optional(&standby)
-        .await
-        .unwrap_or(None);
+        let row: Option<(String,)> =
+            sqlx::query_as("SELECT val FROM replication_canary WHERE val = $1 LIMIT 1")
+                .bind(&sentinel)
+                .fetch_optional(&standby)
+                .await
+                .unwrap_or(None);
 
         if row.is_some() {
             found = true;

@@ -30,16 +30,14 @@ describe("renderBackupCronJobManifest", () => {
 
   it("uses the postgres:16-alpine image for the pg-basebackup container", () => {
     const doc = parseYaml(renderBackupCronJobManifest({ env: "staging" }));
-    const container =
-      doc.spec.jobTemplate.spec.template.spec.containers[0];
+    const container = doc.spec.jobTemplate.spec.template.spec.containers[0];
     expect(container.name).toBe("pg-basebackup");
     expect(container.image).toBe("postgres:16-alpine");
   });
 
   it("injects replication credentials from a k8s Secret", () => {
     const doc = parseYaml(renderBackupCronJobManifest({ env: "prod" }));
-    const container =
-      doc.spec.jobTemplate.spec.template.spec.containers[0];
+    const container = doc.spec.jobTemplate.spec.template.spec.containers[0];
     const pwdEnv = container.env.find(
       (e: { name: string }) => e.name === "PGPASSWORD",
     );
@@ -58,14 +56,11 @@ describe("renderBackupCronJobManifest", () => {
 
   it("substitutes env into resource names and secret references", () => {
     const doc = parseYaml(renderBackupCronJobManifest({ env: "qa" }));
-    const container =
-      doc.spec.jobTemplate.spec.template.spec.containers[0];
+    const container = doc.spec.jobTemplate.spec.template.spec.containers[0];
     const pwdEnv = container.env.find(
       (e: { name: string }) => e.name === "PGPASSWORD",
     );
-    expect(pwdEnv.valueFrom.secretKeyRef.name).toBe(
-      "postgres-replication-qa",
-    );
+    expect(pwdEnv.valueFrom.secretKeyRef.name).toBe("postgres-replication-qa");
   });
 
   it("does not leave unsubstituted placeholders", () => {
@@ -83,8 +78,7 @@ describe("renderBackupCronJobManifest", () => {
 
   it("sets resource requests and limits on the container", () => {
     const doc = parseYaml(renderBackupCronJobManifest({ env: "dev" }));
-    const container =
-      doc.spec.jobTemplate.spec.template.spec.containers[0];
+    const container = doc.spec.jobTemplate.spec.template.spec.containers[0];
     expect(container.resources.requests.cpu).toBe("200m");
     expect(container.resources.requests.memory).toBe("256Mi");
     expect(container.resources.limits.cpu).toBe("1");
