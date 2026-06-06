@@ -1,0 +1,169 @@
+# On-demand Criterion benchmark workflow for the ContainerRuntime backends.
+#
+# Runs cargo bench for:
+#   - container_runtime: per-op create/start/delete microbenchmarks
+#   - fork_latency: real container lifecycle latency (fork_time + first_write)
+#
+# Prerequisites installed at runtime:
+#   - crun (apt: crun)
+#   - busybox-static (rootfs stub at /tmp/fastenv-bench-rootfs)
+#
+# Outputs:
+#   - Criterion HTML report (target/criterion/) uploaded as artifact
+#   - docs/benchmarks/container-runtime-comparison.json uploaded as artifact
+#   - Job summary with raw Criterion output and JSON results
+#
+# Trigger: Actions → Bench: Container Runtime → Run workflow
+name: "Bench: Container Runtime"
+
+on:
+  workflow_dispatch:
+    inputs:
+      youki:
+        description: "Include YoukiBackend benchmarks (libcontainer compiled in — no youki binary needed)"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  bench:
+    name: Container Runtime Benchmarks
+    # Issue #124: the default GitHub-hosted shared 2-vCPU runner is too noisy to publish
+    # crun-vs-youki percentile comparisons from. Use the org's dedicated bench
+    # runner (the same label bench.yml already targets) so the timed regions
+    # are not contaminated by neighbour-tenant scheduling jitter.
+    runs-on: [self-hosted, Linux, X64]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y crun busybox-static libseccomp-dev
+
+      - name: Set up minimal rootfs
+        run: |
+          ROOTFS=/tmp/fastenv-bench-rootfs
+          sudo mkdir -p "$ROOTFS"/{bin,etc,proc,dev,sys,tmp}
+          sudo cp /bin/busybox "$ROOTFS/bin/busybox"
+          sudo ln -sf busybox "$ROOTFS/bin/true"
+          sudo ln -sf busybox "$ROOTFS/bin/sh"
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index
+            ~/.cargo/registry/cache
+            ~/.cargo/git/db
+          key: ${{ runner.os }}-cargo-registry-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-registry-
+
+      - name: Cache build artifacts
+        uses: actions/cache@v4
+        with:
+          path: target/
+          key: ${{ runner.os }}-cargo-bench-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: ${{ runner.os }}-cargo-bench-
+
+      # Build under the normal user so the cache stays warm for subsequent runs.
+      - name: Build benchmark binaries
+        run: |
+          cargo build --benches
+          if [ "${{ inputs.youki }}" = "true" ]; then
+            cargo build --benches --features youki
+          fi
+
+      # crun needs CAP_SYS_ADMIN for pid/mount namespace creation.
+      # Preserve PATH, HOME, CARGO_HOME, and RUSTUP_HOME so that cargo and
+      # rustc (rustup shims) remain resolvable under the root environment.
+      - name: Run microbenchmarks — CrunBackend
+        run: |
+          set -o pipefail
+          sudo --preserve-env=PATH,HOME,CARGO_HOME,RUSTUP_HOME \
+            "$(which cargo)" bench --bench container_runtime 2>&1 | tee microbench-crun.txt
+
+      - name: Run microbenchmarks — YoukiBackend
+        if: ${{ inputs.youki }}
+        timeout-minutes: 15
+        # Issue #124: this step intentionally fails the workflow on any
+        # iteration error. A partial youki failure must NOT be swallowed —
+        # silently dropped samples would produce a fake youki win in the
+        # published JSON artifact. Microbench step.
+        run: |
+          set -o pipefail
+          sudo --preserve-env=PATH,HOME,CARGO_HOME,RUSTUP_HOME \
+            "$(which cargo)" bench --bench container_runtime --features youki 2>&1 | tee microbench-youki.txt
+
+      # fork_latency bench measures real container lifecycle — needs CAP_SYS_ADMIN.
+      - name: Run fork_latency benchmarks — CrunBackend
+        run: |
+          set -o pipefail
+          sudo --preserve-env=PATH,HOME,CARGO_HOME,RUSTUP_HOME \
+            "$(which cargo)" bench --bench fork_latency 2>&1 | tee fork-latency-crun.txt
+
+      - name: Run fork_latency benchmarks — YoukiBackend
+        if: ${{ inputs.youki }}
+        timeout-minutes: 15
+        # Issue #124: this step intentionally fails the workflow on any
+        # iteration error. Any youki iteration failure must fail the workflow
+        # so we never publish a JSON artifact that looks like a youki win
+        # because youki silently dropped samples. fork_latency step.
+        run: |
+          set -o pipefail
+          sudo --preserve-env=PATH,HOME,CARGO_HOME,RUSTUP_HOME \
+            "$(which cargo)" bench --bench fork_latency --features youki 2>&1 | tee fork-latency-youki.txt
+
+      - name: Upload Criterion HTML report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-report-${{ github.run_id }}
+          path: target/criterion/
+          retention-days: 90
+
+      - name: Upload JSON results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-results-${{ github.run_id }}
+          path: docs/benchmarks/container-runtime-comparison.json
+          retention-days: 90
+
+      - name: Write job summary
+        if: always()
+        run: |
+          {
+            echo "## Microbenchmarks (crun)"
+            echo '```'
+            cat microbench-crun.txt 2>/dev/null || echo "(skipped)"
+            echo '```'
+
+            if [ "${{ inputs.youki }}" = "true" ]; then
+              echo "## Microbenchmarks (youki)"
+              echo '```'
+              cat microbench-youki.txt 2>/dev/null || echo "(skipped)"
+              echo '```'
+            fi
+
+            echo "## Fork latency benchmarks (crun)"
+            echo '```'
+            cat fork-latency-crun.txt 2>/dev/null || echo "(skipped)"
+            echo '```'
+
+            if [ "${{ inputs.youki }}" = "true" ]; then
+              echo "## Fork latency benchmarks (youki)"
+              echo '```'
+              cat fork-latency-youki.txt 2>/dev/null || echo "(skipped)"
+              echo '```'
+            fi
+
+            echo "## JSON artifact"
+            echo '```json'
+            cat docs/benchmarks/container-runtime-comparison.json 2>/dev/null || echo "[]"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
