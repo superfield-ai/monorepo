@@ -81,22 +81,12 @@ BEGIN
 
   -- Add a supporting index on workspace_id for efficient per-workspace scans
   -- and future RLS filtering.
+  -- NOTE: CREATE INDEX IF NOT EXISTS avoids the nested DO $$ ... $$ block that
+  -- would conflict with the outer procedure delimiter.
   EXECUTE format(
-    $idx$
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1 FROM pg_indexes
-        WHERE schemaname = '%1$s'
-          AND tablename  = '%2$s'
-          AND indexname  = '%3$s'
-      ) THEN
-        CREATE INDEX %3$s ON %1$s.%2$s (workspace_id);
-      END IF;
-    END $$;
-    $idx$,
-    p_schema, p_table,
-    format('%s_%s_workspace_id_idx', p_schema, p_table)
+    'CREATE INDEX IF NOT EXISTS %I ON %I.%I (workspace_id)',
+    format('%s_%s_workspace_id_idx', p_schema, p_table),
+    p_schema, p_table
   );
 END;
 $$;
