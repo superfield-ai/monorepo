@@ -1,9 +1,0 @@
-{
-  "name": "@sharp/git-canonical",
-  "version": "0.0.0",
-  "private": true,
-  "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
-  "description": "Git-canonical object byte encoding/decoding (blob, tree, commit, tag) with stable hash"
-}

@@ -1,9 +1,0 @@
-name: parallel_use_lines
-category: import_merge
-language: rust
-summary: >
-  Both branches add new `use` declarations to the top of the same file.
-  Adjacent insertions cause a textual conflict.
-expected_git_outcome: conflict
-expected_sharp_outcome: clean_ok
-validator: rust

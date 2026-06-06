@@ -1,6 +1,0 @@
-node_modules
-dist
-coverage
-.git
-tests/_failures
-bun.lock

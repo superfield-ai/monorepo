@@ -1,9 +1,0 @@
-name: format_then_edit
-category: format
-language: rust
-summary: >
-  Branch A reformats a function body (cargo fmt), branch B edits inside
-  the same region. The diff overlap forces git into conflict markers.
-expected_git_outcome: conflict
-expected_sharp_outcome: clean_ok
-validator: rust

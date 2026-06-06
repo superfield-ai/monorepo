@@ -1,9 +1,0 @@
-name: parallel_impl_additions
-category: reorder
-language: rust
-summary: >
-  Both branches add a new method to the same impl block. git's text merger
-  reports a conflict because the additions land in the same hunk.
-expected_git_outcome: conflict
-expected_sharp_outcome: clean_ok
-validator: rust
