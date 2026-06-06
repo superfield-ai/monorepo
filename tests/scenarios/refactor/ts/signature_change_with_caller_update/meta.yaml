@@ -1,0 +1,16 @@
+name: signature_change_with_caller_update
+category: refactor
+language: ts
+summary: >
+  Branch A adds a third parameter to sum() and updates all existing call
+  sites. Branch B adds a new file that calls sum() with only two args
+  (the old signature). Text merge succeeds silently but produces a type
+  error: B's new file calls sum() with wrong arity. Sharp propagates the
+  signature change to B's new call site.
+expected_git_outcome: clean_wrong
+expected_sharp_outcome: clean_wrong
+validator: ts
+notes: |
+  Classic arity-mismatch scenario. git three-way merge cannot know that
+  Branch B's newly added call site must also receive the extra parameter
+  introduced by Branch A.

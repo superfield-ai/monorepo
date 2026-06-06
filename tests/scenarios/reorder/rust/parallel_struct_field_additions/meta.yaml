@@ -1,0 +1,18 @@
+name: parallel_struct_field_additions
+category: reorder
+language: rust
+summary: >
+  Rust equivalent of the notorious adjacent-insertion false conflict: both
+  branches add a single new field to the same struct definition. Both
+  additions land after the same anchor field so git groups them into one
+  conflicting hunk. This hits Rust teams constantly when two developers each
+  add a config or state field to a shared struct. Sharp concatenates both
+  additions for a clean_ok merge.
+expected_git_outcome: conflict
+expected_sharp_outcome: clean_ok
+validator: rust
+notes: >
+  Reproduces the notorious Git adjacent-insertion false conflict in the Rust
+  struct-field form. Developers on separate branches each add one field to a
+  shared struct; git marks it as a conflict because both insertions anchor to
+  the same preceding field. Sharp resolves with concat-additions.

@@ -1,0 +1,11 @@
+name: move_then_edit
+category: move_edit
+language: ts
+summary: >
+  Branch A moves src/old.ts to src/new.ts. Branch B edits src/old.ts.
+  git's rename detection fires only at >50% similarity threshold; if the
+  move is bundled with even minor edits, git often reports modify/delete
+  conflicts and the branch B edits are lost.
+expected_git_outcome: conflict
+expected_sharp_outcome: clean_ok
+validator: ts
