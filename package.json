@@ -1,0 +1,27 @@
+{
+  "name": "calypso-studio",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "studio": "bun run studio/scripts/studio-start.ts",
+    "test:unit": "bun --bun vitest run apps/server/tests/unit packages/core/tests",
+    "test:integration": "for f in apps/server/tests/integration/*.test.ts; do case \"$f\" in *studio-start.test.ts) continue ;; esac; bun --bun vitest run \"$f\" || exit 1; done",
+    "test:browser-unit": "bun --bun vitest run --config apps/web/vitest.config.ts --project unit",
+    "test:component": "bun --bun vitest run --config apps/web/vitest.config.ts --project component",
+    "test:e2e": "npx playwright test"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.58.2",
+    "@vitest/browser": "2.1.9",
+    "@vitest/coverage-v8": "^2.1.9",
+    "playwright": "^1.58.2",
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "vitest": "^2.1.9"
+  }
+}
