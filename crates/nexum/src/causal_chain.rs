@@ -118,7 +118,7 @@ pub async fn error_to_cause_chain(
     let error_row: Option<EntityRow> = sqlx::query_as(
         r#"
         SELECT id, type, properties
-        FROM entities
+        FROM nexum.entities
         WHERE id = $1 AND type = 'error'
         "#,
     )
@@ -201,8 +201,8 @@ async fn follow_relation(
     let row: Option<EntityRow> = sqlx::query_as(
         r#"
         SELECT e.id, e.type, e.properties
-        FROM relations r
-        JOIN entities e ON e.id = r.target_id
+        FROM nexum.relations r
+        JOIN nexum.entities e ON e.id = r.target_id
         WHERE r.source_id = $1
           AND r.type      = $2
           AND e.type      = $3
@@ -352,22 +352,41 @@ mod tests {
     /// Insert a complete five-node chain and return all five UUIDs.
     #[allow(dead_code)]
     async fn seed_complete_chain(pool: &PgPool) -> (Uuid, Uuid, Uuid, Uuid, Uuid) {
-        let error_id =
-            insert_entity(pool, "error", serde_json::json!({"message": "test error"})).await;
-        let session_id = insert_entity(pool, "session", serde_json::json!({})).await;
-        let user_id = insert_entity(pool, "user", serde_json::json!({"name": "test-user"})).await;
+        let ws_id = insert_workspace(pool).await;
+        let error_id = insert_entity(
+            pool,
+            ws_id,
+            "error",
+            serde_json::json!({"message": "test error"}),
+        )
+        .await;
+        let session_id = insert_entity(pool, ws_id, "session", serde_json::json!({})).await;
+        let user_id = insert_entity(
+            pool,
+            ws_id,
+            "user",
+            serde_json::json!({"name": "test-user"}),
+        )
+        .await;
         let req_id = insert_entity(
             pool,
+            ws_id,
             "requirement",
             serde_json::json!({"title": "test-req"}),
         )
         .await;
-        let code_id = insert_entity(pool, "code", serde_json::json!({"path": "src/lib.rs"})).await;
+        let code_id = insert_entity(
+            pool,
+            ws_id,
+            "code",
+            serde_json::json!({"path": "src/lib.rs"}),
+        )
+        .await;
 
-        insert_relation(pool, error_id, session_id, "caused_in").await;
-        insert_relation(pool, session_id, user_id, "initiated_by").await;
-        insert_relation(pool, session_id, req_id, "fulfills").await;
-        insert_relation(pool, req_id, code_id, "implemented_by").await;
+        insert_relation(pool, ws_id, error_id, session_id, "caused_in").await;
+        insert_relation(pool, ws_id, session_id, user_id, "initiated_by").await;
+        insert_relation(pool, ws_id, session_id, req_id, "fulfills").await;
+        insert_relation(pool, ws_id, req_id, code_id, "implemented_by").await;
 
         (error_id, session_id, user_id, req_id, code_id)
     }
@@ -375,39 +394,66 @@ mod tests {
     /// Insert a partial chain: error → session only (no user/requirement/code links).
     #[allow(dead_code)]
     async fn seed_partial_chain_error_to_session(pool: &PgPool) -> (Uuid, Uuid) {
+        let ws_id = insert_workspace(pool).await;
         let error_id = insert_entity(
             pool,
+            ws_id,
             "error",
             serde_json::json!({"message": "partial error"}),
         )
         .await;
-        let session_id = insert_entity(pool, "session", serde_json::json!({})).await;
-        insert_relation(pool, error_id, session_id, "caused_in").await;
+        let session_id = insert_entity(pool, ws_id, "session", serde_json::json!({})).await;
+        insert_relation(pool, ws_id, error_id, session_id, "caused_in").await;
         (error_id, session_id)
+    }
+
+    #[allow(dead_code)]
+    async fn insert_workspace(pool: &PgPool) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO public.workspaces (slug, display_name) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(format!("causal-chain-test-ws-{}", uuid::Uuid::new_v4()))
+        .bind("Causal Chain Test Workspace")
+        .fetch_one(pool)
+        .await
+        .expect("workspace insert failed")
     }
 
     #[allow(dead_code)]
     async fn insert_entity(
         pool: &PgPool,
+        workspace_id: Uuid,
         entity_type: &str,
         properties: serde_json::Value,
     ) -> Uuid {
-        sqlx::query_scalar("INSERT INTO entities (type, properties) VALUES ($1, $2) RETURNING id")
-            .bind(entity_type)
-            .bind(properties)
-            .fetch_one(pool)
-            .await
-            .expect("entity insert failed")
+        sqlx::query_scalar(
+            "INSERT INTO nexum.entities (workspace_id, type, properties) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind(workspace_id)
+        .bind(entity_type)
+        .bind(properties)
+        .fetch_one(pool)
+        .await
+        .expect("entity insert failed")
     }
 
     #[allow(dead_code)]
-    async fn insert_relation(pool: &PgPool, source_id: Uuid, target_id: Uuid, rel_type: &str) {
-        sqlx::query("INSERT INTO relations (source_id, target_id, type) VALUES ($1, $2, $3)")
-            .bind(source_id)
-            .bind(target_id)
-            .bind(rel_type)
-            .execute(pool)
-            .await
-            .expect("relation insert failed");
+    async fn insert_relation(
+        pool: &PgPool,
+        workspace_id: Uuid,
+        source_id: Uuid,
+        target_id: Uuid,
+        rel_type: &str,
+    ) {
+        sqlx::query(
+            "INSERT INTO nexum.relations (workspace_id, source_id, target_id, type) VALUES ($1, $2, $3, $4)",
+        )
+        .bind(workspace_id)
+        .bind(source_id)
+        .bind(target_id)
+        .bind(rel_type)
+        .execute(pool)
+        .await
+        .expect("relation insert failed");
     }
 }

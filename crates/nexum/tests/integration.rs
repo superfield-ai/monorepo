@@ -50,22 +50,38 @@ async fn maybe_pool() -> Option<PgPool> {
 
 // ── Seed helpers ──────────────────────────────────────────────────────────────
 
-/// Insert a test corpus and return its UUID.
-async fn insert_corpus(pool: &PgPool) -> Uuid {
-    sqlx::query_scalar("INSERT INTO nexum.corpora (name) VALUES ($1) RETURNING id")
-        .bind(format!("nexum-test-corpus-{}", Uuid::new_v4()))
-        .fetch_one(pool)
-        .await
-        .expect("corpus insert failed")
+/// Insert a workspace and return its UUID.
+async fn insert_workspace(pool: &PgPool) -> Uuid {
+    sqlx::query_scalar(
+        r#"INSERT INTO public.workspaces (slug, display_name) VALUES ($1, $2) RETURNING id"#,
+    )
+    .bind(format!("nexum-test-ws-{}", Uuid::new_v4()))
+    .bind("Nexum Integration Test Workspace")
+    .fetch_one(pool)
+    .await
+    .expect("workspace insert failed")
+}
+
+/// Insert a test corpus scoped to `workspace_id` and return its UUID.
+async fn insert_corpus(pool: &PgPool, workspace_id: Uuid) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO nexum.corpora (workspace_id, name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(workspace_id)
+    .bind(format!("nexum-test-corpus-{}", Uuid::new_v4()))
+    .fetch_one(pool)
+    .await
+    .expect("corpus insert failed")
 }
 
 /// Insert a bare block (no embedding, no tsv) in `nexum.blocks`.
-async fn insert_block_bare(pool: &PgPool, doc_id: Uuid, content: &str) -> Uuid {
+async fn insert_block_bare(pool: &PgPool, doc_id: Uuid, workspace_id: Uuid, content: &str) -> Uuid {
     let hash = content_hash(content);
     sqlx::query_scalar(
-        r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type)
-           VALUES ($1, $2, $3, 'paragraph') RETURNING id"#,
+        r#"INSERT INTO nexum.blocks (workspace_id, doc_id, content, content_hash, block_type)
+           VALUES ($1, $2, $3, $4, 'paragraph') RETURNING id"#,
     )
+    .bind(workspace_id)
     .bind(doc_id)
     .bind(content)
     .bind(hash)
@@ -75,13 +91,14 @@ async fn insert_block_bare(pool: &PgPool, doc_id: Uuid, content: &str) -> Uuid {
 }
 
 /// Insert a link in `nexum.links`.
-async fn insert_link(pool: &PgPool, src: Uuid, dst: Uuid, layer: &str) -> Uuid {
+async fn insert_link(pool: &PgPool, src: Uuid, dst: Uuid, workspace_id: Uuid, layer: &str) -> Uuid {
     let link_id = Uuid::new_v4();
     sqlx::query(
-        r#"INSERT INTO nexum.links (id, src, dst, layer, rel_type, weight)
-           VALUES ($1, $2, $3, $4, 'cites', 1.0)"#,
+        r#"INSERT INTO nexum.links (id, workspace_id, src, dst, layer, rel_type, weight, provenance)
+           VALUES ($1, $2, $3, $4, $5, 'cites', 1.0, '{}'::jsonb)"#,
     )
     .bind(link_id)
+    .bind(workspace_id)
     .bind(src)
     .bind(dst)
     .bind(layer)
@@ -91,25 +108,42 @@ async fn insert_link(pool: &PgPool, src: Uuid, dst: Uuid, layer: &str) -> Uuid {
     link_id
 }
 
-/// Insert an entity into the `entities` table (public schema).
-async fn insert_entity(pool: &PgPool, entity_type: &str, props: serde_json::Value) -> Uuid {
-    sqlx::query_scalar("INSERT INTO entities (type, properties) VALUES ($1, $2) RETURNING id")
-        .bind(entity_type)
-        .bind(props)
-        .fetch_one(pool)
-        .await
-        .expect("entity insert failed")
+/// Insert an entity into the `nexum.entities` table.
+async fn insert_entity(
+    pool: &PgPool,
+    workspace_id: Uuid,
+    entity_type: &str,
+    props: serde_json::Value,
+) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO nexum.entities (workspace_id, type, properties) VALUES ($1, $2, $3) RETURNING id",
+    )
+    .bind(workspace_id)
+    .bind(entity_type)
+    .bind(props)
+    .fetch_one(pool)
+    .await
+    .expect("entity insert failed")
 }
 
-/// Insert a relation into the `relations` table (public schema).
-async fn insert_relation(pool: &PgPool, source_id: Uuid, target_id: Uuid, rel_type: &str) {
-    sqlx::query("INSERT INTO relations (source_id, target_id, type) VALUES ($1, $2, $3)")
-        .bind(source_id)
-        .bind(target_id)
-        .bind(rel_type)
-        .execute(pool)
-        .await
-        .expect("relation insert failed");
+/// Insert a relation into the `nexum.relations` table.
+async fn insert_relation(
+    pool: &PgPool,
+    workspace_id: Uuid,
+    source_id: Uuid,
+    target_id: Uuid,
+    rel_type: &str,
+) {
+    sqlx::query(
+        "INSERT INTO nexum.relations (workspace_id, source_id, target_id, type) VALUES ($1, $2, $3, $4)",
+    )
+    .bind(workspace_id)
+    .bind(source_id)
+    .bind(target_id)
+    .bind(rel_type)
+    .execute(pool)
+    .await
+    .expect("relation insert failed");
 }
 
 // ── Cleanup helpers ───────────────────────────────────────────────────────────
@@ -177,14 +211,14 @@ async fn cleanup_corpus(pool: &PgPool, corpus_id: Uuid) {
 /// Delete entities and relations by a list of entity UUIDs.
 async fn cleanup_entities(pool: &PgPool, ids: &[Uuid]) {
     for id in ids {
-        sqlx::query("DELETE FROM relations WHERE source_id = $1 OR target_id = $1")
+        sqlx::query("DELETE FROM nexum.relations WHERE source_id = $1 OR target_id = $1")
             .bind(id)
             .execute(pool)
             .await
             .ok();
     }
     for id in ids {
-        sqlx::query("DELETE FROM entities WHERE id = $1")
+        sqlx::query("DELETE FROM nexum.entities WHERE id = $1")
             .bind(id)
             .execute(pool)
             .await
@@ -207,13 +241,15 @@ async fn test_ingest_round_trip() {
     };
 
     let embedder = Embedder::new().expect("embedder init failed");
-    let corpus_id = insert_corpus(&pool).await;
+    let workspace_id = insert_workspace(&pool).await;
+    let corpus_id = insert_corpus(&pool, workspace_id).await;
 
     let content = "The quick brown fox.\n\nSecond paragraph here.";
     let result = ingest_document(
         &pool,
         &embedder,
         IngestOptions {
+            workspace_id,
             corpus_id,
             title: format!("ingest-test-{}", Uuid::new_v4()),
             content: content.into(),
@@ -265,7 +301,8 @@ async fn test_fulltext_search_finds_ingested_doc() {
     };
 
     let embedder = Embedder::new().expect("embedder init failed");
-    let corpus_id = insert_corpus(&pool).await;
+    let workspace_id = insert_workspace(&pool).await;
+    let corpus_id = insert_corpus(&pool, workspace_id).await;
 
     // Use a highly distinctive phrase unlikely to collide with other test data.
     let run_id = Uuid::new_v4().to_string().replace('-', "");
@@ -276,6 +313,7 @@ async fn test_fulltext_search_finds_ingested_doc() {
         &pool,
         &embedder,
         IngestOptions {
+            workspace_id,
             corpus_id,
             title: format!("ft-search-test-{}", Uuid::new_v4()),
             content: content.clone(),
@@ -292,6 +330,7 @@ async fn test_fulltext_search_finds_ingested_doc() {
     let results = fulltext_search(
         &pool,
         FullTextOptions {
+            workspace_id,
             corpus_id,
             query_text: search_word.clone(),
             limit: 10,
@@ -329,12 +368,14 @@ async fn test_semantic_search_returns_positive_score() {
     };
 
     let embedder = Embedder::new().expect("embedder init failed");
-    let corpus_id = insert_corpus(&pool).await;
+    let workspace_id = insert_workspace(&pool).await;
+    let corpus_id = insert_corpus(&pool, workspace_id).await;
 
     ingest_document(
         &pool,
         &embedder,
         IngestOptions {
+            workspace_id,
             corpus_id,
             title: format!("sem-search-test-{}", Uuid::new_v4()),
             content: "Rust is a systems programming language focused on safety and performance."
@@ -350,6 +391,7 @@ async fn test_semantic_search_returns_positive_score() {
         &pool,
         &embedder,
         SemanticOptions {
+            workspace_id,
             corpus_id,
             query_text: "systems programming language".into(),
             limit: 10,
@@ -386,25 +428,35 @@ async fn test_graph_search_returns_linked_block() {
         None => return,
     };
 
-    let corpus_id = insert_corpus(&pool).await;
+    let workspace_id = insert_workspace(&pool).await;
+    let corpus_id = insert_corpus(&pool, workspace_id).await;
 
     // Insert a bare document so blocks have a valid doc_id.
     let doc_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO nexum.documents (corpus_id, title) VALUES ($1, $2) RETURNING id",
+        "INSERT INTO nexum.documents (workspace_id, corpus_id, title) VALUES ($1, $2, $3) RETURNING id",
     )
+    .bind(workspace_id)
     .bind(corpus_id)
     .bind(format!("graph-test-doc-{}", Uuid::new_v4()))
     .fetch_one(&pool)
     .await
     .expect("document insert failed");
 
-    let src_id = insert_block_bare(&pool, doc_id, "Graph source block for test").await;
-    let dst_id = insert_block_bare(&pool, doc_id, "Graph destination block for test").await;
-    insert_link(&pool, src_id, dst_id, "structural").await;
+    let src_id =
+        insert_block_bare(&pool, doc_id, workspace_id, "Graph source block for test").await;
+    let dst_id = insert_block_bare(
+        &pool,
+        doc_id,
+        workspace_id,
+        "Graph destination block for test",
+    )
+    .await;
+    insert_link(&pool, src_id, dst_id, workspace_id, "structural").await;
 
     let results = graph_search(
         &pool,
         GraphOptions {
+            workspace_id,
             seed_block_id: src_id,
             max_hops: 1,
             layers: vec!["structural".into()],
@@ -445,43 +497,49 @@ async fn test_causal_chain_full_five_node_chain() {
     };
 
     let run_tag = Uuid::new_v4().to_string();
+    let workspace_id = insert_workspace(&pool).await;
 
     let error_id = insert_entity(
         &pool,
+        workspace_id,
         "error",
         serde_json::json!({"message": format!("test-error-{}", run_tag)}),
     )
     .await;
     let session_id = insert_entity(
         &pool,
+        workspace_id,
         "session",
         serde_json::json!({"run": run_tag.clone()}),
     )
     .await;
     let user_id = insert_entity(
         &pool,
+        workspace_id,
         "user",
         serde_json::json!({"name": format!("test-user-{}", run_tag)}),
     )
     .await;
     let req_id = insert_entity(
         &pool,
+        workspace_id,
         "requirement",
         serde_json::json!({"title": format!("test-req-{}", run_tag)}),
     )
     .await;
     let code_id = insert_entity(
         &pool,
+        workspace_id,
         "code",
         serde_json::json!({"path": format!("src/{}.rs", run_tag)}),
     )
     .await;
 
     // Wire the chain: error→session→user, session→requirement→code.
-    insert_relation(&pool, error_id, session_id, "caused_in").await;
-    insert_relation(&pool, session_id, user_id, "initiated_by").await;
-    insert_relation(&pool, session_id, req_id, "fulfills").await;
-    insert_relation(&pool, req_id, code_id, "implemented_by").await;
+    insert_relation(&pool, workspace_id, error_id, session_id, "caused_in").await;
+    insert_relation(&pool, workspace_id, session_id, user_id, "initiated_by").await;
+    insert_relation(&pool, workspace_id, session_id, req_id, "fulfills").await;
+    insert_relation(&pool, workspace_id, req_id, code_id, "implemented_by").await;
 
     let chain = error_to_cause_chain(&pool, error_id)
         .await
@@ -537,22 +595,25 @@ async fn test_causal_chain_partial_reports_missing_hops() {
     };
 
     let run_tag = Uuid::new_v4().to_string();
+    let workspace_id = insert_workspace(&pool).await;
 
     let error_id = insert_entity(
         &pool,
+        workspace_id,
         "error",
         serde_json::json!({"message": format!("partial-error-{}", run_tag)}),
     )
     .await;
     let session_id = insert_entity(
         &pool,
+        workspace_id,
         "session",
         serde_json::json!({"run": run_tag.clone()}),
     )
     .await;
 
     // Only the error→session hop; no user/requirement/code links.
-    insert_relation(&pool, error_id, session_id, "caused_in").await;
+    insert_relation(&pool, workspace_id, error_id, session_id, "caused_in").await;
 
     let chain = error_to_cause_chain(&pool, error_id)
         .await

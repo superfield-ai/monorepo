@@ -55,6 +55,12 @@ pub enum IngestError {
 /// Options for [`ingest_document`].
 #[derive(Debug, Clone)]
 pub struct IngestOptions {
+    /// Workspace (tenant) that owns this document.
+    ///
+    /// Stamped onto every row written by the pipeline so that per-workspace
+    /// RLS policies and application-layer filters work correctly.  Must be
+    /// a non-nil UUID that exists in `public.workspaces(id)`.
+    pub workspace_id: Uuid,
     /// UUID of the corpus this document belongs to.  Must exist in `corpora`.
     pub corpus_id: Uuid,
     /// Human-readable title for the document.
@@ -105,6 +111,11 @@ pub async fn ingest_document(
     embedder: &Embedder,
     opts: IngestOptions,
 ) -> Result<IngestResult, IngestError> {
+    if opts.workspace_id.is_nil() {
+        return Err(IngestError::InvalidOptions(
+            "workspace_id must not be nil".into(),
+        ));
+    }
     if opts.title.is_empty() {
         return Err(IngestError::InvalidOptions(
             "title must not be empty".into(),
@@ -133,14 +144,15 @@ pub async fn ingest_document(
     // 4. Write in a transaction.
     let mut tx = pool.begin().await?;
 
-    // Insert document.
+    // Insert document — stamp workspace_id on every row per issue #429.
     let doc_id: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO documents (title, corpus_id, external_id)
-        VALUES ($1, $2, $3)
+        INSERT INTO nexum.documents (workspace_id, title, corpus_id, external_id)
+        VALUES ($1, $2, $3, $4)
         RETURNING id
         "#,
     )
+    .bind(opts.workspace_id)
     .bind(&opts.title)
     .bind(opts.corpus_id)
     .bind(&opts.external_id)
@@ -149,20 +161,21 @@ pub async fn ingest_document(
 
     // Determine next version number.
     let version_num: i32 = sqlx::query_scalar(
-        "SELECT COALESCE(MAX(version_num), 0) + 1 FROM document_versions WHERE doc_id = $1",
+        "SELECT COALESCE(MAX(version_num), 0) + 1 FROM nexum.document_versions WHERE doc_id = $1",
     )
     .bind(doc_id)
     .fetch_one(&mut *tx)
     .await?;
 
-    // Insert version.
+    // Insert version — stamp workspace_id per issue #429.
     let version_id: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO document_versions (doc_id, version_num, status)
-        VALUES ($1, $2, 'parsed')
+        INSERT INTO nexum.document_versions (workspace_id, doc_id, version_num, status)
+        VALUES ($1, $2, $3, 'parsed')
         RETURNING id
         "#,
     )
+    .bind(opts.workspace_id)
     .bind(doc_id)
     .bind(version_num)
     .fetch_one(&mut *tx)
@@ -171,7 +184,7 @@ pub async fn ingest_document(
     // Look up existing blocks for this doc by content_hash (dedup).
     let existing_hashes: Vec<String> = hashes.clone();
     let existing_rows: Vec<(Uuid, String)> = sqlx::query_as(
-        "SELECT id, content_hash FROM blocks WHERE doc_id = $1 AND content_hash = ANY($2)",
+        "SELECT id, content_hash FROM nexum.blocks WHERE doc_id = $1 AND content_hash = ANY($2)",
     )
     .bind(doc_id)
     .bind(&existing_hashes)
@@ -206,12 +219,14 @@ pub async fn ingest_document(
 
             let new_id: Uuid = sqlx::query_scalar(
                 r#"
-                INSERT INTO blocks (doc_id, content, content_hash, block_type, level, embedding)
-                VALUES ($1, $2, $3, $4, $5, $6::vector)
+                INSERT INTO nexum.blocks
+                    (workspace_id, doc_id, content, content_hash, block_type, level, embedding)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::vector)
                 ON CONFLICT DO NOTHING
                 RETURNING id
                 "#,
             )
+            .bind(opts.workspace_id)
             .bind(doc_id)
             .bind(&block.content)
             .bind(hash)
@@ -228,7 +243,7 @@ pub async fn ingest_document(
             if new_id == Uuid::nil() {
                 // Race: fetch the row that won.
                 sqlx::query_scalar::<_, Uuid>(
-                    "SELECT id FROM blocks WHERE doc_id = $1 AND content_hash = $2",
+                    "SELECT id FROM nexum.blocks WHERE doc_id = $1 AND content_hash = $2",
                 )
                 .bind(doc_id)
                 .bind(hash)
@@ -241,16 +256,18 @@ pub async fn ingest_document(
 
         block_ids.push(block_id);
 
-        sqlx::query("INSERT INTO version_blocks (version_id, block_id, seq) VALUES ($1, $2, $3)")
-            .bind(version_id)
-            .bind(block_id)
-            .bind((i + 1) as i32)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO nexum.version_blocks (version_id, block_id, seq) VALUES ($1, $2, $3)",
+        )
+        .bind(version_id)
+        .bind(block_id)
+        .bind((i + 1) as i32)
+        .execute(&mut *tx)
+        .await?;
     }
 
     // Update current_version_id on the document.
-    sqlx::query("UPDATE documents SET current_version_id = $1 WHERE id = $2")
+    sqlx::query("UPDATE nexum.documents SET current_version_id = $1 WHERE id = $2")
         .bind(version_id)
         .bind(doc_id)
         .execute(&mut *tx)
@@ -263,12 +280,14 @@ pub async fn ingest_document(
     for link in &links {
         sqlx::query(
             r#"
-            INSERT INTO links (id, src, dst, layer, rel_type, weight, confirmed, provenance)
-            VALUES ($1, $2, $3, $4, $5, $6, NULL, $7::jsonb)
+            INSERT INTO nexum.links
+                (id, workspace_id, src, dst, layer, rel_type, weight, confirmed, provenance)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8::jsonb)
             ON CONFLICT DO NOTHING
             "#,
         )
         .bind(Uuid::new_v4())
+        .bind(opts.workspace_id)
         .bind(Uuid::parse_str(&link.src_block_id).unwrap_or_else(|_| Uuid::nil()))
         .bind(Uuid::parse_str(&link.dst_block_id).unwrap_or_else(|_| Uuid::nil()))
         .bind(&link.layer)
@@ -280,7 +299,7 @@ pub async fn ingest_document(
     }
 
     // Mark version as embedded (blocks have embeddings).
-    sqlx::query("UPDATE document_versions SET status = 'embedded' WHERE id = $1")
+    sqlx::query("UPDATE nexum.document_versions SET status = 'embedded' WHERE id = $1")
         .bind(version_id)
         .execute(&mut *tx)
         .await?;
@@ -438,12 +457,14 @@ mod tests {
                        Second paragraph, see § 1 for details.\n\n\
                        Section 1: this is the target.";
 
-        let corpus_id = setup_test_corpus(&pool).await;
+        let workspace_id = setup_test_workspace(&pool).await;
+        let corpus_id = setup_test_corpus(&pool, workspace_id).await;
 
         let result = ingest_document(
             &pool,
             &embedder,
             IngestOptions {
+                workspace_id,
                 corpus_id,
                 title: "parity fixture".into(),
                 content: content.into(),
@@ -473,10 +494,12 @@ mod tests {
         let pool = connect(&cfg).await.expect("pool creation failed");
         let embedder = sf_embed::Embedder::new().expect("embedder init failed");
 
-        let corpus_id = setup_test_corpus(&pool).await;
+        let workspace_id = setup_test_workspace(&pool).await;
+        let corpus_id = setup_test_corpus(&pool, workspace_id).await;
 
         let content = "First paragraph.\n\nSecond paragraph.";
         let opts = IngestOptions {
+            workspace_id,
             corpus_id,
             title: "dedup fixture".into(),
             content: content.into(),
@@ -505,12 +528,36 @@ mod tests {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
+    /// Create a workspace row for integration tests and return its UUID.
     #[allow(dead_code)]
-    async fn setup_test_corpus(pool: &PgPool) -> Uuid {
-        sqlx::query_scalar("INSERT INTO corpora (name) VALUES ($1) RETURNING id")
-            .bind(format!("test-{}", Uuid::new_v4()))
-            .fetch_one(pool)
-            .await
-            .expect("corpus insert failed")
+    async fn setup_test_workspace(pool: &PgPool) -> Uuid {
+        sqlx::query_scalar(
+            r#"
+            INSERT INTO public.workspaces (slug, display_name)
+            VALUES ($1, $2)
+            RETURNING id
+            "#,
+        )
+        .bind(format!("test-ws-{}", Uuid::new_v4()))
+        .bind("Test Workspace")
+        .fetch_one(pool)
+        .await
+        .expect("workspace insert failed")
+    }
+
+    #[allow(dead_code)]
+    async fn setup_test_corpus(pool: &PgPool, workspace_id: Uuid) -> Uuid {
+        sqlx::query_scalar(
+            r#"
+            INSERT INTO nexum.corpora (workspace_id, name)
+            VALUES ($1, $2)
+            RETURNING id
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(format!("test-{}", Uuid::new_v4()))
+        .fetch_one(pool)
+        .await
+        .expect("corpus insert failed")
     }
 }

@@ -72,6 +72,46 @@ pub async fn acquire_workspace(
     Ok(conn)
 }
 
+/// Acquire a [`PoolConnection<Postgres>`] with both the workspace identity and
+/// the legacy principal identity set as session-local variables.
+///
+/// This is the preferred helper for issue #429-compliant callers.  It sets:
+///
+/// ```sql
+/// SET LOCAL app.workspace_id      = '<workspace_id>';
+/// SET LOCAL app.current_principal_id = '<workspace_id>';
+/// ```
+///
+/// RLS policies authored by issue #430 will reference `app.workspace_id`.  The
+/// legacy `app.current_principal_id` is kept for backwards compatibility until
+/// all policies have migrated.
+///
+/// # Arguments
+///
+/// * `pool`         — the shared pool obtained from [`connect`].
+/// * `workspace_id` — UUID of the workspace (tenant) to bind.
+///
+/// # Errors
+///
+/// Returns [`PoolError::Sqlx`] if the pool is exhausted, the connection is
+/// broken, or either `SET LOCAL` statement fails.
+pub async fn acquire_with_workspace_id(
+    pool: &PgPool,
+    workspace_id: uuid::Uuid,
+) -> Result<PoolConnection<Postgres>, PoolError> {
+    let ws_str = workspace_id.to_string();
+    let mut conn = pool.acquire().await?;
+    sqlx::query("SET LOCAL app.workspace_id = $1")
+        .bind(&ws_str)
+        .execute(&mut *conn)
+        .await?;
+    sqlx::query("SET LOCAL app.current_principal_id = $1")
+        .bind(&ws_str)
+        .execute(&mut *conn)
+        .await?;
+    Ok(conn)
+}
+
 #[cfg(test)]
 mod tests {
     // Integration tests that require a live Postgres instance are gated behind
