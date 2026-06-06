@@ -5,17 +5,16 @@
 -- Creates the `nexum` PostgreSQL schema and its core tables.
 -- All statements are idempotent (CREATE ... IF NOT EXISTS throughout).
 --
--- STUB — Phase: Substrate foundations (issue #426 scout)
+-- Phase: Substrate foundations (issues #426 scout, #431 fold AGE into single instance)
 -- This file defines the boundary interface so that:
 --   - The unified migration runner (#428) can apply it at startup.
 --   - workspace_id threading (#429) can add the column here.
 --   - RLS policies (#430) can target nexum.* tables.
 --   - The TypeScript nexum repo migration can be cross-referenced.
 --
--- This schema mirrors the TypeScript `db/schema.sql` but places all tables
--- in the `nexum` schema rather than `public`.  The Rust crate's `query.rs`
--- and integration tests already use fully-qualified `nexum.<table>` references;
--- `ingest.rs` must be updated to match.
+-- This schema places all tables in the `nexum` schema.  All Rust source files
+-- (ingest.rs, query.rs, causal_chain.rs) and integration tests use fully-qualified
+-- `nexum.<table>` references (issue #431 completed this migration).
 --
 -- See docs/scouts/426-postgres-schema-map.md §Integration Points and Risks for
 -- the gap analysis between TypeScript `public` tables and these `nexum.*` tables.
@@ -164,10 +163,7 @@ CREATE INDEX IF NOT EXISTS links_edge_embedding_hnsw_idx
 
 -- 9. entities and relations --------------------------------------------------
 -- Used by the causal-chain query (crates/nexum/src/causal_chain.rs).
--- These tables live in the nexum schema; causal_chain.rs currently uses
--- unqualified names — that code must be updated to use nexum.entities and
--- nexum.relations when this migration is applied.
--- See docs/scouts/426-postgres-schema-map.md §Integration Points and Risks.
+-- causal_chain.rs uses nexum.entities and nexum.relations (updated in issue #431).
 
 CREATE TABLE IF NOT EXISTS nexum.entities (
     id          UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
