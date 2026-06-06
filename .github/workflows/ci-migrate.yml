@@ -69,7 +69,10 @@ jobs:
         run: |
           output=$(bun packages/db/migrate.ts status)
           echo "$output"
-          if echo "$output" | grep -q "pending"; then
+          # Match "pending" as the status column value (surrounded by whitespace).
+          # The summary line prints "N pending)" — the closing parenthesis prevents
+          # a false positive, so this grep only fires on actual pending row entries.
+          if echo "$output" | grep -qE "\spending\s"; then
             echo "ERROR: Some migrations are still pending after migrate up"
             exit 1
           fi
