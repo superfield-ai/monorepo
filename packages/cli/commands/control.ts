@@ -1,4 +1,5 @@
 import { resolve } from "node:path";
+import { spawn as nodeSpawn } from "node:child_process";
 
 /**
  * @file control.ts
@@ -132,12 +133,14 @@ export async function controlCommand(
   const _buildControlWeb =
     deps._buildControlWeb ??
     (async () => {
-      const proc = Bun.spawn(["bun", "run", "build"], {
-        cwd: CONTROL_WEB_APP_DIR,
-        stdout: "inherit",
-        stderr: "inherit",
+      const exitCode = await new Promise<number | null>((resolve, reject) => {
+        const proc = nodeSpawn("bun", ["run", "build"], {
+          cwd: CONTROL_WEB_APP_DIR,
+          stdio: "inherit",
+        });
+        proc.on("error", reject);
+        proc.on("close", resolve);
       });
-      const exitCode = await proc.exited;
       if (exitCode !== 0) {
         throw new Error(
           `Browser UI build failed in ${CONTROL_WEB_APP_DIR} (exit ${exitCode})`,
@@ -149,23 +152,25 @@ export async function controlCommand(
     deps._startSfServe ??
     (async (opts: SfServeOpts) => {
       const sfServeBin = resolveSfServeBin();
-      const proc = Bun.spawn([sfServeBin], {
-        env: {
-          ...process.env,
-          CONTROL_PORT: String(opts.port),
-          CONTROL_ASSETS_DIR: opts.assetsDir,
-          SUPERFIELD_API_URL: opts.apiUrl,
-          ...(opts.projectRoot
-            ? {
-                SUPERFIELD_REPO_ROOT: opts.projectRoot,
-                CONTROL_SOURCE_DIR: opts.projectRoot,
-              }
-            : {}),
-        },
-        stdout: "inherit",
-        stderr: "inherit",
+      const exitCode = await new Promise<number | null>((resolve, reject) => {
+        const proc = nodeSpawn(sfServeBin, [], {
+          env: {
+            ...process.env,
+            CONTROL_PORT: String(opts.port),
+            CONTROL_ASSETS_DIR: opts.assetsDir,
+            SUPERFIELD_API_URL: opts.apiUrl,
+            ...(opts.projectRoot
+              ? {
+                  SUPERFIELD_REPO_ROOT: opts.projectRoot,
+                  CONTROL_SOURCE_DIR: opts.projectRoot,
+                }
+              : {}),
+          },
+          stdio: "inherit",
+        });
+        proc.on("error", reject);
+        proc.on("close", resolve);
       });
-      const exitCode = await proc.exited;
       if (exitCode !== 0) {
         throw new Error(`sf-serve exited with code ${exitCode}`);
       }
@@ -194,7 +199,7 @@ export async function controlCommand(
   const assetsDir = process.env.CONTROL_ASSETS_DIR ?? CONTROL_WEB_DIST_DIR;
 
   // Propagate to environment so any child process or library reads consistent
-  // values. sf-serve also inherits these via the env passed to Bun.spawn above.
+  // values. sf-serve also inherits these via the env passed to nodeSpawn above.
   if (parsed.port !== undefined) {
     process.env.CONTROL_PORT = String(parsed.port);
   }

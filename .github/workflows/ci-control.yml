@@ -89,7 +89,7 @@ jobs:
       - name: Build control web app
         run: bun run build:control-web
       - name: Install C toolchain (required by Rust build scripts)
-        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev
+        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libssl-dev
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
       - name: Build Rust superfield binary
@@ -120,4 +120,4 @@ jobs:
       - name: Install Playwright chromium browser
         run: bun x playwright install chromium --with-deps
       - name: Unit tests
-        run: bun --bun vitest run packages/control/apps/tests
+        run: bun --bun vitest run --config packages/control/apps/vitest.config.ts

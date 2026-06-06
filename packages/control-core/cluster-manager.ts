@@ -279,7 +279,7 @@ export async function waitForHealthy(
     if (allReady) return;
 
     tick++;
-    await Bun.sleep(POLL_INTERVAL_MS);
+    await new Promise((resolve) => setTimeout(resolve, POLL_INTERVAL_MS));
   }
 
   console.error("\n❌ Timed out waiting for cluster services.");
