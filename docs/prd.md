@@ -8,7 +8,11 @@ Every large enterprise carries an unserved build backlog: the internal and depar
 
 The backlog persists because the traditional cost of building, _product-managing_, and _maintaining_ a small bespoke application is too high to justify against its individual value. Building it the conventional way scatters its life across disconnected systems — source in one place, issues in another, validation on a server fleet, runtime errors in an observability tool, the spec in a document nobody updates. A human can cross those boundaries; an autonomous agent cannot, because it reads the stale fact with the same confidence as the fresh one. So the distance from a signal to a corrective change stays measured in days or weeks, and a small app is never worth that overhead. The backlog is the visible symptom of a structural cost problem.
 
-Superfield attacks the backlog by collapsing that cost. Each new app is born inside a single **company brain** — one coherent store holding its source code, changes, validation results, issues, specifications, documents, and runtime behavior together — and agents build and continuously improve it against that store, steered by the requesting team. The same store also gives the business a synthesized, continuously current view of itself, and the operational gaps that view surfaces become the next apps the brain builds. Each app is operated first by the people who requested it — whose usage becomes signal — and, over time, by agents themselves. Because each app is net-new, Superfield enters the enterprise as a **green wedge**: it builds software the business does not have and no incumbent system covers, displacing nothing and requiring no rip-and-replace. It lands on one unserved need, proves itself, and expands as more of the backlog moves into the brain — each additional app cheaper and more legible than the last because they share one coherent ground truth.
+A secondary cost is the toolchain itself. Conventional software delivery depends on a constellation of external services — source management, continuous integration, artifact storage, deployment orchestration — each maintained separately, each a boundary an agent must cross. These services were designed for human-paced workflows. Superfield does not outsource its core loop to them.
+
+Superfield attacks the backlog by collapsing both costs. The installation root is the **Forge** — one per enterprise, the single surface through which the enterprise provisions, manages, and operates all Superfield workloads. The Forge manages the company's knowledge base, source code, project management, and deployment: it is the source manager, the CI service, the artifact store, and the deployment controller in one. It runs in **fastenv**, Superfield's purpose-built execution environment, and deploys every app it builds into fastenv as well — removing the need for general-purpose container orchestration entirely.
+
+Inside the Forge lives the **company brain** — one coherent store that unifies the knowledge base and the transactional record. Source code, change history, validation results, issues, specifications, documents, and runtime behavior all live together in that store. Agents build and continuously improve apps against it, steered by the requesting team. The same store gives the business a synthesized, continuously current view of itself, and the operational gaps that view surfaces become the next apps the brain builds. Each app is operated first by the people who requested it — whose usage becomes signal — and, over time, by agents themselves. Because each app is net-new, Superfield enters the enterprise as a **green wedge**: it builds software the business does not have and no incumbent system covers, displacing nothing and requiring no rip-and-replace. It lands on one unserved need, proves itself, and expands as more of the backlog moves into the brain — each additional app cheaper and more legible than the last because they share one coherent ground truth.
 
 For every app it builds, Superfield delivers two surfaces:
 
@@ -25,6 +29,7 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 - Give each app a single, coherent source of truth that humans and agents reason against without crossing system boundaries.
 - Close the loop from signal to corrective action so it runs at the speed data updates, not at the speed of human hand-offs — making each app self-maintaining rather than a maintenance liability.
 - Let agents perform the development work — proposing, validating, and shipping changes — that humans steer and approve rather than execute.
+- Eliminate the external toolchain: the Forge is the source manager, CI service, artifact store, and deployment controller, so the core loop has no hard dependency on any external service.
 - Enter on a single unserved need without rip-and-replace, and expand as more of the backlog moves into the brain.
 
 **Success metrics**
@@ -38,7 +43,7 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 
 ## 3. User Roles
 
-- **Owner / Sponsor** — the IT or platform stakeholder accountable for adoption across the enterprise. Sets policy: what counts as a valid correction, what risk level may ship without human review, and what requires sign-off.
+- **Owner / Sponsor** — the technology leadership stakeholder (typically the office of the CTIO or equivalent) accountable for Superfield adoption across the enterprise. Provisions and governs the Forge. Sets policy: what counts as a valid correction, what risk level may ship without human review, and what requires sign-off.
 - **Requestor (business unit)** — the department that owns an unserved need, requests an app to address it, and operates that app once it exists so its usage becomes signal.
 - **Steerer (Product/Engineering lead)** — directs agent work by stating intent and confirming or correcting the agent's inference of intent. Reviews and approves gated changes.
 - **Collaborator** — proposes and reviews changes within a workspace, and operates the software so its behavior becomes signal.
@@ -48,6 +53,8 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 
 ## 4. User Stories
 
+- As an **Owner**, I want to provision a Forge on infrastructure my organization controls so that Superfield runs entirely within our trust boundary from day one.
+- As an **Owner**, I want the Forge to deploy apps to whatever hosts it can access and observe, so that I can start with a single host for a proof of concept and expand to additional infrastructure as usage grows.
 - As an **Owner**, I want to set the policy that governs which changes agents may ship autonomously and which require human approval, so that autonomy stays within the risk tolerance of the business.
 - As an **Owner**, I want every agent action and decision recorded with its reasoning, so that I can demonstrate control and accountability to auditors and regulators.
 - As a **Steerer**, I want to express what I want the software to do and have an agent infer the rest from how the software is actually used, so that I steer intent instead of authoring detailed specifications.
@@ -66,15 +73,17 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 
 ## 5. Core Workflows
 
+**Provisioning the Forge.** An Owner installs the Forge on infrastructure the organization controls. The Forge comes up as a self-contained fastenv instance: the brain store, the source manager, the validation runner, and the deployment controller all start together. The Owner points the Forge at the hosts it may deploy to — which may be the same host the Forge runs on for a first proof of concept, or additional hosts as usage grows. The data store may be local to the Forge host or a managed service the Forge connects to. Once the Forge is up, it is the only system the Owner needs to operate Superfield end to end.
+
 **Requesting a net-new app (the wedge).** A Requestor describes a need their department has no software for. A new workspace is created for that app inside the brain, and agents stand up a working first version against the unified store — born coherent, displacing nothing. Where the app needs data the enterprise maintains, it connects to the relevant systems of record by reading from them, without modifying or replacing them. Each additional app the enterprise requests follows the same path and joins the same brain.
 
 **Stating intent and inferring the spec.** A Steerer states what the software should do, or simply has the team operate it. The behavioral trace of that usage lands in the same store as the goals and the code. An agent reads the trace, infers what the software is actually used for, compares it to the stated goals, and surfaces the delta as a proposed specification. The human confirms or corrects the inference; the specification is continuously revised, never separately authored.
 
-**Proposing and validating a change.** An agent (or human) proposes a change as an isolated fork of the live state. The change is validated on demand — locally, or on federated machines when capacity is needed — against a current baseline held in the same store, and checked for conformance to the architectural and security constraints the brain holds. A change cannot merge until validation passes and any policy-required human approval is given.
+**Proposing and validating a change.** An agent (or human) proposes a change as an isolated fork of the live state. The Forge runs validation — in a fastenv instance provisioned for that job — against a current baseline held in the brain, checking conformance to the architectural and security constraints the brain holds. A change cannot merge until validation passes and any policy-required human approval is given.
 
 **Reviewing and merging.** A Steerer reviews a gated change together with its full reasoning chain and approves or rejects it. Approved changes merge into the live state; the decision and its rationale are recorded.
 
-**Deploying and learning.** A merged, validated change is deployed to the target environment. Runtime behavior and errors flow back into the brain as new signal, closing the loop. When a production error fires, an agent traverses the chain from error to session to affected users to requirement to current code, produces a grounded diagnosis, and proposes the next change — within minutes, with a human reviewing the change rather than assembling the diagnosis.
+**Deploying and learning.** The Forge deploys a merged, validated change to the target environment — a fastenv instance on a host the Forge can access and observe. Runtime behavior and errors flow back into the brain as new signal, closing the loop. When a production error fires, an agent traverses the chain from error to session to affected users to requirement to current code, produces a grounded diagnosis, and proposes the next change — within minutes, with a human reviewing the change rather than assembling the diagnosis.
 
 **Steering and monitoring from the control panel.** A Steerer drives agent work from the control panel through three modes: directing an agent on a specific issue, turning a raw idea into a tracked piece of work, and editing the app's documents and plan. They watch the agent work against a live preview of the running app, see each step's reasoning and the resulting change, and steer mid-task. An Owner monitors every active agent — its task, elapsed time, and cost — and can intervene, escalate, or stop the loop. Both surfaces — the app and the control panel — are reached through one sign-on.
 
@@ -86,13 +95,14 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 
 ## 6. Entity Lifecycle
 
-- **Workspace (company brain):** provisioned → active → suspended → decommissioned. Isolated from every other workspace.
-- **App (project):** requested → standing-up → active → archived. Each app gets its own workspace within the enterprise's brain.
+- **Forge:** provisioned → active → suspended → decommissioned. One per enterprise. Hosts the brain, runs validation, and manages deployments for all apps under it.
+- **fastenv instance:** requested → running → stopped | replaced. The execution unit for all Superfield workloads — the Forge itself, validation jobs, and delivered application instances all run as fastenv instances.
+- **Workspace (company brain):** provisioned → active → suspended → decommissioned. Isolated from every other workspace. The knowledge base and transactional record are unified in the same store.
+- **App (project):** requested → standing-up → active → archived. Each app gets its own workspace within the enterprise's brain and runs as a fastenv instance on a Forge-accessible host.
 - **Intent / requirement:** stated or inferred → confirmed → revised (continuous) → retired.
 - **Specification:** inferred → confirmed | corrected → superseded. Always derived from current intent and behavior.
 - **Change:** draft → validating → awaiting-approval (when policy requires) → merged | rejected | abandoned.
-- **Isolated environment:** requested → provisioned → active → torn down.
-- **Validation run:** queued → running → passed | failed.
+- **Validation run:** queued → running → passed | failed. Runs in an isolated fastenv instance provisioned by the Forge.
 - **Issue:** open → in-progress → resolved | closed.
 - **Deployment:** pending → live → rolled-back | superseded.
 - **Policy:** drafted → active → revised → retired.
@@ -102,18 +112,17 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 Capability categories required (no specific vendors):
 
 - **Read from systems of record** — read-only connection to the enterprise's existing systems so a new app can use data the business maintains, without modifying or replacing those systems.
-- **Federated compute** — the ability to run validation jobs on remote machines when local capacity is insufficient.
 - **Identity and access management** — enterprise-grade authentication and single sign-on for human users, mapped to the role model and shared by both surfaces (the delivered app and the control panel).
-- **Deployment targets** — the ability to ship the application to the enterprise's chosen hosting environments.
+- **Host access** — the ability for the Forge to reach, observe, and deploy onto infrastructure the enterprise makes available. The data store may be local to the Forge host or a managed service.
 - **Agent execution** — access to large-language-model agent capability that performs the reading, reasoning, and writing.
 - **Notification** — the ability to alert a human when a change awaits approval or a signal demands attention.
 
-**Triggers:** a new workspace is created when a Requestor requests an app; systems of record are read on demand as an app needs their data; federated compute is requested when a validation run exceeds local capacity; identity is checked on every human action; deployment runs on a merged, validated change; notification fires when policy requires human approval or a high-severity signal appears.
+**Triggers:** a new workspace is created when a Requestor requests an app; systems of record are read on demand as an app needs their data; identity is checked on every human action; the Forge provisions a fastenv instance to run a validation job or deploy a merged change; notification fires when policy requires human approval or a high-severity signal appears.
 
 ## 8. Out of Scope
 
 - Reproducing the full feature surface of incumbent developer tooling. Only the portion that actually carries development work is in scope; the rest is overhead for a human-paced collaboration model that agents do not need.
-- A permanent dependency on external continuous-integration services or external forges to complete the core loop. These may be imported from, but the core loop is self-sufficient.
+- Compatibility with external source forges, CI services, container registries, or GitOps deployment pipelines as required runtime dependencies. The Forge replaces these for the apps it manages; importing from them during initial onboarding is acceptable, but ongoing operation does not depend on them.
 - Arbitrary workflow customization. The product encodes one coherent way to run the loop rather than offering configuration knobs.
 - Serving as a general-purpose data warehouse or analytics platform for retrospective reporting. The brain synthesizes a current view of the business to decide and steer what software to build — synthesis in service of execution is in scope; reporting and metrics unrelated to the development loop are not.
 - Executing operational improvements that are not software. Superfield drives the software slice of operational improvement; where a gap is best closed by process, policy, or people, it may surface the gap but does not implement the fix.
@@ -123,8 +132,9 @@ Capability categories required (no specific vendors):
 
 ## 9. Constraints
 
-- **Self-sufficiency.** The core loop — intent, change, validation, review, deploy — must complete without a hard dependency on any external forge or continuous-integration service.
-- **Coherence.** Operational facts and knowledge must share one schema, one clock, and one trust model, so that any fact joins to any related fact without translation.
+- **Self-sufficiency.** The Forge is the source manager, CI service, artifact store, and deployment controller for every app it manages. The core loop — intent, change, validation, review, deploy — completes without a runtime dependency on any external forge, CI service, registry, or GitOps tool.
+- **fastenv execution.** All Superfield workloads — the Forge itself, validation jobs, and delivered application instances — run in fastenv. No general-purpose container orchestration platform is required.
+- **Coherence.** The knowledge base and transactional record are unified in one store, sharing one schema, one clock, and one trust model, so that any fact joins to any related fact without translation.
 - **End-to-end verifiability.** Every change must be traceable from the intent that motivated it through the validation that gated it to the runtime behavior it produced.
 - **Validation gate.** No change may merge without passing validation against a current baseline — including conformance to the governed architectural and security constraints the brain holds, not test results alone — and no change above the policy-defined risk threshold may ship without human approval.
 - **Isolation and access control.** Each enterprise workspace is isolated from every other, and access control travels with the data rather than living in a separate system. Because one store concentrates risk, isolation and recoverability are launch-critical.
@@ -143,3 +153,4 @@ Capability categories required (no specific vendors):
 - How are conflicting concurrent changes from multiple agents and humans reconciled within the live state?
 - What data-residency and regulatory boundaries must a single workspace honor for a multinational enterprise?
 - How does an enterprise measure trust in autonomous changes well enough to raise the policy threshold over time?
+- When the Forge and an app instance share the same host, what isolation guarantees apply between the Forge's own workloads and the app's runtime behavior?
