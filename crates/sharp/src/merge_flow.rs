@@ -189,10 +189,7 @@ pub async fn run_merge_flow(pool: &PgPool, req: MergeRequest) -> Result<MergeOut
 /// # Errors
 ///
 /// Returns [`SharpError::Db`] on a database error.
-pub async fn onboard_workspace(
-    pool: &PgPool,
-    repo_name: &str,
-) -> Result<repo::Repo, SharpError> {
+pub async fn onboard_workspace(pool: &PgPool, repo_name: &str) -> Result<repo::Repo, SharpError> {
     repo::init(pool, repo_name).await
 }
 

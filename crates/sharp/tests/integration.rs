@@ -1330,8 +1330,6 @@ async fn merge_flow_onboard_workspace_is_idempotent() {
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL, applied Sharp migrations, and cargo on PATH"]
 async fn merge_flow_run_merge_flow_records_episode() {
-    use std::path::PathBuf;
-
     let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
     let pool = connect(&cfg).await.expect("pool creation failed");
 
@@ -1377,7 +1375,10 @@ async fn merge_flow_run_merge_flow_records_episode() {
         .expect("run_merge_flow must succeed on a clean rename-propagated merge");
 
     assert_eq!(outcome.files_merged, 1, "one file merged");
-    assert!(outcome.episode_id != uuid::Uuid::nil(), "episode_id must be set");
+    assert!(
+        outcome.episode_id != uuid::Uuid::nil(),
+        "episode_id must be set"
+    );
 
     // Verify the episode was finished and its event recorded.
     let ep = episode::find(&pool, outcome.episode_id)
