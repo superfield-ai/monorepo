@@ -97,7 +97,10 @@ jobs:
           TEMPLATE_REPO_PATH: ${{ github.workspace }}/template
           CONTROL_WEB_SERVICE_NAME: superfield-app
           DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
-          SF_SERVE_BIN: ./target/release/superfield
+          # .cargo/config.toml sets target-dir = "~/.cache/cargo-target/cli".
+          # Cargo does NOT shell-expand ~ in target-dir, so the binary lands at
+          # the literal path <workspace>/~/.cache/cargo-target/cli/release/superfield.
+          SF_SERVE_BIN: ./~/.cache/cargo-target/cli/release/superfield
         run: |
           bun x playwright test \
             --config=packages/control/tests/e2e/playwright.config.ts \

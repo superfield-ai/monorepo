@@ -151,7 +151,15 @@ export class FeaturePaneController {
     }
   }
 
-  async steer(context: string, sessionId: string): Promise<void> {
+  async steer(context: string, sessionId?: string): Promise<void> {
+    if (!sessionId) {
+      this.state = {
+        ...this.state,
+        error: "SELECT A RUNNING ISSUE BEFORE STEERING",
+      };
+      this.notify();
+      return;
+    }
     this.state = { ...this.state, error: null };
     this.notify();
     try {
