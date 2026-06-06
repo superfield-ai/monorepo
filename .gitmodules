@@ -1,3 +1,15 @@
 [submodule "blueprint"]
 	path = blueprint
 	url = https://github.com/superfield-ai/superfield-blueprint.git
+[submodule "sharp"]
+	path = sharp
+	url = git@github-lucky:superfield-ai/sharp.git
+[submodule "nexum"]
+	path = nexum
+	url = https://github.com/superfield-ai/nexum.git
+[submodule "fastenv"]
+	path = fastenv
+	url = git@github-lucky:superfield-ai/fastenv.git
+[submodule "control"]
+	path = control
+	url = git@github-lucky:superfield-ai/superfield-studio.git
