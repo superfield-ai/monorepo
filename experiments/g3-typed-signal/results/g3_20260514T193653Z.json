@@ -1,0 +1,56 @@
+{
+  "extra": {
+    "config": {
+      "corpus_size": 5000,
+      "device": "cpu",
+      "hidden_dim": 64,
+      "n_steps": 500,
+      "out_dim": 32,
+      "seed": 42,
+      "type_emb_dim": 16
+    },
+    "legacy_path": "results/g3_5k_500steps.json"
+  },
+  "gate": "G3",
+  "hypothesis": "H7.2",
+  "metrics": {
+    "accuracy_delta": -0.08000001311302185,
+    "corpus_size": 5000,
+    "mannwhitney_statistic": 8590964.0,
+    "mean_cross_type_distance": 1.1488455167834095,
+    "mean_within_type_distance": 0.22310718499811175,
+    "n_steps": 500,
+    "p_value": 0.0,
+    "separation_ratio": 5.1492986063767185,
+    "typed_accuracy": 0.28999999165534973,
+    "typed_better": false,
+    "typed_final_loss": 0.01180318370461464,
+    "untyped_accuracy": 0.3700000047683716,
+    "untyped_final_loss": 0.015305524691939354
+  },
+  "notes": "Typed links develop distinct gradient profiles. Link types are a meaningful gradient training axis.",
+  "pass": true,
+  "results_path": "results/g3_20260514T193653Z.json",
+  "runtime": {
+    "accelerator": {
+      "available": true,
+      "device": "cpu"
+    },
+    "cpu": "x86_64",
+    "cpu_count": 40,
+    "env": {},
+    "gate": "G3",
+    "git_sha": "85b5a2a",
+    "hostname": "libra-explorer-01",
+    "hypothesis": "H7.2",
+    "image_digest": null,
+    "platform": "Linux-5.15.0-173-generic-x86_64-with-glibc2.35",
+    "python_version": "3.10.12",
+    "ram_bytes": 67162193920,
+    "seed": 42,
+    "started_at_iso": "2026-05-14T19:36:53Z",
+    "started_at_unix": 1778787413.4059093,
+    "torch_version": "2.11.0+cu130"
+  },
+  "schema_version": 1
+}

@@ -1,0 +1,9 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+results/*.png
+# Note: results/g3_*Z.json (canonical envelopes) and results/g3_*_*.json
+# (legacy spike outputs) are committed as evidence for the H7.2/G3 gate
+# decision. Test-run scratch files are not.
+results/.g3_test_run_tmp.json

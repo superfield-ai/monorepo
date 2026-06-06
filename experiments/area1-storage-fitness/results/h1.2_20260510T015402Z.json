@@ -1,0 +1,94 @@
+{
+  "extra": {
+    "design": "synthetic planted-cross-type",
+    "embedding_dim": 384,
+    "modes": [
+      "fulltext",
+      "semantic",
+      "graph_only",
+      "hybrid",
+      "edge_semantic"
+    ],
+    "noise_std": 0.08,
+    "topic_dim": 16
+  },
+  "gate": "H1.2",
+  "hypothesis": "H1.2",
+  "metrics": {
+    "block_type_counts": {
+      "heading": 12415,
+      "list_item": 12521,
+      "paragraph": 12364,
+      "table": 12700
+    },
+    "h12_passed": false,
+    "h12_relative_gain_hybrid_vs_semantic": 0.0,
+    "ingest_seconds": 86.43235010793433,
+    "k": 10,
+    "n_blocks": 50000,
+    "n_documents": 500,
+    "n_links": 2392,
+    "n_planted_queries": 200,
+    "per_mode": {
+      "edge_semantic": {
+        "n_queries": 200,
+        "ndcg_at_10": 0.45975712633069643,
+        "p50_ms": 2.039610641077161,
+        "p99_ms": 2.2095819702371955,
+        "recall_at_10": 0.765
+      },
+      "fulltext": {
+        "n_queries": 200,
+        "ndcg_at_10": 0.5925066976594077,
+        "p50_ms": 4.451662534847856,
+        "p99_ms": 6.644115238450467,
+        "recall_at_10": 1.0
+      },
+      "graph_only": {
+        "n_queries": 200,
+        "ndcg_at_10": 0.1401270969742891,
+        "p50_ms": 0.4474835004657507,
+        "p99_ms": 2.0139223895967007,
+        "recall_at_10": 0.245
+      },
+      "hybrid": {
+        "n_queries": 200,
+        "ndcg_at_10": 0.03360164710238238,
+        "p50_ms": 2.7519934810698032,
+        "p99_ms": 3.830840829759836,
+        "recall_at_10": 0.075
+      },
+      "semantic": {
+        "n_queries": 200,
+        "ndcg_at_10": 0.03360164710238238,
+        "p50_ms": 1.123595517128706,
+        "p99_ms": 1.462306641042232,
+        "recall_at_10": 0.075
+      }
+    }
+  },
+  "pass": false,
+  "results_path": "/home/lucas/tmp/agent-worktrees/nexum/feat-6-area-1-storage-architecture-fitness-full-benchma/experiments/area1-storage-fitness/results/h1.2_20260510T015402Z.json",
+  "runtime": {
+    "accelerator": {
+      "available": true,
+      "device": "cpu"
+    },
+    "cpu": "x86_64",
+    "cpu_count": 40,
+    "env": {},
+    "gate": "H1.2",
+    "git_sha": "65e29de",
+    "hostname": "libra-explorer-01",
+    "hypothesis": "H1.2",
+    "image_digest": null,
+    "platform": "Linux-5.15.0-173-generic-x86_64-with-glibc2.35",
+    "python_version": "3.10.12",
+    "ram_bytes": 67162193920,
+    "seed": 42,
+    "started_at_iso": "2026-05-10T01:54:02Z",
+    "started_at_unix": 1778378042.7564793,
+    "torch_version": "2.11.0+cu130"
+  },
+  "schema_version": 1
+}

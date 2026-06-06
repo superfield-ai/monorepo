@@ -1,0 +1,24 @@
+{
+  "pass_g3": true,
+  "p_value": 0.0,
+  "separation_ratio": 5.1492986063767185,
+  "typed_accuracy": 0.28999999165534973,
+  "untyped_accuracy": 0.3700000047683716,
+  "typed_better": false,
+  "accuracy_delta": -0.08000001311302185,
+  "typed_final_loss": 0.01180318370461464,
+  "untyped_final_loss": 0.015305524691939354,
+  "mean_within_type_distance": 0.22310718499811175,
+  "mean_cross_type_distance": 1.1488455167834095,
+  "mannwhitney_statistic": 8590964.0,
+  "interpretation": "Typed links develop distinct gradient profiles. Link types are a meaningful gradient training axis.",
+  "config": {
+    "n_steps": 500,
+    "corpus_size": 5000,
+    "seed": 42,
+    "hidden_dim": 64,
+    "out_dim": 32,
+    "type_emb_dim": 16,
+    "device": "cpu"
+  }
+}

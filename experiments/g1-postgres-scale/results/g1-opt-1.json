@@ -1,0 +1,103 @@
+{
+  "gate": "G1",
+  "hypothesis": "H1.1",
+  "metrics": {
+    "acceptance": {
+      "p99_target_ms": 200.0,
+      "recall_target": 0.9,
+      "shared_buffer_target_bytes": 1073741824
+    },
+    "env": {
+      "embedding_dim": 384,
+      "maintenance_work_mem": "2GB",
+      "n_blocks": 1000000,
+      "pg_version": "16.13 (Debian 16.13-1.pgdg12+1)",
+      "pgvector_version": "0.8.2",
+      "shared_buffers": "1GB",
+      "shared_buffers_bytes": 1073741824,
+      "table_size_bytes": 839385088,
+      "work_mem": "64MB"
+    },
+    "overall_pass": false,
+    "per_config": {
+      "hnsw_m16_full": {
+        "build": {
+          "build_seconds": null,
+          "column_type": "vector",
+          "index_size_bytes": 2048008192,
+          "kind": "hnsw",
+          "opclass": "vector_cosine_ops",
+          "params": {
+            "ef_construction": 64,
+            "m": 16
+          },
+          "reused_existing": true
+        },
+        "sweep": [
+          {
+            "knob": 20,
+            "knob_name": "ef_search",
+            "mean_ms": 8.505263649858534,
+            "p50_ms": 8.359445026144385,
+            "p95_ms": 10.805235663428903,
+            "p99_ms": 12.325339540839202,
+            "recall_at_10": 0.06333333333333334
+          },
+          {
+            "knob": 40,
+            "knob_name": "ef_search",
+            "mean_ms": 11.242472268640995,
+            "p50_ms": 11.050834553316236,
+            "p95_ms": 15.349307586438952,
+            "p99_ms": 17.848810856230557,
+            "recall_at_10": 0.10666666666666667
+          },
+          {
+            "knob": 80,
+            "knob_name": "ef_search",
+            "mean_ms": 20.115622356534004,
+            "p50_ms": 19.4538168143481,
+            "p95_ms": 26.238979771733284,
+            "p99_ms": 27.47519159689546,
+            "recall_at_10": 0.14333333333333334
+          },
+          {
+            "knob": 200,
+            "knob_name": "ef_search",
+            "mean_ms": 38.78819219302386,
+            "p50_ms": 37.50820318236947,
+            "p95_ms": 48.46101584844291,
+            "p99_ms": 52.240996235050275,
+            "recall_at_10": 0.19
+          }
+        ]
+      }
+    },
+    "winners": []
+  },
+  "notes": "G1-OPT-1 (#73) HNSW diagnosis & optimization sweep.",
+  "pass": false,
+  "results_path": "/home/lucas/tmp/agent-worktrees/nexum/feat-73-g1-opt-1-diagnose-and-fix-hnsw-semantic-ann-late/experiments/g1-postgres-scale/results/g1-opt-1.json",
+  "runtime": {
+    "accelerator": {
+      "available": true,
+      "device": "cpu"
+    },
+    "cpu": "x86_64",
+    "cpu_count": 40,
+    "env": {},
+    "gate": "G1",
+    "git_sha": "9c7df19",
+    "hostname": "libra-explorer-01",
+    "hypothesis": "H1.1",
+    "image_digest": null,
+    "platform": "Linux-5.15.0-173-generic-x86_64-with-glibc2.35",
+    "python_version": "3.10.12",
+    "ram_bytes": 67162193920,
+    "seed": 42,
+    "started_at_iso": "2026-05-09T01:43:50Z",
+    "started_at_unix": 1778291030.2959807,
+    "torch_version": "2.11.0+cu130"
+  },
+  "schema_version": 1
+}

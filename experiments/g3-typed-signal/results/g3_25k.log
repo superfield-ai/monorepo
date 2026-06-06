@@ -1,0 +1,24 @@
+
+=== G3 Typed-Link Gradient Signal Spike ===
+  Device:      cpu
+  Corpus size: 25,000 nodes
+  Steps:       300
+  Seed:        42
+
+[1/5] Generating synthetic corpus...
+  Generated 25,000 nodes, 124,997 edges in 0.3s
+
+[2/5] Training TypedLinkGraphModel for 300 steps...
+  Step   60/300 — loss=0.3187
+  Step  120/300 — loss=0.0391
+  Step  180/300 — loss=0.0154
+  Step  240/300 — loss=0.0224
+  Step  300/300 — loss=0.0097
+  Typed model trained in 65.8s — val accuracy=0.375
+
+[3/5] Measuring edge type divergence...
+  separation_ratio = 5.020
+  Mann-Whitney U p = 0.0000
+  G3 PASS: True
+
+[4/5] Training UntypedGNNModel for 300 steps...

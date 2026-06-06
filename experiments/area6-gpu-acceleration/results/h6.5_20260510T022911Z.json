@@ -1,0 +1,49 @@
+{
+  "extra": {
+    "cpu_only": true,
+    "cuda_required": false,
+    "simulation": true
+  },
+  "gate": "H6.5",
+  "hypothesis": "H6.5",
+  "metrics": {
+    "cold_latency_multiplier": 10.0,
+    "cpu_fallback_throughput_relative": 1.0,
+    "full_fit_gpu_throughput_relative": 10.0,
+    "h6_6_supported": true,
+    "hot_shard_hit_rate": 1.0,
+    "hot_shard_throughput_relative": 10.0,
+    "n_blocks": 1000000,
+    "n_queries": 10000,
+    "top_10pct_serves_pct_queries": 1.0,
+    "uvm_hit_rate": 0.0964,
+    "uvm_throughput_relative": 1.0950024090052999,
+    "vram_capacity_fraction": 0.1,
+    "zipf_alpha_fit": 0.708308121824826
+  },
+  "notes": "CPU SIMULATION ONLY \u2014 no real CUDA hardware. Statistical model of hot-shard pinning vs. uniform random eviction (UVM proxy) under Zipf(1.2) access distribution. Cold queries pay 10x latency vs. GPU hot path. Real GPU validation deferred until hardware is available; do not interpret throughput numbers as actual measured GPU performance.",
+  "pass": true,
+  "results_path": "experiments/area6-gpu-acceleration/results/h6.5_20260510T022911Z.json",
+  "runtime": {
+    "accelerator": {
+      "available": true,
+      "device": "cpu"
+    },
+    "cpu": "x86_64",
+    "cpu_count": 40,
+    "env": {},
+    "gate": "H6.5",
+    "git_sha": "1a75f98",
+    "hostname": "libra-explorer-01",
+    "hypothesis": "H6.5",
+    "image_digest": null,
+    "platform": "Linux-5.15.0-173-generic-x86_64-with-glibc2.35",
+    "python_version": "3.10.12",
+    "ram_bytes": 67162193920,
+    "seed": 42,
+    "started_at_iso": "2026-05-10T02:29:11Z",
+    "started_at_unix": 1778380151.0625806,
+    "torch_version": "2.11.0+cu130"
+  },
+  "schema_version": 1
+}
