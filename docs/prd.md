@@ -14,6 +14,8 @@ Superfield attacks the backlog by collapsing both costs. The installation root i
 
 Inside the Forge lives the **company brain** — one coherent store that unifies the knowledge base and the transactional record. Source code, change history, validation results, issues, specifications, documents, and runtime behavior all live together in that store. Agents build and continuously improve apps against it, steered by the requesting team. The same store gives the business a synthesized, continuously current view of itself, and the operational gaps that view surfaces become the next apps the brain builds. Each app is operated first by the people who requested it — whose usage becomes signal — and, over time, by agents themselves. Because each app is net-new, Superfield enters the enterprise as a **green wedge**: it builds software the business does not have and no incumbent system covers, displacing nothing and requiring no rip-and-replace. It lands on one unserved need, proves itself, and expands as more of the backlog moves into the brain — each additional app cheaper and more legible than the last because they share one coherent ground truth.
 
+The Forge is itself a Superfield app. It arrives with three seed capabilities — a knowledge base engine, a project management surface, and a CI job orchestrator — and it self-drives its own construction from that seed. As the enterprise uses it, those seed capabilities become signal: the same loop that improves any other app improves the Forge itself. The Forge does not require a separate upgrade or migration path; it evolves through routine Superfield operation. This makes the Forge the most direct proof of the product's thesis: self-improving software, demonstrated on the system that builds it.
+
 For every app it builds, Superfield delivers two surfaces:
 
 - **The application** the business asked for — the running webapp used by its intended audience.
@@ -31,6 +33,7 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 - Let agents perform the development work — proposing, validating, and shipping changes — that humans steer and approve rather than execute.
 - Eliminate the external toolchain: the Forge is the source manager, CI service, artifact store, and deployment controller, so the core loop has no hard dependency on any external service.
 - Enter on a single unserved need without rip-and-replace, and expand as more of the backlog moves into the brain.
+- Demonstrate the product's thesis on itself: the Forge arrives as a minimal seed and self-improves through the same loop it applies to every other app.
 
 **Success metrics**
 
@@ -53,7 +56,8 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 
 ## 4. User Stories
 
-- As an **Owner**, I want to provision a Forge on infrastructure my organization controls so that Superfield runs entirely within our trust boundary from day one.
+- As an **Owner**, I want to provision a Forge on infrastructure my organization controls so that Superfield runs entirely within our trust boundary from day one and arrives ready to use with its seed capabilities.
+- As an **Owner**, I want the Forge to improve its own seed capabilities — the knowledge base, project management, and CI orchestration — through the same agent loop it applies to other apps, so that I never need a separate upgrade process for Superfield itself.
 - As an **Owner**, I want the Forge to deploy apps to whatever hosts it can access and observe, so that I can start with a single host for a proof of concept and expand to additional infrastructure as usage grows.
 - As an **Owner**, I want to set the policy that governs which changes agents may ship autonomously and which require human approval, so that autonomy stays within the risk tolerance of the business.
 - As an **Owner**, I want every agent action and decision recorded with its reasoning, so that I can demonstrate control and accountability to auditors and regulators.
@@ -73,7 +77,9 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 
 ## 5. Core Workflows
 
-**Provisioning the Forge.** An Owner installs the Forge on infrastructure the organization controls. The Forge comes up as a self-contained fastenv instance: the brain store, the source manager, the validation runner, and the deployment controller all start together. The Owner points the Forge at the hosts it may deploy to — which may be the same host the Forge runs on for a first proof of concept, or additional hosts as usage grows. The data store may be local to the Forge host or a managed service the Forge connects to. Once the Forge is up, it is the only system the Owner needs to operate Superfield end to end.
+**Provisioning the Forge.** An Owner installs the Forge on infrastructure the organization controls. The Forge comes up as a self-contained fastenv instance: the brain store, the source manager, the validation runner, and the deployment controller all start together, seeded with three initial apps — a knowledge base engine, a project management surface, and a CI job orchestrator. The Owner points the Forge at the hosts it may deploy to — which may be the same host the Forge runs on for a first proof of concept, or additional hosts as usage grows. The data store may be local to the Forge host or a managed service the Forge connects to. Once the Forge is up, it is the only system the Owner needs to operate Superfield end to end.
+
+**The Forge improves itself.** The seed apps that come with the Forge — the knowledge base engine, the project management surface, and the CI job orchestrator — are full Superfield apps. They accumulate usage signal, surface gaps, and accept agent-proposed improvements through the same loop as any other app. The Forge self-drives its own construction: agents propose changes to the Forge's own capabilities, humans review and approve them, and the Forge upgrades itself without a separate release process. Over time, the Forge evolves from its seed into the full capability the enterprise needs, shaped by actual usage rather than a fixed product roadmap.
 
 **Requesting a net-new app (the wedge).** A Requestor describes a need their department has no software for. A new workspace is created for that app inside the brain, and agents stand up a working first version against the unified store — born coherent, displacing nothing. Where the app needs data the enterprise maintains, it connects to the relevant systems of record by reading from them, without modifying or replacing them. Each additional app the enterprise requests follows the same path and joins the same brain.
 
@@ -95,7 +101,7 @@ Both surfaces sit behind **one shared authentication and access layer**, mapped 
 
 ## 6. Entity Lifecycle
 
-- **Forge:** provisioned → active → suspended → decommissioned. One per enterprise. Hosts the brain, runs validation, and manages deployments for all apps under it.
+- **Forge:** provisioned (seed) → active → evolving → suspended → decommissioned. One per enterprise. Arrives with a knowledge base engine, project management surface, and CI job orchestrator as seed apps; self-improves through routine Superfield operation. Hosts the brain, runs validation, and manages deployments for all apps under it.
 - **fastenv instance:** requested → running → stopped | replaced. The execution unit for all Superfield workloads — the Forge itself, validation jobs, and delivered application instances all run as fastenv instances.
 - **Workspace (company brain):** provisioned → active → suspended → decommissioned. Isolated from every other workspace. The knowledge base and transactional record are unified in the same store.
 - **App (project):** requested → standing-up → active → archived. Each app gets its own workspace within the enterprise's brain and runs as a fastenv instance on a Forge-accessible host.
@@ -132,7 +138,7 @@ Capability categories required (no specific vendors):
 
 ## 9. Constraints
 
-- **Self-sufficiency.** The Forge is the source manager, CI service, artifact store, and deployment controller for every app it manages. The core loop — intent, change, validation, review, deploy — completes without a runtime dependency on any external forge, CI service, registry, or GitOps tool.
+- **Self-sufficiency.** The Forge is the source manager, CI service, artifact store, and deployment controller for every app it manages — including itself. The core loop — intent, change, validation, review, deploy — completes without a runtime dependency on any external forge, CI service, registry, or GitOps tool. The Forge upgrades itself through the same loop; no external release process is required to evolve it.
 - **fastenv execution.** All Superfield workloads — the Forge itself, validation jobs, and delivered application instances — run in fastenv. No general-purpose container orchestration platform is required.
 - **Coherence.** The knowledge base and transactional record are unified in one store, sharing one schema, one clock, and one trust model, so that any fact joins to any related fact without translation.
 - **End-to-end verifiability.** Every change must be traceable from the intent that motivated it through the validation that gated it to the runtime behavior it produced.
