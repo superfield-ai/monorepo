@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+# tests/fixtures/claude-stub
+#
+# Lightweight Claude CLI stub for Layer 3 integration tests.
+#
+# Canonical spec: test-plan.md — "Layer 3 — Integration Tests" /
+# "Mocked Claude CLI" section.
+#
+# Behaviour:
+#   1. Appends all invocation arguments to $CLAUDE_STUB_LOG.
+#   2. When called with -p <prompt>, also logs the prompt value.
+#   3. Echoes a deterministic test response on stdout.
+#
+# The stub is installed by tests/integration/helpers/claude-stub.ts which
+# copies it to a temp directory and prepends that directory to PATH so that
+# any subprocess spawned by the code under test resolves "claude" to this
+# stub.
+#
+# Environment variables:
+#   CLAUDE_STUB_LOG  — absolute path to the log file (required)
+
+set -euo pipefail
+
+LOG_PATH="${CLAUDE_STUB_LOG:-/tmp/claude-stub.log}"
+
+# Log all invocation arguments.
+printf "ARGS: %s\n" "$*" >> "$LOG_PATH"
+
+# Log the prompt value when -p flag is used.
+if [[ "${1:-}" == "-p" ]]; then
+  printf "PROMPT: %s\n" "${2:-}" >> "$LOG_PATH"
+fi
+
+# Emit a deterministic test response.
+echo "Test response to: ${1:-}"

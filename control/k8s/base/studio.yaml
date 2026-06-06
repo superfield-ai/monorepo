@@ -1,0 +1,61 @@
+---
+# Studio server Deployment.
+# The studio server (Bun HTTP) proxies /app/* → web service and serves
+# the browser UI from STUDIO_ASSETS_DIR. Image is built in CI and
+# imported into k3d with imagePullPolicy: Never.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: studio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: studio
+  template:
+    metadata:
+      labels:
+        app: studio
+    spec:
+      containers:
+        - name: studio
+          image: calypso-studio:e2e
+          imagePullPolicy: Never
+          ports:
+            - containerPort: 3000
+          env:
+            - name: STUDIO_PORT
+              value: "3000"
+            - name: STUDIO_WEB_SERVICE_HOST
+              value: web
+            - name: STUDIO_WEB_SERVICE_PORT
+              value: "80"
+            - name: STUDIO_ASSETS_DIR
+              value: /app/dist/web
+            - name: STUDIO_CLUSTER_CONTEXT
+              value: default
+            - name: STUDIO_LOG_DIR
+              value: /tmp/studio-logs
+            - name: CALYPSO_REPO_ROOT
+              value: /studio-repo
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 3000
+            initialDelaySeconds: 5
+            periodSeconds: 3
+            failureThreshold: 20
+
+---
+# Service named "api" so the test fixture's portForward(namespace, 'svc/api', 0, 3000) resolves.
+apiVersion: v1
+kind: Service
+metadata:
+  name: api
+spec:
+  selector:
+    app: studio
+  ports:
+    - protocol: TCP
+      port: 3000
+      targetPort: 3000

@@ -1,0 +1,45 @@
+---
+# Minimal Python HTTP server representing a calypso app's web service.
+# Used by integration tests to verify that studio discovers the web endpoint
+# from the app's k8s manifests and proxies /app/* correctly — always k8s,
+# never a local mock.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: web
+          image: python:3-alpine
+          command: ["python3", "-m", "http.server", "80"]
+          ports:
+            - containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 80
+            initialDelaySeconds: 2
+            periodSeconds: 3
+            failureThreshold: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+spec:
+  selector:
+    app: web
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 80
