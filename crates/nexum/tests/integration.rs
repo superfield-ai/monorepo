@@ -109,7 +109,12 @@ async fn insert_link(pool: &PgPool, src: Uuid, dst: Uuid, workspace_id: Uuid, la
 }
 
 /// Insert an entity into the `nexum.entities` table.
-async fn insert_entity(pool: &PgPool, workspace_id: Uuid, entity_type: &str, props: serde_json::Value) -> Uuid {
+async fn insert_entity(
+    pool: &PgPool,
+    workspace_id: Uuid,
+    entity_type: &str,
+    props: serde_json::Value,
+) -> Uuid {
     sqlx::query_scalar(
         "INSERT INTO nexum.entities (workspace_id, type, properties) VALUES ($1, $2, $3) RETURNING id",
     )
@@ -122,7 +127,13 @@ async fn insert_entity(pool: &PgPool, workspace_id: Uuid, entity_type: &str, pro
 }
 
 /// Insert a relation into the `nexum.relations` table.
-async fn insert_relation(pool: &PgPool, workspace_id: Uuid, source_id: Uuid, target_id: Uuid, rel_type: &str) {
+async fn insert_relation(
+    pool: &PgPool,
+    workspace_id: Uuid,
+    source_id: Uuid,
+    target_id: Uuid,
+    rel_type: &str,
+) {
     sqlx::query(
         "INSERT INTO nexum.relations (workspace_id, source_id, target_id, type) VALUES ($1, $2, $3, $4)",
     )
@@ -431,8 +442,15 @@ async fn test_graph_search_returns_linked_block() {
     .await
     .expect("document insert failed");
 
-    let src_id = insert_block_bare(&pool, doc_id, workspace_id, "Graph source block for test").await;
-    let dst_id = insert_block_bare(&pool, doc_id, workspace_id, "Graph destination block for test").await;
+    let src_id =
+        insert_block_bare(&pool, doc_id, workspace_id, "Graph source block for test").await;
+    let dst_id = insert_block_bare(
+        &pool,
+        doc_id,
+        workspace_id,
+        "Graph destination block for test",
+    )
+    .await;
     insert_link(&pool, src_id, dst_id, workspace_id, "structural").await;
 
     let results = graph_search(

@@ -198,12 +198,11 @@ async fn insert_with_nonexistent_workspace_id_fails_fk() {
 
     let nonexistent_ws = uuid::Uuid::new_v4();
 
-    let result = sqlx::query(
-        "INSERT INTO nexum.corpora (workspace_id, name) VALUES ($1, 'fk-test-corpus')",
-    )
-    .bind(nonexistent_ws)
-    .execute(&pool)
-    .await;
+    let result =
+        sqlx::query("INSERT INTO nexum.corpora (workspace_id, name) VALUES ($1, 'fk-test-corpus')")
+            .bind(nonexistent_ws)
+            .execute(&pool)
+            .await;
 
     assert!(
         result.is_err(),

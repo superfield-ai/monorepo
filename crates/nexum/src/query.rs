@@ -560,8 +560,15 @@ mod tests {
 
         let workspace_id = seed_test_workspace(&pool).await;
         let corpus_id = seed_test_corpus(&pool, workspace_id).await;
-        let doc_id = seed_test_document(&pool, corpus_id, workspace_id, "Full-text search test").await;
-        seed_test_block(&pool, doc_id, workspace_id, "The quick brown fox jumps over the lazy dog").await;
+        let doc_id =
+            seed_test_document(&pool, corpus_id, workspace_id, "Full-text search test").await;
+        seed_test_block(
+            &pool,
+            doc_id,
+            workspace_id,
+            "The quick brown fox jumps over the lazy dog",
+        )
+        .await;
 
         let results = fulltext_search(
             &pool,
@@ -600,7 +607,8 @@ mod tests {
 
         let workspace_id = seed_test_workspace(&pool).await;
         let corpus_id = seed_test_corpus(&pool, workspace_id).await;
-        let doc_id = seed_test_document(&pool, corpus_id, workspace_id, "Semantic search test").await;
+        let doc_id =
+            seed_test_document(&pool, corpus_id, workspace_id, "Semantic search test").await;
         seed_test_block_with_embedding(
             &pool,
             doc_id,
@@ -648,7 +656,8 @@ mod tests {
 
         let workspace_id = seed_test_workspace(&pool).await;
         let corpus_id = seed_test_corpus(&pool, workspace_id).await;
-        let doc_id = seed_test_document(&pool, corpus_id, workspace_id, "Graph traversal test").await;
+        let doc_id =
+            seed_test_document(&pool, corpus_id, workspace_id, "Graph traversal test").await;
         let src_id = seed_test_block_bare(&pool, doc_id, workspace_id, "Source block").await;
         let dst_id = seed_test_block_bare(&pool, doc_id, workspace_id, "Destination block").await;
         seed_test_link(&pool, src_id, dst_id, workspace_id, "structural").await;
@@ -687,10 +696,16 @@ mod tests {
         let workspace_id = seed_test_workspace(&pool).await;
         let corpus_id = seed_test_corpus(&pool, workspace_id).await;
         let doc_id = seed_test_document(&pool, corpus_id, workspace_id, "Hybrid search test").await;
-        let src_id =
-            seed_test_block_with_embedding(&pool, doc_id, workspace_id, "Rust memory safety model", &embedder)
-                .await;
-        let dst_id = seed_test_block_bare(&pool, doc_id, workspace_id, "Ownership and borrowing").await;
+        let src_id = seed_test_block_with_embedding(
+            &pool,
+            doc_id,
+            workspace_id,
+            "Rust memory safety model",
+            &embedder,
+        )
+        .await;
+        let dst_id =
+            seed_test_block_bare(&pool, doc_id, workspace_id, "Ownership and borrowing").await;
         seed_test_link(&pool, src_id, dst_id, workspace_id, "structural").await;
 
         let results = hybrid_search(
@@ -766,7 +781,12 @@ mod tests {
     }
 
     #[allow(dead_code)]
-    async fn seed_test_document(pool: &PgPool, corpus_id: Uuid, workspace_id: Uuid, title: &str) -> Uuid {
+    async fn seed_test_document(
+        pool: &PgPool,
+        corpus_id: Uuid,
+        workspace_id: Uuid,
+        title: &str,
+    ) -> Uuid {
         sqlx::query_scalar(
             "INSERT INTO nexum.documents (workspace_id, corpus_id, title) VALUES ($1, $2, $3) RETURNING id",
         )
@@ -780,7 +800,12 @@ mod tests {
 
     /// Insert a bare block (no embedding, no tsv) for graph-only tests.
     #[allow(dead_code)]
-    async fn seed_test_block_bare(pool: &PgPool, doc_id: Uuid, workspace_id: Uuid, content: &str) -> Uuid {
+    async fn seed_test_block_bare(
+        pool: &PgPool,
+        doc_id: Uuid,
+        workspace_id: Uuid,
+        content: &str,
+    ) -> Uuid {
         sqlx::query_scalar(
             r#"INSERT INTO nexum.blocks (workspace_id, doc_id, content, content_hash, block_type)
                VALUES ($1, $2, $3, $4, 'paragraph') RETURNING id"#,
@@ -796,7 +821,12 @@ mod tests {
 
     /// Insert a block with tsvector for full-text tests.
     #[allow(dead_code)]
-    async fn seed_test_block(pool: &PgPool, doc_id: Uuid, workspace_id: Uuid, content: &str) -> Uuid {
+    async fn seed_test_block(
+        pool: &PgPool,
+        doc_id: Uuid,
+        workspace_id: Uuid,
+        content: &str,
+    ) -> Uuid {
         sqlx::query_scalar(
             r#"INSERT INTO nexum.blocks (workspace_id, doc_id, content, content_hash, block_type, tsv)
                VALUES ($1, $2, $3, $4, 'paragraph', to_tsvector('english', $3)) RETURNING id"#,

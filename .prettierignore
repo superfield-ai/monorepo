@@ -2,3 +2,4 @@ node_modules/
 dist/
 blueprint/
 packages/core/blueprint-data.generated.ts
+~/

@@ -353,10 +353,21 @@ mod tests {
     #[allow(dead_code)]
     async fn seed_complete_chain(pool: &PgPool) -> (Uuid, Uuid, Uuid, Uuid, Uuid) {
         let ws_id = insert_workspace(pool).await;
-        let error_id =
-            insert_entity(pool, ws_id, "error", serde_json::json!({"message": "test error"})).await;
+        let error_id = insert_entity(
+            pool,
+            ws_id,
+            "error",
+            serde_json::json!({"message": "test error"}),
+        )
+        .await;
         let session_id = insert_entity(pool, ws_id, "session", serde_json::json!({})).await;
-        let user_id = insert_entity(pool, ws_id, "user", serde_json::json!({"name": "test-user"})).await;
+        let user_id = insert_entity(
+            pool,
+            ws_id,
+            "user",
+            serde_json::json!({"name": "test-user"}),
+        )
+        .await;
         let req_id = insert_entity(
             pool,
             ws_id,
@@ -364,7 +375,13 @@ mod tests {
             serde_json::json!({"title": "test-req"}),
         )
         .await;
-        let code_id = insert_entity(pool, ws_id, "code", serde_json::json!({"path": "src/lib.rs"})).await;
+        let code_id = insert_entity(
+            pool,
+            ws_id,
+            "code",
+            serde_json::json!({"path": "src/lib.rs"}),
+        )
+        .await;
 
         insert_relation(pool, ws_id, error_id, session_id, "caused_in").await;
         insert_relation(pool, ws_id, session_id, user_id, "initiated_by").await;
@@ -421,7 +438,13 @@ mod tests {
     }
 
     #[allow(dead_code)]
-    async fn insert_relation(pool: &PgPool, workspace_id: Uuid, source_id: Uuid, target_id: Uuid, rel_type: &str) {
+    async fn insert_relation(
+        pool: &PgPool,
+        workspace_id: Uuid,
+        source_id: Uuid,
+        target_id: Uuid,
+        rel_type: &str,
+    ) {
         sqlx::query(
             "INSERT INTO nexum.relations (workspace_id, source_id, target_id, type) VALUES ($1, $2, $3, $4)",
         )
