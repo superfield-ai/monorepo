@@ -2,6 +2,4 @@ node_modules/
 dist/
 blueprint/
 packages/core/blueprint-data.generated.ts
-# Cargo build artefacts written into a literal "~" directory when the
-# target-dir in .cargo/config.toml is not expanded by Cargo.
 ~/
