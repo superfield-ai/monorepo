@@ -1,0 +1,17 @@
+name: struct_field_rename_with_usage
+category: refactor
+language: rust
+summary: >
+  Branch A renames the struct field `name` to `label` in User and updates
+  the impl block. Branch B adds a new function in a separate module that
+  accesses `.name`. Text merge produces a clean tree but cargo check fails
+  because `.name` no longer exists. Sharp propagates the field rename to
+  Branch B's new function.
+expected_git_outcome: clean_wrong
+expected_sharp_outcome: clean_ok
+validator: rust
+notes: |
+  Struct field rename scenario. git three-way merge cannot know that
+  Branch B's new accessor must use the renamed field from Branch A.
+  Fixed in the Rust symbol extractor: pub struct fields are now extracted
+  as kind=struct_field, enabling detectRenames() to propagate the rename.

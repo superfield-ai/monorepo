@@ -1,0 +1,14 @@
+name: parallel_import_only
+category: import_merge
+language: ts
+summary: >
+  Both branches add a single new export to the same file at the same anchor
+  point. Branch A adds a VERSION constant, Branch B adds a MAX_RETRIES
+  constant. Git reports a conflict because both insertions happen after the
+  same last line. Sharp concatenates both additions cleanly.
+expected_git_outcome: conflict
+expected_sharp_outcome: clean_ok
+validator: ts
+notes: >
+  Pure-addition scenario with no body modifications. This tests the
+  concat-additions strategy in isolation for the import/export category.

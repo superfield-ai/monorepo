@@ -1,0 +1,17 @@
+{
+  "name": "@sharp/server",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "migrate": "bun src/migrate.ts",
+    "start": "bun src/index.ts"
+  },
+  "dependencies": {
+    "@sharp/git-canonical": "workspace:*",
+    "@sharp/episodes": "workspace:*",
+    "@sharp/client": "workspace:*",
+    "postgres": "^3.4.0"
+  }
+}

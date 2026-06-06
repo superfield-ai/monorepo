@@ -1,0 +1,10 @@
+name: move_then_edit
+category: move_edit
+language: rust
+summary: >
+  Branch A moves src/old.rs to src/new.rs (and updates lib.rs's mod
+  declaration). Branch B edits src/old.rs. git surfaces a modify/delete
+  on the moved file.
+expected_git_outcome: conflict
+expected_sharp_outcome: clean_ok
+validator: rust

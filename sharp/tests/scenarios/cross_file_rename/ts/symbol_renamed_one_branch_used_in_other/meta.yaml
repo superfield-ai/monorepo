@@ -1,0 +1,12 @@
+name: symbol_renamed_one_branch_used_in_other
+category: cross_file_rename
+language: ts
+summary: >
+  Branch A renames a widely-used symbol across many files. Branch B adds
+  a new caller of the OLD name in a fresh file. git's rename detection
+  works at the file level, not the symbol level — text merge produces
+  a clean tree where the rename completed in A's files and the new file
+  from B references the now-nonexistent old name. tsc fails.
+expected_git_outcome: clean_wrong
+expected_sharp_outcome: clean_ok
+validator: ts
