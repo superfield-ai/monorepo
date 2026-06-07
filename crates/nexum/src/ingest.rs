@@ -2,7 +2,7 @@
 //!
 //! This is the main entry-point for ingesting a document into Nexum.
 //! It coordinates the other modules in this crate and writes to the shared
-//! database pool supplied by `sf-db`.
+//! database pool (a `sqlx::PgPool`) supplied by the caller.
 //!
 //! # Database schema assumptions
 //!
@@ -25,9 +25,9 @@
 //! behaviour described in `src/routes/documents.ts`.
 
 use crate::dedup::content_hash;
-use crate::links::{extract_citation_refs, StructuralLink};
+use crate::links::{embed_edge, extract_citation_refs, StructuralLink};
 use crate::parse::{parse_document, Block, Format};
-use sf_embed::Embedder;
+use crate::embed::Embedder;
 use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
@@ -43,7 +43,7 @@ pub enum IngestError {
 
     /// The embedding model could not be loaded or failed during inference.
     #[error("embedding error: {0}")]
-    Embed(#[from] sf_embed::EmbedError),
+    Embed(#[from] crate::embed::EmbedError),
 
     /// The caller supplied invalid options.
     #[error("invalid options: {0}")]
@@ -260,21 +260,40 @@ pub async fn ingest_document(
     let links = build_structural_links(&blocks, &block_ids);
     let link_count = links.len();
 
+    // Map each freshly assigned block UUID to its parsed content so we can
+    // build the edge text for the edge embedding without a DB round-trip.
+    let content_by_id: std::collections::HashMap<Uuid, &str> = block_ids
+        .iter()
+        .copied()
+        .zip(blocks.iter().map(|b| b.content.as_str()))
+        .collect();
+
     for link in &links {
+        let src_uuid = Uuid::parse_str(&link.src_block_id).unwrap_or_else(|_| Uuid::nil());
+        let dst_uuid = Uuid::parse_str(&link.dst_block_id).unwrap_or_else(|_| Uuid::nil());
+
+        // Embed the edge so `links.edge_embedding` participates in the
+        // edge-similarity (`edge_semantic`) query path.  Mirrors the dual-write
+        // linker pipeline in the TS service (`src/linker/edge-embed.ts`).
+        let src_content = content_by_id.get(&src_uuid).copied().unwrap_or("");
+        let dst_content = content_by_id.get(&dst_uuid).copied().unwrap_or("");
+        let edge_vec = embed_edge(embedder, src_content, dst_content, Some(&link.rel_type))?;
+
         sqlx::query(
             r#"
-            INSERT INTO links (id, src, dst, layer, rel_type, weight, confirmed, provenance)
-            VALUES ($1, $2, $3, $4, $5, $6, NULL, $7::jsonb)
+            INSERT INTO links (id, src, dst, layer, rel_type, weight, confirmed, provenance, edge_embedding)
+            VALUES ($1, $2, $3, $4, $5, $6, NULL, $7::jsonb, $8::vector)
             ON CONFLICT DO NOTHING
             "#,
         )
         .bind(Uuid::new_v4())
-        .bind(Uuid::parse_str(&link.src_block_id).unwrap_or_else(|_| Uuid::nil()))
-        .bind(Uuid::parse_str(&link.dst_block_id).unwrap_or_else(|_| Uuid::nil()))
+        .bind(src_uuid)
+        .bind(dst_uuid)
         .bind(&link.layer)
         .bind(&link.rel_type)
         .bind(link.weight)
         .bind(r#"{"model":"regex","confidence":1.0}"#)
+        .bind(&edge_vec)
         .execute(&mut *tx)
         .await?;
     }
@@ -426,12 +445,14 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL"]
     async fn ingest_fixture_block_and_link_parity() {
-        use sf_db::config::DbConfig;
-        use sf_db::pool::connect;
+        use sqlx::PgPool;
 
-        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-        let pool = connect(&cfg).await.expect("pool creation failed");
-        let embedder = sf_embed::Embedder::new().expect("embedder init failed");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
+        let embedder = crate::embed::Embedder::new().expect("embedder init failed");
 
         // Fixture content: 3 paragraphs, 1 citation ref.
         let content = "First paragraph with no citation.\n\n\
@@ -466,12 +487,14 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL"]
     async fn reingest_reuses_block_ids() {
-        use sf_db::config::DbConfig;
-        use sf_db::pool::connect;
+        use sqlx::PgPool;
 
-        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-        let pool = connect(&cfg).await.expect("pool creation failed");
-        let embedder = sf_embed::Embedder::new().expect("embedder init failed");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
+        let embedder = crate::embed::Embedder::new().expect("embedder init failed");
 
         let corpus_id = setup_test_corpus(&pool).await;
 

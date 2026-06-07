@@ -1,7 +1,7 @@
 //! Nexum query layer — full-text, semantic (HNSW), graph, and hybrid.
 //!
 //! All four query modes run against the single shared Postgres instance via the
-//! `sf-db` pool.  The module mirrors the TypeScript `src/routes/query.ts`
+//! supplied `sqlx::PgPool`.  The module mirrors the TypeScript `src/routes/query.ts`
 //! implementation in `superfield-ai/nexum` so that result shapes and SQL
 //! semantics are identical.
 //!
@@ -23,7 +23,8 @@
 //! See `docs/architecture.md` §Nexum and §Single-Instance Database Schema
 //! Layout.
 
-use sf_embed::Embedder;
+use crate::embed::Embedder;
+use crate::links::build_edge_text;
 use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
@@ -31,6 +32,24 @@ use uuid::Uuid;
 // Internal row types used with sqlx::query_as to avoid clippy's complex-type warning.
 type BlockRow = (Uuid, String, f64, Uuid, String, Option<String>);
 type GraphRow = (Uuid, String, i32, String, Uuid, String, Option<String>);
+// link_id, layer, rel_type, weight, score,
+// src_block_id, src_content, src_doc_id, src_doc_title,
+// dst_block_id, dst_content, dst_doc_id, dst_doc_title
+type EdgeRow = (
+    Uuid,
+    String,
+    Option<String>,
+    f64,
+    f64,
+    Uuid,
+    String,
+    Uuid,
+    String,
+    Uuid,
+    String,
+    Uuid,
+    String,
+);
 
 // ── Errors ────────────────────────────────────────────────────────────────────
 
@@ -43,7 +62,7 @@ pub enum QueryError {
 
     /// The embedding model failed during inference.
     #[error("embedding error: {0}")]
-    Embed(#[from] sf_embed::EmbedError),
+    Embed(#[from] crate::embed::EmbedError),
 
     /// The caller supplied invalid parameters.
     #[error("invalid query options: {0}")]
@@ -96,6 +115,40 @@ pub struct GraphResult {
     pub document: DocRef,
 }
 
+/// One endpoint (source or destination) of an edge result.
+#[derive(Debug, Clone)]
+pub struct EdgeBlockRef {
+    /// UUID of the endpoint block.
+    pub block_id: Uuid,
+    /// Text content of the endpoint block.
+    pub content: String,
+    /// Parent document of the endpoint block.
+    pub document: DocRef,
+}
+
+/// A single typed-link result returned by edge-similarity search.
+///
+/// Mirrors the per-row shape produced by `edgeSemanticSearch` in
+/// `src/routes/query.ts`.
+#[derive(Debug, Clone)]
+pub struct EdgeResult {
+    /// UUID of the link row.
+    pub link_id: Uuid,
+    /// Link layer (`structural`, `semantic`, or `ai`).
+    pub layer: String,
+    /// Relationship type of the link, if any.
+    pub rel_type: Option<String>,
+    /// Link weight.
+    pub weight: f64,
+    /// Cosine similarity (`1 − distance`) between the probe and the edge
+    /// embedding.  In the range `[0, 1]`.
+    pub score: f64,
+    /// Source endpoint.
+    pub src: EdgeBlockRef,
+    /// Destination endpoint.
+    pub dst: EdgeBlockRef,
+}
+
 // ── Options ───────────────────────────────────────────────────────────────────
 
 /// Options for [`fulltext_search`].
@@ -143,6 +196,43 @@ pub struct HybridOptions {
     /// Free-text query string.  Used for both the semantic seed pass and the
     /// graph expansion pass.
     pub query_text: String,
+    /// Maximum number of results to return.  Capped at 100.
+    pub limit: u32,
+}
+
+/// Probe input for [`edge_semantic_search`].
+///
+/// The probe is either a free-text `query` or a structured
+/// `(src_text, dst_text, rel_hint?)` triple.  The triple is embedded with the
+/// same [`build_edge_text`] template the linker uses at write time, so the
+/// probe and stored edge embeddings live in matching constructions.  Mirrors
+/// the `target: 'edges'` branch of `handleVectorQuery` in
+/// `src/routes/query.ts`.
+#[derive(Debug, Clone)]
+pub enum EdgeProbe {
+    /// A free-text query, embedded directly.
+    Text(String),
+    /// A structured endpoint triple, embedded via [`build_edge_text`].
+    Triple {
+        /// Source-side text.
+        src_text: String,
+        /// Destination-side text.
+        dst_text: String,
+        /// Optional relationship hint; defaults to `"related"`.
+        rel_hint: Option<String>,
+    },
+}
+
+/// Options for [`edge_semantic_search`].
+#[derive(Debug, Clone)]
+pub struct EdgeSemanticOptions {
+    /// UUID of the corpus to search within.  Both endpoint blocks must belong
+    /// to documents in this corpus.
+    pub corpus_id: Uuid,
+    /// The probe to embed and match against `links.edge_embedding`.
+    pub probe: EdgeProbe,
+    /// Optional link-layer filter.  When empty, all layers are searched.
+    pub layers: Vec<String>,
     /// Maximum number of results to return.  Capped at 100.
     pub limit: u32,
 }
@@ -277,6 +367,136 @@ pub async fn semantic_search(
                     external_id,
                 },
                 origin: None,
+            },
+        )
+        .collect())
+}
+
+/// Edge-similarity ANN search over `nexum.links.edge_embedding`.
+///
+/// Embeds the probe (free text or a `(src, dst, rel_hint)` triple) into a
+/// 384-dim vector, then retrieves the nearest typed links via the `<=>`
+/// cosine-distance operator on the HNSW index, scoped to the corpus and
+/// optionally filtered by link layer.  Both endpoint blocks must belong to
+/// documents in `opts.corpus_id`, matching the corpus-scoping invariant the
+/// other modes enforce.
+///
+/// Mirrors `edgeSemanticSearch` (the `mode: 'vector'` + `target: 'edges'`
+/// path) in `src/routes/query.ts`.
+///
+/// # Errors
+///
+/// Returns [`QueryError::Embed`] if embedding fails, [`QueryError::Database`]
+/// on a SQL error, or [`QueryError::InvalidOptions`] when the probe text is
+/// empty.
+pub async fn edge_semantic_search(
+    pool: &PgPool,
+    embedder: &Embedder,
+    opts: EdgeSemanticOptions,
+) -> Result<Vec<EdgeResult>, QueryError> {
+    let probe_text = match &opts.probe {
+        EdgeProbe::Text(t) => t.clone(),
+        EdgeProbe::Triple {
+            src_text,
+            dst_text,
+            rel_hint,
+        } => build_edge_text(src_text, dst_text, rel_hint.as_deref()),
+    };
+    if probe_text.trim().is_empty() {
+        return Err(QueryError::InvalidOptions(
+            "probe text must not be empty for edge-semantic search".into(),
+        ));
+    }
+
+    let limit = opts.limit.min(100) as i64;
+
+    let vec = embedder.embed_one(&probe_text)?;
+    let vec_str = format!(
+        "[{}]",
+        vec.iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+
+    // Optional layer filter mirrors the TS `layerFilter` clause.  Layers are
+    // bound as a Postgres text[] parameter ($4) rather than interpolated.
+    let layer_filter = if opts.layers.is_empty() {
+        ""
+    } else {
+        " AND l.layer = ANY($4)"
+    };
+
+    let sql = format!(
+        r#"
+        SELECT l.id, l.layer, l.rel_type, l.weight::double precision,
+               (1.0 - (l.edge_embedding <=> $1::vector))::double precision AS score,
+               sb.id, sb.content, sd.id, sd.title,
+               db.id, db.content, dd.id, dd.title
+        FROM nexum.links l
+        JOIN nexum.blocks sb ON sb.id = l.src
+        JOIN nexum.blocks db ON db.id = l.dst
+        JOIN nexum.documents sd ON sd.id = sb.doc_id
+        JOIN nexum.documents dd ON dd.id = db.doc_id
+        WHERE l.edge_embedding IS NOT NULL
+          AND sd.corpus_id = $2
+          AND dd.corpus_id = $2{layer_filter}
+        ORDER BY l.edge_embedding <=> $1::vector
+        LIMIT $3
+        "#,
+        layer_filter = layer_filter,
+    );
+
+    let mut q = sqlx::query_as::<_, EdgeRow>(&sql)
+        .bind(&vec_str)
+        .bind(opts.corpus_id)
+        .bind(limit);
+    if !opts.layers.is_empty() {
+        q = q.bind(&opts.layers);
+    }
+    let rows: Vec<EdgeRow> = q.fetch_all(pool).await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(
+                link_id,
+                layer,
+                rel_type,
+                weight,
+                score,
+                src_block_id,
+                src_content,
+                src_doc_id,
+                src_doc_title,
+                dst_block_id,
+                dst_content,
+                dst_doc_id,
+                dst_doc_title,
+            )| EdgeResult {
+                link_id,
+                layer,
+                rel_type,
+                weight,
+                score,
+                src: EdgeBlockRef {
+                    block_id: src_block_id,
+                    content: src_content,
+                    document: DocRef {
+                        id: src_doc_id,
+                        title: src_doc_title,
+                        external_id: None,
+                    },
+                },
+                dst: EdgeBlockRef {
+                    block_id: dst_block_id,
+                    content: dst_content,
+                    document: DocRef {
+                        id: dst_doc_id,
+                        title: dst_doc_title,
+                        external_id: None,
+                    },
+                },
             },
         )
         .collect())
@@ -523,7 +743,101 @@ mod tests {
         assert_eq!(lit, "ARRAY['stru''ct']");
     }
 
+    #[test]
+    fn edge_probe_triple_builds_template_text() {
+        // Mirrors the TS triple path: build_edge_text is applied to a triple.
+        let probe = EdgeProbe::Triple {
+            src_text: "the  source".into(),
+            dst_text: "the dest".into(),
+            rel_hint: Some("cites".into()),
+        };
+        let text = match &probe {
+            EdgeProbe::Text(t) => t.clone(),
+            EdgeProbe::Triple {
+                src_text,
+                dst_text,
+                rel_hint,
+            } => crate::links::build_edge_text(src_text, dst_text, rel_hint.as_deref()),
+        };
+        assert_eq!(text, "cites: the source -> the dest");
+    }
+
+    #[test]
+    fn edge_layer_filter_clause_toggles_on_layers() {
+        let with: &[String] = &["structural".into()];
+        let without: &[String] = &[];
+        let clause = |layers: &[String]| {
+            if layers.is_empty() {
+                ""
+            } else {
+                " AND l.layer = ANY($4)"
+            }
+        };
+        assert_eq!(clause(with), " AND l.layer = ANY($4)");
+        assert_eq!(clause(without), "");
+    }
+
     // ── Integration tests (require DATABASE_URL and a seeded nexum schema) ──
+
+    /// Edge-semantic search returns the nearest typed link on seeded data.
+    ///
+    /// Skipped unless `DATABASE_URL` is set.
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL and seeded nexum schema"]
+    async fn edge_semantic_returns_nearest_link() {
+        use sqlx::PgPool;
+
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
+        let embedder = Embedder::new().expect("embedder init failed");
+
+        let corpus_id = seed_test_corpus(&pool).await;
+        let doc_id = seed_test_document(&pool, corpus_id, "Edge-semantic search test").await;
+        let src_id = seed_test_block_bare(&pool, doc_id, "Payment is due under Section 4").await;
+        let dst_id = seed_test_block_bare(&pool, doc_id, "Section 4 governs the fees").await;
+
+        // Write an edge with an edge embedding via the shared helper.
+        let edge_vec = crate::links::embed_edge(
+            &embedder,
+            "Payment is due under Section 4",
+            "Section 4 governs the fees",
+            Some("cites"),
+        )
+        .expect("embed_edge failed");
+        sqlx::query(
+            r#"INSERT INTO nexum.links (id, src, dst, layer, rel_type, weight, provenance, edge_embedding)
+               VALUES ($1, $2, $3, 'structural', 'cites', 1.0, '{}'::jsonb, $4::vector)"#,
+        )
+        .bind(Uuid::new_v4())
+        .bind(src_id)
+        .bind(dst_id)
+        .bind(&edge_vec)
+        .execute(&pool)
+        .await
+        .expect("link insert failed");
+
+        let results = edge_semantic_search(
+            &pool,
+            &embedder,
+            EdgeSemanticOptions {
+                corpus_id,
+                probe: EdgeProbe::Text("cites: payment -> fees".into()),
+                layers: vec!["structural".into()],
+                limit: 10,
+            },
+        )
+        .await
+        .expect("edge_semantic_search should succeed");
+
+        assert!(!results.is_empty(), "expected at least one edge result");
+        assert_eq!(results[0].src.block_id, src_id);
+        assert_eq!(results[0].dst.block_id, dst_id);
+        assert_eq!(results[0].rel_type.as_deref(), Some("cites"));
+    }
+
 
     /// Full-text search returns results for a known query on seeded data.
     ///
@@ -531,11 +845,13 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL and seeded nexum schema"]
     async fn fulltext_returns_results_on_seeded_data() {
-        use sf_db::config::DbConfig;
-        use sf_db::pool::connect;
+        use sqlx::PgPool;
 
-        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-        let pool = connect(&cfg).await.expect("pool creation failed");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
 
         let corpus_id = seed_test_corpus(&pool).await;
         let doc_id = seed_test_document(&pool, corpus_id, "Full-text search test").await;
@@ -568,11 +884,13 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL and seeded nexum schema"]
     async fn semantic_returns_results_on_seeded_data() {
-        use sf_db::config::DbConfig;
-        use sf_db::pool::connect;
+        use sqlx::PgPool;
 
-        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-        let pool = connect(&cfg).await.expect("pool creation failed");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
         let embedder = Embedder::new().expect("embedder init failed");
 
         let corpus_id = seed_test_corpus(&pool).await;
@@ -614,11 +932,13 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL and seeded nexum schema"]
     async fn graph_returns_one_hop_neighbours() {
-        use sf_db::config::DbConfig;
-        use sf_db::pool::connect;
+        use sqlx::PgPool;
 
-        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-        let pool = connect(&cfg).await.expect("pool creation failed");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
 
         let corpus_id = seed_test_corpus(&pool).await;
         let doc_id = seed_test_document(&pool, corpus_id, "Graph traversal test").await;
@@ -649,11 +969,13 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL and seeded nexum schema"]
     async fn hybrid_combines_semantic_and_graph_without_duplicates() {
-        use sf_db::config::DbConfig;
-        use sf_db::pool::connect;
+        use sqlx::PgPool;
 
-        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-        let pool = connect(&cfg).await.expect("pool creation failed");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
         let embedder = Embedder::new().expect("embedder init failed");
 
         let corpus_id = seed_test_corpus(&pool).await;
