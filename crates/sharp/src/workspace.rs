@@ -38,57 +38,16 @@ use uuid::Uuid;
 
 use crate::error::SharpError;
 use crate::git_canonical::{
-    decode_tree, encode_tree, hash_object, id_from_hex, id_hex, HashAlgo, ObjectKind, TreeEntry,
-    TreeMode,
+    decode_tree, encode_tree, id_from_hex, id_hex, HashAlgo, ObjectKind, TreeEntry, TreeMode,
 };
 use crate::object;
 
 /// Native Sharp object ids are SHA-256.
 const ALGO: HashAlgo = HashAlgo::Sha256;
 
-/// Store `payload` in `sharp.objects` keyed by its **git-canonical
-/// header-prefixed** SHA-256 id (the digest of `"<kind> <size>\0<payload>"`),
-/// and return that id as lowercase hex.
-///
-/// Unlike [`object::store`] (which keys on the SHA-256 of the raw payload), this
-/// keys on the same id [`encode_tree`]/[`decode_tree`] reference, so a tree
-/// entry's id always resolves back to the bytes that produced it. See the
-/// module docs for the chosen id model.
-///
-/// # Errors
-///
-/// Returns [`SharpError::Db`] on a database error.
-async fn store_canonical(
-    pool: &PgPool,
-    repo_id: Uuid,
-    kind: ObjectKind,
-    payload: &[u8],
-) -> Result<String, SharpError> {
-    let id = id_hex(&hash_object(kind, payload, ALGO));
-    // `sharp.objects.object_type` mirrors Git's keywords. Tags are not produced
-    // by the worktree paths; map defensively to "commit".
-    let object_type = match kind {
-        ObjectKind::Blob => "blob",
-        ObjectKind::Tree => "tree",
-        ObjectKind::Commit | ObjectKind::Tag => "commit",
-    };
-    let size = payload.len() as i64;
-    sqlx::query(
-        r#"
-        INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data)
-        VALUES ($1, $2, $3, $4, $5)
-        ON CONFLICT (sha256) DO NOTHING
-        "#,
-    )
-    .bind(&id)
-    .bind(repo_id)
-    .bind(object_type)
-    .bind(size)
-    .bind(payload)
-    .execute(pool)
-    .await?;
-    Ok(id)
-}
+// The canonical-id object store lives in [`object::store_canonical`] — the
+// shared home for the git-canonical id model — so any future caller can reuse
+// it. This module routes all working-tree object writes through it.
 
 /// Directory names skipped while walking a working tree.
 const IGNORED_DIRS: &[&str] = &[".git", ".sharp", "node_modules", "target", "dist", ".cargo"];
@@ -160,7 +119,7 @@ fn walk<'a>(
             if file_type.is_symlink() {
                 let target = std::fs::read_link(&full)?;
                 let buf = target.to_string_lossy().into_owned().into_bytes();
-                let sha = store_canonical(pool, repo_id, ObjectKind::Blob, &buf).await?;
+                let sha = object::store_canonical(pool, repo_id, ObjectKind::Blob, &buf).await?;
                 out.push(FileSnapshot {
                     path: rel_path(root, &full),
                     mode: TreeMode::Symlink,
@@ -170,7 +129,7 @@ fn walk<'a>(
                 walk(pool, repo_id, root, &full, out).await?;
             } else if file_type.is_file() {
                 let data = std::fs::read(&full)?;
-                let sha = store_canonical(pool, repo_id, ObjectKind::Blob, &data).await?;
+                let sha = object::store_canonical(pool, repo_id, ObjectKind::Blob, &data).await?;
                 let mode = if is_executable(&meta) {
                     TreeMode::Executable
                 } else {
@@ -294,7 +253,7 @@ fn build_subtree<'a>(
         // Store under the git-canonical header-prefixed id — the exact id tree
         // entries reference and that `materialize_recursive` loads by. See the
         // module docs for the chosen id model.
-        store_canonical(pool, repo_id, ObjectKind::Tree, &bytes).await
+        object::store_canonical(pool, repo_id, ObjectKind::Tree, &bytes).await
     })
 }
 
@@ -464,6 +423,7 @@ mod tests {
     /// tree entries reference. (The previous version keyed blobs by raw-bytes
     /// SHA-256 and re-stored trees under both ids to paper over the mismatch;
     /// now there is a single id space, matching `store_canonical`.)
+    use crate::git_canonical::hash_object;
     use std::cell::RefCell;
     use std::collections::HashMap;
 
