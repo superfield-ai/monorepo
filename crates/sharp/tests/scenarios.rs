@@ -46,7 +46,9 @@
 //! §architecture.md — Sharp subsystem (Tier-1 Rust semantic merge)
 
 use sharp::error::SharpError;
+use sharp::oracle::FileSet;
 use sharp::semantic_merge::{semantic_merge_rust, FileVersion, MergeOptions};
+use sharp::tier1::{tier1_merge, MergeOutcome, Tier1Options};
 use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 
@@ -238,6 +240,15 @@ fn read_tree(root: &Path) -> Vec<FileVersion> {
     out
 }
 
+/// Project a list of [`FileVersion`] into the unified driver's
+/// `path -> content` [`FileSet`], keying on the relative path string.
+fn file_set(files: &[FileVersion]) -> FileSet {
+    files
+        .iter()
+        .map(|f| (f.path.to_string_lossy().into_owned(), f.content.clone()))
+        .collect()
+}
+
 /// True iff any merged file contains a git-style conflict marker line
 /// (mirrors classify/conflictMarkers.ts). A clean exit that nonetheless leaves
 /// markers must be classified as [`Outcome::Conflict`].
@@ -267,6 +278,24 @@ async fn run_scenario(scenario: &Scenario) -> Outcome {
     let base = read_tree(&scenario.path.join("base"));
     let ours = read_tree(&scenario.path.join("branch_a"));
     let theirs = read_tree(&scenario.path.join("branch_b"));
+
+    // Tier-3 modify/delete escalation runs in the pure unified driver: no
+    // rust-analyzer or cargo needed. Run it first; if it produces a dilemma,
+    // that is the engine's outcome and we short-circuit before the
+    // infrastructure-bound rename-aware path. (We pass no symbol renames — the
+    // dilemma classification depends only on path-level classification +
+    // file-rename detection, both pure.)
+    if let Ok(MergeOutcome::Dilemma(_)) = tier1_merge(
+        &file_set(&base),
+        &file_set(&ours),
+        &file_set(&theirs),
+        &[],
+        &Tier1Options::default(),
+    )
+    .await
+    {
+        return Outcome::Dilemma;
+    }
 
     // Seed a temp workspace from branch_a so the cargo-check gate has a full,
     // buildable tree (Cargo.toml + any files the merge doesn't touch). The
@@ -384,10 +413,16 @@ scenario_test!(
     "cross_file_rename/rust/struct_renamed_one_branch_used_in_other"
 );
 
-// NOTE: modify/delete escalation (Tier-3 dilemma) is not implemented in the
-// Rust merge engine yet — expected_sharp_outcome=dilemma will not be produced.
-// Left in place so the gap is visible; see follow_ups.
-scenario_test!(delete_edit_delete_then_edit, "delete_edit/rust/delete_then_edit");
+// Tier-3 modify/delete escalation (issue #41) is now implemented in the unified
+// driver (`sharp::tier1::tier1_merge`). The dilemma is reached by pure
+// path-level classification + Jaccard file-rename detection — no rust-analyzer
+// or cargo — so this scenario runs un-#[ignore]'d in normal CI. `run_scenario`
+// short-circuits to `Outcome::Dilemma` via the unified driver before the
+// infrastructure-bound rename-aware path.
+#[tokio::test]
+async fn delete_edit_delete_then_edit() {
+    assert_scenario("delete_edit/rust/delete_then_edit").await;
+}
 
 scenario_test!(format_format_then_edit, "format/rust/format_then_edit");
 

@@ -320,7 +320,7 @@ fn is_identifier(s: &str) -> bool {
 }
 
 /// Replace all whole-word occurrences of `old` with `new` in `text`.
-fn replace_whole_word(text: &str, old: &str, new: &str) -> String {
+pub fn replace_whole_word(text: &str, old: &str, new: &str) -> String {
     let mut result = String::with_capacity(text.len());
     let mut rest = text;
     while let Some(pos) = rest.find(old) {

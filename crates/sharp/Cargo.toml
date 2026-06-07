@@ -12,7 +12,6 @@ name = "sharp"
 path = "src/lib.rs"
 
 [dependencies]
-sf-db = { workspace = true }
 sqlx = { workspace = true }
 tokio = { workspace = true }
 uuid = { workspace = true }

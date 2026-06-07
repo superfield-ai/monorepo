@@ -9,9 +9,24 @@
 //!
 //! Native Sharp objects are content-addressed by SHA-256 (see [`crate::object`]);
 //! this module reuses that store rather than introducing a separate hash space.
-//! Tree payloads are encoded/decoded with [`crate::git_canonical`] using
-//! [`HashAlgo::Sha256`], so the binary ids embedded in tree entries are the same
-//! 32-byte SHA-256 digests the object store keys on.
+//!
+//! ## Object-id model (chosen: git-canonical header-prefixed)
+//!
+//! Every CAS object — blob, tree, commit — is keyed by the **git-canonical
+//! header-prefixed** SHA-256: the digest of `"<kind> <size>\0<payload>"`, i.e.
+//! `id_hex(hash_object(kind, payload, Sha256))`. This is the *only* id that
+//! tree entries can reference, since [`encode_tree`] embeds exactly that id and
+//! [`decode_tree`] hands it straight to `object::load`. It also matches the TS
+//! source of truth: the server's `putObject` (`apps/server/src/cas.ts`) and the
+//! client's `workspace.ts` both key on `hashObject(kind, payload, algo)`.
+//!
+//! The naive `object::store` keys on the SHA-256 of the *raw* payload (no
+//! header), which is a different digest and would store blobs/trees under an id
+//! tree entries never reference — the snapshot would store under one id and
+//! materialize would look up under another. To stay consistent we route all
+//! writes in this module through [`store_canonical`], which inserts under the
+//! header-prefixed id. Both ids are SHA-256 (the `sharp.objects` key column is
+//! unchanged), satisfying the "native sharp objects stay SHA-256" decision.
 //!
 //! Ported from `sharp/apps/client/src/workspace.ts`.
 
@@ -26,10 +41,54 @@ use crate::git_canonical::{
     decode_tree, encode_tree, hash_object, id_from_hex, id_hex, HashAlgo, ObjectKind, TreeEntry,
     TreeMode,
 };
-use crate::object::{self, ObjectType};
+use crate::object;
 
 /// Native Sharp object ids are SHA-256.
 const ALGO: HashAlgo = HashAlgo::Sha256;
+
+/// Store `payload` in `sharp.objects` keyed by its **git-canonical
+/// header-prefixed** SHA-256 id (the digest of `"<kind> <size>\0<payload>"`),
+/// and return that id as lowercase hex.
+///
+/// Unlike [`object::store`] (which keys on the SHA-256 of the raw payload), this
+/// keys on the same id [`encode_tree`]/[`decode_tree`] reference, so a tree
+/// entry's id always resolves back to the bytes that produced it. See the
+/// module docs for the chosen id model.
+///
+/// # Errors
+///
+/// Returns [`SharpError::Db`] on a database error.
+async fn store_canonical(
+    pool: &PgPool,
+    repo_id: Uuid,
+    kind: ObjectKind,
+    payload: &[u8],
+) -> Result<String, SharpError> {
+    let id = id_hex(&hash_object(kind, payload, ALGO));
+    // `sharp.objects.object_type` mirrors Git's keywords. Tags are not produced
+    // by the worktree paths; map defensively to "commit".
+    let object_type = match kind {
+        ObjectKind::Blob => "blob",
+        ObjectKind::Tree => "tree",
+        ObjectKind::Commit | ObjectKind::Tag => "commit",
+    };
+    let size = payload.len() as i64;
+    sqlx::query(
+        r#"
+        INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (sha256) DO NOTHING
+        "#,
+    )
+    .bind(&id)
+    .bind(repo_id)
+    .bind(object_type)
+    .bind(size)
+    .bind(payload)
+    .execute(pool)
+    .await?;
+    Ok(id)
+}
 
 /// Directory names skipped while walking a working tree.
 const IGNORED_DIRS: &[&str] = &[".git", ".sharp", "node_modules", "target", "dist", ".cargo"];
@@ -101,7 +160,7 @@ fn walk<'a>(
             if file_type.is_symlink() {
                 let target = std::fs::read_link(&full)?;
                 let buf = target.to_string_lossy().into_owned().into_bytes();
-                let sha = object::store(pool, repo_id, ObjectType::Blob, &buf).await?;
+                let sha = store_canonical(pool, repo_id, ObjectKind::Blob, &buf).await?;
                 out.push(FileSnapshot {
                     path: rel_path(root, &full),
                     mode: TreeMode::Symlink,
@@ -111,7 +170,7 @@ fn walk<'a>(
                 walk(pool, repo_id, root, &full, out).await?;
             } else if file_type.is_file() {
                 let data = std::fs::read(&full)?;
-                let sha = object::store(pool, repo_id, ObjectType::Blob, &data).await?;
+                let sha = store_canonical(pool, repo_id, ObjectKind::Blob, &data).await?;
                 let mode = if is_executable(&meta) {
                     TreeMode::Executable
                 } else {
@@ -232,12 +291,10 @@ fn build_subtree<'a>(
 
         let bytes =
             encode_tree(&child_entries, ALGO).map_err(|e| SharpError::GitInterop(e.to_string()))?;
-        // The object store recomputes and confirms the SHA-256 over the raw
-        // bytes; the git-canonical id (header-prefixed) is what tree entries
-        // reference, so compute it here for the return / parent linkage.
-        let local_id = id_hex(&hash_object(ObjectKind::Tree, &bytes, ALGO));
-        object::store(pool, repo_id, ObjectType::Tree, &bytes).await?;
-        Ok(local_id)
+        // Store under the git-canonical header-prefixed id — the exact id tree
+        // entries reference and that `materialize_recursive` loads by. See the
+        // module docs for the chosen id model.
+        store_canonical(pool, repo_id, ObjectKind::Tree, &bytes).await
     })
 }
 
@@ -402,8 +459,11 @@ mod tests {
         assert!(is_executable(&std::fs::symlink_metadata(&exec).unwrap()));
     }
 
-    /// In-memory CAS used to exercise the pure tree build/materialize logic
-    /// without a Postgres backend. Keyed by SHA-256 hex of the raw bytes.
+    /// In-memory CAS mirroring the real store's id model: every object is
+    /// keyed by its **git-canonical header-prefixed** SHA-256 id — the same id
+    /// tree entries reference. (The previous version keyed blobs by raw-bytes
+    /// SHA-256 and re-stored trees under both ids to paper over the mismatch;
+    /// now there is a single id space, matching `store_canonical`.)
     use std::cell::RefCell;
     use std::collections::HashMap;
 
@@ -413,15 +473,14 @@ mod tests {
     }
 
     impl MemCas {
-        fn store(&self, data: &[u8]) -> String {
-            let sha = object::sha256_hex(data);
-            self.objects
-                .borrow_mut()
-                .insert(sha.clone(), data.to_vec());
-            sha
+        /// Store under the git-canonical id for `kind` and return it.
+        fn store(&self, kind: ObjectKind, data: &[u8]) -> String {
+            let id = id_hex(&hash_object(kind, data, ALGO));
+            self.objects.borrow_mut().insert(id.clone(), data.to_vec());
+            id
         }
-        fn load(&self, sha: &str) -> Vec<u8> {
-            self.objects.borrow().get(sha).cloned().unwrap()
+        fn load(&self, id: &str) -> Vec<u8> {
+            self.objects.borrow().get(id).cloned().unwrap()
         }
     }
 
@@ -462,19 +521,9 @@ mod tests {
             });
         }
         let bytes = encode_tree(&child_entries, ALGO).unwrap();
-        let local_id = id_hex(&hash_object(ObjectKind::Tree, &bytes, ALGO));
-        // Store under the raw-bytes sha (what materialize loads by).
-        let stored = cas.store(&bytes);
-        // Sanity: object store key is the raw-bytes sha256; git-canonical id is
-        // header-prefixed, so they differ. Tree entries reference local_id, and
-        // materialize loads by id_hex(entry.id) — so the CAS must be addressable
-        // by the git-canonical id. Re-store under that id too.
-        if stored != local_id {
-            cas.objects
-                .borrow_mut()
-                .insert(local_id.clone(), bytes.clone());
-        }
-        local_id
+        // Single id space: store the tree under its git-canonical id, which is
+        // exactly what parent entries reference and what materialize loads by.
+        cas.store(ObjectKind::Tree, &bytes)
     }
 
     fn materialize_mem(cas: &MemCas, tree_sha: &str, dest: &Path) {
@@ -522,7 +571,7 @@ mod tests {
                 let ft = meta.file_type();
                 if ft.is_symlink() {
                     let target = std::fs::read_link(&full).unwrap();
-                    let sha = cas.store(target.to_string_lossy().as_bytes());
+                    let sha = cas.store(ObjectKind::Blob, target.to_string_lossy().as_bytes());
                     out.push(FileSnapshot {
                         path: rel_path(root, &full),
                         mode: TreeMode::Symlink,
@@ -532,7 +581,7 @@ mod tests {
                     walk(cas, root, &full, out);
                 } else if ft.is_file() {
                     let data = std::fs::read(&full).unwrap();
-                    let sha = cas.store(&data);
+                    let sha = cas.store(ObjectKind::Blob, &data);
                     let mode = if is_executable(&meta) {
                         TreeMode::Executable
                     } else {
@@ -688,5 +737,120 @@ mod tests {
         let dest = tempfile::tempdir().unwrap();
         materialize_mem(&cas, &root_tree, dest.path());
         assert_eq!(std::fs::read_dir(dest.path()).unwrap().count(), 0);
+    }
+
+    // -----------------------------------------------------------------------
+    // DB-gated round-trip: snapshot → build → materialize is identity.
+    //
+    // Proves the real (Postgres-backed) paths agree on a single object-id
+    // space — the bug being fixed was that blobs/trees were *stored* under the
+    // raw-bytes SHA-256 but tree entries *referenced* the git-canonical
+    // header-prefixed id, so materialize looked objects up under an id nothing
+    // was stored at. `#[ignore]`'d because it needs a live DB + migrations.
+    // Run with: DATABASE_URL=… cargo test -p sharp -- --include-ignored db_round_trip
+    // -----------------------------------------------------------------------
+
+    async fn connect_pool() -> PgPool {
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        sqlx::postgres::PgPoolOptions::new()
+            .max_connections(5)
+            .connect(&url)
+            .await
+            .expect("connect to DATABASE_URL")
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL and applied Sharp migrations"]
+    async fn db_round_trip_snapshot_build_materialize_is_identity() {
+        use std::io::Write;
+        use std::os::unix::fs::PermissionsExt;
+
+        let pool = connect_pool().await;
+        let repo_name = format!(
+            "ws-round-trip-{}",
+            std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos()
+        );
+        let repo = crate::repo::init(&pool, &repo_name)
+            .await
+            .expect("repo init");
+
+        // Source tree: nested dirs, a top-level file, an executable, a symlink.
+        let src = tempfile::tempdir().unwrap();
+        std::fs::create_dir_all(src.path().join("a/c")).unwrap();
+        std::fs::File::create(src.path().join("top.txt"))
+            .unwrap()
+            .write_all(b"top level")
+            .unwrap();
+        std::fs::File::create(src.path().join("a/b.txt"))
+            .unwrap()
+            .write_all(b"hello b")
+            .unwrap();
+        std::fs::File::create(src.path().join("a/c/d.txt"))
+            .unwrap()
+            .write_all(b"deep d")
+            .unwrap();
+        let script = src.path().join("a/run.sh");
+        std::fs::File::create(&script)
+            .unwrap()
+            .write_all(b"#!/bin/sh\necho hi\n")
+            .unwrap();
+        let mut perms = std::fs::metadata(&script).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&script, perms).unwrap();
+        std::os::unix::fs::symlink("top.txt", src.path().join("link")).unwrap();
+
+        // snapshot → build (the forward direction).
+        let snap = snapshot_working_tree(&pool, repo.id, src.path())
+            .await
+            .expect("snapshot");
+        let root_tree = build_tree_from_snapshot(&pool, repo.id, &snap)
+            .await
+            .expect("build tree");
+
+        // materialize (the inverse) into a fresh dir. The fix means every id a
+        // tree entry references resolves; pre-fix this would ObjectNotFound.
+        let dest = tempfile::tempdir().unwrap();
+        materialize_tree(&pool, &root_tree, dest.path())
+            .await
+            .expect("materialize");
+
+        // Identity: contents, exec bit, and symlink survive.
+        assert_eq!(
+            std::fs::read(dest.path().join("top.txt")).unwrap(),
+            b"top level"
+        );
+        assert_eq!(std::fs::read(dest.path().join("a/b.txt")).unwrap(), b"hello b");
+        assert_eq!(
+            std::fs::read(dest.path().join("a/c/d.txt")).unwrap(),
+            b"deep d"
+        );
+        let out_mode = std::fs::metadata(dest.path().join("a/run.sh"))
+            .unwrap()
+            .permissions()
+            .mode();
+        assert_ne!(out_mode & 0o111, 0, "exec bit should survive round-trip");
+        let link_meta = std::fs::symlink_metadata(dest.path().join("link")).unwrap();
+        assert!(link_meta.file_type().is_symlink());
+        assert_eq!(
+            std::fs::read_link(dest.path().join("link"))
+                .unwrap()
+                .to_str()
+                .unwrap(),
+            "top.txt"
+        );
+
+        // Re-snapshotting the materialized tree yields the same root id — the
+        // strongest identity statement (same id space end-to-end).
+        let snap2 = snapshot_working_tree(&pool, repo.id, dest.path())
+            .await
+            .expect("re-snapshot");
+        let root_tree2 = build_tree_from_snapshot(&pool, repo.id, &snap2)
+            .await
+            .expect("re-build tree");
+        assert_eq!(root_tree, root_tree2, "round-trip must reproduce root tree id");
     }
 }

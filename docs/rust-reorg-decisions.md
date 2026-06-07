@@ -8,7 +8,10 @@ missing `apps/`+`src/` segments) and #23's schema half was already shipped.
 - All Phase 1-2 porting: nexum #22-24, sharp #25-31.
 - Embedder **inlined now**: copy sf-embed candle BERT into `nexum/src/embed.rs`,
   drop `sf-embed` (and `sf-db`) from `nexum/Cargo.toml`. nexum takes `&PgPool` directly.
-- Phases 3-4 (repo create/rename, submodule wiring, sf-db/sf-embed deletion) **excluded** —
+- **sf-db / sf-embed are KEPT** (decision 2026-06-07): nexum/sharp are decoupled from them
+  (nexum via N0, sharp via #38), but the crates stay as shared deps of sf-serve/sf-cli/sf-auth/
+  superfield. reorg.md #34 (delete them) is **cancelled**.
+- Phases 3-4 (repo create/rename, submodule wiring) **excluded** —
   irreversible/outward-facing, require explicit human go-ahead. Note the ordering hazard:
   rename TS repos to `*-ts` (#35/#36) **before** creating the new Rust repos (#32/#33),
   or `gh repo create` collides with the existing names (contradicts reorg.md's stated order).

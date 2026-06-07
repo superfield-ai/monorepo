@@ -50,16 +50,30 @@
 //!   Rust repo into the VCS store, performs a semantic merge, and records the
 //!   episode.  Requires `DATABASE_URL` and live rust-analyzer + cargo.
 
-use sf_db::{connect, DbConfig};
 use sharp::cargo_check::{run_cargo_check, CheckResult};
 use sharp::runtime_signal::{self, SignalKind};
 use sharp::semantic_merge::{semantic_merge_rust, three_way_merge, FileVersion, MergeOptions};
 use sharp::{commit, episode, git_interop, object, repo};
 use std::path::PathBuf;
 use tempfile::TempDir;
+use sqlx::PgPool;
 use uuid::Uuid;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
+
+/// Connect to the database at `DATABASE_URL` and return a pool.
+///
+/// Reads `DATABASE_URL` directly via `sqlx` (no `sf-db` dependency); the
+/// DB-backed tests below are `#[ignore]`'d and only run when `DATABASE_URL`
+/// is set.
+async fn connect_pool() -> PgPool {
+    let url = std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+    sqlx::postgres::PgPoolOptions::new()
+        .max_connections(5)
+        .connect(&url)
+        .await
+        .expect("pool creation failed")
+}
 
 /// Helper: unique repo name per test run.
 fn unique_name(prefix: &str) -> String {
@@ -106,8 +120,7 @@ path = "src/main.rs"
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL and applied Sharp migrations"]
 async fn init_add_commit_roundtrip() {
-    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-    let pool = connect(&cfg).await.expect("pool creation failed");
+    let pool = connect_pool().await;
 
     let repo_name = unique_name("test-repo");
     let r = repo::init(&pool, &repo_name)
@@ -199,8 +212,7 @@ async fn init_add_commit_roundtrip() {
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL and applied Sharp migrations"]
 async fn episode_open_append_finish_query() {
-    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-    let pool = connect(&cfg).await.expect("pool creation failed");
+    let pool = connect_pool().await;
 
     // Need a repo for the FK.
     let repo_name = unique_name("ep-test-repo");
@@ -313,8 +325,7 @@ async fn apply_runtime_signal_migration(pool: &sqlx::PgPool) {
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL and applied Sharp migrations including 0004"]
 async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
-    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-    let pool = connect(&cfg).await.expect("pool creation failed");
+    let pool = connect_pool().await;
     apply_runtime_signal_migration(&pool).await;
 
     // Create a repo + open episode to attach the signal to.
@@ -389,8 +400,7 @@ async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL and applied Sharp migrations including 0004"]
 async fn behavioral_signal_is_queryable_from_store() {
-    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-    let pool = connect(&cfg).await.expect("pool creation failed");
+    let pool = connect_pool().await;
     apply_runtime_signal_migration(&pool).await;
 
     let repo_name = unique_name("behavior-test-repo");
@@ -477,8 +487,7 @@ async fn behavioral_signal_is_queryable_from_store() {
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL and applied Sharp migrations including 0004"]
 async fn record_signal_against_missing_episode_returns_not_found() {
-    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-    let pool = connect(&cfg).await.expect("pool creation failed");
+    let pool = connect_pool().await;
     apply_runtime_signal_migration(&pool).await;
 
     let missing_id = Uuid::new_v4();
@@ -953,8 +962,7 @@ async fn apply_git_interop_migration(pool: &sqlx::PgPool) {
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL, git, and applied Sharp migrations including 0003"]
 async fn git_import_then_export_roundtrip() {
-    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-    let pool = connect(&cfg).await.expect("pool");
+    let pool = connect_pool().await;
     apply_git_interop_migration(&pool).await;
 
     let tmp = tempfile::tempdir().expect("tempdir");
@@ -1197,8 +1205,7 @@ path = "src/main.rs"
 async fn self_hosting_gate_with_episode() {
     use sharp::semantic_merge::three_way_merge;
 
-    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-    let pool = connect(&cfg).await.expect("pool creation failed");
+    let pool = connect_pool().await;
 
     // ── Step 1: Register the Superfield Rust repo in Sharp ────────────────
     let repo_name = unique_name("superfield-sharp-self-hosting");
@@ -1297,8 +1304,7 @@ fn main() { let r = calculate_result(21); println!(\"{r}\"); }\n";
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL, git, and applied Sharp migrations including 0003"]
 async fn git_export_refuses_merged_branch() {
-    let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-    let pool = connect(&cfg).await.expect("pool");
+    let pool = connect_pool().await;
     apply_git_interop_migration(&pool).await;
 
     let tmp = tempfile::tempdir().expect("tempdir");

@@ -2744,7 +2744,6 @@ dependencies = [
  "serde",
  "serde_json",
  "serde_yaml",
- "sf-db",
  "sha1",
  "sha2",
  "sqlx",

@@ -21,6 +21,7 @@
 //! - [`cargo_check`]            — run `cargo check --message-format=json` and parse diagnostics
 //! - [`semantic_merge`]         — Tier-1 Rust merge algorithm (rename-aware + compile gate)
 //! - [`semantic_merge_ts`]      — Tier-1 TypeScript merge path (tsserver-bridge rename propagation)
+//! - [`tier1`]                  — unified Tier-1 driver (classification + file-rename + ast-equivalence + oracle + hooks)
 //! - [`file_rename`]            — Jaccard file-rename detection
 //! - [`ast_equivalence`]        — tree-sitter AST whitespace-equivalence (Rust)
 //! - [`oracle`]                 — Tier-2 oracle conflict scoring scaffold
@@ -65,6 +66,7 @@ pub mod runtime_signal;
 pub mod rust_analyzer_client;
 pub mod semantic_merge;
 pub mod semantic_merge_ts;
+pub mod tier1;
 pub mod tsserver_bridge_client;
 pub mod workspace;
 
