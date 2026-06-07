@@ -3,7 +3,7 @@
 **ADR number:** 001  
 **Decision date:** 2026-05-30  
 **Status:** Accepted — closes #427  
-**Canonical reference:** `docs/architecture.md` §Single-Instance Database Schema Layout  
+**Canonical reference:** `docs/architecture.md` §Single-Instance Database Schema Layout
 
 ---
 
@@ -18,11 +18,11 @@ cross-component joins.
 
 Three topologies were candidates:
 
-| Option | Description |
-| --- | --- |
-| **A** | All components share the default `public` schema — flat table namespace. |
-| **B** | Each component owns a dedicated PostgreSQL schema within the shared instance. |
-| **C** | Each component gets its own Postgres database (separate `DATABASE_URL`). |
+| Option | Description                                                                   |
+| ------ | ----------------------------------------------------------------------------- |
+| **A**  | All components share the default `public` schema — flat table namespace.      |
+| **B**  | Each component owns a dedicated PostgreSQL schema within the shared instance. |
+| **C**  | Each component gets its own Postgres database (separate `DATABASE_URL`).      |
 
 A fourth question arose separately from topology: whether the Apache AGE graph
 extension should run as a second Postgres process (port 5433) or within the
@@ -83,12 +83,12 @@ traversal on any stock Postgres 14+ instance with no extra binary or port.
 Each component owns exactly one PostgreSQL schema. No component may create
 objects in another component's schema.
 
-| PostgreSQL schema | Owner component | Tables (current) |
-| --- | --- | --- |
-| `sharp` | Sharp | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections` |
-| `nexum` | Nexum | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `corpus_access`, `job_queue` |
-| `auth` | Auth (shared) | `sessions`, `oauth_tokens`, `app_installations` |
-| `episodes` | Orchestrator | `episodes`, `episode_events`, `episode_outcomes` |
+| PostgreSQL schema | Owner component | Tables (current)                                                                                                           |
+| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                   |
+| `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `corpus_access`, `job_queue` |
+| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations`                                                                            |
+| `episodes`        | Orchestrator    | `episodes`, `episode_events`, `episode_outcomes`                                                                           |
 
 ---
 
@@ -110,12 +110,12 @@ Where:
 
 Examples:
 
-| File | Component | Notes |
-| --- | --- | --- |
-| `0001_sharp_vcs_schema.sql` | Sharp | Creates the `sharp` schema and VCS core tables |
-| `0002_sharp_episode_schema.sql` | Sharp | Adds episode signal tables under `sharp` |
-| `0001_nexum_schema.sql` | Nexum | Creates the `nexum` schema |
-| `0001_auth_schema.sql` | Auth | Creates the `auth` schema and session tables |
+| File                            | Component | Notes                                          |
+| ------------------------------- | --------- | ---------------------------------------------- |
+| `0001_sharp_vcs_schema.sql`     | Sharp     | Creates the `sharp` schema and VCS core tables |
+| `0002_sharp_episode_schema.sql` | Sharp     | Adds episode signal tables under `sharp`       |
+| `0001_nexum_schema.sql`         | Nexum     | Creates the `nexum` schema                     |
+| `0001_auth_schema.sql`          | Auth      | Creates the `auth` schema and session tables   |
 
 **Rules enforced by convention:**
 
@@ -145,13 +145,13 @@ Examples:
 
 ### Component migration paths
 
-| Component | Source migration path |
-| --- | --- |
-| Sharp (Rust) | `crates/sharp/migrations/` |
-| Nexum (Rust) | `crates/nexum/migrations/` |
-| Auth (Rust) | `crates/sf-auth/src/migrations/` |
+| Component             | Source migration path                        |
+| --------------------- | -------------------------------------------- |
+| Sharp (Rust)          | `crates/sharp/migrations/`                   |
+| Nexum (Rust)          | `crates/nexum/migrations/`                   |
+| Auth (Rust)           | `crates/sf-auth/src/migrations/`             |
 | Episodes (TypeScript) | `packages/orchestrator/migrations/` (target) |
-| Substrate / sf-db | `crates/sf-db/migrations/` |
+| Substrate / sf-db     | `crates/sf-db/migrations/`                   |
 
 ---
 

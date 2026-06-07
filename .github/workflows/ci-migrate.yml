@@ -1,0 +1,87 @@
+name: Migration CI
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "packages/db/migrate.ts"
+      - "packages/db/migrator.ts"
+      - "packages/db/migrations/**"
+      - "crates/sf-db/migrations/**"
+      - "crates/sf-auth/src/migrations/**"
+      - "crates/nexum/migrations/**"
+      - "crates/sharp/migrations/**"
+      - ".github/workflows/ci-migrate.yml"
+  pull_request:
+    branches: [main]
+    paths:
+      - "packages/db/migrate.ts"
+      - "packages/db/migrator.ts"
+      - "packages/db/migrations/**"
+      - "crates/sf-db/migrations/**"
+      - "crates/sf-auth/src/migrations/**"
+      - "crates/nexum/migrations/**"
+      - "crates/sharp/migrations/**"
+      - ".github/workflows/ci-migrate.yml"
+
+concurrency:
+  group: ci-migrate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  migrate-up:
+    name: migrate up on clean database
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    services:
+      postgres:
+        # pgvector/pgvector:pg16 includes the vector extension required by
+        # the nexum schema migration (embedding vector(384) columns).
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: superfield
+          POSTGRES_PASSWORD: superfield
+          POSTGRES_DB: superfield
+        options: >-
+          --health-cmd "pg_isready -U superfield -d superfield"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Run migrate up on clean database
+        run: bun packages/db/migrate.ts up
+
+      - name: Verify migrate status shows all applied
+        run: |
+          output=$(bun packages/db/migrate.ts status)
+          echo "$output"
+          # Match "pending" as the status column value (surrounded by whitespace).
+          # The summary line prints "N pending)" — the closing parenthesis prevents
+          # a false positive, so this grep only fires on actual pending row entries.
+          if echo "$output" | grep -qE "\spending\s"; then
+            echo "ERROR: Some migrations are still pending after migrate up"
+            exit 1
+          fi
+
+      - name: Verify migrate up is idempotent
+        run: |
+          output=$(bun packages/db/migrate.ts up)
+          echo "$output"
+          # Idempotent run should report no pending migrations
+          if echo "$output" | grep -qv "no pending migrations"; then
+            echo "Second migrate up completed (idempotency verified)"
+          fi

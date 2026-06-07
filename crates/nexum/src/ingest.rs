@@ -2,19 +2,20 @@
 //!
 //! This is the main entry-point for ingesting a document into Nexum.
 //! It coordinates the other modules in this crate and writes to the shared
-//! database pool (a `sqlx::PgPool`) supplied by the caller.
+//! database pool supplied by `sf-db`.
 //!
 //! # Database schema assumptions
 //!
-//! The pipeline writes to the following tables (defined in the Nexum
-//! `db/schema.sql` and expected to exist in the shared Postgres instance):
+//! The pipeline writes to the following tables in the `nexum` schema (defined
+//! in `crates/nexum/migrations/0001_nexum_schema.sql` and expected to exist
+//! in the shared Postgres instance):
 //!
-//! - `documents` — one row per logical document identity.
-//! - `document_versions` — one row per ingestion of a document.
-//! - `blocks` — content-addressed block rows; unchanged blocks are shared
+//! - `nexum.documents` — one row per logical document identity.
+//! - `nexum.document_versions` — one row per ingestion of a document.
+//! - `nexum.blocks` — content-addressed block rows; unchanged blocks are shared
 //!   across versions.
-//! - `version_blocks` — ordered junction between versions and their blocks.
-//! - `links` — structural citation links between blocks.
+//! - `nexum.version_blocks` — ordered junction between versions and their blocks.
+//! - `nexum.links` — structural citation links between blocks.
 //!
 //! # Dedup semantics (version parity)
 //!
@@ -25,9 +26,9 @@
 //! behaviour described in `src/routes/documents.ts`.
 
 use crate::dedup::content_hash;
-use crate::links::{embed_edge, extract_citation_refs, StructuralLink};
+use crate::links::{extract_citation_refs, StructuralLink};
 use crate::parse::{parse_document, Block, Format};
-use crate::embed::Embedder;
+use sf_embed::Embedder;
 use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
@@ -43,7 +44,7 @@ pub enum IngestError {
 
     /// The embedding model could not be loaded or failed during inference.
     #[error("embedding error: {0}")]
-    Embed(#[from] crate::embed::EmbedError),
+    Embed(#[from] sf_embed::EmbedError),
 
     /// The caller supplied invalid options.
     #[error("invalid options: {0}")]
@@ -55,6 +56,12 @@ pub enum IngestError {
 /// Options for [`ingest_document`].
 #[derive(Debug, Clone)]
 pub struct IngestOptions {
+    /// Workspace (tenant) that owns this document.
+    ///
+    /// Stamped onto every row written by the pipeline so that per-workspace
+    /// RLS policies and application-layer filters work correctly.  Must be
+    /// a non-nil UUID that exists in `public.workspaces(id)`.
+    pub workspace_id: Uuid,
     /// UUID of the corpus this document belongs to.  Must exist in `corpora`.
     pub corpus_id: Uuid,
     /// Human-readable title for the document.
@@ -105,6 +112,11 @@ pub async fn ingest_document(
     embedder: &Embedder,
     opts: IngestOptions,
 ) -> Result<IngestResult, IngestError> {
+    if opts.workspace_id.is_nil() {
+        return Err(IngestError::InvalidOptions(
+            "workspace_id must not be nil".into(),
+        ));
+    }
     if opts.title.is_empty() {
         return Err(IngestError::InvalidOptions(
             "title must not be empty".into(),
@@ -133,48 +145,20 @@ pub async fn ingest_document(
     // 4. Write in a transaction.
     let mut tx = pool.begin().await?;
 
-    // Resolve (find-or-create) the document. Re-ingesting the same logical
-    // document — matched by `external_id` within the corpus, or by `title` when
-    // no `external_id` is given — appends a new version under the existing
-    // `doc_id` and reuses unchanged blocks (dedup is scoped to `doc_id`), rather
-    // than creating a duplicate document. This mirrors the TS prototype, where
-    // block dedup operates across versions of one document.
-    let existing_doc: Option<Uuid> = if let Some(ext) = &opts.external_id {
-        sqlx::query_scalar(
-            "SELECT id FROM nexum.documents WHERE corpus_id = $1 AND external_id = $2 LIMIT 1",
-        )
-        .bind(opts.corpus_id)
-        .bind(ext)
-        .fetch_optional(&mut *tx)
-        .await?
-    } else {
-        sqlx::query_scalar(
-            "SELECT id FROM nexum.documents \
-             WHERE corpus_id = $1 AND external_id IS NULL AND title = $2 LIMIT 1",
-        )
-        .bind(opts.corpus_id)
-        .bind(&opts.title)
-        .fetch_optional(&mut *tx)
-        .await?
-    };
-
-    let doc_id: Uuid = match existing_doc {
-        Some(id) => id,
-        None => {
-            sqlx::query_scalar(
-                r#"
-                INSERT INTO nexum.documents (title, corpus_id, external_id)
-                VALUES ($1, $2, $3)
-                RETURNING id
-                "#,
-            )
-            .bind(&opts.title)
-            .bind(opts.corpus_id)
-            .bind(&opts.external_id)
-            .fetch_one(&mut *tx)
-            .await?
-        }
-    };
+    // Insert document — stamp workspace_id on every row per issue #429.
+    let doc_id: Uuid = sqlx::query_scalar(
+        r#"
+        INSERT INTO nexum.documents (workspace_id, title, corpus_id, external_id)
+        VALUES ($1, $2, $3, $4)
+        RETURNING id
+        "#,
+    )
+    .bind(opts.workspace_id)
+    .bind(&opts.title)
+    .bind(opts.corpus_id)
+    .bind(&opts.external_id)
+    .fetch_one(&mut *tx)
+    .await?;
 
     // Determine next version number.
     let version_num: i32 = sqlx::query_scalar(
@@ -184,14 +168,15 @@ pub async fn ingest_document(
     .fetch_one(&mut *tx)
     .await?;
 
-    // Insert version.
+    // Insert version — stamp workspace_id per issue #429.
     let version_id: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO nexum.document_versions (doc_id, version_num, status)
-        VALUES ($1, $2, 'parsed')
+        INSERT INTO nexum.document_versions (workspace_id, doc_id, version_num, status)
+        VALUES ($1, $2, $3, 'parsed')
         RETURNING id
         "#,
     )
+    .bind(opts.workspace_id)
     .bind(doc_id)
     .bind(version_num)
     .fetch_one(&mut *tx)
@@ -235,12 +220,14 @@ pub async fn ingest_document(
 
             let new_id: Uuid = sqlx::query_scalar(
                 r#"
-                INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type, level, embedding)
-                VALUES ($1, $2, $3, $4, $5, $6::vector)
+                INSERT INTO nexum.blocks
+                    (workspace_id, doc_id, content, content_hash, block_type, level, embedding)
+                VALUES ($1, $2, $3, $4, $5, $6, $7::vector)
                 ON CONFLICT DO NOTHING
                 RETURNING id
                 "#,
             )
+            .bind(opts.workspace_id)
             .bind(doc_id)
             .bind(&block.content)
             .bind(hash)
@@ -270,12 +257,14 @@ pub async fn ingest_document(
 
         block_ids.push(block_id);
 
-        sqlx::query("INSERT INTO nexum.version_blocks (version_id, block_id, seq) VALUES ($1, $2, $3)")
-            .bind(version_id)
-            .bind(block_id)
-            .bind((i + 1) as i32)
-            .execute(&mut *tx)
-            .await?;
+        sqlx::query(
+            "INSERT INTO nexum.version_blocks (version_id, block_id, seq) VALUES ($1, $2, $3)",
+        )
+        .bind(version_id)
+        .bind(block_id)
+        .bind((i + 1) as i32)
+        .execute(&mut *tx)
+        .await?;
     }
 
     // Update current_version_id on the document.
@@ -289,40 +278,23 @@ pub async fn ingest_document(
     let links = build_structural_links(&blocks, &block_ids);
     let link_count = links.len();
 
-    // Map each freshly assigned block UUID to its parsed content so we can
-    // build the edge text for the edge embedding without a DB round-trip.
-    let content_by_id: std::collections::HashMap<Uuid, &str> = block_ids
-        .iter()
-        .copied()
-        .zip(blocks.iter().map(|b| b.content.as_str()))
-        .collect();
-
     for link in &links {
-        let src_uuid = Uuid::parse_str(&link.src_block_id).unwrap_or_else(|_| Uuid::nil());
-        let dst_uuid = Uuid::parse_str(&link.dst_block_id).unwrap_or_else(|_| Uuid::nil());
-
-        // Embed the edge so `links.edge_embedding` participates in the
-        // edge-similarity (`edge_semantic`) query path.  Mirrors the dual-write
-        // linker pipeline in the TS service (`src/linker/edge-embed.ts`).
-        let src_content = content_by_id.get(&src_uuid).copied().unwrap_or("");
-        let dst_content = content_by_id.get(&dst_uuid).copied().unwrap_or("");
-        let edge_vec = embed_edge(embedder, src_content, dst_content, Some(&link.rel_type))?;
-
         sqlx::query(
             r#"
-            INSERT INTO nexum.links (id, src, dst, layer, rel_type, weight, confirmed, provenance, edge_embedding)
-            VALUES ($1, $2, $3, $4, $5, $6, NULL, $7::jsonb, $8::vector)
+            INSERT INTO nexum.links
+                (id, workspace_id, src, dst, layer, rel_type, weight, confirmed, provenance)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, NULL, $8::jsonb)
             ON CONFLICT DO NOTHING
             "#,
         )
         .bind(Uuid::new_v4())
-        .bind(src_uuid)
-        .bind(dst_uuid)
+        .bind(opts.workspace_id)
+        .bind(Uuid::parse_str(&link.src_block_id).unwrap_or_else(|_| Uuid::nil()))
+        .bind(Uuid::parse_str(&link.dst_block_id).unwrap_or_else(|_| Uuid::nil()))
         .bind(&link.layer)
         .bind(&link.rel_type)
         .bind(link.weight)
         .bind(r#"{"model":"regex","confidence":1.0}"#)
-        .bind(&edge_vec)
         .execute(&mut *tx)
         .await?;
     }
@@ -474,26 +446,26 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL"]
     async fn ingest_fixture_block_and_link_parity() {
-        use sqlx::PgPool;
+        use sf_db::config::DbConfig;
+        use sf_db::pool::connect;
 
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        let pool = PgPool::connect(&database_url)
-            .await
-            .expect("pool creation failed");
-        let embedder = crate::embed::Embedder::new().expect("embedder init failed");
+        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
+        let pool = connect(&cfg).await.expect("pool creation failed");
+        let embedder = sf_embed::Embedder::new().expect("embedder init failed");
 
         // Fixture content: 3 paragraphs, 1 citation ref.
         let content = "First paragraph with no citation.\n\n\
                        Second paragraph, see § 1 for details.\n\n\
                        Section 1: this is the target.";
 
-        let corpus_id = setup_test_corpus(&pool).await;
+        let workspace_id = setup_test_workspace(&pool).await;
+        let corpus_id = setup_test_corpus(&pool, workspace_id).await;
 
         let result = ingest_document(
             &pool,
             &embedder,
             IngestOptions {
+                workspace_id,
                 corpus_id,
                 title: "parity fixture".into(),
                 content: content.into(),
@@ -516,19 +488,19 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL"]
     async fn reingest_reuses_block_ids() {
-        use sqlx::PgPool;
+        use sf_db::config::DbConfig;
+        use sf_db::pool::connect;
 
-        let database_url =
-            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-        let pool = PgPool::connect(&database_url)
-            .await
-            .expect("pool creation failed");
-        let embedder = crate::embed::Embedder::new().expect("embedder init failed");
+        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
+        let pool = connect(&cfg).await.expect("pool creation failed");
+        let embedder = sf_embed::Embedder::new().expect("embedder init failed");
 
-        let corpus_id = setup_test_corpus(&pool).await;
+        let workspace_id = setup_test_workspace(&pool).await;
+        let corpus_id = setup_test_corpus(&pool, workspace_id).await;
 
         let content = "First paragraph.\n\nSecond paragraph.";
         let opts = IngestOptions {
+            workspace_id,
             corpus_id,
             title: "dedup fixture".into(),
             content: content.into(),
@@ -557,12 +529,36 @@ mod tests {
 
     // ── helpers ───────────────────────────────────────────────────────────────
 
+    /// Create a workspace row for integration tests and return its UUID.
     #[allow(dead_code)]
-    async fn setup_test_corpus(pool: &PgPool) -> Uuid {
-        sqlx::query_scalar("INSERT INTO nexum.corpora (name) VALUES ($1) RETURNING id")
-            .bind(format!("test-{}", Uuid::new_v4()))
-            .fetch_one(pool)
-            .await
-            .expect("corpus insert failed")
+    async fn setup_test_workspace(pool: &PgPool) -> Uuid {
+        sqlx::query_scalar(
+            r#"
+            INSERT INTO public.workspaces (slug, display_name)
+            VALUES ($1, $2)
+            RETURNING id
+            "#,
+        )
+        .bind(format!("test-ws-{}", Uuid::new_v4()))
+        .bind("Test Workspace")
+        .fetch_one(pool)
+        .await
+        .expect("workspace insert failed")
+    }
+
+    #[allow(dead_code)]
+    async fn setup_test_corpus(pool: &PgPool, workspace_id: Uuid) -> Uuid {
+        sqlx::query_scalar(
+            r#"
+            INSERT INTO nexum.corpora (workspace_id, name)
+            VALUES ($1, $2)
+            RETURNING id
+            "#,
+        )
+        .bind(workspace_id)
+        .bind(format!("test-{}", Uuid::new_v4()))
+        .fetch_one(pool)
+        .await
+        .expect("corpus insert failed")
     }
 }

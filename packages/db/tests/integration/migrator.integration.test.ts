@@ -11,16 +11,24 @@
  * Docker-in-Docker support), the entire suite is skipped with an explicit
  * reason rather than failing.
  *
- * Test plan (issue #356):
- *   - Migrate empty DB then assert all expected tables exist.
- *   - Run migrations twice and assert idempotency (no error, no duplicate records).
+ * Issue #428 acceptance criteria tested here:
+ *   - `migrate up` applies all component migrations idempotently (AC-1)
+ *   - `migrate status` reports applied vs. pending (AC-4, tested via getMigrationStatus)
+ *
+ * Issue #428 test plan:
+ *   - TP-1: fresh Postgres → migrate up → all tables present (in all schemas)
+ *   - TP-2: migrate up is idempotent (runs twice, no error, no duplicates)
  */
 
 import { spawnSync } from "node:child_process";
 import { createConnection } from "node:net";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { startPostgres, type PgContainer } from "../../pg-container.ts";
-import { runMigrations } from "../../migrator.ts";
+import {
+  runMigrations,
+  getMigrationStatus,
+  rollbackMigrations,
+} from "../../migrator.ts";
 
 function dockerAvailable(): boolean {
   try {
@@ -98,7 +106,11 @@ describe("runMigrations — integration", () => {
     await pg?.stop();
   });
 
-  it("creates all expected tables in an empty database", async () => {
+  /**
+   * TP-1: fresh Postgres → migrate up → all expected tables present across all
+   * component schemas (substrate, auth, nexum, sharp, public graph tables).
+   */
+  it("TP-1: creates all expected tables in an empty database", async () => {
     if (skipReason) {
       console.warn(skipReason);
       return;
@@ -112,30 +124,96 @@ describe("runMigrations — integration", () => {
 
     // At least one migration should have been applied.
     expect(applied.length).toBeGreaterThan(0);
+
+    // The TypeScript graph migration (public schema) must be applied.
     expect(applied).toContain("0001_initial_graph");
 
-    // Verify the core graph tables exist via a direct query.
+    // Component SQL migrations must be applied.
+    expect(applied.some((id) => id.startsWith("sf-db/"))).toBe(true);
+    expect(applied.some((id) => id.startsWith("sf-auth/"))).toBe(true);
+    expect(applied.some((id) => id.startsWith("nexum/"))).toBe(true);
+    expect(applied.some((id) => id.startsWith("sharp/"))).toBe(true);
+
     const { default: postgres } = await import("postgres");
     const sql = postgres(pg.url, { max: 1 });
     try {
-      const rows = await sql<{ tablename: string }[]>`
+      // --- public schema: migration tracker and graph tables ---
+      const publicRows = await sql<{ tablename: string }[]>`
         SELECT tablename
         FROM pg_tables
         WHERE schemaname = 'public'
-          AND tablename IN ('entity_types', 'entities', 'relations', 'schema_migrations')
+          AND tablename IN ('entity_types', 'entities', 'relations', 'schema_migrations', 'workspaces')
         ORDER BY tablename
       `;
-      const names = rows.map((r) => r.tablename);
-      expect(names).toContain("entity_types");
-      expect(names).toContain("entities");
-      expect(names).toContain("relations");
-      expect(names).toContain("schema_migrations");
+      const publicNames = publicRows.map((r) => r.tablename);
+      expect(publicNames).toContain("schema_migrations");
+      expect(publicNames).toContain("entity_types");
+      expect(publicNames).toContain("entities");
+      expect(publicNames).toContain("relations");
+      expect(publicNames).toContain("workspaces");
+
+      // --- auth schema: sessions, oauth_tokens, app_installations ---
+      const authSchemas = await sql<{ schema_name: string }[]>`
+        SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'auth'
+      `;
+      expect(authSchemas.length).toBe(1);
+
+      const authRows = await sql<{ tablename: string }[]>`
+        SELECT tablename
+        FROM pg_tables
+        WHERE schemaname = 'auth'
+          AND tablename IN ('sessions', 'oauth_tokens', 'app_installations')
+        ORDER BY tablename
+      `;
+      const authNames = authRows.map((r) => r.tablename);
+      expect(authNames).toContain("sessions");
+      expect(authNames).toContain("oauth_tokens");
+      expect(authNames).toContain("app_installations");
+
+      // --- nexum schema: core tables ---
+      const nexumSchemas = await sql<{ schema_name: string }[]>`
+        SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'nexum'
+      `;
+      expect(nexumSchemas.length).toBe(1);
+
+      const nexumRows = await sql<{ tablename: string }[]>`
+        SELECT tablename
+        FROM pg_tables
+        WHERE schemaname = 'nexum'
+        ORDER BY tablename
+      `;
+      const nexumNames = nexumRows.map((r) => r.tablename);
+      // nexum schema must have at least its core tables
+      expect(nexumNames.length).toBeGreaterThan(0);
+
+      // --- sharp schema: VCS core tables ---
+      const sharpSchemas = await sql<{ schema_name: string }[]>`
+        SELECT schema_name FROM information_schema.schemata WHERE schema_name = 'sharp'
+      `;
+      expect(sharpSchemas.length).toBe(1);
+
+      const sharpRows = await sql<{ tablename: string }[]>`
+        SELECT tablename
+        FROM pg_tables
+        WHERE schemaname = 'sharp'
+          AND tablename IN ('repos', 'objects', 'refs', 'commit_metadata', 'commit_paths')
+        ORDER BY tablename
+      `;
+      const sharpNames = sharpRows.map((r) => r.tablename);
+      expect(sharpNames).toContain("repos");
+      expect(sharpNames).toContain("objects");
+      expect(sharpNames).toContain("refs");
+      expect(sharpNames).toContain("commit_metadata");
+      expect(sharpNames).toContain("commit_paths");
     } finally {
       await sql.end();
     }
-  }, 60_000);
+  }, 90_000);
 
-  it("is idempotent — running migrations twice does not error or create duplicates", async () => {
+  /**
+   * TP-2: migrate up is idempotent — running twice does not error or duplicate records.
+   */
+  it("TP-2: is idempotent — running migrations twice does not error or create duplicates", async () => {
     if (skipReason) {
       console.warn(skipReason);
       return;
@@ -167,5 +245,57 @@ describe("runMigrations — integration", () => {
     } finally {
       await sql.end();
     }
+  }, 60_000);
+
+  /**
+   * getMigrationStatus — reports applied vs. pending correctly.
+   */
+  it("getMigrationStatus — reports all as applied after migrate up", async () => {
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
+    if (!pg) throw new Error("postgres container not initialised");
+
+    const statuses = await getMigrationStatus({ databaseUrl: pg.url });
+
+    // All migrations should be applied after the previous tests ran migrate up.
+    const pending = statuses.filter((s) => !s.applied);
+    expect(pending).toHaveLength(0);
+
+    // Statuses should include all component namespaces.
+    const ids = statuses.map((s) => s.id);
+    expect(ids.some((id) => id.startsWith("sf-db/"))).toBe(true);
+    expect(ids.some((id) => id.startsWith("sf-auth/"))).toBe(true);
+    expect(ids.some((id) => id.startsWith("nexum/"))).toBe(true);
+    expect(ids.some((id) => id.startsWith("sharp/"))).toBe(true);
+    expect(ids).toContain("0001_initial_graph");
+  }, 60_000);
+
+  /**
+   * rollbackMigrations — removes tracking records so the migration can be re-applied.
+   */
+  it("rollbackMigrations — removes the last applied tracking record", async () => {
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
+    if (!pg) throw new Error("postgres container not initialised");
+
+    // Roll back 1 step.
+    const rolledBack = await rollbackMigrations({
+      databaseUrl: pg.url,
+      steps: 1,
+      log: () => {},
+    });
+    expect(rolledBack).toHaveLength(1);
+
+    // After rollback, that migration should appear as pending.
+    const statuses = await getMigrationStatus({ databaseUrl: pg.url });
+    const pending = statuses.filter((s) => !s.applied);
+    expect(pending.map((s) => s.id)).toContain(rolledBack[0]);
+
+    // Re-apply to restore state.
+    await runMigrations({ databaseUrl: pg.url, log: () => {} });
   }, 60_000);
 });
