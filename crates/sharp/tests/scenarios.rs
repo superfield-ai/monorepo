@@ -411,19 +411,15 @@ macro_rules! scenario_test {
     };
 }
 
-// KNOWN ENGINE GAP (#44, follow-up to #42): the four scenarios below exercise
-// cross-file / branch-B-only symbol-rename propagation. `semantic_merge_rust`
-// detects renames within changed files via rust-analyzer, but cannot propagate a
-// rename into a file that exists only on the other branch (or into code newly
-// added on the other side), because those spans were never in rust-analyzer's
-// rename location set. They merge to `CleanWrong` (and fail `cargo check`) even
-// with live infrastructure. Closing this needs AST-aware merging or a second
-// rename-detection pass over the fully-merged content. Validated 2026-06-07.
+// #44 (cross-file / branch-B-only rename propagation) was closed 2026-06-07:
+// `semantic_merge_rust` now waits for rust-analyzer to finish indexing, addresses
+// it with absolute on-disk paths, propagates renames into B-only files, routes
+// file moves, and merges via an LCS-anchored diff3. All four rename scenarios
+// below now reach `clean_ok` with live infrastructure.
 
 scenario_test!(
     cross_file_rename_struct_renamed_one_branch_used_in_other,
-    "cross_file_rename/rust/struct_renamed_one_branch_used_in_other",
-    "scenario: KNOWN ENGINE GAP #44 — cross-file AST rename propagation unimplemented (CleanWrong)"
+    "cross_file_rename/rust/struct_renamed_one_branch_used_in_other"
 );
 
 // Tier-3 modify/delete escalation (issue #41) is now implemented in the unified
@@ -448,21 +444,15 @@ scenario_test!(
     "import_merge/rust/parallel_use_lines"
 );
 
-scenario_test!(
-    move_edit_move_then_edit,
-    "move_edit/rust/move_then_edit",
-    "scenario: KNOWN ENGINE GAP #44 — cross-file AST rename propagation unimplemented (CleanWrong)"
-);
+scenario_test!(move_edit_move_then_edit, "move_edit/rust/move_then_edit");
 
 scenario_test!(
     refactor_struct_field_rename_with_usage,
-    "refactor/rust/struct_field_rename_with_usage",
-    "scenario: KNOWN ENGINE GAP #44 — B-only AST rename propagation unimplemented (CleanWrong)"
+    "refactor/rust/struct_field_rename_with_usage"
 );
 scenario_test!(
     refactor_trait_method_rename,
-    "refactor/rust/trait_method_rename",
-    "scenario: KNOWN ENGINE GAP #44 — B-only AST rename propagation unimplemented (CleanWrong)"
+    "refactor/rust/trait_method_rename"
 );
 
 scenario_test!(

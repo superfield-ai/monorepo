@@ -134,9 +134,46 @@ pub async fn semantic_merge_rust(
         .copied()
         .collect();
 
+    // File-move routing (mirrors `crate::tier1`'s ADeletedBEdited branch): if
+    // "ours" moved a file old->new and "theirs" still carries an edited old, the
+    // per-file 3-way loop below would see old as deleted-vs-edited and conflict,
+    // dropping the edit. Detect the rename and route theirs' content to the new
+    // path, skipping both paths in the loop. As in tier1, B's content wins for a
+    // move+edit (A's move relocates it; B's edit is preserved at the new path).
+    let to_btree = |fs: &[FileVersion]| -> std::collections::BTreeMap<String, String> {
+        fs.iter()
+            .map(|f| (f.path.to_string_lossy().into_owned(), f.content.clone()))
+            .collect()
+    };
+    let file_renames =
+        crate::file_rename::detect_file_renames(&to_btree(base), &to_btree(ours));
+    let mut routed_files: Vec<(PathBuf, String)> = Vec::new();
+    let mut skip_paths: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
+    for (old_path, new_path) in &file_renames {
+        let old = PathBuf::from(old_path);
+        if let Some(theirs_old) = theirs_map.get(old.as_path()) {
+            routed_files.push((PathBuf::from(new_path), theirs_old.to_string()));
+            skip_paths.insert(old);
+            skip_paths.insert(PathBuf::from(new_path));
+        }
+    }
+
     // Step 1: Rename detection via rust-analyzer.
     let mut detected_renames: Vec<DetectedRename> = Vec::new();
     let mut ra_client = start_ra_client(opts).await?;
+
+    // rust-analyzer loaded the project rooted at `workspace_root`, so all LSP
+    // calls must use absolute on-disk paths. File paths here are relative to the
+    // tree root; resolve them against `workspace_root` (the merge later writes
+    // its output to the same `workspace_root.join(path)` locations). Returned
+    // reference locations are normalised back to relative paths so they match
+    // the relative keys used during merge.
+    let to_abs = |rel: &Path| opts.workspace_root.join(rel);
+    let to_rel = |abs: &Path| -> PathBuf {
+        abs.strip_prefix(&opts.workspace_root)
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|_| abs.to_path_buf())
+    };
 
     // Open all "ours" files in rust-analyzer so it can build the index.
     for path in &all_paths {
@@ -148,7 +185,7 @@ pub async fn semantic_merge_rust(
         if content.is_empty() {
             continue;
         }
-        let _ = ra_client.open_file(path, content).await;
+        let _ = ra_client.open_file(&to_abs(path), content).await;
     }
 
     // For each file changed in "ours" relative to base, probe symbol positions.
@@ -162,10 +199,17 @@ pub async fn semantic_merge_rust(
         let rename_candidates = find_renamed_identifiers(base_content, &file.content);
         for (line, col, old_name, new_name) in rename_candidates {
             match ra_client
-                .get_rename_locations(&file.path, line, col, true)
+                .get_rename_locations(&to_abs(&file.path), line, col, true)
                 .await
             {
                 Ok(locations) if !locations.is_empty() => {
+                    let locations = locations
+                        .into_iter()
+                        .map(|mut loc| {
+                            loc.file = to_rel(&loc.file);
+                            loc
+                        })
+                        .collect();
                     detected_renames.push(DetectedRename {
                         file: file.path.clone(),
                         locations,
@@ -184,15 +228,28 @@ pub async fn semantic_merge_rust(
     let mut merged_files: Vec<FileVersion> = Vec::new();
 
     for path in &all_paths {
+        if skip_paths.contains(*path) {
+            continue; // handled by file-move routing above
+        }
         let base_text = base_map.get(path).copied().unwrap_or("");
         let ours_text = ours_map.get(path).copied().unwrap_or("");
         let theirs_text = theirs_map.get(path).copied().unwrap_or("");
 
         // Apply rename propagation to "theirs" first: if "ours" renamed a
         // symbol, update all occurrences on the "theirs" side as well.
+        //
+        // A file that is new on "theirs" only (absent from both base and ours)
+        // was never opened in rust-analyzer during detection, so it cannot
+        // appear in any rename's `locations` even when it references the renamed
+        // symbol. Propagate into those B-only files too — otherwise a brand-new
+        // file on the other branch keeps the old name and fails the compile gate
+        // (the cross-file / B-only rename gap, #44).
+        let is_theirs_only =
+            base_text.is_empty() && ours_text.is_empty() && !theirs_text.is_empty();
         let mut updated_theirs = theirs_text.to_string();
         for rename in &detected_renames {
-            if !rename.locations.iter().any(|loc| loc.file == **path) {
+            let referenced_here = rename.locations.iter().any(|loc| loc.file == **path);
+            if !referenced_here && !is_theirs_only {
                 continue;
             }
             // Simple string replacement of the old name with the new name.
@@ -226,6 +283,11 @@ pub async fn semantic_merge_rust(
             path: PathBuf::from(path),
             content: merged,
         });
+    }
+
+    // Emit the file-move-routed outputs (theirs' content at the new path).
+    for (path, content) in routed_files {
+        merged_files.push(FileVersion { path, content });
     }
 
     // Step 3: Write merged files to the workspace and run cargo check.
@@ -267,22 +329,25 @@ async fn start_ra_client(opts: &MergeOptions) -> Result<RustAnalyzerClient, Shar
     Ok(client)
 }
 
-/// Find identifiers that appear at the same line/col in base but have a
-/// different name in the new version.
+/// Find identifiers that were renamed in place between `base` and `new`.
 ///
-/// Returns `(0-based-line, 0-based-char, old_name, new_name)`.
+/// Returns `(0-based-line-in-new, 0-based-char, old_name, new_name)` — the
+/// line/col are positions in `new`, since the probe opens the new content.
 ///
-/// This is a heuristic diff: we align lines, then scan each line for the
-/// first identifier that differs at the same character offset.
+/// Lines are aligned with a line-level LCS first, and only genuine
+/// *substitutions* (a deleted base line paired with an added new line between
+/// the same pair of common anchors) yield candidates. Naively zipping by index
+/// would mis-read an inserted line as a substitution — e.g. inserting
+/// `use BTreeMap;` above `use HashMap;` would look like `HashMap`→`BTreeMap`
+/// and manufacture a bogus rename.
 fn find_renamed_identifiers(base: &str, new: &str) -> Vec<(u32, u32, String, String)> {
-    let mut results = Vec::new();
     let base_lines: Vec<&str> = base.lines().collect();
     let new_lines: Vec<&str> = new.lines().collect();
 
-    for (li, (base_line, new_line)) in base_lines.iter().zip(new_lines.iter()).enumerate() {
-        if base_line == new_line {
-            continue;
-        }
+    let mut results = Vec::new();
+    for (bi, nj) in substitution_pairs(&base_lines, &new_lines) {
+        let base_line = base_lines[bi];
+        let new_line = new_lines[nj];
         // Walk character by character to find the first divergence.
         let diverge_col = base_line
             .chars()
@@ -290,17 +355,64 @@ fn find_renamed_identifiers(base: &str, new: &str) -> Vec<(u32, u32, String, Str
             .position(|(a, b)| a != b)
             .unwrap_or(0);
 
-        // Extract identifiers starting at or near the divergence.
         if let (Some(old_id), Some(new_id)) = (
             extract_ident_at(base_line, diverge_col),
             extract_ident_at(new_line, diverge_col),
         ) {
             if old_id != new_id && is_identifier(&old_id) && is_identifier(&new_id) {
-                results.push((li as u32, diverge_col as u32, old_id, new_id));
+                results.push((nj as u32, diverge_col as u32, old_id, new_id));
             }
         }
     }
     results
+}
+
+/// Align `base`/`new` lines via a line-level LCS and return the `(base_idx,
+/// new_idx)` pairs that are substitutions: within each gap between common
+/// anchors, the deleted base lines are paired positionally with the added new
+/// lines (up to the shorter run). Pure insertions/deletions are excluded.
+fn substitution_pairs(base: &[&str], new: &[&str]) -> Vec<(usize, usize)> {
+    // LCS length table over lines.
+    let n = base.len();
+    let m = new.len();
+    let mut dp = vec![vec![0u32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            dp[i][j] = if base[i] == new[j] {
+                dp[i + 1][j + 1] + 1
+            } else {
+                dp[i + 1][j].max(dp[i][j + 1])
+            };
+        }
+    }
+
+    // Backtrack into runs of deletions/insertions between common anchors.
+    let mut pairs = Vec::new();
+    let (mut i, mut j) = (0usize, 0usize);
+    while i < n && j < m {
+        if base[i] == new[j] {
+            i += 1;
+            j += 1;
+            continue;
+        }
+        // Collect the maximal non-matching run on each side up to the next anchor.
+        let del_start = i;
+        let ins_start = j;
+        while i < n && j < m && base[i] != new[j] {
+            if dp[i + 1][j] >= dp[i][j + 1] {
+                i += 1; // base[i] is a deletion
+            } else {
+                j += 1; // new[j] is an insertion
+            }
+        }
+        // Pair the deleted base lines with the added new lines positionally.
+        let dels: Vec<usize> = (del_start..i).collect();
+        let inss: Vec<usize> = (ins_start..j).collect();
+        for (bi, nj) in dels.into_iter().zip(inss.into_iter()) {
+            pairs.push((bi, nj));
+        }
+    }
+    pairs
 }
 
 /// Extract the identifier token starting at or containing `col`.
@@ -381,36 +493,43 @@ pub fn three_way_merge(base: &str, ours: &str, theirs: &str) -> String {
         return ours.to_string();
     }
 
-    // Line-level merge.
+    // Line-level diff3 anchored on the LCS of base with each side. Aligning by
+    // raw index would mis-handle insertions: one side adding a line shifts every
+    // following line and fabricates a conflict (or worse, a wrong take). Anchors
+    // are base lines that survive unchanged in BOTH ours and theirs; between
+    // consecutive anchors we merge the diverging chunks.
     let base_lines: Vec<&str> = base.lines().collect();
     let ours_lines: Vec<&str> = ours.lines().collect();
     let theirs_lines: Vec<&str> = theirs.lines().collect();
 
-    let max_len = ours_lines.len().max(theirs_lines.len());
-    let mut output = Vec::new();
+    let o_match: std::collections::HashMap<usize, usize> =
+        lcs_pairs(&base_lines, &ours_lines).into_iter().collect();
+    let t_match: std::collections::HashMap<usize, usize> =
+        lcs_pairs(&base_lines, &theirs_lines).into_iter().collect();
 
-    for i in 0..max_len {
-        let b = base_lines.get(i).copied().unwrap_or("");
-        let o = ours_lines.get(i).copied().unwrap_or("");
-        let t = theirs_lines.get(i).copied().unwrap_or("");
-
-        if o == t {
-            output.push(o.to_string());
-        } else if b == o {
-            // Only theirs changed.
-            output.push(t.to_string());
-        } else if b == t {
-            // Only ours changed.
-            output.push(o.to_string());
-        } else {
-            // Both sides changed — conflict marker (should be rare after rename propagation).
-            output.push("<<<<<<< ours".to_string());
-            output.push(o.to_string());
-            output.push("=======".to_string());
-            output.push(t.to_string());
-            output.push(">>>>>>> theirs".to_string());
-        }
+    let mut output: Vec<String> = Vec::new();
+    let (mut bi, mut oi, mut ti) = (0usize, 0usize, 0usize);
+    for anchor in 0..base_lines.len() {
+        let (Some(&ao), Some(&at)) = (o_match.get(&anchor), t_match.get(&anchor)) else {
+            continue; // not common to both sides — handled inside the chunk below
+        };
+        merge_chunk(
+            &mut output,
+            &base_lines[bi..anchor],
+            &ours_lines[oi..ao],
+            &theirs_lines[ti..at],
+        );
+        output.push(base_lines[anchor].to_string());
+        bi = anchor + 1;
+        oi = ao + 1;
+        ti = at + 1;
     }
+    merge_chunk(
+        &mut output,
+        &base_lines[bi..],
+        &ours_lines[oi..],
+        &theirs_lines[ti..],
+    );
 
     let mut result = output.join("\n");
     // Preserve trailing newline.
@@ -418,4 +537,130 @@ pub fn three_way_merge(base: &str, ours: &str, theirs: &str) -> String {
         result.push('\n');
     }
     result
+}
+
+/// Line-level LCS of `a` and `b` as matched `(a_idx, b_idx)` pairs, ascending.
+fn lcs_pairs(a: &[&str], b: &[&str]) -> Vec<(usize, usize)> {
+    let (n, m) = (a.len(), b.len());
+    let mut dp = vec![vec![0u32; m + 1]; n + 1];
+    for i in (0..n).rev() {
+        for j in (0..m).rev() {
+            dp[i][j] = if a[i] == b[j] {
+                dp[i + 1][j + 1] + 1
+            } else {
+                dp[i + 1][j].max(dp[i][j + 1])
+            };
+        }
+    }
+    let mut pairs = Vec::new();
+    let (mut i, mut j) = (0usize, 0usize);
+    while i < n && j < m {
+        if a[i] == b[j] {
+            pairs.push((i, j));
+            i += 1;
+            j += 1;
+        } else if dp[i + 1][j] >= dp[i][j + 1] {
+            i += 1;
+        } else {
+            j += 1;
+        }
+    }
+    pairs
+}
+
+/// Merge one diverging chunk (the lines between two shared anchors) by classic
+/// diff3 rules: identical edits collapse, one-sided edits win, genuine
+/// divergence emits conflict markers.
+///
+/// When all three chunks are the same length the divergence is a block of
+/// in-place substitutions, so each line is aligned and resolved individually —
+/// this recovers clean merges where the two sides agree on some lines and only
+/// one side changed others (whole-chunk resolution would conflict the lot).
+/// Unequal lengths mean an insertion/deletion, where per-line alignment is
+/// invalid, so the chunk is resolved as a whole.
+fn merge_chunk(out: &mut Vec<String>, base: &[&str], ours: &[&str], theirs: &[&str]) {
+    let push_all = |out: &mut Vec<String>, lines: &[&str]| {
+        out.extend(lines.iter().map(|s| s.to_string()))
+    };
+    if ours == theirs {
+        push_all(out, ours);
+        return;
+    }
+    if ours == base {
+        push_all(out, theirs); // only theirs changed
+        return;
+    }
+    if theirs == base {
+        push_all(out, ours); // only ours changed
+        return;
+    }
+
+    if base.len() == ours.len() && ours.len() == theirs.len() {
+        for i in 0..base.len() {
+            if ours[i] == theirs[i] || base[i] == theirs[i] {
+                out.push(ours[i].to_string()); // agree, or only ours changed
+            } else if base[i] == ours[i] {
+                out.push(theirs[i].to_string()); // only theirs changed
+            } else {
+                out.push("<<<<<<< ours".to_string());
+                out.push(ours[i].to_string());
+                out.push("=======".to_string());
+                out.push(theirs[i].to_string());
+                out.push(">>>>>>> theirs".to_string());
+            }
+        }
+        return;
+    }
+
+    out.push("<<<<<<< ours".to_string());
+    push_all(out, ours);
+    out.push("=======".to_string());
+    push_all(out, theirs);
+    out.push(">>>>>>> theirs".to_string());
+}
+
+#[cfg(test)]
+mod merge_tests {
+    use super::three_way_merge;
+
+    #[test]
+    fn insertion_on_one_side_does_not_conflict() {
+        // theirs inserts a line; ours edits a later line. A naive index-aligned
+        // merge would mis-align and conflict — the LCS-anchored diff3 must not.
+        let base = "use a;\n\nuse old;\n";
+        let ours = "use a;\n\nuse new;\n";
+        let theirs = "use a;\nuse extra;\n\nuse old;\n";
+        let merged = three_way_merge(base, ours, theirs);
+        assert!(!merged.contains("<<<<<<<"), "unexpected conflict:\n{merged}");
+        assert!(merged.contains("use extra;"), "lost theirs insertion:\n{merged}");
+        assert!(merged.contains("use new;"), "lost ours edit:\n{merged}");
+    }
+
+    #[test]
+    fn equal_length_block_resolves_per_line() {
+        // Both sides change line 1 identically (a rename); only theirs changes
+        // line 2. The shared change must collapse and theirs's edit must win.
+        let base = "fn compute() {\n    x * 2\n}\n";
+        let ours = "fn calc() {\n    x * 2\n}\n";
+        let theirs = "fn calc() {\n    x * 3\n}\n";
+        let merged = three_way_merge(base, ours, theirs);
+        assert_eq!(merged, "fn calc() {\n    x * 3\n}\n");
+    }
+
+    #[test]
+    fn genuine_divergence_still_conflicts() {
+        let base = "value = 1\n";
+        let ours = "value = 2\n";
+        let theirs = "value = 3\n";
+        let merged = three_way_merge(base, ours, theirs);
+        assert!(merged.contains("<<<<<<<") && merged.contains(">>>>>>>"));
+    }
+
+    #[test]
+    fn identical_sides_take_either() {
+        let base = "a\n";
+        let ours = "b\n";
+        let theirs = "b\n";
+        assert_eq!(three_way_merge(base, ours, theirs), "b\n");
+    }
 }

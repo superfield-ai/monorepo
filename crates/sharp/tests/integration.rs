@@ -1201,14 +1201,15 @@ path = "src/main.rs"
 /// Requires `DATABASE_URL`, applied Sharp migrations, and `cargo` on PATH.
 /// Run with: DATABASE_URL=postgres://... cargo test -p sharp -- --include-ignored self_hosting_gate_with_episode
 #[tokio::test]
-// KNOWN LIMITATION #44: the fixture below renames the fn on `ours` while
-// `theirs` renames AND edits the body on the *same physical line*. Raw
-// `three_way_merge` is line-level, so it reports a conflict it cannot resolve
-// (the rename and the body edit collide on one line). This is the same
-// rename-propagation gap as the cross-file scenarios; the fixture would merge
-// clean only with AST-aware merging or a multi-line layout. Left as-is to honestly
-// surface the gap rather than reshaping the fixture to dodge it.
-#[ignore = "integration: requires DATABASE_URL + cargo; KNOWN GAP #44 (same-line rename+edit, CleanWrong)"]
+// KNOWN LIMITATION: the fixture below renames the fn on `ours` while `theirs`
+// renames AND edits the body on the *same physical line*. Line-level
+// `three_way_merge` cannot resolve a single line that both sides changed to
+// different values (the rename and the body edit collide on one line), so it
+// conflicts. The multi-line equivalent (`self_hosting_gate_semantic_merge_on_
+// sharp_source`) merges clean. Left as-is to honestly surface the limitation
+// rather than reshaping the fixture to dodge it; a true fix needs token/AST-level
+// (sub-line) merging. Distinct from #44 (cross-file rename), which is now closed.
+#[ignore = "integration: requires DATABASE_URL + cargo; known limitation (same-line rename+body-edit conflicts)"]
 async fn self_hosting_gate_with_episode() {
     use sharp::semantic_merge::three_way_merge;
 
