@@ -115,8 +115,9 @@ async fn insert_document(pool: &PgPool, corpus_id: Uuid, title: &str) -> Uuid {
 async fn insert_block_tsv(pool: &PgPool, doc_id: Uuid, content: &str) -> Uuid {
     let hash = content_hash(content);
     sqlx::query_scalar(
-        r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type, tsv)
-           VALUES ($1, $2, $3, 'paragraph', to_tsvector('english', $2)) RETURNING id"#,
+        // `tsv` is a GENERATED ALWAYS column — never inserted explicitly.
+        r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type)
+           VALUES ($1, $2, $3, 'paragraph') RETURNING id"#,
     )
     .bind(doc_id)
     .bind(content)
@@ -140,8 +141,9 @@ async fn insert_block_embedded(
         vec.iter().map(|v| v.to_string()).collect::<Vec<_>>().join(",")
     );
     sqlx::query_scalar(
-        r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type, embedding, tsv)
-           VALUES ($1, $2, $3, 'paragraph', $4::vector, to_tsvector('english', $2)) RETURNING id"#,
+        // `tsv` is a GENERATED ALWAYS column — never inserted explicitly.
+        r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type, embedding)
+           VALUES ($1, $2, $3, 'paragraph', $4::vector) RETURNING id"#,
     )
     .bind(doc_id)
     .bind(content)
@@ -156,8 +158,9 @@ async fn insert_block_embedded(
 async fn insert_link(pool: &PgPool, src: Uuid, dst: Uuid, layer: &str) -> Uuid {
     let link_id = Uuid::new_v4();
     sqlx::query(
-        r#"INSERT INTO nexum.links (id, src, dst, layer, rel_type, weight)
-           VALUES ($1, $2, $3, $4, 'cites', 1.0)"#,
+        // `provenance` is jsonb NOT NULL with no default — supply an empty object.
+        r#"INSERT INTO nexum.links (id, src, dst, layer, rel_type, weight, provenance)
+           VALUES ($1, $2, $3, $4, 'cites', 1.0, '{}'::jsonb)"#,
     )
     .bind(link_id)
     .bind(src)
@@ -171,7 +174,7 @@ async fn insert_link(pool: &PgPool, src: Uuid, dst: Uuid, layer: &str) -> Uuid {
 
 /// Insert an entity into the `entities` table (public schema).
 async fn insert_entity(pool: &PgPool, entity_type: &str, props: serde_json::Value) -> Uuid {
-    sqlx::query_scalar("INSERT INTO entities (type, properties) VALUES ($1, $2) RETURNING id")
+    sqlx::query_scalar("INSERT INTO nexum.entities (type, properties) VALUES ($1, $2) RETURNING id")
         .bind(entity_type)
         .bind(props)
         .fetch_one(pool)
@@ -181,7 +184,7 @@ async fn insert_entity(pool: &PgPool, entity_type: &str, props: serde_json::Valu
 
 /// Insert a relation into the `relations` table (public schema).
 async fn insert_relation(pool: &PgPool, source_id: Uuid, target_id: Uuid, rel_type: &str) {
-    sqlx::query("INSERT INTO relations (source_id, target_id, type) VALUES ($1, $2, $3)")
+    sqlx::query("INSERT INTO nexum.relations (source_id, target_id, type) VALUES ($1, $2, $3)")
         .bind(source_id)
         .bind(target_id)
         .bind(rel_type)
@@ -255,14 +258,14 @@ async fn cleanup_corpus(pool: &PgPool, corpus_id: Uuid) {
 /// Delete entities and relations by a list of entity UUIDs.
 async fn cleanup_entities(pool: &PgPool, ids: &[Uuid]) {
     for id in ids {
-        sqlx::query("DELETE FROM relations WHERE source_id = $1 OR target_id = $1")
+        sqlx::query("DELETE FROM nexum.relations WHERE source_id = $1 OR target_id = $1")
             .bind(id)
             .execute(pool)
             .await
             .ok();
     }
     for id in ids {
-        sqlx::query("DELETE FROM entities WHERE id = $1")
+        sqlx::query("DELETE FROM nexum.entities WHERE id = $1")
             .bind(id)
             .execute(pool)
             .await

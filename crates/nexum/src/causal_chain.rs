@@ -118,7 +118,7 @@ pub async fn error_to_cause_chain(
     let error_row: Option<EntityRow> = sqlx::query_as(
         r#"
         SELECT id, type, properties
-        FROM entities
+        FROM nexum.entities
         WHERE id = $1 AND type = 'error'
         "#,
     )
@@ -201,8 +201,8 @@ async fn follow_relation(
     let row: Option<EntityRow> = sqlx::query_as(
         r#"
         SELECT e.id, e.type, e.properties
-        FROM relations r
-        JOIN entities e ON e.id = r.target_id
+        FROM nexum.relations r
+        JOIN nexum.entities e ON e.id = r.target_id
         WHERE r.source_id = $1
           AND r.type      = $2
           AND e.type      = $3
@@ -396,7 +396,7 @@ mod tests {
         entity_type: &str,
         properties: serde_json::Value,
     ) -> Uuid {
-        sqlx::query_scalar("INSERT INTO entities (type, properties) VALUES ($1, $2) RETURNING id")
+        sqlx::query_scalar("INSERT INTO nexum.entities (type, properties) VALUES ($1, $2) RETURNING id")
             .bind(entity_type)
             .bind(properties)
             .fetch_one(pool)
@@ -406,7 +406,7 @@ mod tests {
 
     #[allow(dead_code)]
     async fn insert_relation(pool: &PgPool, source_id: Uuid, target_id: Uuid, rel_type: &str) {
-        sqlx::query("INSERT INTO relations (source_id, target_id, type) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO nexum.relations (source_id, target_id, type) VALUES ($1, $2, $3)")
             .bind(source_id)
             .bind(target_id)
             .bind(rel_type)

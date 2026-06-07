@@ -365,7 +365,7 @@ fn try_apply_renames_to_b(
 /// whitespace-equivalent reformat of base. Mirrors the TS
 /// `tryWhitespaceEquivalent`. Only Rust source is parseable here (the TS path
 /// runs out-of-process); other extensions return `Ok(None)`.
-fn try_whitespace_equivalent(
+pub(crate) fn try_whitespace_equivalent(
     path: &str,
     base: &str,
     a: &str,

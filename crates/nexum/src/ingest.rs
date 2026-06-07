@@ -133,23 +133,52 @@ pub async fn ingest_document(
     // 4. Write in a transaction.
     let mut tx = pool.begin().await?;
 
-    // Insert document.
-    let doc_id: Uuid = sqlx::query_scalar(
-        r#"
-        INSERT INTO documents (title, corpus_id, external_id)
-        VALUES ($1, $2, $3)
-        RETURNING id
-        "#,
-    )
-    .bind(&opts.title)
-    .bind(opts.corpus_id)
-    .bind(&opts.external_id)
-    .fetch_one(&mut *tx)
-    .await?;
+    // Resolve (find-or-create) the document. Re-ingesting the same logical
+    // document — matched by `external_id` within the corpus, or by `title` when
+    // no `external_id` is given — appends a new version under the existing
+    // `doc_id` and reuses unchanged blocks (dedup is scoped to `doc_id`), rather
+    // than creating a duplicate document. This mirrors the TS prototype, where
+    // block dedup operates across versions of one document.
+    let existing_doc: Option<Uuid> = if let Some(ext) = &opts.external_id {
+        sqlx::query_scalar(
+            "SELECT id FROM nexum.documents WHERE corpus_id = $1 AND external_id = $2 LIMIT 1",
+        )
+        .bind(opts.corpus_id)
+        .bind(ext)
+        .fetch_optional(&mut *tx)
+        .await?
+    } else {
+        sqlx::query_scalar(
+            "SELECT id FROM nexum.documents \
+             WHERE corpus_id = $1 AND external_id IS NULL AND title = $2 LIMIT 1",
+        )
+        .bind(opts.corpus_id)
+        .bind(&opts.title)
+        .fetch_optional(&mut *tx)
+        .await?
+    };
+
+    let doc_id: Uuid = match existing_doc {
+        Some(id) => id,
+        None => {
+            sqlx::query_scalar(
+                r#"
+                INSERT INTO nexum.documents (title, corpus_id, external_id)
+                VALUES ($1, $2, $3)
+                RETURNING id
+                "#,
+            )
+            .bind(&opts.title)
+            .bind(opts.corpus_id)
+            .bind(&opts.external_id)
+            .fetch_one(&mut *tx)
+            .await?
+        }
+    };
 
     // Determine next version number.
     let version_num: i32 = sqlx::query_scalar(
-        "SELECT COALESCE(MAX(version_num), 0) + 1 FROM document_versions WHERE doc_id = $1",
+        "SELECT COALESCE(MAX(version_num), 0) + 1 FROM nexum.document_versions WHERE doc_id = $1",
     )
     .bind(doc_id)
     .fetch_one(&mut *tx)
@@ -158,7 +187,7 @@ pub async fn ingest_document(
     // Insert version.
     let version_id: Uuid = sqlx::query_scalar(
         r#"
-        INSERT INTO document_versions (doc_id, version_num, status)
+        INSERT INTO nexum.document_versions (doc_id, version_num, status)
         VALUES ($1, $2, 'parsed')
         RETURNING id
         "#,
@@ -171,7 +200,7 @@ pub async fn ingest_document(
     // Look up existing blocks for this doc by content_hash (dedup).
     let existing_hashes: Vec<String> = hashes.clone();
     let existing_rows: Vec<(Uuid, String)> = sqlx::query_as(
-        "SELECT id, content_hash FROM blocks WHERE doc_id = $1 AND content_hash = ANY($2)",
+        "SELECT id, content_hash FROM nexum.blocks WHERE doc_id = $1 AND content_hash = ANY($2)",
     )
     .bind(doc_id)
     .bind(&existing_hashes)
@@ -206,7 +235,7 @@ pub async fn ingest_document(
 
             let new_id: Uuid = sqlx::query_scalar(
                 r#"
-                INSERT INTO blocks (doc_id, content, content_hash, block_type, level, embedding)
+                INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type, level, embedding)
                 VALUES ($1, $2, $3, $4, $5, $6::vector)
                 ON CONFLICT DO NOTHING
                 RETURNING id
@@ -228,7 +257,7 @@ pub async fn ingest_document(
             if new_id == Uuid::nil() {
                 // Race: fetch the row that won.
                 sqlx::query_scalar::<_, Uuid>(
-                    "SELECT id FROM blocks WHERE doc_id = $1 AND content_hash = $2",
+                    "SELECT id FROM nexum.blocks WHERE doc_id = $1 AND content_hash = $2",
                 )
                 .bind(doc_id)
                 .bind(hash)
@@ -241,7 +270,7 @@ pub async fn ingest_document(
 
         block_ids.push(block_id);
 
-        sqlx::query("INSERT INTO version_blocks (version_id, block_id, seq) VALUES ($1, $2, $3)")
+        sqlx::query("INSERT INTO nexum.version_blocks (version_id, block_id, seq) VALUES ($1, $2, $3)")
             .bind(version_id)
             .bind(block_id)
             .bind((i + 1) as i32)
@@ -250,7 +279,7 @@ pub async fn ingest_document(
     }
 
     // Update current_version_id on the document.
-    sqlx::query("UPDATE documents SET current_version_id = $1 WHERE id = $2")
+    sqlx::query("UPDATE nexum.documents SET current_version_id = $1 WHERE id = $2")
         .bind(version_id)
         .bind(doc_id)
         .execute(&mut *tx)
@@ -281,7 +310,7 @@ pub async fn ingest_document(
 
         sqlx::query(
             r#"
-            INSERT INTO links (id, src, dst, layer, rel_type, weight, confirmed, provenance, edge_embedding)
+            INSERT INTO nexum.links (id, src, dst, layer, rel_type, weight, confirmed, provenance, edge_embedding)
             VALUES ($1, $2, $3, $4, $5, $6, NULL, $7::jsonb, $8::vector)
             ON CONFLICT DO NOTHING
             "#,
@@ -299,7 +328,7 @@ pub async fn ingest_document(
     }
 
     // Mark version as embedded (blocks have embeddings).
-    sqlx::query("UPDATE document_versions SET status = 'embedded' WHERE id = $1")
+    sqlx::query("UPDATE nexum.document_versions SET status = 'embedded' WHERE id = $1")
         .bind(version_id)
         .execute(&mut *tx)
         .await?;
@@ -530,7 +559,7 @@ mod tests {
 
     #[allow(dead_code)]
     async fn setup_test_corpus(pool: &PgPool) -> Uuid {
-        sqlx::query_scalar("INSERT INTO corpora (name) VALUES ($1) RETURNING id")
+        sqlx::query_scalar("INSERT INTO nexum.corpora (name) VALUES ($1) RETURNING id")
             .bind(format!("test-{}", Uuid::new_v4()))
             .fetch_one(pool)
             .await

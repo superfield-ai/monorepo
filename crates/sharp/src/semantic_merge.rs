@@ -202,8 +202,26 @@ pub async fn semantic_merge_rust(
                 replace_whole_word(&updated_theirs, &rename.old_name, &rename.new_name);
         }
 
-        // 3-way textual merge.
-        let merged = three_way_merge(base_text, ours_text, &updated_theirs);
+        // Tier-1 enhancements (mirror `crate::tier1`'s BothDifferent ladder):
+        // prefer whitespace-equivalence (one side is a pure reformat → take the
+        // semantic side) and concat-additions (both sides only appended) before
+        // falling back to a line-level 3-way merge. Both helpers return `None`
+        // when inapplicable, so genuine conflicts still reach `three_way_merge`.
+        let path_str = path.to_str().unwrap_or("");
+        let merged = if let Some(equiv) = crate::tier1::try_whitespace_equivalent(
+            path_str,
+            base_text,
+            ours_text,
+            &updated_theirs,
+        )? {
+            equiv
+        } else if let Some(concat) =
+            crate::tier1::try_concat_additions(base_text, ours_text, &updated_theirs)
+        {
+            concat
+        } else {
+            three_way_merge(base_text, ours_text, &updated_theirs)
+        };
         merged_files.push(FileVersion {
             path: PathBuf::from(path),
             content: merged,
