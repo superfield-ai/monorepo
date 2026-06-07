@@ -279,11 +279,13 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL and seeded public schema"]
     async fn chain_query_returns_all_hops_on_seeded_data() {
-        use sf_db::config::DbConfig;
-        use sf_db::pool::connect;
+        use sqlx::PgPool;
 
-        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-        let pool = connect(&cfg).await.expect("pool creation failed");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
 
         // Seed a complete chain: error → session → user + requirement → code.
         let (error_id, _session_id, _user_id, _req_id, _code_id) = seed_complete_chain(&pool).await;
@@ -312,11 +314,13 @@ mod tests {
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL and seeded public schema"]
     async fn broken_chain_reports_missing_hop() {
-        use sf_db::config::DbConfig;
-        use sf_db::pool::connect;
+        use sqlx::PgPool;
 
-        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
-        let pool = connect(&cfg).await.expect("pool creation failed");
+        let database_url =
+            std::env::var("DATABASE_URL").expect("DATABASE_URL must be set");
+        let pool = PgPool::connect(&database_url)
+            .await
+            .expect("pool creation failed");
 
         // Seed an error with a session but no user, requirement, or code.
         let (error_id, _session_id) = seed_partial_chain_error_to_session(&pool).await;

@@ -24,7 +24,14 @@ chrono = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 flate2 = { workspace = true }
+# AST-equivalence checking for semantic merge (later tasks).
+tree-sitter = "0.26"
+tree-sitter-rust = "0.24"
+# Temporary worktrees / scratch dirs for merge and cargo-check gating.
+tempfile = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
 tempfile = { workspace = true }
+serde_yaml = "0.9"
+walkdir = "2"
