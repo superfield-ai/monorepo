@@ -1791,16 +1791,20 @@ dependencies = [
 name = "nexum"
 version = "0.1.0"
 dependencies = [
+ "candle-core",
+ "candle-nn",
+ "candle-transformers",
  "hex",
+ "hf-hub",
  "once_cell",
  "regex",
  "serde",
  "serde_json",
  "sf-db",
- "sf-embed",
  "sha2",
  "sqlx",
  "thiserror 1.0.69",
+ "tokenizers 0.20.4",
  "tokio",
  "uuid",
 ]

@@ -11,13 +11,14 @@
 //!   (`causal_chain` module, issue #382).
 //!
 //! All operations run in-process against the shared Postgres instance via
-//! `sf-db` and the governed 384-dim embedding model via `sf-embed`.
+//! `sf-db` and the governed 384-dim embedding model via the in-crate
+//! [`embed`] module (a pure-Rust `candle` BERT embedder).
 //!
 //! # Pipeline overview
 //!
 //! 1. **Parse** — split a document into typed blocks (`parse` module).
 //! 2. **Dedup** — SHA-256 content hash each block (`dedup` module).
-//! 3. **Embed** — produce 384-dim vectors via `sf_embed::Embedder` (`ingest` module).
+//! 3. **Embed** — produce 384-dim vectors via [`embed::Embedder`] (`ingest` module).
 //! 4. **Store** — write blocks, version, and links to the shared Postgres pool
 //!    via `sf-db` (`ingest` module).
 //! 5. **Link** — extract structural citation links between blocks (`links` module).
@@ -39,6 +40,7 @@
 
 pub mod causal_chain;
 pub mod dedup;
+pub mod embed;
 pub mod ingest;
 pub mod links;
 pub mod parse;
