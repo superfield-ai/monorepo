@@ -26,12 +26,12 @@
 //!    `error_to_cause_chain`, assert no missing hops.
 
 use nexum::dedup::content_hash;
+use nexum::embed::Embedder;
 use nexum::parse::Format;
 use nexum::{
     error_to_cause_chain, fulltext_search, graph_search, ingest_document, semantic_search,
     FullTextOptions, GraphOptions, IngestOptions, SemanticOptions,
 };
-use nexum::embed::Embedder;
 use sqlx::PgPool;
 use uuid::Uuid;
 

@@ -26,9 +26,9 @@
 //! behaviour described in `src/routes/documents.ts`.
 
 use crate::dedup::content_hash;
+use crate::embed::Embedder;
 use crate::links::{extract_citation_refs, StructuralLink};
 use crate::parse::{parse_document, Block, Format};
-use crate::embed::Embedder;
 use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
