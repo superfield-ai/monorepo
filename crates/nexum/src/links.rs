@@ -7,6 +7,7 @@
 //! regular expressions.  Links are stored in the `links` table with
 //! `layer = 'structural'` and `rel_type = 'cites'`.
 
+use crate::embed::{EmbedError, Embedder};
 use once_cell::sync::Lazy;
 use regex::Regex;
 
@@ -101,6 +102,71 @@ impl StructuralLink {
             weight: 1.0,
         }
     }
+}
+
+// ── Edge embedding ──────────────────────────────────────────────────────────────
+//
+// Mirrors `src/linker/edge-embed.ts` from the Nexum Node service.  An *edge
+// embedding* is a 384-dim vector produced by embedding a templated string of
+// the form `"<rel_type>: <src_snippet> -> <dst_snippet>"` with the same
+// all-MiniLM-L6-v2 model used for blocks, so edge vectors live in the same
+// space and can be retrieved with the same pgvector cosine operator.
+
+/// Max characters of each endpoint's content folded into the edge text.
+///
+/// Mirrors `SNIPPET_CHARS` in `edge-embed.ts`.  The embedder truncates at the
+/// token level anyway; capping the character count earlier keeps the latency
+/// floor predictable across edge-count scale.
+const SNIPPET_CHARS: usize = 240;
+
+/// Truncate `s` to at most [`SNIPPET_CHARS`] characters (UTF-8 safe — never
+/// splits a multi-byte character), collapse all internal whitespace runs to a
+/// single space, and trim the ends.  Mirrors
+/// `s.slice(0, SNIPPET_CHARS).replace(/\s+/g, ' ').trim()`.
+fn snippet(s: &str) -> String {
+    let truncated: &str = match s.char_indices().nth(SNIPPET_CHARS) {
+        Some((byte_idx, _)) => &s[..byte_idx],
+        None => s,
+    };
+    truncated.split_whitespace().collect::<Vec<_>>().join(" ")
+}
+
+/// Build the templated edge text `"<rel>: <src_snippet> -> <dst_snippet>"`.
+///
+/// `rel_type` of `None` falls back to `"related"`.  Mirrors `buildEdgeText`
+/// in `edge-embed.ts`.
+pub fn build_edge_text(src_content: &str, dst_content: &str, rel_type: Option<&str>) -> String {
+    let rel = rel_type.unwrap_or("related");
+    let src = snippet(src_content);
+    let dst = snippet(dst_content);
+    format!("{rel}: {src} -> {dst}")
+}
+
+/// Render a 384-dim vector as a pgvector literal `[v1,v2,...]` for binding as
+/// `$N::vector`.  Mirrors `vectorLiteral` in `edge-embed.ts`.
+pub fn vector_literal(vec: &[f32]) -> String {
+    format!(
+        "[{}]",
+        vec.iter()
+            .map(|v| v.to_string())
+            .collect::<Vec<_>>()
+            .join(",")
+    )
+}
+
+/// Embed one edge.  Builds the edge text from the two endpoint contents and
+/// `rel_type`, embeds it with the shared model, and returns the pgvector
+/// literal string ready to bind as `$N::vector`.  Mirrors `embedEdge` in
+/// `edge-embed.ts`.
+pub fn embed_edge(
+    embedder: &Embedder,
+    src_content: &str,
+    dst_content: &str,
+    rel_type: Option<&str>,
+) -> Result<String, EmbedError> {
+    let text = build_edge_text(src_content, dst_content, rel_type);
+    let vec = embedder.embed_one(&text)?;
+    Ok(vector_literal(&vec))
 }
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
