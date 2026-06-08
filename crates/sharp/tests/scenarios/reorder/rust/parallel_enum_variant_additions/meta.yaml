@@ -1,0 +1,15 @@
+name: parallel_enum_variant_additions
+category: reorder
+language: rust
+summary: >
+  Both branches add a new variant to the same Rust enum. Git reports a
+  conflict because both additions anchor to the same last variant. Sharp
+  should resolve cleanly via concat-additions.
+expected_git_outcome: conflict
+expected_sharp_outcome: clean_ok
+validator: rust
+notes: |
+  Rust equivalent of the adjacent-insertion false conflict applied to enum
+  variants. Both developers independently extend the enum; git collapses
+  both insertions into one conflict hunk. Sharp concatenates them for a
+  clean_ok merge.

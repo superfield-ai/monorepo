@@ -9,6 +9,7 @@
 
 use crate::error::SharpError;
 use crate::object::{self, ObjectType};
+use crate::refs;
 use chrono::{DateTime, Utc};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -102,22 +103,9 @@ pub async fn commit(
         .await?;
     }
 
-    // Upsert the branch ref
+    // Upsert the branch ref via the refs model.
     let ref_name = format!("refs/heads/{branch}");
-    sqlx::query(
-        r#"
-        INSERT INTO sharp.refs (repo_id, ref_name, target_sha)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (repo_id, ref_name) DO UPDATE
-            SET target_sha = EXCLUDED.target_sha,
-                updated_at = now()
-        "#,
-    )
-    .bind(repo_id)
-    .bind(&ref_name)
-    .bind(&commit_sha)
-    .execute(pool)
-    .await?;
+    refs::set_ref(pool, repo_id, &ref_name, &commit_sha).await?;
 
     Ok(commit_sha)
 }
@@ -136,20 +124,7 @@ pub async fn create_branch(
     target_sha: &str,
 ) -> Result<(), SharpError> {
     let ref_name = format!("refs/heads/{branch}");
-    sqlx::query(
-        r#"
-        INSERT INTO sharp.refs (repo_id, ref_name, target_sha)
-        VALUES ($1, $2, $3)
-        ON CONFLICT (repo_id, ref_name) DO UPDATE
-            SET target_sha = EXCLUDED.target_sha,
-                updated_at = now()
-        "#,
-    )
-    .bind(repo_id)
-    .bind(&ref_name)
-    .bind(target_sha)
-    .execute(pool)
-    .await?;
+    refs::set_ref(pool, repo_id, &ref_name, target_sha).await?;
     Ok(())
 }
 
@@ -160,15 +135,9 @@ pub async fn create_branch(
 /// Returns [`SharpError::RefNotFound`] when the branch does not exist.
 pub async fn branch_head(pool: &PgPool, repo_id: Uuid, branch: &str) -> Result<String, SharpError> {
     let ref_name = format!("refs/heads/{branch}");
-    let row = sqlx::query("SELECT target_sha FROM sharp.refs WHERE repo_id = $1 AND ref_name = $2")
-        .bind(repo_id)
-        .bind(&ref_name)
-        .fetch_optional(pool)
+    refs::resolve_ref(pool, repo_id, &ref_name)
         .await?
-        .ok_or_else(|| SharpError::RefNotFound(ref_name))?;
-
-    let sha: String = row.try_get("target_sha")?;
-    Ok(sha)
+        .ok_or(SharpError::RefNotFound(ref_name))
 }
 
 /// Return all commit_metadata rows for `repo_id` in reverse chronological order.
