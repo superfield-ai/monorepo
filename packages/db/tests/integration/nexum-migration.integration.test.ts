@@ -183,7 +183,9 @@ function pgClientToExecutor(client: Client): QueryExecutor {
       const res = await client.query(sql, params as unknown[]);
       return { rows: res.rows as Record<string, unknown>[] };
     },
-    transaction: async <T>(fn: (tx: QueryExecutor) => Promise<T>): Promise<T> => {
+    transaction: async <T>(
+      fn: (tx: QueryExecutor) => Promise<T>,
+    ): Promise<T> => {
       await client.query("BEGIN");
       try {
         const result = await fn(executor);
@@ -392,7 +394,15 @@ async function seedStagingNexum(client: Client): Promise<SeedResult> {
      VALUES ('embed', '{"doc": "x"}', 'pending'), ('embed', '{"doc": "y"}', 'done')`,
   );
 
-  return { corpusId, documentId, versionId, blockId1, blockId2, linkId, entityId };
+  return {
+    corpusId,
+    documentId,
+    versionId,
+    blockId1,
+    blockId2,
+    linkId,
+    entityId,
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -405,7 +415,8 @@ let client: Client;
 
 beforeAll(async () => {
   if (!dockerAvailable()) {
-    skipReason = "docker not available — skipping nexum migration integration tests";
+    skipReason =
+      "docker not available — skipping nexum migration integration tests";
     return;
   }
   try {
@@ -450,7 +461,10 @@ afterAll(async () => {
 
 describe("runNexumSchemaMigration — schema creation in shared instance (#441)", () => {
   it("creates nexum schema and all tables when run against a fresh database", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     const tables = await client.query<{ tablename: string }>(`
       SELECT tablename FROM pg_tables WHERE schemaname = 'nexum' ORDER BY tablename
@@ -469,7 +483,10 @@ describe("runNexumSchemaMigration — schema creation in shared instance (#441)"
   }, 30_000);
 
   it("records each applied migration version in nexum.schema_migrations", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     const rows = await client.query<{ version: string; name: string }>(
       "SELECT version, name FROM nexum.schema_migrations ORDER BY version",
@@ -479,7 +496,10 @@ describe("runNexumSchemaMigration — schema creation in shared instance (#441)"
   }, 30_000);
 
   it("is idempotent: re-running skips already-applied migrations without error", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     const executor = pgClientToExecutor(client);
     const result = await runNexumSchemaMigration(executor);
@@ -490,7 +510,10 @@ describe("runNexumSchemaMigration — schema creation in shared instance (#441)"
   }, 30_000);
 
   it("blocks.embedding column has dimension 384 matching the governed model", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     // atttypmod for vector(384) encodes the dimension.
     // typmod = dimension + 1 for pgvector.
@@ -509,7 +532,10 @@ describe("runNexumSchemaMigration — schema creation in shared instance (#441)"
   }, 30_000);
 
   it("links.edge_embedding column has dimension 384 matching blocks.embedding", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     const rows = await client.query<{ atttypmod: number }>(`
       SELECT a.atttypmod
@@ -525,7 +551,10 @@ describe("runNexumSchemaMigration — schema creation in shared instance (#441)"
   }, 30_000);
 
   it("all tables have a workspace_key TEXT NOT NULL column for future RLS", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     // Tables that have workspace_key (not all tables do — version_blocks, corpus_access
     // use composite PKs referencing parent rows that carry workspace_key).
@@ -540,7 +569,8 @@ describe("runNexumSchemaMigration — schema creation in shared instance (#441)"
     ];
 
     for (const table of workspaceKeyTables) {
-      const rows = await client.query<{ attnotnull: boolean }>(`
+      const rows = await client.query<{ attnotnull: boolean }>(
+        `
         SELECT a.attnotnull
         FROM   pg_attribute a
         JOIN   pg_class c ON c.oid = a.attrelid
@@ -549,7 +579,9 @@ describe("runNexumSchemaMigration — schema creation in shared instance (#441)"
           AND  c.relname = $1
           AND  a.attname = 'workspace_key'
           AND  a.attnum > 0
-      `, [table]);
+      `,
+        [table],
+      );
       expect(rows.rows.length).toBe(1);
       expect(rows.rows[0]!.attnotnull).toBe(true);
     }
@@ -567,11 +599,17 @@ describe("runNexumDataCutover — data migration with workspace key (#441)", () 
     if (skipReason) return;
     // Run the data cutover once for all tests in this suite.
     const executor = pgClientToExecutor(client);
-    await runNexumDataCutover({ workspaceKey: WORKSPACE_KEY, stagingExecutor: executor });
+    await runNexumDataCutover({
+      workspaceKey: WORKSPACE_KEY,
+      stagingExecutor: executor,
+    });
   }, 60_000);
 
   it("migrates a seeded staging_nexum DB into nexum.* with row parity: same IDs and content", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     // Verify corpora
     const corpora = await client.query<{ count: string }>(
@@ -603,7 +641,10 @@ describe("runNexumDataCutover — data migration with workspace key (#441)", () 
   }, 30_000);
 
   it("stamps every migrated row with the supplied workspaceKey", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     // All corpora rows must have the correct workspace_key
     const wrongWs = await client.query<{ count: string }>(
@@ -621,7 +662,10 @@ describe("runNexumDataCutover — data migration with workspace key (#441)", () 
   }, 30_000);
 
   it("is idempotent: re-running the cutover with the same source does not duplicate rows", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     const countBefore = await client.query<{ count: string }>(
       "SELECT COUNT(*) AS count FROM nexum.corpora WHERE workspace_key = $1",
@@ -630,7 +674,10 @@ describe("runNexumDataCutover — data migration with workspace key (#441)", () 
 
     // Re-run the cutover — ON CONFLICT DO NOTHING should make this a no-op
     const executor = pgClientToExecutor(client);
-    await runNexumDataCutover({ workspaceKey: WORKSPACE_KEY, stagingExecutor: executor });
+    await runNexumDataCutover({
+      workspaceKey: WORKSPACE_KEY,
+      stagingExecutor: executor,
+    });
 
     const countAfter = await client.query<{ count: string }>(
       "SELECT COUNT(*) AS count FROM nexum.corpora WHERE workspace_key = $1",
@@ -641,7 +688,10 @@ describe("runNexumDataCutover — data migration with workspace key (#441)", () 
   }, 30_000);
 
   it("skips job_queue rows that are not in pending status", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     // We seeded 2 job_queue rows: 1 pending + 1 done
     // Only the pending one should be migrated.
@@ -660,7 +710,10 @@ describe("runNexumDataCutover — data migration with workspace key (#441)", () 
   }, 30_000);
 
   it("restores current_version_id FK on documents after all versions are migrated", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     // The seeded document has a current_version_id set in staging.
     // After cutover, the nexum.documents row must also have current_version_id set.
@@ -679,7 +732,10 @@ describe("runNexumDataCutover — data migration with workspace key (#441)", () 
 
 describe("nexum.* workspace isolation — RLS groundwork (#441, §7 gap #3)", () => {
   it("two workspaces can hold corpora with the same name without collision", async () => {
-    if (skipReason) { console.warn(skipReason); return; }
+    if (skipReason) {
+      console.warn(skipReason);
+      return;
+    }
 
     // Insert the same corpus name under two different workspace keys directly.
     await client.query(
