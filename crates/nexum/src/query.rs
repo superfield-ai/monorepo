@@ -23,7 +23,7 @@
 //! See `docs/architecture.md` §Nexum and §Single-Instance Database Schema
 //! Layout.
 
-use sf_embed::Embedder;
+use crate::embed::Embedder;
 use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
@@ -43,7 +43,7 @@ pub enum QueryError {
 
     /// The embedding model failed during inference.
     #[error("embedding error: {0}")]
-    Embed(#[from] sf_embed::EmbedError),
+    Embed(#[from] crate::embed::EmbedError),
 
     /// The caller supplied invalid parameters.
     #[error("invalid query options: {0}")]
@@ -101,6 +101,11 @@ pub struct GraphResult {
 /// Options for [`fulltext_search`].
 #[derive(Debug, Clone)]
 pub struct FullTextOptions {
+    /// Workspace (tenant) to restrict results to.
+    ///
+    /// Every query filters by `documents.workspace_id = workspace_id` so that
+    /// one workspace cannot observe another workspace's blocks.
+    pub workspace_id: Uuid,
     /// UUID of the corpus to search within.
     pub corpus_id: Uuid,
     /// Free-text query string.  Passed to `plainto_tsquery('english', …)`.
@@ -112,6 +117,8 @@ pub struct FullTextOptions {
 /// Options for [`semantic_search`].
 #[derive(Debug, Clone)]
 pub struct SemanticOptions {
+    /// Workspace (tenant) to restrict results to.
+    pub workspace_id: Uuid,
     /// UUID of the corpus to search within.
     pub corpus_id: Uuid,
     /// Free-text query string.  Embedded into a 384-dim vector before
@@ -124,6 +131,8 @@ pub struct SemanticOptions {
 /// Options for [`graph_search`].
 #[derive(Debug, Clone)]
 pub struct GraphOptions {
+    /// Workspace (tenant) to restrict results to.
+    pub workspace_id: Uuid,
     /// UUID of the seed block to start traversal from.
     pub seed_block_id: Uuid,
     /// Maximum number of hops to traverse.  Defaults to 3 when not set.
@@ -138,6 +147,8 @@ pub struct GraphOptions {
 /// Options for [`hybrid_search`].
 #[derive(Debug, Clone)]
 pub struct HybridOptions {
+    /// Workspace (tenant) to restrict results to.
+    pub workspace_id: Uuid,
     /// UUID of the corpus to search within.
     pub corpus_id: Uuid,
     /// Free-text query string.  Used for both the semantic seed pass and the
@@ -180,13 +191,15 @@ pub async fn fulltext_search(
         FROM nexum.blocks b
         JOIN nexum.documents d ON d.id = b.doc_id,
              plainto_tsquery('english', $1) q
-        WHERE d.corpus_id = $2
+        WHERE d.workspace_id = $2
+          AND d.corpus_id = $3
           AND b.tsv @@ q
         ORDER BY score DESC
-        LIMIT $3
+        LIMIT $4
         "#,
     )
     .bind(&opts.query_text)
+    .bind(opts.workspace_id)
     .bind(opts.corpus_id)
     .bind(limit)
     .fetch_all(pool)
@@ -252,13 +265,15 @@ pub async fn semantic_search(
                d.id, d.title, d.external_id
         FROM nexum.blocks b
         JOIN nexum.documents d ON d.id = b.doc_id
-        WHERE d.corpus_id = $2
+        WHERE d.workspace_id = $2
+          AND d.corpus_id = $3
           AND b.embedding IS NOT NULL
         ORDER BY b.embedding <=> $1::vector
-        LIMIT $3
+        LIMIT $4
         "#,
     )
     .bind(&vec_str)
+    .bind(opts.workspace_id)
     .bind(opts.corpus_id)
     .bind(limit)
     .fetch_all(pool)
@@ -331,21 +346,22 @@ pub async fn graph_search(
         WITH RECURSIVE graph AS (
             SELECT dst AS id, 1 AS depth, ARRAY[src] AS path, rel_type
             FROM nexum.links
-            WHERE src = $1 AND layer = ANY({layers})
+            WHERE src = $1 AND workspace_id = $4 AND layer = ANY({layers})
             UNION ALL
             SELECT l.dst, g.depth + 1, g.path || l.src, l.rel_type
             FROM nexum.links l
             JOIN graph g ON l.src = g.id
             WHERE g.depth < $2
               AND l.src != ALL(g.path)
+              AND l.workspace_id = $4
               AND l.layer = ANY({layers})
         )
         SELECT DISTINCT b.id, b.content,
                g.depth, g.rel_type,
                d.id, d.title, d.external_id
         FROM graph g
-        JOIN nexum.blocks b ON b.id = g.id
-        JOIN nexum.documents d ON d.id = b.doc_id
+        JOIN nexum.blocks b ON b.id = g.id AND b.workspace_id = $4
+        JOIN nexum.documents d ON d.id = b.doc_id AND d.workspace_id = $4
         ORDER BY g.depth
         LIMIT $3
         "#,
@@ -356,6 +372,7 @@ pub async fn graph_search(
         .bind(opts.seed_block_id)
         .bind(max_hops)
         .bind(limit)
+        .bind(opts.workspace_id)
         .fetch_all(pool)
         .await?;
 
@@ -408,6 +425,7 @@ pub async fn hybrid_search(
         pool,
         embedder,
         SemanticOptions {
+            workspace_id: opts.workspace_id,
             corpus_id: opts.corpus_id,
             query_text: opts.query_text.clone(),
             limit: 10,
@@ -431,6 +449,7 @@ pub async fn hybrid_search(
         let neighbors = graph_search(
             pool,
             GraphOptions {
+                workspace_id: opts.workspace_id,
                 seed_block_id: sr.block_id,
                 max_hops: 1,
                 layers: vec![
@@ -474,6 +493,7 @@ mod tests {
         // The rejection happens synchronously in `fulltext_search` before any
         // DB call.  We test the guard by inspecting the option struct directly.
         let opts = FullTextOptions {
+            workspace_id: Uuid::new_v4(),
             corpus_id: Uuid::new_v4(),
             query_text: "  ".into(),
             limit: 10,
@@ -490,6 +510,7 @@ mod tests {
     #[test]
     fn graph_search_defaults_layers_when_empty() {
         let opts = GraphOptions {
+            workspace_id: Uuid::new_v4(),
             seed_block_id: Uuid::new_v4(),
             max_hops: 3,
             layers: vec![],
@@ -537,13 +558,22 @@ mod tests {
         let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
         let pool = connect(&cfg).await.expect("pool creation failed");
 
-        let corpus_id = seed_test_corpus(&pool).await;
-        let doc_id = seed_test_document(&pool, corpus_id, "Full-text search test").await;
-        seed_test_block(&pool, doc_id, "The quick brown fox jumps over the lazy dog").await;
+        let workspace_id = seed_test_workspace(&pool).await;
+        let corpus_id = seed_test_corpus(&pool, workspace_id).await;
+        let doc_id =
+            seed_test_document(&pool, corpus_id, workspace_id, "Full-text search test").await;
+        seed_test_block(
+            &pool,
+            doc_id,
+            workspace_id,
+            "The quick brown fox jumps over the lazy dog",
+        )
+        .await;
 
         let results = fulltext_search(
             &pool,
             FullTextOptions {
+                workspace_id,
                 corpus_id,
                 query_text: "quick brown fox".into(),
                 limit: 10,
@@ -575,11 +605,14 @@ mod tests {
         let pool = connect(&cfg).await.expect("pool creation failed");
         let embedder = Embedder::new().expect("embedder init failed");
 
-        let corpus_id = seed_test_corpus(&pool).await;
-        let doc_id = seed_test_document(&pool, corpus_id, "Semantic search test").await;
+        let workspace_id = seed_test_workspace(&pool).await;
+        let corpus_id = seed_test_corpus(&pool, workspace_id).await;
+        let doc_id =
+            seed_test_document(&pool, corpus_id, workspace_id, "Semantic search test").await;
         seed_test_block_with_embedding(
             &pool,
             doc_id,
+            workspace_id,
             "Rust is a systems programming language",
             &embedder,
         )
@@ -589,6 +622,7 @@ mod tests {
             &pool,
             &embedder,
             SemanticOptions {
+                workspace_id,
                 corpus_id,
                 query_text: "systems programming".into(),
                 limit: 10,
@@ -620,15 +654,18 @@ mod tests {
         let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
         let pool = connect(&cfg).await.expect("pool creation failed");
 
-        let corpus_id = seed_test_corpus(&pool).await;
-        let doc_id = seed_test_document(&pool, corpus_id, "Graph traversal test").await;
-        let src_id = seed_test_block_bare(&pool, doc_id, "Source block").await;
-        let dst_id = seed_test_block_bare(&pool, doc_id, "Destination block").await;
-        seed_test_link(&pool, src_id, dst_id, "structural").await;
+        let workspace_id = seed_test_workspace(&pool).await;
+        let corpus_id = seed_test_corpus(&pool, workspace_id).await;
+        let doc_id =
+            seed_test_document(&pool, corpus_id, workspace_id, "Graph traversal test").await;
+        let src_id = seed_test_block_bare(&pool, doc_id, workspace_id, "Source block").await;
+        let dst_id = seed_test_block_bare(&pool, doc_id, workspace_id, "Destination block").await;
+        seed_test_link(&pool, src_id, dst_id, workspace_id, "structural").await;
 
         let results = graph_search(
             &pool,
             GraphOptions {
+                workspace_id,
                 seed_block_id: src_id,
                 max_hops: 1,
                 layers: vec!["structural".into()],
@@ -656,18 +693,26 @@ mod tests {
         let pool = connect(&cfg).await.expect("pool creation failed");
         let embedder = Embedder::new().expect("embedder init failed");
 
-        let corpus_id = seed_test_corpus(&pool).await;
-        let doc_id = seed_test_document(&pool, corpus_id, "Hybrid search test").await;
-        let src_id =
-            seed_test_block_with_embedding(&pool, doc_id, "Rust memory safety model", &embedder)
-                .await;
-        let dst_id = seed_test_block_bare(&pool, doc_id, "Ownership and borrowing").await;
-        seed_test_link(&pool, src_id, dst_id, "structural").await;
+        let workspace_id = seed_test_workspace(&pool).await;
+        let corpus_id = seed_test_corpus(&pool, workspace_id).await;
+        let doc_id = seed_test_document(&pool, corpus_id, workspace_id, "Hybrid search test").await;
+        let src_id = seed_test_block_with_embedding(
+            &pool,
+            doc_id,
+            workspace_id,
+            "Rust memory safety model",
+            &embedder,
+        )
+        .await;
+        let dst_id =
+            seed_test_block_bare(&pool, doc_id, workspace_id, "Ownership and borrowing").await;
+        seed_test_link(&pool, src_id, dst_id, workspace_id, "structural").await;
 
         let results = hybrid_search(
             &pool,
             &embedder,
             HybridOptions {
+                workspace_id,
                 corpus_id,
                 query_text: "memory safety".into(),
                 limit: 20,
@@ -706,20 +751,46 @@ mod tests {
 
     // ── Integration test helpers ──────────────────────────────────────────────
 
+    /// Create a workspace row for integration tests and return its UUID.
     #[allow(dead_code)]
-    async fn seed_test_corpus(pool: &PgPool) -> Uuid {
-        sqlx::query_scalar("INSERT INTO nexum.corpora (name) VALUES ($1) RETURNING id")
-            .bind(format!("test-corpus-{}", Uuid::new_v4()))
-            .fetch_one(pool)
-            .await
-            .expect("corpus insert failed")
+    async fn seed_test_workspace(pool: &PgPool) -> Uuid {
+        sqlx::query_scalar(
+            r#"
+            INSERT INTO public.workspaces (slug, display_name)
+            VALUES ($1, $2)
+            RETURNING id
+            "#,
+        )
+        .bind(format!("test-ws-{}", Uuid::new_v4()))
+        .bind("Test Workspace")
+        .fetch_one(pool)
+        .await
+        .expect("workspace insert failed")
     }
 
     #[allow(dead_code)]
-    async fn seed_test_document(pool: &PgPool, corpus_id: Uuid, title: &str) -> Uuid {
+    async fn seed_test_corpus(pool: &PgPool, workspace_id: Uuid) -> Uuid {
         sqlx::query_scalar(
-            "INSERT INTO nexum.documents (corpus_id, title) VALUES ($1, $2) RETURNING id",
+            "INSERT INTO nexum.corpora (workspace_id, name) VALUES ($1, $2) RETURNING id",
         )
+        .bind(workspace_id)
+        .bind(format!("test-corpus-{}", Uuid::new_v4()))
+        .fetch_one(pool)
+        .await
+        .expect("corpus insert failed")
+    }
+
+    #[allow(dead_code)]
+    async fn seed_test_document(
+        pool: &PgPool,
+        corpus_id: Uuid,
+        workspace_id: Uuid,
+        title: &str,
+    ) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO nexum.documents (workspace_id, corpus_id, title) VALUES ($1, $2, $3) RETURNING id",
+        )
+        .bind(workspace_id)
         .bind(corpus_id)
         .bind(title)
         .fetch_one(pool)
@@ -729,11 +800,17 @@ mod tests {
 
     /// Insert a bare block (no embedding, no tsv) for graph-only tests.
     #[allow(dead_code)]
-    async fn seed_test_block_bare(pool: &PgPool, doc_id: Uuid, content: &str) -> Uuid {
+    async fn seed_test_block_bare(
+        pool: &PgPool,
+        doc_id: Uuid,
+        workspace_id: Uuid,
+        content: &str,
+    ) -> Uuid {
         sqlx::query_scalar(
-            r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type)
-               VALUES ($1, $2, $3, 'paragraph') RETURNING id"#,
+            r#"INSERT INTO nexum.blocks (workspace_id, doc_id, content, content_hash, block_type)
+               VALUES ($1, $2, $3, $4, 'paragraph') RETURNING id"#,
         )
+        .bind(workspace_id)
         .bind(doc_id)
         .bind(content)
         .bind(crate::dedup::content_hash(content))
@@ -744,11 +821,17 @@ mod tests {
 
     /// Insert a block with tsvector for full-text tests.
     #[allow(dead_code)]
-    async fn seed_test_block(pool: &PgPool, doc_id: Uuid, content: &str) -> Uuid {
+    async fn seed_test_block(
+        pool: &PgPool,
+        doc_id: Uuid,
+        workspace_id: Uuid,
+        content: &str,
+    ) -> Uuid {
         sqlx::query_scalar(
-            r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type, tsv)
-               VALUES ($1, $2, $3, 'paragraph', to_tsvector('english', $2)) RETURNING id"#,
+            r#"INSERT INTO nexum.blocks (workspace_id, doc_id, content, content_hash, block_type, tsv)
+               VALUES ($1, $2, $3, $4, 'paragraph', to_tsvector('english', $3)) RETURNING id"#,
         )
+        .bind(workspace_id)
         .bind(doc_id)
         .bind(content)
         .bind(crate::dedup::content_hash(content))
@@ -762,6 +845,7 @@ mod tests {
     async fn seed_test_block_with_embedding(
         pool: &PgPool,
         doc_id: Uuid,
+        workspace_id: Uuid,
         content: &str,
         embedder: &Embedder,
     ) -> Uuid {
@@ -774,9 +858,10 @@ mod tests {
                 .join(",")
         );
         sqlx::query_scalar(
-            r#"INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type, embedding, tsv)
-               VALUES ($1, $2, $3, 'paragraph', $4::vector, to_tsvector('english', $2)) RETURNING id"#,
+            r#"INSERT INTO nexum.blocks (workspace_id, doc_id, content, content_hash, block_type, embedding, tsv)
+               VALUES ($1, $2, $3, $4, 'paragraph', $5::vector, to_tsvector('english', $3)) RETURNING id"#,
         )
+        .bind(workspace_id)
         .bind(doc_id)
         .bind(content)
         .bind(crate::dedup::content_hash(content))
@@ -788,12 +873,13 @@ mod tests {
 
     /// Insert a structural link between two blocks.
     #[allow(dead_code)]
-    async fn seed_test_link(pool: &PgPool, src: Uuid, dst: Uuid, layer: &str) {
+    async fn seed_test_link(pool: &PgPool, src: Uuid, dst: Uuid, workspace_id: Uuid, layer: &str) {
         sqlx::query(
-            r#"INSERT INTO nexum.links (id, src, dst, layer, rel_type, weight)
-               VALUES ($1, $2, $3, $4, 'cites', 1.0)"#,
+            r#"INSERT INTO nexum.links (id, workspace_id, src, dst, layer, rel_type, weight, provenance)
+               VALUES ($1, $2, $3, $4, $5, 'cites', 1.0, '{}'::jsonb)"#,
         )
         .bind(Uuid::new_v4())
+        .bind(workspace_id)
         .bind(src)
         .bind(dst)
         .bind(layer)

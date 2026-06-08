@@ -20,6 +20,15 @@ pub enum SharpError {
     #[error("ref not found: {0}")]
     RefNotFound(String),
 
+    /// A compare-and-swap update of a ref failed because the observed value did
+    /// not match the expected value.
+    #[error("ref CAS failed for {ref_name}: expected {expected}, found {found}")]
+    RefCasFailed {
+        ref_name: String,
+        expected: String,
+        found: String,
+    },
+
     /// An object with the given sha256 was not found.
     #[error("object not found: {0}")]
     ObjectNotFound(String),
@@ -32,6 +41,16 @@ pub enum SharpError {
     #[error("episode {0} is not open (state: {1})")]
     EpisodeNotOpen(uuid::Uuid, String),
 
+    /// A typed artifact failed validation (e.g. unknown kind, missing content
+    /// reference, or malformed provenance).
+    #[error("invalid artifact: {0}")]
+    InvalidArtifact(String),
+
+    /// An episode redaction request failed validation (e.g. unknown target or
+    /// an empty reason).
+    #[error("invalid redaction: {0}")]
+    InvalidRedaction(String),
+
     // ── Git interop errors ───────────────────────────────────────────────────
     /// A Git interoperability error (import or export).
     #[error("git interop error: {0}")]
@@ -41,6 +60,10 @@ pub enum SharpError {
     /// The rust-analyzer subprocess could not be spawned or communicated with.
     #[error("rust-analyzer subprocess error: {0}")]
     RustAnalyzerProcess(String),
+
+    /// The tsserver-bridge subprocess could not be spawned or communicated with.
+    #[error("tsserver-bridge subprocess error: {0}")]
+    TsserverBridgeProcess(String),
 
     /// A JSON-RPC message could not be serialized or deserialized.
     #[error("JSON-RPC protocol error: {0}")]
@@ -61,6 +84,10 @@ pub enum SharpError {
     /// A merge was refused because it would produce non-compiling output.
     #[error("merge refused: non-compiling result detected\n{diagnostics}")]
     MergeRefused { diagnostics: String },
+
+    /// A merge was vetoed by a registered pre-merge hook.
+    #[error("merge vetoed by hook '{hook}': {reason}")]
+    HookVeto { hook: String, reason: String },
 
     /// I/O error.
     #[error("I/O error: {0}")]

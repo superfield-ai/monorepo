@@ -707,7 +707,7 @@ This comment is updated on each resumption and deleted when the issue closes. On
 ## Single-Instance Database Schema Layout
 
 **Decision date:** 2026-05-30
-**Status:** Accepted
+**Status:** Accepted — full ADR in `docs/adr-schema-boundary.md` (closes #427)
 
 ### Decision
 
@@ -987,7 +987,7 @@ A real implementation will:
 
 | #   | Gap                                                                      | Target state                                                                                                                                                                                 | Tracking                                                                                                                                             |
 | --- | ------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Schema-sharing boundary not codified                                     | Namespaced schemas per component as described above                                                                                                                                          | Closed by #355                                                                                                                                       |
+| 1   | Schema-sharing boundary not codified                                     | Namespaced schemas per component as described above                                                                                                                                          | Closed by #355; ADR in `docs/adr-schema-boundary.md` (#427)                                                                                          |
 | 2   | AGE shim runs on a second Postgres at `:5433`                            | AGE as in-instance extension on primary Postgres                                                                                                                                             | Closed by #359 — recursive CTEs on `nexum.links` (see §6)                                                                                            |
 | 3   | No RLS policies anywhere                                                 | Per-schema RLS enabled; policies reference `auth.sessions`                                                                                                                                   | Partially closed by #358 — migration stubs and session context wiring in `packages/db/`; full per-schema policies require component schemas to exist |
 | 4   | No cross-component migration runner                                      | Single runner applies all component migrations in dependency order at startup                                                                                                                | Open — tracked in migration-runner issue                                                                                                             |

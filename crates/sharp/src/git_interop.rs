@@ -25,8 +25,8 @@
 //! See `docs/architecture.md` §sharp schema and whitepaper §7.
 
 use crate::error::SharpError;
+use crate::git_canonical::{self, HashAlgo, ObjectKind};
 use flate2::{read::ZlibDecoder, write::ZlibEncoder, Compression};
-use sha1::{Digest as _, Sha1};
 use sqlx::{PgPool, Row};
 use std::io::{Read, Write};
 use std::path::{Path, PathBuf};
@@ -111,6 +111,16 @@ impl GitKind {
         }
     }
 
+    /// Map to the git-canonical [`ObjectKind`].
+    fn to_canonical(self) -> ObjectKind {
+        match self {
+            GitKind::Blob => ObjectKind::Blob,
+            GitKind::Tree => ObjectKind::Tree,
+            GitKind::Commit => ObjectKind::Commit,
+            GitKind::Tag => ObjectKind::Tag,
+        }
+    }
+
     fn from_str(s: &str) -> Option<GitKind> {
         match s {
             "blob" => Some(GitKind::Blob),
@@ -130,11 +140,8 @@ impl GitKind {
 ///
 /// Git hashes `"<kind> <decimal-size>\0<payload>"`.
 fn git_sha1(kind: GitKind, payload: &[u8]) -> String {
-    let header = format!("{} {}\0", kind.as_str(), payload.len());
-    let mut h = Sha1::new();
-    h.update(header.as_bytes());
-    h.update(payload);
-    hex::encode(h.finalize())
+    let id = git_canonical::hash_object(kind.to_canonical(), payload, HashAlgo::Sha1);
+    git_canonical::id_hex(&id)
 }
 
 // ---------------------------------------------------------------------------
