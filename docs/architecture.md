@@ -944,7 +944,7 @@ The reliability stack has three layers:
 
 2. **WAL archiving** — `archive_mode = on`; the `archive_command` copies each completed WAL segment to durable object storage (`gs://sf-wal-archive/<env>/`). Combined with the daily base backup, this enables point-in-time recovery to any LSN within the retention window (target: 7 days).
 
-3. **Daily base backup** — a `pg_basebackup` job runs against the primary and writes a consistent filesystem snapshot to `gs://sf-backups/<env>/YYYY-MM-DD/`. The job is scheduled as a Kubernetes CronJob (see `packages/core/templates/k8s/postgres-backup-cronjob.yaml.tpl` — not yet authored; this is the next implementation step).
+3. **Daily base backup** — a `pg_basebackup` job runs against the primary and writes a consistent filesystem snapshot to `gs://sf-backups/<env>/YYYY-MM-DD/`. The job is scheduled as a Kubernetes CronJob defined in `packages/core/templates/k8s/postgres-backup-cronjob.yaml.tpl`; the renderer is `packages/core/templates/k8s/render-backup-cronjob.ts`. The CronJob fires at 02:00 UTC, uses `concurrencyPolicy: Forbid`, and injects replication credentials from the `postgres-replication-{{ ENV }}` k8s Secret.
 
 ### Restore Procedure
 
@@ -965,11 +965,13 @@ Total elapsed time should be under the 15-minute RTO. Steps 3–5 (WAL fetch + r
 
 The `sf-db` crate defines [`SubstrateBackup`] (`crates/sf-db/src/backup.rs`): a trait that operations tooling implements to record backup-completion events. The no-op stub [`NoopSubstrateBackup`] satisfies the interface in tests and in components that have not yet wired a real implementation.
 
-A real implementation will:
+The real implementation ([`PgBackup`]) is shipped in `crates/sf-db/src/backup.rs`:
 
-1. Receive a [`BackupEvent`] from the CronJob runner on successful `pg_basebackup` completion.
-2. Insert a row into a `substrate.backup_events` table (schema to be defined).
-3. Expose the latest event via [`SubstrateBackup::latest`] for health check queries.
+1. Receives a [`BackupEvent`] from the CronJob runner on successful `pg_basebackup` completion.
+2. Inserts a row into `substrate.backups` (created by migration `crates/sf-db/migrations/0002_substrate_backups.sql`).
+3. Exposes the latest event via [`SubstrateBackup::latest`] for health check queries.
+
+For local replication testing, `docker-compose.replication.yml` starts a primary and one hot-standby; integration tests live in `crates/sf-db/tests/replication_integration.rs`.
 
 ### K8s template seams
 
