@@ -1,0 +1,11 @@
+name: delete_then_edit
+category: delete_edit
+language: rust
+summary: >
+  Branch A removes src/legacy.rs and its mod declaration. Branch B edits
+  the same file. Modify/delete conflict; the correct resolution is
+  intent-dependent and should escalate to a Tier 3 dilemma.
+expected_git_outcome: conflict
+expected_sharp_outcome: dilemma
+notes: |
+  Tier 3 dilemma scenario. Same shape as the TS version of this fixture.

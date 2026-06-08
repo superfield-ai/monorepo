@@ -7,6 +7,7 @@
 //! See `docs/architecture.md` §sharp schema.
 
 use crate::error::SharpError;
+use crate::git_canonical::{hash_object, id_hex, HashAlgo, ObjectKind};
 use sha2::{Digest, Sha256};
 use sqlx::{PgPool, Row};
 use uuid::Uuid;
@@ -72,6 +73,55 @@ pub async fn store(
     .await?;
 
     Ok(sha)
+}
+
+/// Store an object keyed on its **git-canonical id** — `id_hex(hash_object(
+/// kind, payload))`, the header-prefixed SHA-256 that `git_canonical` tree and
+/// commit encodings embed in their entries.
+///
+/// Use this whenever the object will be referenced by a git-canonical id
+/// (working-tree snapshots, git interop). [`store`] keys on the raw-bytes
+/// SHA-256 instead and backs the commit/episode/projection paths, whose
+/// references are internally consistent under that scheme. The two id models
+/// share the `sharp.objects` table but address different rows; a future cleanup
+/// (#45 caller migration) can converge them — it is not a correctness issue
+/// today because each path resolves objects by the same id it stored under.
+///
+/// Returns the git-canonical id hex of the stored object.
+///
+/// # Errors
+///
+/// Returns [`SharpError::Db`] on a database error.
+pub async fn store_canonical(
+    pool: &PgPool,
+    repo_id: Uuid,
+    kind: ObjectKind,
+    payload: &[u8],
+) -> Result<String, SharpError> {
+    let id = id_hex(&hash_object(kind, payload, HashAlgo::Sha256));
+    // `sharp.objects.object_type` mirrors Git's keywords. Tags are not produced
+    // by the worktree paths; map defensively to "commit".
+    let object_type = match kind {
+        ObjectKind::Blob => "blob",
+        ObjectKind::Tree => "tree",
+        ObjectKind::Commit | ObjectKind::Tag => "commit",
+    };
+    let size = payload.len() as i64;
+    sqlx::query(
+        r#"
+        INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data)
+        VALUES ($1, $2, $3, $4, $5)
+        ON CONFLICT (sha256) DO NOTHING
+        "#,
+    )
+    .bind(&id)
+    .bind(repo_id)
+    .bind(object_type)
+    .bind(size)
+    .bind(payload)
+    .execute(pool)
+    .await?;
+    Ok(id)
 }
 
 /// Retrieve raw object bytes by SHA-256 hex.
