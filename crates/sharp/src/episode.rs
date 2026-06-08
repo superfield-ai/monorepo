@@ -367,7 +367,10 @@ fn row_to_typed_artifact(r: &sqlx::postgres::PgRow) -> Result<TypedArtifact, sql
     // Map an unknown kind to a column-decode error so it surfaces through sqlx.
     let kind = ArtifactKind::parse(&kind_str).map_err(|e| sqlx::Error::ColumnDecode {
         index: "kind".to_string(),
-        source: Box::new(std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string())),
+        source: Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            e.to_string(),
+        )),
     })?;
     Ok(TypedArtifact {
         id: r.try_get("id")?,
@@ -610,10 +613,14 @@ pub async fn redact(
     redacted: Json,
 ) -> Result<(), SharpError> {
     if policy.trim().is_empty() {
-        return Err(SharpError::InvalidRedaction("policy must not be empty".to_string()));
+        return Err(SharpError::InvalidRedaction(
+            "policy must not be empty".to_string(),
+        ));
     }
     if actor.trim().is_empty() {
-        return Err(SharpError::InvalidRedaction("actor must not be empty".to_string()));
+        return Err(SharpError::InvalidRedaction(
+            "actor must not be empty".to_string(),
+        ));
     }
 
     let mut tx = pool.begin().await?;
@@ -706,6 +713,32 @@ pub async fn list_filtered(
         .map_err(SharpError::Db)
 }
 
+/// Return all episodes for a repo (any state), most recently opened first.
+///
+/// Used by `sf-cli`'s `episode list` command.
+///
+/// # Errors
+///
+/// Returns [`SharpError::Db`] on a database error.
+pub async fn list_for_repo(pool: &PgPool, repo_id: Uuid) -> Result<Vec<Episode>, SharpError> {
+    let rows = sqlx::query(
+        r#"
+        SELECT id, repo_id, title, state, opened_at, finished_at, metadata
+        FROM   sharp.episodes
+        WHERE  repo_id = $1
+        ORDER  BY opened_at DESC
+        "#,
+    )
+    .bind(repo_id)
+    .fetch_all(pool)
+    .await?;
+
+    rows.iter()
+        .map(row_to_episode)
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(SharpError::Db)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -742,30 +775,4 @@ mod tests {
         assert_eq!(LinkRelation::ReplayOf.as_str(), "replay_of");
         assert_eq!(LinkRelation::SupersededBy.as_str(), "superseded_by");
     }
-}
-
-/// Return all episodes for a repo (any state), most recently opened first.
-///
-/// Used by `sf-cli`'s `episode list` command.
-///
-/// # Errors
-///
-/// Returns [`SharpError::Db`] on a database error.
-pub async fn list_for_repo(pool: &PgPool, repo_id: Uuid) -> Result<Vec<Episode>, SharpError> {
-    let rows = sqlx::query(
-        r#"
-        SELECT id, repo_id, title, state, opened_at, finished_at, metadata
-        FROM   sharp.episodes
-        WHERE  repo_id = $1
-        ORDER  BY opened_at DESC
-        "#,
-    )
-    .bind(repo_id)
-    .fetch_all(pool)
-    .await?;
-
-    rows.iter()
-        .map(row_to_episode)
-        .collect::<Result<Vec<_>, _>>()
-        .map_err(SharpError::Db)
 }

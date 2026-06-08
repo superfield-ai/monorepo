@@ -32,9 +32,7 @@
 
 use crate::error::SharpError;
 use crate::semantic_merge::{three_way_merge, FileVersion, MergeResult};
-use crate::tsserver_bridge_client::{
-    TsRename, TsserverBridgeClient, TsserverBridgeClientOptions,
-};
+use crate::tsserver_bridge_client::{TsRename, TsserverBridgeClient, TsserverBridgeClientOptions};
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 
@@ -95,7 +93,8 @@ pub async fn semantic_merge_ts(
 
     let mut detected: Vec<TsRename> = Vec::new();
     let mut seen: HashSet<(String, String, String)> = HashSet::new();
-    let detect_result = detect_renames(&mut client, ours, &base_map, &mut detected, &mut seen).await;
+    let detect_result =
+        detect_renames(&mut client, ours, &base_map, &mut detected, &mut seen).await;
 
     // Step 2: apply detected renames to each `theirs` file.
     let apply_result = if detect_result.is_ok() {

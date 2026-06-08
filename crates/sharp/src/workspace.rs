@@ -311,7 +311,8 @@ fn materialize_recursive<'a>(
 ) -> std::pin::Pin<Box<dyn std::future::Future<Output = Result<(), SharpError>> + 'a>> {
     Box::pin(async move {
         let data = object::load(pool, tree_sha).await?;
-        let entries = decode_tree(&data, ALGO).map_err(|e| SharpError::GitInterop(e.to_string()))?;
+        let entries =
+            decode_tree(&data, ALGO).map_err(|e| SharpError::GitInterop(e.to_string()))?;
         std::fs::create_dir_all(dest)?;
         for entry in entries {
             let path = dest.join(&entry.name);
@@ -409,8 +410,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let plain = dir.path().join("plain");
         let exec = dir.path().join("exec");
-        std::fs::File::create(&plain).unwrap().write_all(b"x").unwrap();
-        std::fs::File::create(&exec).unwrap().write_all(b"x").unwrap();
+        std::fs::File::create(&plain)
+            .unwrap()
+            .write_all(b"x")
+            .unwrap();
+        std::fs::File::create(&exec)
+            .unwrap()
+            .write_all(b"x")
+            .unwrap();
         let mut p = std::fs::metadata(&exec).unwrap().permissions();
         p.set_mode(0o755);
         std::fs::set_permissions(&exec, p).unwrap();
@@ -660,7 +667,10 @@ mod tests {
         let link_path = dest.path().join("link");
         let meta = std::fs::symlink_metadata(&link_path).unwrap();
         assert!(meta.file_type().is_symlink());
-        assert_eq!(std::fs::read_link(&link_path).unwrap().to_str().unwrap(), "target.txt");
+        assert_eq!(
+            std::fs::read_link(&link_path).unwrap().to_str().unwrap(),
+            "target.txt"
+        );
     }
 
     #[test]
@@ -783,7 +793,10 @@ mod tests {
             std::fs::read(dest.path().join("top.txt")).unwrap(),
             b"top level"
         );
-        assert_eq!(std::fs::read(dest.path().join("a/b.txt")).unwrap(), b"hello b");
+        assert_eq!(
+            std::fs::read(dest.path().join("a/b.txt")).unwrap(),
+            b"hello b"
+        );
         assert_eq!(
             std::fs::read(dest.path().join("a/c/d.txt")).unwrap(),
             b"deep d"
@@ -811,6 +824,9 @@ mod tests {
         let root_tree2 = build_tree_from_snapshot(&pool, repo.id, &snap2)
             .await
             .expect("re-build tree");
-        assert_eq!(root_tree, root_tree2, "round-trip must reproduce root tree id");
+        assert_eq!(
+            root_tree, root_tree2,
+            "round-trip must reproduce root tree id"
+        );
     }
 }

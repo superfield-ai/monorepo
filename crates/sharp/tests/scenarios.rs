@@ -150,12 +150,10 @@ pub fn load_rust_scenarios() -> Vec<Scenario> {
 
             // Physical layout is the source of truth; meta drift is a bug.
             let name_from_path = fixture.file_name().and_then(|s| s.to_str()).unwrap_or("");
-            let category_from_path = category
-                .file_name()
-                .and_then(|s| s.to_str())
-                .unwrap_or("");
+            let category_from_path = category.file_name().and_then(|s| s.to_str()).unwrap_or("");
             assert_eq!(
-                meta.name, name_from_path,
+                meta.name,
+                name_from_path,
                 "{}: meta.name disagrees with directory name",
                 meta_path.display()
             );
@@ -166,7 +164,8 @@ pub fn load_rust_scenarios() -> Vec<Scenario> {
                 meta_path.display()
             );
             assert_eq!(
-                meta.language, "rust",
+                meta.language,
+                "rust",
                 "{}: only rust fixtures live in this corpus",
                 meta_path.display()
             );
@@ -214,7 +213,10 @@ fn read_tree(root: &Path) -> Vec<FileVersion> {
     let mut out = Vec::new();
     for entry in WalkDir::new(root).into_iter().filter_entry(|e| {
         let name = e.file_name().to_str().unwrap_or("");
-        !matches!(name, ".git" | ".sharp" | "node_modules" | "target" | ".cargo")
+        !matches!(
+            name,
+            ".git" | ".sharp" | "node_modules" | "target" | ".cargo"
+        )
     }) {
         let entry = match entry {
             Ok(e) => e,
@@ -231,10 +233,7 @@ fn read_tree(root: &Path) -> Vec<FileVersion> {
             Ok(c) => c,
             Err(_) => continue, // skip binaries / unreadable
         };
-        out.push(FileVersion {
-            path: rel,
-            content,
-        });
+        out.push(FileVersion { path: rel, content });
     }
     out.sort_by(|a, b| a.path.cmp(&b.path));
     out
@@ -338,7 +337,10 @@ async fn run_scenario(scenario: &Scenario) -> Outcome {
 fn copy_tree(src: &Path, dst: &Path) -> std::io::Result<()> {
     for entry in WalkDir::new(src).into_iter().filter_entry(|e| {
         let name = e.file_name().to_str().unwrap_or("");
-        !matches!(name, ".git" | ".sharp" | "node_modules" | "target" | ".cargo")
+        !matches!(
+            name,
+            ".git" | ".sharp" | "node_modules" | "target" | ".cargo"
+        )
     }) {
         let entry = entry?;
         let rel = match entry.path().strip_prefix(src) {
@@ -400,7 +402,11 @@ fn loader_finds_all_rust_scenarios() {
 
 macro_rules! scenario_test {
     ($fn_name:ident, $id:literal) => {
-        scenario_test!($fn_name, $id, "scenario: requires live rust-analyzer + cargo");
+        scenario_test!(
+            $fn_name,
+            $id,
+            "scenario: requires live rust-analyzer + cargo"
+        );
     };
     ($fn_name:ident, $id:literal, $reason:literal) => {
         #[tokio::test]

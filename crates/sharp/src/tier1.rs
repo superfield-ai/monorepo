@@ -38,7 +38,9 @@
 use crate::ast_equivalence::ast_equal;
 use crate::error::SharpError;
 use crate::file_rename::detect_file_renames;
-use crate::oracle::{classify_path, select_candidate, Candidate, Classification, FileSet, OracleSelection};
+use crate::oracle::{
+    classify_path, select_candidate, Candidate, Classification, FileSet, OracleSelection,
+};
 use crate::semantic_merge::{replace_whole_word, DetectedRename};
 use std::collections::BTreeSet;
 use std::path::Path;
@@ -205,8 +207,7 @@ pub async fn tier1_merge(
                 if let Some(merged) = try_concat_additions(&base_c, &a_c, &b_c) {
                     result.insert(path.clone(), apply_renames(&merged, renames));
                 } else {
-                    unhandled
-                        .get_or_insert_with(|| format!("both branches modified {path}"));
+                    unhandled.get_or_insert_with(|| format!("both branches modified {path}"));
                 }
             }
             Classification::ADeletedBEdited => {
@@ -398,8 +399,8 @@ async fn run_hook_gate(
     workspace_root: &Path,
     result: &FileSet,
 ) -> Result<Option<DilemmaPayload>, SharpError> {
-    let hooks = crate::hooks::discover_hooks(workspace_root, crate::hooks::HookEvent::PreMerge)
-        .await?;
+    let hooks =
+        crate::hooks::discover_hooks(workspace_root, crate::hooks::HookEvent::PreMerge).await?;
     if hooks.is_empty() {
         return Ok(None);
     }
@@ -493,7 +494,10 @@ fn split_lines(s: &str) -> Vec<String> {
 /// Compute the pure-insertion map turning `base` into `derived`, anchored at
 /// the base index after which each new block belongs. Returns `None` if any
 /// base line was deleted or replaced. Mirrors the TS `pureInsertionsOrUndefined`.
-fn pure_insertions(base: &[String], derived: &[String]) -> Option<std::collections::BTreeMap<usize, Vec<String>>> {
+fn pure_insertions(
+    base: &[String],
+    derived: &[String],
+) -> Option<std::collections::BTreeMap<usize, Vec<String>>> {
     let mut insertions: std::collections::BTreeMap<usize, Vec<String>> =
         std::collections::BTreeMap::new();
     let mut bi = 0usize;
@@ -569,7 +573,10 @@ mod tests {
         // legacy.rs. The modify/delete conflict must escalate to a dilemma.
         let base = fs(&[
             ("src/lib.rs", "pub mod legacy;\n"),
-            ("src/legacy.rs", "pub fn legacy_helper() -> &'static str {\n    \"old\"\n}\n"),
+            (
+                "src/legacy.rs",
+                "pub fn legacy_helper() -> &'static str {\n    \"old\"\n}\n",
+            ),
         ]);
         let a = fs(&[("src/lib.rs", "// removed\n")]);
         let b = fs(&[

@@ -45,6 +45,7 @@ impl ObjectKind {
     }
 
     /// Parse a Git kind keyword.
+    #[allow(clippy::should_implement_trait)] // returns Option, not a FromStr impl
     pub fn from_str(s: &str) -> Option<ObjectKind> {
         match s {
             "blob" => Some(ObjectKind::Blob),
@@ -166,6 +167,7 @@ impl TreeMode {
     }
 
     /// Parse a Git tree-entry mode string.
+    #[allow(clippy::should_implement_trait)] // returns Option, not a FromStr impl
     pub fn from_str(s: &str) -> Option<TreeMode> {
         match s {
             "100644" => Some(TreeMode::Regular),
@@ -514,8 +516,8 @@ pub fn decode_tag(payload: &[u8]) -> Result<TagObject> {
             _ => {}
         }
     }
-    let object =
-        object.ok_or_else(|| GitCanonicalError::Decode("decodeTag: missing required header".into()))?;
+    let object = object
+        .ok_or_else(|| GitCanonicalError::Decode("decodeTag: missing required header".into()))?;
     let kind =
         kind.ok_or_else(|| GitCanonicalError::Decode("decodeTag: missing required header".into()))?;
     let tag =
@@ -674,7 +676,10 @@ mod tests {
         assert_eq!(decoded.tree, empty_tree_id());
         assert_eq!(decoded.parents.len(), 0);
         assert_eq!(decoded.message, "initial commit\n");
-        assert_eq!(decoded.author.name_and_email, "Alice Doe <alice@example.com>");
+        assert_eq!(
+            decoded.author.name_and_email,
+            "Alice Doe <alice@example.com>"
+        );
         assert_eq!(decoded.author.timestamp, 1735689600);
     }
 

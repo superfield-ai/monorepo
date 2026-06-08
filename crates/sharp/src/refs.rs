@@ -243,7 +243,13 @@ pub async fn update_ref(
 ) -> Result<(), SharpError> {
     let Some(expected) = expected_old else {
         // Create-only path.
-        return create_ref(pool, repo_id, name, &RefTarget::Hash(new_target.to_string())).await;
+        return create_ref(
+            pool,
+            repo_id,
+            name,
+            &RefTarget::Hash(new_target.to_string()),
+        )
+        .await;
     };
 
     let result = sqlx::query(

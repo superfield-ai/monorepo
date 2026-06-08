@@ -108,11 +108,7 @@ pub async fn discover_hooks(
         Err(_) => return Ok(out), // missing dir → no hooks
     };
 
-    while let Some(entry) = entries
-        .next_entry()
-        .await
-        .map_err(|e| SharpError::Io(e))?
-    {
+    while let Some(entry) = entries.next_entry().await.map_err(SharpError::Io)? {
         let path = entry.path();
         let meta = match tokio::fs::metadata(&path).await {
             Ok(m) => m,

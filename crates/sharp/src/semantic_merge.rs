@@ -145,8 +145,7 @@ pub async fn semantic_merge_rust(
             .map(|f| (f.path.to_string_lossy().into_owned(), f.content.clone()))
             .collect()
     };
-    let file_renames =
-        crate::file_rename::detect_file_renames(&to_btree(base), &to_btree(ours));
+    let file_renames = crate::file_rename::detect_file_renames(&to_btree(base), &to_btree(ours));
     let mut routed_files: Vec<(PathBuf, String)> = Vec::new();
     let mut skip_paths: std::collections::HashSet<PathBuf> = std::collections::HashSet::new();
     for (old_path, new_path) in &file_renames {
@@ -579,9 +578,8 @@ fn lcs_pairs(a: &[&str], b: &[&str]) -> Vec<(usize, usize)> {
 /// Unequal lengths mean an insertion/deletion, where per-line alignment is
 /// invalid, so the chunk is resolved as a whole.
 fn merge_chunk(out: &mut Vec<String>, base: &[&str], ours: &[&str], theirs: &[&str]) {
-    let push_all = |out: &mut Vec<String>, lines: &[&str]| {
-        out.extend(lines.iter().map(|s| s.to_string()))
-    };
+    let push_all =
+        |out: &mut Vec<String>, lines: &[&str]| out.extend(lines.iter().map(|s| s.to_string()));
     if ours == theirs {
         push_all(out, ours);
         return;
@@ -631,8 +629,14 @@ mod merge_tests {
         let ours = "use a;\n\nuse new;\n";
         let theirs = "use a;\nuse extra;\n\nuse old;\n";
         let merged = three_way_merge(base, ours, theirs);
-        assert!(!merged.contains("<<<<<<<"), "unexpected conflict:\n{merged}");
-        assert!(merged.contains("use extra;"), "lost theirs insertion:\n{merged}");
+        assert!(
+            !merged.contains("<<<<<<<"),
+            "unexpected conflict:\n{merged}"
+        );
+        assert!(
+            merged.contains("use extra;"),
+            "lost theirs insertion:\n{merged}"
+        );
         assert!(merged.contains("use new;"), "lost ours edit:\n{merged}");
     }
 

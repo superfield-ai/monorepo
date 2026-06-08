@@ -54,9 +54,9 @@ use sharp::cargo_check::{run_cargo_check, CheckResult};
 use sharp::runtime_signal::{self, SignalKind};
 use sharp::semantic_merge::{semantic_merge_rust, three_way_merge, FileVersion, MergeOptions};
 use sharp::{commit, episode, git_interop, object, repo};
+use sqlx::PgPool;
 use std::path::PathBuf;
 use tempfile::TempDir;
-use sqlx::PgPool;
 use uuid::Uuid;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
