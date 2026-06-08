@@ -525,3 +525,16 @@ export {
   runNexumSchemaMigration,
   runNexumDataCutover,
 } from "./nexum-migration.ts";
+
+// Row-Level Security — workspace context helpers for PostgreSQL RLS.
+// @see packages/db/rls.ts
+// @see packages/db/migrations/0001_rls_workspace_isolation.sql
+// @see issue #430
+export type { PgQueryable } from "./rls.ts";
+export {
+  RlsContextError,
+  setWorkspaceContext,
+  clearWorkspaceContext,
+  getWorkspaceContext,
+  withWorkspaceTransaction,
+} from "./rls.ts";
