@@ -248,6 +248,12 @@ impl RustAnalyzerClient {
                     },
                     "workspace": {
                         "workspaceFolders": true
+                    },
+                    // Ask rust-analyzer to emit `experimental/serverStatus`
+                    // notifications so we can wait for the project to finish
+                    // loading before issuing reference/rename queries.
+                    "experimental": {
+                        "serverStatusNotification": true
                     }
                 },
                 "initializationOptions": {}
@@ -262,7 +268,41 @@ impl RustAnalyzerClient {
         self.send_notification("initialized", json!({})).await?;
 
         self.initialized = true;
+
+        // Block until the project is loaded and indexed. Without this, the first
+        // reference/rename query races the asynchronous project load and comes
+        // back empty (the root cause of the cross-file rename gap, #44).
+        self.wait_until_ready().await?;
+
         Ok(())
+    }
+
+    /// Block until rust-analyzer reports it has finished loading and indexing
+    /// the workspace, signalled by an `experimental/serverStatus` notification
+    /// with `quiescent: true`. Bounded by the client timeout so a server that
+    /// never emits the notification cannot hang the merge indefinitely.
+    async fn wait_until_ready(&mut self) -> Result<(), SharpError> {
+        let timeout_duration = Duration::from_millis(self.options.timeout_ms);
+        timeout(timeout_duration, async {
+            loop {
+                let msg = self.read_message().await?;
+                if msg.get("method").and_then(Value::as_str) == Some("experimental/serverStatus") {
+                    let quiescent = msg
+                        .get("params")
+                        .and_then(|p| p.get("quiescent"))
+                        .and_then(Value::as_bool)
+                        .unwrap_or(false);
+                    if quiescent {
+                        return Ok(());
+                    }
+                }
+            }
+        })
+        .await
+        .map_err(|_| SharpError::Timeout {
+            method: "experimental/serverStatus(quiescent)".into(),
+            timeout_ms: self.options.timeout_ms,
+        })?
     }
 
     /// Gracefully shut down the `rust-analyzer` subprocess.
