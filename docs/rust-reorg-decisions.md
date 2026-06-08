@@ -5,6 +5,7 @@ Grounded in the verified gap audit; reorg.md's TS paths were stale (all sharp pa
 missing `apps/`+`src/` segments) and #23's schema half was already shipped.
 
 ## Scope this run
+
 - All Phase 1-2 porting: nexum #22-24, sharp #25-31.
 - Embedder **inlined now**: copy sf-embed candle BERT into `nexum/src/embed.rs`,
   drop `sf-embed` (and `sf-db`) from `nexum/Cargo.toml`. nexum takes `&PgPool` directly.
@@ -17,6 +18,7 @@ missing `apps/`+`src/` segments) and #23's schema half was already shipped.
   or `gh repo create` collides with the existing names (contradicts reorg.md's stated order).
 
 ## Decisions
+
 1. **sharp migration numbers:** 0005 = refs model, 0006 = episodes model, 0007 = projections.
    Worktree snapshot (#30) needs **no** migration (reuses `sharp.objects`).
 2. **Refs (#26):** ref ids stored as hex `String` (matches rest of crate), not `bytea`.
@@ -38,5 +40,6 @@ missing `apps/`+`src/` segments) and #23's schema half was already shipped.
    sharp's own sf-db coupling (not a listed task).
 
 ## Gate
+
 Every batch: `cargo check --workspace` then `cargo test -p <crate>`. DB-gated and
 rust-analyzer-gated tests are `#[ignore]`'d so CI without Postgres/RA stays green.
