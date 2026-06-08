@@ -25,12 +25,14 @@
 //!    error→session→user→requirement→code chain, call
 //!    `error_to_cause_chain`, assert no missing hops.
 
+use nexum::ai_link::process_ai_links;
 use nexum::dedup::content_hash;
 use nexum::embed::Embedder;
 use nexum::parse::Format;
 use nexum::{
-    error_to_cause_chain, fulltext_search, graph_search, ingest_document, semantic_search,
-    FullTextOptions, GraphOptions, IngestOptions, SemanticOptions,
+    edge_semantic_search, error_to_cause_chain, fulltext_search, graph_search, ingest_document,
+    semantic_search, EdgeProbe, EdgeSemanticOptions, FullTextOptions, GraphOptions, IngestOptions,
+    SemanticOptions,
 };
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -281,6 +283,87 @@ async fn test_ingest_round_trip() {
     assert_eq!(
         embedding_count, count,
         "every block must have a non-null embedding"
+    );
+
+    cleanup_corpus(&pool, corpus_id).await;
+}
+
+// ── Test: AI linker + edge-semantic search ────────────────────────────────────
+
+/// Ingest two near-paraphrase blocks (one carrying a `contradicts` keyword),
+/// run the AI linker, and verify it writes a `layer = 'ai'` edge with a
+/// populated edge embedding that `edge_semantic_search` can retrieve.
+///
+/// Exercises the full #48b path: `process_ai_links` (pgvector ANN self-join +
+/// keyword classification + `embed_edge`) and `edge_semantic_search`.
+#[tokio::test]
+async fn test_ai_linker_and_edge_semantic_search() {
+    let pool = match maybe_pool().await {
+        Some(p) => p,
+        None => return,
+    };
+
+    let embedder = Embedder::new().expect("embedder init failed");
+    let workspace_id = insert_workspace(&pool).await;
+    let corpus_id = insert_corpus(&pool, workspace_id).await;
+
+    // Two near-identical paragraphs (high cosine similarity); the second opens
+    // with "However" so `classify_pair` tags the edge as `contradicts`.
+    let content = "The annual budget allocates funds to public infrastructure across the region.\n\n\
+                   However, the annual budget allocates funds to public infrastructure across the region.";
+    let result = ingest_document(
+        &pool,
+        &embedder,
+        IngestOptions {
+            workspace_id,
+            corpus_id,
+            title: format!("ai-link-test-{}", Uuid::new_v4()),
+            content: content.into(),
+            format: Format::Text,
+            external_id: None,
+        },
+    )
+    .await
+    .expect("ingest must succeed");
+    assert!(result.block_count >= 2, "expected two blocks to link");
+
+    // Run the AI linker over the ingested version.
+    process_ai_links(&pool, &embedder, result.version_id)
+        .await
+        .expect("process_ai_links must succeed");
+
+    // At least one `ai` edge with a populated edge embedding must exist, scoped
+    // to this workspace.
+    let ai_edges: i64 = sqlx::query_scalar(
+        r#"SELECT COUNT(*) FROM nexum.links
+           WHERE layer = 'ai' AND workspace_id = $1 AND edge_embedding IS NOT NULL"#,
+    )
+    .bind(workspace_id)
+    .fetch_one(&pool)
+    .await
+    .expect("ai-edge count query failed");
+    assert!(ai_edges >= 1, "AI linker must write at least one ai edge");
+
+    // Edge-semantic search must retrieve at least one of those edges.
+    let results = edge_semantic_search(
+        &pool,
+        &embedder,
+        EdgeSemanticOptions {
+            corpus_id,
+            probe: EdgeProbe::Text("budget infrastructure funding".into()),
+            layers: vec!["ai".into()],
+            limit: 10,
+        },
+    )
+    .await
+    .expect("edge_semantic_search must succeed");
+    assert!(
+        !results.is_empty(),
+        "edge_semantic_search must return the ai edge"
+    );
+    assert!(
+        results.iter().all(|r| r.layer == "ai"),
+        "layer filter must restrict to ai edges"
     );
 
     cleanup_corpus(&pool, corpus_id).await;
