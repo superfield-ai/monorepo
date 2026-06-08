@@ -36,7 +36,7 @@
 //! - `git_export_refuses_merged_branch` — verifies that export of a branch
 //!   with a merge commit returns an error with guidance.
 //!
-//! # Self-hosting gate (issue #374)
+//! # Self-hosting gate (issue #374 / #447)
 //!
 //! - `self_hosting_gate_semantic_merge_on_sharp_source` — runs the Rust
 //!   semantic merge against actual Sharp source files (the rename fixture
@@ -49,8 +49,13 @@
 //! - `self_hosting_gate_with_episode` — full end-to-end: imports a Sharp-like
 //!   Rust repo into the VCS store, performs a semantic merge, and records the
 //!   episode.  Requires `DATABASE_URL` and live rust-analyzer + cargo.
+//! - `merge_flow_run_merge_flow_records_episode` — exercises the production
+//!   `merge_flow::run_merge_flow` entry point end-to-end (DB + cargo).
+//! - `merge_flow_onboard_workspace_is_idempotent` — verifies that
+//!   `merge_flow::onboard_workspace` registers a repo idempotently.
 
 use sharp::cargo_check::{run_cargo_check, CheckResult};
+use sharp::merge_flow::{self, MergeRequest};
 use sharp::runtime_signal::{self, SignalKind};
 use sharp::semantic_merge::{semantic_merge_rust, three_way_merge, FileVersion, MergeOptions};
 use sharp::{commit, episode, git_interop, object, repo};
@@ -1302,6 +1307,113 @@ fn main() { let r = calculate_result(21); println!(\"{r}\"); }\n";
         payload["workspace"].as_str(),
         Some("crates/sharp"),
         "workspace must record 'crates/sharp' (Superfield's own Rust source)"
+    );
+}
+
+/// **merge_flow: onboard_workspace is idempotent** — calling `onboard_workspace`
+/// twice with the same name returns the same repo record both times.
+///
+/// Requires DATABASE_URL and applied Sharp migrations.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL and applied Sharp migrations"]
+async fn merge_flow_onboard_workspace_is_idempotent() {
+    let pool = connect_pool().await;
+
+    let repo_name = unique_name("sharp-self-hosting-onboard");
+
+    // First registration.
+    let r1 = merge_flow::onboard_workspace(&pool, &repo_name)
+        .await
+        .expect("first onboard_workspace failed");
+    assert_eq!(r1.name, repo_name, "repo name must match");
+
+    // Second registration — idempotent; same id must be returned.
+    let r2 = merge_flow::onboard_workspace(&pool, &repo_name)
+        .await
+        .expect("second onboard_workspace failed");
+    assert_eq!(r2.id, r1.id, "idempotent onboard must return the same id");
+    assert_eq!(r2.name, repo_name, "name must still match");
+}
+
+/// **merge_flow: run_merge_flow records episode end-to-end** — exercises the
+/// production `run_merge_flow` entry point: repo onboarding, semantic merge
+/// (pure textual path without rust-analyzer), episode recording, and episode
+/// finish.  The merge scenario is a clean rename propagation that compiles.
+///
+/// Requires DATABASE_URL, applied Sharp migrations, and `cargo` on PATH.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL, applied Sharp migrations, and cargo on PATH"]
+async fn merge_flow_run_merge_flow_records_episode() {
+    let pool = connect_pool().await;
+
+    // Build a temporary Cargo project whose source files are the merge inputs.
+    // "ours" renames `compute_value` → `calculate_result` and the body from
+    // "theirs" is already propagated (simulating Sharp's rename step), so the
+    // merged result compiles cleanly.
+    let base_src = "fn compute_value(x: i32) -> i32 { x * 2 }\nfn main() { let r = compute_value(21); println!(\"{r}\"); }\n";
+    let ours_src = "fn calculate_result(x: i32) -> i32 { x * 2 }\nfn main() { let r = calculate_result(21); println!(\"{r}\"); }\n";
+    // Theirs after rename propagation — uses the new name and includes the body edit.
+    let theirs_propagated_src = "fn calculate_result(x: i32) -> i32 { x * 3 }\nfn main() { let r = calculate_result(21); println!(\"{r}\"); }\n";
+
+    let (dir, main_path) = make_temp_project(ours_src);
+
+    let workspace_root = dir.path().to_path_buf();
+
+    let req = MergeRequest {
+        repo_name: unique_name("sharp-self-hosting-flow"),
+        workspace_root: workspace_root.clone(),
+        base_files: vec![FileVersion {
+            path: main_path.clone(),
+            content: base_src.to_string(),
+        }],
+        our_files: vec![FileVersion {
+            path: main_path.clone(),
+            content: ours_src.to_string(),
+        }],
+        their_files: vec![FileVersion {
+            path: main_path.clone(),
+            content: theirs_propagated_src.to_string(),
+        }],
+        merge_options: MergeOptions {
+            workspace_root: workspace_root.clone(),
+            rust_analyzer_path: None,
+            ra_timeout_ms: 60_000,
+        },
+        pr_title: "feat(sharp): self-hosting gate merge flow test".to_string(),
+    };
+
+    let repo_name = req.repo_name.clone();
+    let outcome = merge_flow::run_merge_flow(&pool, req)
+        .await
+        .expect("run_merge_flow must succeed on a clean rename-propagated merge");
+
+    assert_eq!(outcome.files_merged, 1, "one file merged");
+    assert!(
+        outcome.episode_id != uuid::Uuid::nil(),
+        "episode_id must be set"
+    );
+
+    // Verify the episode was finished and its event recorded.
+    let ep = episode::find(&pool, outcome.episode_id)
+        .await
+        .expect("episode must be retrievable");
+    assert_eq!(ep.state, "finished", "episode must be finished");
+    assert!(ep.finished_at.is_some(), "finished_at must be set");
+
+    let evs = episode::events(&pool, outcome.episode_id)
+        .await
+        .expect("episode events must be retrievable");
+    assert_eq!(evs.len(), 1, "exactly one merge_result event expected");
+    assert_eq!(evs[0].event_type, "merge_result");
+    assert_eq!(
+        evs[0].payload["compile_gate"].as_str(),
+        Some("passed"),
+        "compile_gate must be 'passed'"
+    );
+    assert_eq!(
+        evs[0].payload["repo"].as_str(),
+        Some(repo_name.as_str()),
+        "repo field must match"
     );
 }
 

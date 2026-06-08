@@ -16,6 +16,7 @@
 //! - [`runtime_signal`]       — production error and behavioral signal capture (issue #381)
 //! - [`git_canonical`]        — Git-canonical object encode/decode (blob/tree/commit/tag)
 //! - [`git_interop`]          — Git import and linear export
+//! - [`merge_flow`]           — self-hosting gate: production merge pipeline (onboard + merge + episode)
 //! - [`rust_analyzer_client`]   — subprocess orchestration of `rust-analyzer` over LSP
 //! - [`tsserver_bridge_client`] — subprocess orchestration of `tsserver-bridge` via JSON-RPC
 //! - [`cargo_check`]            — run `cargo check --message-format=json` and parse diagnostics
@@ -57,6 +58,7 @@ pub mod file_rename;
 pub mod git_canonical;
 pub mod git_interop;
 pub mod hooks;
+pub mod merge_flow;
 pub mod object;
 pub mod oracle;
 pub mod projections;
