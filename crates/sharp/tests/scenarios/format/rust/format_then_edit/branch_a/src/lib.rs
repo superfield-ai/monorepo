@@ -1,0 +1,3 @@
+pub fn complicated(a: i64, b: i64, c: i64, d: i64) -> i64 {
+    a * b + c * d
+}
