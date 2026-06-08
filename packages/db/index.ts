@@ -30,10 +30,17 @@ import { JSONFilePreset } from "lowdb/node";
  * vectors produced by this model. No other embedding model or dimensionality
  * is permitted without a superseding architecture decision.
  *
- * @see docs/architecture.md §Governed Embedding Standard (closes #360)
+ * The `revision` field pins the HuggingFace Hub commit SHA for reproducible
+ * weight downloads. It matches `GOVERNED_MODEL_REVISION` in `crates/sf-embed`
+ * and the canonical entry in `models/embedding.lock`.
+ *
+ * @see docs/adr-embedding-model.md (issue #432)
+ * @see docs/architecture.md §Governed Embedding Standard
  */
 export const GOVERNED_EMBEDDING = {
   model: "Xenova/all-MiniLM-L6-v2" as const,
+  /** Pinned HuggingFace Hub commit SHA. Must match models/embedding.lock. */
+  revision: "c9745ed" as const,
   dimensions: 384 as const,
   distanceFunction: "cosine" as const,
   indexType: "hnsw" as const,
