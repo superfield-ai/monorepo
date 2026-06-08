@@ -1800,6 +1800,7 @@ dependencies = [
  "regex",
  "serde",
  "serde_json",
+ "sf-db",
  "sha2",
  "sqlx",
  "thiserror 1.0.69",
