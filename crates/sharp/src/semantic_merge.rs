@@ -407,7 +407,7 @@ fn substitution_pairs(base: &[&str], new: &[&str]) -> Vec<(usize, usize)> {
         // Pair the deleted base lines with the added new lines positionally.
         let dels: Vec<usize> = (del_start..i).collect();
         let inss: Vec<usize> = (ins_start..j).collect();
-        for (bi, nj) in dels.into_iter().zip(inss.into_iter()) {
+        for (bi, nj) in dels.into_iter().zip(inss) {
             pairs.push((bi, nj));
         }
     }
