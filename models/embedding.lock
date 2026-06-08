@@ -1,0 +1,37 @@
+# Superfield Embedding Model Lockfile
+#
+# Records the pinned checkpoint for the governed embedding model.
+# All Superfield components that produce vector embeddings MUST use the model
+# and revision recorded here.
+#
+# Governed by: docs/adr-embedding-model.md (issue #432)
+# Constants:
+#   Rust  — sf_embed::GOVERNED_MODEL, sf_embed::GOVERNED_MODEL_REVISION, sf_embed::GOVERNED_DIM
+#   TS    — GOVERNED_EMBEDDING in packages/db/index.ts
+#
+# To update: create a superseding ADR, update the revision here, update the
+# constants in both runtimes, run a corpus re-embedding pass, and migrate every
+# vector column.
+
+[model]
+# HuggingFace model ID (safetensors, used by the Rust sf-embed crate via hf-hub + candle)
+hf_model_id = "sentence-transformers/all-MiniLM-L6-v2"
+
+# HuggingFace model ID (ONNX, used by TypeScript via @xenova/transformers)
+hf_model_id_onnx = "Xenova/all-MiniLM-L6-v2"
+
+# Pinned git commit SHA on the HuggingFace Hub.
+# Both IDs point to the same underlying weights; the revision is shared.
+revision = "c9745ed"
+
+# Output vector dimensionality.  All pgvector columns must declare vector(384).
+dimensions = 384
+
+# Distance function used for pgvector index and similarity queries.
+distance = "cosine"
+
+# pgvector index type.
+index_type = "hnsw"
+
+# Normalisation applied after pooling.
+normalisation = "l2"
