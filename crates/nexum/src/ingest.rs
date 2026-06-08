@@ -28,7 +28,7 @@
 use crate::dedup::content_hash;
 use crate::links::{extract_citation_refs, StructuralLink};
 use crate::parse::{parse_document, Block, Format};
-use sf_embed::Embedder;
+use crate::embed::Embedder;
 use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
@@ -44,7 +44,7 @@ pub enum IngestError {
 
     /// The embedding model could not be loaded or failed during inference.
     #[error("embedding error: {0}")]
-    Embed(#[from] sf_embed::EmbedError),
+    Embed(#[from] crate::embed::EmbedError),
 
     /// The caller supplied invalid options.
     #[error("invalid options: {0}")]
@@ -451,7 +451,7 @@ mod tests {
 
         let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
         let pool = connect(&cfg).await.expect("pool creation failed");
-        let embedder = sf_embed::Embedder::new().expect("embedder init failed");
+        let embedder = crate::embed::Embedder::new().expect("embedder init failed");
 
         // Fixture content: 3 paragraphs, 1 citation ref.
         let content = "First paragraph with no citation.\n\n\
@@ -493,7 +493,7 @@ mod tests {
 
         let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
         let pool = connect(&cfg).await.expect("pool creation failed");
-        let embedder = sf_embed::Embedder::new().expect("embedder init failed");
+        let embedder = crate::embed::Embedder::new().expect("embedder init failed");
 
         let workspace_id = setup_test_workspace(&pool).await;
         let corpus_id = setup_test_corpus(&pool, workspace_id).await;

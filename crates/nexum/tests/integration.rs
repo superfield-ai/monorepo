@@ -31,7 +31,7 @@ use nexum::{
     error_to_cause_chain, fulltext_search, graph_search, ingest_document, semantic_search,
     FullTextOptions, GraphOptions, IngestOptions, SemanticOptions,
 };
-use sf_embed::Embedder;
+use nexum::embed::Embedder;
 use sqlx::PgPool;
 use uuid::Uuid;
 

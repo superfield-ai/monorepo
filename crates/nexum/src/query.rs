@@ -23,7 +23,7 @@
 //! See `docs/architecture.md` §Nexum and §Single-Instance Database Schema
 //! Layout.
 
-use sf_embed::Embedder;
+use crate::embed::Embedder;
 use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
@@ -43,7 +43,7 @@ pub enum QueryError {
 
     /// The embedding model failed during inference.
     #[error("embedding error: {0}")]
-    Embed(#[from] sf_embed::EmbedError),
+    Embed(#[from] crate::embed::EmbedError),
 
     /// The caller supplied invalid parameters.
     #[error("invalid query options: {0}")]
