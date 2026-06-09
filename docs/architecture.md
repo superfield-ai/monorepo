@@ -1,6 +1,6 @@
 # Superfield — Architecture
 
-Technical and implementation details for Superfield. Product scope lives in [`product.md`](./product.md); build order lives in [`roadmap.md`](./roadmap.md); test strategy lives in [`testing.md`](./testing.md).
+Technical and implementation details for Superfield. Product scope lives in [`product.md`](./product.md); execution planning lives in the GitHub Plan issue tracker; test strategy lives in [`testing.md`](./testing.md).
 
 ## GitOps Control Plane
 
