@@ -57,7 +57,7 @@ export PATH="$HOME/.bun/bin:$PATH"
 
 ## Orchestration
 
-GitOps autonomous development loop. Issues are the task queue; the Plan issue is orchestration state; PRs are change proposals.
+GitOps autonomous development loop. Issues are the task queue; the GitHub Plan issue tracker is the planning source of truth; PRs are change proposals.
 
 ```bash
 superfield github add           # authenticate, install GitHub App, register repo
@@ -131,6 +131,4 @@ packages/
 docs/
   product.md       Product requirements and vision
   architecture.md  Technical design
-  plan.md          Implementation state and known issues
-  roadmap.md       Build order
 ```
