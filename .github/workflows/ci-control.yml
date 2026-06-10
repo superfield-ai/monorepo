@@ -123,4 +123,4 @@ jobs:
       - name: Install Playwright chromium browser
         run: bun x playwright install chromium --with-deps
       - name: Unit tests
-        run: bun --bun vitest run --config packages/control/apps/vitest.config.ts
+        run: bun --bun vitest run --config packages/control/apps/vitest.config.ts --project unit

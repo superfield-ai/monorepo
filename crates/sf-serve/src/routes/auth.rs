@@ -6,7 +6,7 @@
 //! | Method | Path                       | Description                          |
 //! |--------|----------------------------|--------------------------------------|
 //! | POST   | `/api/auth/session`        | Issue a new session token            |
-//! | DELETE | `/api/auth/session/:token` | Revoke an existing session token     |
+//! | DELETE | `/api/auth/session/{token}` | Revoke an existing session token     |
 //! | GET    | `/api/auth/health`         | Liveness probe (no auth required)    |
 
 use axum::{
@@ -107,7 +107,7 @@ pub async fn issue_session(
     }
 }
 
-/// `DELETE /api/auth/session/:token` — revoke an existing session.
+/// `DELETE /api/auth/session/{token}` — revoke an existing session.
 ///
 /// Idempotent — revokes the session if it exists and returns `204 No Content`.
 pub async fn revoke_session(
@@ -141,6 +141,6 @@ pub fn router(state: AppState) -> Router {
     Router::new()
         .route("/api/auth/health", get(health))
         .route("/api/auth/session", post(issue_session))
-        .route("/api/auth/session/:token", delete(revoke_session))
+        .route("/api/auth/session/{token}", delete(revoke_session))
         .with_state(state)
 }
