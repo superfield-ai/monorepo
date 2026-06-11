@@ -6,11 +6,13 @@ on:
     paths-ignore:
       - "**/*.md"
       - "docs/**"
+      - "blueprint"
   pull_request:
     branches: [main]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
+      - "blueprint"
 
 concurrency:
   group: test-integration-${{ github.ref }}
