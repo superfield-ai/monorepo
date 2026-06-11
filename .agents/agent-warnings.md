@@ -1,0 +1,10 @@
+# Agent Warnings
+
+Nag list for recurring agent mistakes, settled decisions, and retired API surfaces. Read before planning or writing any code. Never delete entries.
+
+## Settled decisions
+
+- **GitHub is never required for a Superfield appliance** (settled 2026-06-09). The GitHub-based stack in this repo (issues/PRs/check-runs control plane, GitHub App auth, k3s/cloud deploy commands) is **prototype scaffolding** used to prove the orchestration loop — it is not "Phase 1 of the product" and it is not on the appliance's dependency path. Do not design any appliance-facing feature, install path, or seed app that assumes a GitHub account, a GitHub App installation, or network reachability to github.com. Git interop is optional onboarding import / optional outbound backup only.
+- **Product docs describe the end state only — no phase framing** (settled 2026-06-09). `docs/prd.md` must say nothing about phases, milestones, or delivery sequencing; it states the end result. Sequencing lives in `docs/technical-requirements.md` as dependency order (not named phases). Do not import the README's "Phase 1 / Phase 2" vocabulary into product or roadmap documents — that vocabulary describes prototype history.
+- **Roadmaps are derived from first principles, not from the existing codebase** (settled 2026-06-09). When writing or revising planning documents, derive what the vision needs, then evaluate existing components (Sharp, Nexum, Blueprint, fastenv, the prototype CLI) against those needs. Nothing is grandfathered in because it exists; do not force a fit.
+- **`docs/architecture.md` documents the appliance substrate only** (settled 2026-06-10). Prototype designs — the GitOps control plane, GitHub App auth, planning/dev/doc loop internals, CLI command internals (`start`/`plan`/`feature`), issue schema, Plan issue format, lowdb local issue store, `~/.superfield/config.yaml`, control webapp implementation, GitHub-comment session storage — were deliberately removed and must not be re-added; they live in git history. Phase language is banned from the doc. Do not use lowercase "forge" to mean GitHub anywhere; "Forge" means the appliance, per the PRD.
