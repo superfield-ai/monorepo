@@ -10,6 +10,7 @@ members = [
     "crates/sf-serve",
     "crates/sf-deploy",
     "crates/sf-embed",
+    "crates/fastenv",
 ]
 
 [workspace.package]
@@ -31,6 +32,7 @@ sf-cli = { path = "crates/sf-cli" }
 sf-serve = { path = "crates/sf-serve" }
 sf-deploy = { path = "crates/sf-deploy" }
 sf-embed = { path = "crates/sf-embed" }
+fastenv = { path = "crates/fastenv" }
 
 # third-party deps shared across crates
 sqlx = { version = "0.8", features = ["postgres", "runtime-tokio", "tls-rustls", "uuid", "chrono", "json"] }
