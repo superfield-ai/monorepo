@@ -41,7 +41,12 @@ jobs:
       image: ghcr.io/superfield-ai/ci-runner:latest
     services:
       postgres:
-        image: postgres:16
+        # pgvector/pgvector:pg16 includes the vector extension required by the
+        # nexum schema migration. The unified migrate runner applies every
+        # component migration (sf-db → sf-auth → nexum → sharp); the sf-auth
+        # migration creates auth.sessions, which the register/login handlers
+        # write to — without it POST /api/auth/register returns 500.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: superfield
           POSTGRES_PASSWORD: superfield
@@ -73,6 +78,12 @@ jobs:
       - name: Install cli deps
         working-directory: cli
         run: bun install --frozen-lockfile
+
+      - name: Apply database migrations (creates auth schema)
+        working-directory: cli
+        run: bun packages/db/migrate.ts up
+        env:
+          DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
 
       - name: Install Playwright chromium
         working-directory: cli
