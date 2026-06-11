@@ -23,12 +23,12 @@ crun:    0.17 (commit 0e9229ae, OCI spec 1.0.0, +SECCOMP +EBPF +YAJL)
 
 ### Crate versions validated
 
-| Crate   | Version | Note                          |
-|---------|---------|-------------------------------|
-| tar     | 0.4.45  | latest on crates.io at scout date |
-| flate2  | 1.1.9   | uses miniz_oxide backend by default |
-| sha2    | 0.10.9  | RustCrypto, no C dependency   |
-| hex     | 0.4.3   | hex encoding for digest       |
+| Crate  | Version | Note                                |
+| ------ | ------- | ----------------------------------- |
+| tar    | 0.4.45  | latest on crates.io at scout date   |
+| flate2 | 1.1.9   | uses miniz_oxide backend by default |
+| sha2   | 0.10.9  | RustCrypto, no C dependency         |
+| hex    | 0.4.3   | hex encoding for digest             |
 
 ### Correct API sequence
 
@@ -186,11 +186,7 @@ crun 0.17 enforces that setting `hostname` requires `uts` in `linux.namespaces`.
     { "destination": "/tmp", "type": "tmpfs", "source": "tmpfs" }
   ],
   "linux": {
-    "namespaces": [
-      { "type": "pid" },
-      { "type": "mount" },
-      { "type": "uts" }
-    ]
+    "namespaces": [{ "type": "pid" }, { "type": "mount" }, { "type": "uts" }]
   }
 }
 ```
@@ -199,22 +195,23 @@ Exit code: `0`. Output: `hello-from-crun`.
 
 ### Required fields summary
 
-| Field | Required | Notes |
-|---|---|---|
-| `ociVersion` | yes | must be `"1.0.0"` |
-| `process.terminal` | yes | `false` for non-interactive exec |
-| `process.user` | yes | uid/gid; `0`/`0` for root |
-| `process.args` | yes | argv[0] must exist in rootfs |
-| `process.env` | yes | at minimum `["PATH=/bin"]` |
-| `process.cwd` | yes | must exist in rootfs |
-| `root.path` | yes | path to rootfs dir (relative or absolute) |
-| `root.readonly` | yes | `false` for writable forks |
-| `hostname` | conditional | if set, `uts` namespace required |
-| `mounts[proc]` | yes | crun aborts if `/proc` cannot be mounted |
-| `mounts[dev]` | yes | crun requires `/dev` to be writable |
-| `linux.namespaces` | yes | `pid` + `mount` minimum; add `uts` if hostname is set |
+| Field              | Required    | Notes                                                 |
+| ------------------ | ----------- | ----------------------------------------------------- |
+| `ociVersion`       | yes         | must be `"1.0.0"`                                     |
+| `process.terminal` | yes         | `false` for non-interactive exec                      |
+| `process.user`     | yes         | uid/gid; `0`/`0` for root                             |
+| `process.args`     | yes         | argv[0] must exist in rootfs                          |
+| `process.env`      | yes         | at minimum `["PATH=/bin"]`                            |
+| `process.cwd`      | yes         | must exist in rootfs                                  |
+| `root.path`        | yes         | path to rootfs dir (relative or absolute)             |
+| `root.readonly`    | yes         | `false` for writable forks                            |
+| `hostname`         | conditional | if set, `uts` namespace required                      |
+| `mounts[proc]`     | yes         | crun aborts if `/proc` cannot be mounted              |
+| `mounts[dev]`      | yes         | crun requires `/dev` to be writable                   |
+| `linux.namespaces` | yes         | `pid` + `mount` minimum; add `uts` if hostname is set |
 
 Fields **not** required for a minimal exec with crun 0.17:
+
 - `linux.resources` (CPU/memory limits)
 - `linux.seccomp`
 - `linux.capabilities`
@@ -295,20 +292,20 @@ This matches the rollback pattern from phase2-findings.md §5.
 
 ### #37 (build-base)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Non-deterministic tar walk → different digest on each run | High | Sort directory entries before appending (see §1 above) |
-| Blob file permissions too broad (0664) | Low | Explicitly `chmod 0440` after write |
-| Large base images OOM from in-memory Vec | Medium | Use a `BufWriter<File>` and hash via `io::copy` with a `sha2::digest::DynDigest` wrapper instead of buffering all bytes |
+| Risk                                                      | Severity | Mitigation                                                                                                              |
+| --------------------------------------------------------- | -------- | ----------------------------------------------------------------------------------------------------------------------- |
+| Non-deterministic tar walk → different digest on each run | High     | Sort directory entries before appending (see §1 above)                                                                  |
+| Blob file permissions too broad (0664)                    | Low      | Explicitly `chmod 0440` after write                                                                                     |
+| Large base images OOM from in-memory Vec                  | Medium   | Use a `BufWriter<File>` and hash via `io::copy` with a `sha2::digest::DynDigest` wrapper instead of buffering all bytes |
 
 ### #40 (exec)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| `hostname` without `uts` namespace → crun error | Low | Always include `uts` in `linux.namespaces` when hostname is set |
-| Absolute `root.path` and relative bundle path misalignment | Low | Write config.json to a temp dir; use absolute path for `root.path` |
-| Missing `/proc` mount → crun abort | Medium | Always include proc mount in generated config.json |
-| crun 0.17 is old (Ubuntu 22.04 package); newer spec fields may differ | Low | Pin to spec 1.0.0; test on the self-hosted runner before merge |
+| Risk                                                                  | Severity | Mitigation                                                         |
+| --------------------------------------------------------------------- | -------- | ------------------------------------------------------------------ |
+| `hostname` without `uts` namespace → crun error                       | Low      | Always include `uts` in `linux.namespaces` when hostname is set    |
+| Absolute `root.path` and relative bundle path misalignment            | Low      | Write config.json to a temp dir; use absolute path for `root.path` |
+| Missing `/proc` mount → crun abort                                    | Medium   | Always include proc mount in generated config.json                 |
+| crun 0.17 is old (Ubuntu 22.04 package); newer spec fields may differ | Low      | Pin to spec 1.0.0; test on the self-hosted runner before merge     |
 
 ---
 

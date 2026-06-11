@@ -38,17 +38,17 @@ Code that called workspace modules directly should be updated to go through
 
 The following commands are supported through the project VM design:
 
-| Command        | Boundary     | Notes                                                        |
-|----------------|--------------|--------------------------------------------------------------|
-| `build-base`   | GuestRuntime | Creates a read-only base snapshot inside the project VM      |
-| `fork`         | GuestRuntime | Creates a writable CoW workspace layer for an agent          |
-| `discard`      | GuestRuntime | Releases a fork's snapshot resources and registry entry      |
-| `exec`         | GuestRuntime | Launches a crun container with network mode and limits       |
-| `diff`         | GuestRuntime | Shows changes in a fork's upper overlayfs layer              |
-| `du`           | GuestRuntime | Reports disk usage of a fork's upper layer                   |
-| `export-patch` | GuestRuntime | Exports fork changes as a tar archive                        |
-| `gc`           | GuestRuntime | Collects stale forks and snapshots within the project VM     |
-| `bench`        | GuestRuntime | Measures Firecracker boot and container startup latency      |
+| Command        | Boundary     | Notes                                                    |
+| -------------- | ------------ | -------------------------------------------------------- |
+| `build-base`   | GuestRuntime | Creates a read-only base snapshot inside the project VM  |
+| `fork`         | GuestRuntime | Creates a writable CoW workspace layer for an agent      |
+| `discard`      | GuestRuntime | Releases a fork's snapshot resources and registry entry  |
+| `exec`         | GuestRuntime | Launches a crun container with network mode and limits   |
+| `diff`         | GuestRuntime | Shows changes in a fork's upper overlayfs layer          |
+| `du`           | GuestRuntime | Reports disk usage of a fork's upper layer               |
+| `export-patch` | GuestRuntime | Exports fork changes as a tar archive                    |
+| `gc`           | GuestRuntime | Collects stale forks and snapshots within the project VM |
+| `bench`        | GuestRuntime | Measures Firecracker boot and container startup latency  |
 
 ### Deprecated commands
 
@@ -56,8 +56,8 @@ The following commands are deprecated and retained only for migration
 compatibility. They emit a warning log when used and will be removed in a
 future release:
 
-| Command      | Reason for deprecation                                        |
-|--------------|---------------------------------------------------------------|
+| Command      | Reason for deprecation                                         |
+| ------------ | -------------------------------------------------------------- |
 | `mount-path` | Exposes host-side mount paths directly; use the guest boundary |
 | `unmount`    | Direct unmount entrypoint; use the guest boundary instead      |
 

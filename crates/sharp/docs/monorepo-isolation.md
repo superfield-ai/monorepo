@@ -13,6 +13,7 @@ Sharp's database-native architecture and semantic merge substrate offer a new ap
 ### **1.1 Why Submodules and Gittrees Fail**
 
 Git submodules allow a repository to embed another repository at a specific commit. In principle, this enables:
+
 - Independent versioning of components
 - Selective cloning of only needed repositories
 - Clear ownership boundaries
@@ -21,16 +22,21 @@ Git submodules allow a repository to embed another repository at a specific comm
 In practice, they fail catastrophically:
 
 #### **Hidden State and Silent Failures**
+
 Submodule state lives in two places: `.gitmodules` (declared) and `.git/modules/<name>/HEAD` (actual). A developer can commit `.gitmodules` changes without updating the submodule checkout, or vice versa. Cloning a repository with submodules does not automatically initialize them; the developer must remember to run `git submodule update --init --recursive`. Forgetting this leads to silent failures: CI runs on stale submodule commits, developers see old code, and the mismatch only surfaces when something breaks.
 
 #### **Brittle Merge Behavior**
+
 When two branches modify a submodule's pinned commit in different ways, Git cannot merge the changes automatically. The developer must manually resolve the conflict, manually verify that the resulting commit is sensible, and manually test that the merged submodule version is compatible with the rest of the tree. This is tedious even when both sides moved the submodule forward on the same history; it becomes a nightmare when the submodule itself had a merge conflict that one side resolved differently.
 
 #### **No Visibility Into Submodule Changes**
-A commit message like "Bump submodule X to 5a7c9d1" tells you the commit hash, but not *what changed*. You must clone the submodule, run `git log 4f2b8e..5a7c9d`, and read the changes yourself. This friction discourages code review and audit; teams often merge submodule bumps without understanding the impact.
+
+A commit message like "Bump submodule X to 5a7c9d1" tells you the commit hash, but not _what changed_. You must clone the submodule, run `git log 4f2b8e..5a7c9d`, and read the changes yourself. This friction discourages code review and audit; teams often merge submodule bumps without understanding the impact.
 
 #### **Cognitive Overhead**
+
 Developers must understand:
+
 - Which repositories are submodules vs. monorepo-local
 - When to run `git submodule update` vs. a plain `git pull`
 - How to push changes to a submodule vs. the parent
@@ -40,11 +46,13 @@ Developers must understand:
 Most developers get it wrong frequently, even after years of experience.
 
 #### **Tooling Friction**
+
 IDE support is often broken or incomplete. Many CI systems require special submodule-aware configuration. Bisect, blame, and log operations must be run separately on each submodule. Automation scripts accumulate workarounds for submodule quirks.
 
 ### **1.2 Why Monorepos Become Necessary**
 
 When submodules become too painful, teams consolidate into a monorepo — a single Git repository containing many logically independent projects. The appeal is obvious:
+
 - No hidden state; everything is in one place
 - No merge conflicts between version declarations and actual code
 - Atomic commits across multiple services
@@ -54,18 +62,23 @@ When submodules become too painful, teams consolidate into a monorepo — a sing
 But monorepos introduce their own problems:
 
 #### **Coarse-Grained Locks**
+
 Every merge to main locks the entire repository. A failing test in service B blocks unrelated changes to service A from landing. Teams accumulate expensive CI gates (linters, type checkers, tests) that block all merges, not just those that touch the relevant code. A single slow test slows down the entire org.
 
 #### **Weak Service Boundaries**
+
 With everything in one tree, it is trivial to create a dependency on code you were not supposed to depend on. Over time, the monorepo accumulates unintended coupling. Services that should be independently deployable become entangled.
 
 #### **Scaling Pain**
+
 As the monorepo grows, tooling struggles. IDEs slow down. Incremental builds take longer because the build graph is harder to partition. Clone times balloon. Developers increasingly skip running the full test suite locally, reducing confidence in their changes before they hit CI.
 
 #### **Visibility and Secrets**
+
 In a monorepo, all developers have access to all code (unless the VCS enforces per-directory visibility, which most do not). This is a security risk when teams have different confidentiality levels or when third-party contributors should see only certain services. Secrets, API keys, and internal documentation end up scattered across the repo, risking leaks.
 
 #### **No Release Isolation**
+
 If service A and service B are in the same monorepo, they typically share a single version number and a single release tag. This couples their release cycles. If A is ready but B is not, A is blocked. Teams work around this with branches-per-service and cherry-picks, reintroducing the complexity of multi-repo workflows.
 
 ### **1.3 The False Dichotomy**
@@ -128,7 +141,9 @@ Sharp tracks which commits touch which services (this is already needed for sele
 ### **3.1 Core Concepts**
 
 #### **Workspace**
+
 A workspace is a logical grouping of files in a Sharp repository. It has:
+
 - A name (e.g., `services/auth`, `packages/ui`)
 - A root path (or a list of paths, for multi-root workspaces)
 - Declared dependencies on other workspaces
@@ -136,9 +151,11 @@ A workspace is a logical grouping of files in a Sharp repository. It has:
 - CI and merge gate configuration (e.g., which tests must pass before merging)
 
 #### **Manifest**
+
 A `WORKSPACES.yaml` (or similar) file at the repository root declares all workspaces and their relationships. It is not mandatory — a repository without this file is treated as a single monolithic workspace. But when present, it governs merge, visibility, and CI behavior.
 
 Example:
+
 ```yaml
 workspaces:
   services/auth:
@@ -170,7 +187,9 @@ workspaces:
 ```
 
 #### **Sparse Checkout**
+
 A developer checks out only the files they need:
+
 ```bash
 sharp clone https://repo.example.com/acme/services --sparse services/auth shared/db-client
 ```
@@ -178,7 +197,9 @@ sharp clone https://repo.example.com/acme/services --sparse services/auth shared
 The sparse checkout includes only those workspaces and their transitive dependencies. Sharp's server computes this set using the manifest and serves only those files. The database still knows about the full tree; CI, blame, and history operations see the entire commit graph. A subsequent `sharp pull` automatically brings in any new dependencies discovered in the meantime.
 
 #### **Merge Gate with Dependency Checking**
+
 When merging two branches that touch different workspaces with dependencies, the merge gate verifies:
+
 1. **Syntax validity:** Each service still type-checks and builds (handled by semantic merge and cargo-check gates, already in v1 design)
 2. **Dependency resolution:** Imports between services still resolve validly. E.g., if service A imports from service B, does the merged version of B still export what A expects?
 3. **Visibility constraints:** A public service does not import from an internal service.
@@ -188,6 +209,7 @@ If any gate fails, the merge is rejected (or marked as requiring manual review).
 ### **3.2 Storage and Semantics**
 
 In the PostgreSQL schema:
+
 - Add a `workspaces` table with metadata about each workspace (name, root, owner, visibility, etc.)
 - Add a `workspace_dependencies` table tracking the edges in the dependency graph
 - Extend the `blobs` and `trees` tables with an optional `workspace_id` column. If set, the file or directory belongs to that workspace.
@@ -198,6 +220,7 @@ When a commit is created, the merge or write logic computes which workspaces wer
 ### **3.3 API and CLI**
 
 #### **CLI**
+
 ```bash
 # Clone a monorepo and check out only the specified workspaces
 sharp clone <url> --sparse <workspace> [<workspace> ...]
@@ -220,6 +243,7 @@ sharp workspaces validate
 ```
 
 #### **Merge API (for agent harnesses)**
+
 ```rust
 pub struct MergeOptions {
     pub check_workspace_deps: bool,
@@ -276,23 +300,27 @@ If an agent harness is making changes that touch multiple services, it must unde
 ## **5. Phased Rollout**
 
 ### **Phase 1: Manifest and Data Structure (v2)**
+
 - Add `WORKSPACES.yaml` support with schema validation
 - Extend the database schema to track workspace membership and dependencies
 - Implement sparse checkout (client-side filtering)
 - No merge gate logic yet; workspaces are advisory
 
 ### **Phase 2: Merge Gate with Dependency Checking (v2–v3)**
+
 - Implement dependency validation in the merge gate
 - Reject merges that violate visibility constraints
 - Extend the API to expose dependency information to agent harnesses
 - Provide diagnostic tools for debugging dependency issues
 
 ### **Phase 3: Transitive Build and Test Caching (v3+)**
+
 - Extend CI to understand workspaces and run only affected tests
 - Cache build artifacts per workspace
 - Integrate with release tooling to generate per-service release notes
 
 ### **Phase 4: Multi-Workspace Federation (v3+, if needed)**
+
 - Support multiple independent workspaces with different histories
 - Implement cross-workspace merges and dependency version negotiation
 - This is more complex and should be deferred until the benefits are clear
@@ -302,6 +330,7 @@ If an agent harness is making changes that touch multiple services, it must unde
 ## **6. Comparison to Alternatives**
 
 ### **Git Submodules / Gittrees**
+
 - **Isolation:** Both provide isolation; submodules and gittrees are explicitly separate repos, workspaces are logical partitions within a single repo
 - **State management:** Submodules have hidden state (`.git/modules`); workspaces have only the manifest
 - **Merge conflict handling:** Submodules require manual resolution; workspaces can use semantic merge
@@ -309,6 +338,7 @@ If an agent harness is making changes that touch multiple services, it must unde
 - **Verdict:** Workspaces eliminate the cognitive overhead of submodules while retaining the benefits
 
 ### **Traditional Monorepo (no isolation)**
+
 - **Simplicity:** Monorepo is simpler (no manifest); workspaces add a small amount of manifest overhead
 - **Merge latency:** Monorepo has coarse-grained locks; workspaces can support more granular locks (future work)
 - **CI latency:** Monorepo runs all tests; workspaces can run only affected tests (future work)
@@ -316,6 +346,7 @@ If an agent harness is making changes that touch multiple services, it must unde
 - **Verdict:** Workspaces add safety and scalability to the monorepo model with minimal overhead
 
 ### **Polyrepo (many small repos, managed by a build tool like Bazel or Nx)**
+
 - **Isolation:** Polyrepo provides strong isolation via separate repos; workspaces provide logical isolation within a single repo
 - **Merge coordination:** Polyrepo requires cross-repo coordination; workspaces atomically merge multiple services
 - **Developer experience:** Polyrepo requires learning the build tool; workspaces are part of the VCS itself

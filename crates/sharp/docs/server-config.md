@@ -124,7 +124,7 @@ SHARP_DSN=postgres://... ./sharp-server
 ### Docker Compose
 
 ```yaml
-version: '3.9'
+version: "3.9"
 services:
   db:
     image: postgres:16
@@ -135,7 +135,7 @@ services:
     volumes:
       - pgdata:/var/lib/postgresql/data
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U sharp']
+      test: ["CMD-SHELL", "pg_isready -U sharp"]
       interval: 5s
       timeout: 3s
       retries: 10
@@ -148,10 +148,10 @@ services:
     command: bun apps/server/src/index.ts
     environment:
       SHARP_DSN: postgres://sharp:changeme@db:5432/sharp
-      SHARP_PORT: '5174'
+      SHARP_PORT: "5174"
       SHARP_LOG_LEVEL: info
     ports:
-      - '5174:5174'
+      - "5174:5174"
     depends_on:
       db:
         condition: service_healthy

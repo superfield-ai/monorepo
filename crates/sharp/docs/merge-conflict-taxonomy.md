@@ -38,24 +38,24 @@ This is perhaps the most common false conflict seen in practice. It affects any 
 ```typescript
 // base
 const config = {
-  host: 'localhost',
+  host: "localhost",
 };
 
 // branch_a adds:
 const config = {
-  host: 'localhost',
+  host: "localhost",
   port: 5432, // <-- A's addition
 };
 
 // branch_b adds:
 const config = {
-  host: 'localhost',
+  host: "localhost",
   timeout: 30, // <-- B's addition
 };
 
 // git produces CONFLICT; correct merge is:
 const config = {
-  host: 'localhost',
+  host: "localhost",
   port: 5432,
   timeout: 30,
 };
@@ -143,15 +143,15 @@ export function subtract(a: number, b: number): number {
 
 ```typescript
 // base
-import { existsSync } from 'node:fs';
+import { existsSync } from "node:fs";
 
 // branch_a
-import { existsSync } from 'node:fs';
-import { readFileSync } from 'node:fs'; // new
+import { existsSync } from "node:fs";
+import { readFileSync } from "node:fs"; // new
 
 // branch_b
-import { existsSync } from 'node:fs';
-import { resolve } from 'node:path'; // new
+import { existsSync } from "node:fs";
+import { resolve } from "node:path"; // new
 
 // git CONFLICT; correct: both new imports included
 ```
@@ -593,17 +593,17 @@ trait Printable {
 
 ```typescript
 // base: status.ts
-export type Status = 'active' | 'inactive';
+export type Status = "active" | "inactive";
 
 // branch_a adds "pending":
-export type Status = 'active' | 'inactive' | 'pending';
+export type Status = "active" | "inactive" | "pending";
 
 // branch_b adds handler.ts with exhaustive switch over "active" | "inactive"
 function handle(s: Status) {
   switch (s) {
-    case 'active':
+    case "active":
       return doActive();
-    case 'inactive':
+    case "inactive":
       return doInactive();
     default:
       assertNever(s); // 'pending' now reaches here -> type error
@@ -739,19 +739,27 @@ These are cases where git is _correct_ to report a conflict (or would be correct
 ```typescript
 // base
 function calculateDiscount(price: number, tier: string): number {
-  return tier === 'premium' ? price * 0.8 : price * 0.9;
+  return tier === "premium" ? price * 0.8 : price * 0.9;
 }
 
 // branch_a: implements tiered discount from a lookup table
 function calculateDiscount(price: number, tier: string): number {
-  const rates: Record<string, number> = { premium: 0.75, standard: 0.85, basic: 0.95 };
+  const rates: Record<string, number> = {
+    premium: 0.75,
+    standard: 0.85,
+    basic: 0.95,
+  };
   return price * (rates[tier] ?? 1);
 }
 
 // branch_b: adds percentage-based override parameter
-function calculateDiscount(price: number, tier: string, override?: number): number {
+function calculateDiscount(
+  price: number,
+  tier: string,
+  override?: number,
+): number {
   if (override !== undefined) return price * (1 - override);
-  return tier === 'premium' ? price * 0.8 : price * 0.9;
+  return tier === "premium" ? price * 0.8 : price * 0.9;
 }
 
 // Both changes are incompatible: B's override doesn't work with A's rate table

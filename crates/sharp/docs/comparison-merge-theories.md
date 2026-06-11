@@ -5,17 +5,17 @@ it fails a human edits markers" with "merge is an algebraic operation with laws"
 **CRDTs** (conflict-free replicated data types), **patch theory** (Darcs, made rigorous
 by Pijul), and **Jujutsu's algebraic conflict representation**. They are frequently
 conflated — `jj` in particular is often mislabeled as "Darcs-like patch theory" — but
-they make three *different* promises, and the differences decide what Sharp can borrow
+they make three _different_ promises, and the differences decide what Sharp can borrow
 from each.
 
 The one-line placement: **CRDTs are conflict-free by construction, patch theory is
 conflict-avoiding by commutation, and `jj` is conflict-preserving by representation.**
-Sharp, whose core guarantee is *never silently pick between two semantically valid
-resolutions* (whitepaper §6), needs pieces of all three — and a semantic layer none of
+Sharp, whose core guarantee is _never silently pick between two semantically valid
+resolutions_ (whitepaper §6), needs pieces of all three — and a semantic layer none of
 them has.
 
-The architectural decision this analysis drives — *why Sharp keeps a snapshot substrate
-instead of a Darcs/Pijul patch substrate, yet still gets first-class conflicts* — is
+The architectural decision this analysis drives — _why Sharp keeps a snapshot substrate
+instead of a Darcs/Pijul patch substrate, yet still gets first-class conflicts_ — is
 written up on its own in [`snapshots-vs-patches.md`](./snapshots-vs-patches.md).
 
 ---
@@ -31,14 +31,14 @@ reaches the identical state. There is never a conflict to show anyone (Shapiro e
 2011).
 
 The catalogue is rich: grow-only and add-remove sets, counters, last-writer-wins and
-**multi-value registers** (keep *all* concurrent values rather than picking a winner —
+**multi-value registers** (keep _all_ concurrent values rather than picking a winner —
 the Dynamo lineage), and sequence CRDTs for collaborative text — WOOT, Treedoc, Logoot,
 RGA, and the production implementations Yjs and Automerge.
 
-**The cost: convergence is not correctness.** A CRDT must decide, *in the data type
-definition*, what every concurrent combination means. For text, that rule is structural —
+**The cost: convergence is not correctness.** A CRDT must decide, _in the data type
+definition_, what every concurrent combination means. For text, that rule is structural —
 concurrent insertions at the same position get deterministically interleaved or
-juxtaposed. Both authors' characters survive; the *meaning* is whatever falls out.
+juxtaposed. Both authors' characters survive; the _meaning_ is whatever falls out.
 Convergence guarantees everyone sees the same result, not that the result is what anyone
 intended — the well-known interleaving anomalies in sequence CRDTs are exactly this gap.
 For prose in a live editor, a human watches the merge happen and repairs intent
@@ -55,7 +55,7 @@ changes with algebraic structure.
 
 **Darcs** built its model on **commutation**: independent patches can be reordered
 (`AB ↔ B′A′`), and merging is reordering the other repository's patches past yours. A
-repository is a *set* of patches, and any order consistent with their dependencies yields
+repository is a _set_ of patches, and any order consistent with their dependencies yields
 the same tree — "cherry-picking is free" falls out, because a patch's identity does not
 depend on the commits beneath it. Darcs's theory, however, was semi-formal, and its
 handling of conflicting patches was its undoing: certain conflict-heavy merges triggered
@@ -63,7 +63,7 @@ exponential-time commutation searches (the infamous Darcs 1 "exponential merge";
 mitigated but did not eliminate the pathology).
 
 **Pijul** is the rigorous reconstruction. Files are generalized into graphs of lines, and
-a merge is a **pushout** in an appropriate category — a construction that *always exists*,
+a merge is a **pushout** in an appropriate category — a construction that _always exists_,
 because the state space is enlarged to include conflicted states as legitimate values
 (Mimram & Di Giusto's categorical theory of patches is the academic ancestor). Two
 properties follow that Git lacks:
@@ -77,10 +77,10 @@ Because conflicted states are values and merge is total, commutative, and associ
 Pijul's own authors describe its state as behaving like a CRDT — the formal bridge
 between the two lineages. The cost of patch theory is the inverted storage model: state
 must be reconstructed from patch history (Pijul mitigates with caching), tooling and
-ecosystem diverge completely from Git, and the theory governs *structure* (lines in
+ecosystem diverge completely from Git, and the theory governs _structure_ (lines in
 graphs), not language semantics.
 
-**Verdict for code:** the *laws* — order-independence, associativity, conflicts-as-values
+**Verdict for code:** the _laws_ — order-independence, associativity, conflicts-as-values
 — are exactly what a fleet of concurrent mergers wants. The patch-based storage model is
 a poor fit for a system whose interop contract is byte-isomorphism with Git's object
 model (whitepaper §2.1).
@@ -88,7 +88,7 @@ model (whitepaper §2.1).
 ## 3. Jujutsu's algebraic conflict representation
 
 `jj` is **snapshot-based, like Git — it is not patch theory**. Its innovation is narrower
-and deliberately pragmatic: when a merge conflicts, the resulting *tree* is stored as an
+and deliberately pragmatic: when a merge conflicts, the resulting _tree_ is stored as an
 unevaluated algebraic term over trees:
 
 ```
@@ -107,15 +107,15 @@ algebra behaves like formal sums in a free abelian group over tree states, which
 - Resolve a conflict once: the resolution propagates through descendants carrying the
   same term.
 
-What `jj` does *not* promise: convergence (the term openly represents divergence, the
+What `jj` does _not_ promise: convergence (the term openly represents divergence, the
 opposite of a CRDT's contract) or patch-theoretic completeness (the "same-change rule"
 that auto-resolves agreeing sides is acknowledged as lossy in some rebase scenarios; the
-algebra is a practical instrument, not a proven theory). What it *does* promise is the
+algebra is a practical instrument, not a proven theory). What it _does_ promise is the
 property the other two lineages under-serve: a **canonical, deterministic representation
 of the divergence itself** — every observer computing the same merge derives the same
 term, and simplification is a pure function of the algebra, not of who runs it.
 
-One more `jj` layer genuinely *is* CRDT-shaped, and it is not the conflict algebra: the
+One more `jj` layer genuinely _is_ CRDT-shaped, and it is not the conflict algebra: the
 **operation log's view merge**. When concurrent operations move ref `main` to B and to C,
 the merged view records "main is at B-or-C" — keep-both semantics, almost exactly a
 multi-value register. `jj` is thus a hybrid: CRDT-like at the metadata layer, where
@@ -124,16 +124,16 @@ it is not.
 
 ## 4. The three promises, side by side
 
-| Dimension | CRDTs | Patch theory (Darcs/Pijul) | `jj`'s conflict algebra |
-| --- | --- | --- | --- |
-| Unit of history | Replica states / commuting ops | Patches (first-class changes) | Snapshots (Git-style trees) |
-| Merge guarantee | Always converges, automatically | Always *defined* (pushout exists); conflicts are values | Always *representable*; conflict stored as a term |
-| Stance on conflict | Impossible by construction | A legitimate state, derived by the theory | Preserved, canonical, simplifiable |
-| Key algebraic laws | Associative + commutative + idempotent join | Commutation of independent patches; associative merge | Cancellation of formal sums; lazy evaluation |
-| What is deterministic | The converged state | The merged state (order-independent) | The *description of the divergence* |
+| Dimension                | CRDTs                                                                 | Patch theory (Darcs/Pijul)                                      | `jj`'s conflict algebra                                                      |
+| ------------------------ | --------------------------------------------------------------------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------- |
+| Unit of history          | Replica states / commuting ops                                        | Patches (first-class changes)                                   | Snapshots (Git-style trees)                                                  |
+| Merge guarantee          | Always converges, automatically                                       | Always _defined_ (pushout exists); conflicts are values         | Always _representable_; conflict stored as a term                            |
+| Stance on conflict       | Impossible by construction                                            | A legitimate state, derived by the theory                       | Preserved, canonical, simplifiable                                           |
+| Key algebraic laws       | Associative + commutative + idempotent join                           | Commutation of independent patches; associative merge           | Cancellation of formal sums; lazy evaluation                                 |
+| What is deterministic    | The converged state                                                   | The merged state (order-independent)                            | The _description of the divergence_                                          |
 | Where it breaks for code | Convergent ≠ correct; arbitrary interleaving is a silent wrong answer | Inverted storage model; structural not semantic; ecosystem cost | Lossy edge cases (same-change rule); no semantic layer; pragmatic not proven |
-| Production embodiment | Yjs, Automerge, Dynamo-style registers | Darcs, Pijul | Jujutsu |
-| Semantic awareness | None (structural) | None (structural) | None (structural) |
+| Production embodiment    | Yjs, Automerge, Dynamo-style registers                                | Darcs, Pijul                                                    | Jujutsu                                                                      |
+| Semantic awareness       | None (structural)                                                     | None (structural)                                               | None (structural)                                                            |
 
 The last row is the quiet headline: **all three lineages are syntactic.** They reason
 about sets, lines, graphs, and trees — never about symbols, types, or whether the merged
@@ -142,8 +142,8 @@ program compiles. Whatever Sharp borrows, the semantic tiers are additive on top
 ## 5. What Sharp takes from each
 
 Sharp's three-tier contract — dissolve deterministically, verify intrinsically, escalate
-structurally — fixes the goal: *converge automatically only when language semantics prove
-it safe; otherwise emit a canonical divergence object instead of a guess.* Each lineage
+structurally — fixes the goal: _converge automatically only when language semantics prove
+it safe; otherwise emit a canonical divergence object instead of a guess._ Each lineage
 contributes to a different layer:
 
 - **From CRDTs: the metadata layer.** Refs, visible heads, and view state should behave
@@ -155,8 +155,8 @@ contributes to a different layer:
 - **From patch theory: the laws as test obligations.** Sharp keeps Git's snapshot model
   for interop, but Pijul's two theorems become differential-corpus properties for the
   merge engine and the speculative-merge projection (whitepaper §6.7):
-  *order-independence* (merging branch sets in any order yields the same projection) and
-  *associativity* (incremental projection recompute equals from-scratch recompute). Where
+  _order-independence_ (merging branch sets in any order yields the same projection) and
+  _associativity_ (incremental projection recompute equals from-scratch recompute). Where
   Tier 1 cannot honor them, that is a finding, not a shrug.
 - **From `jj`: the content layer's representation.** Conflict-preservation with a
   canonical algebraic term is the right contract for source code, and determinism — not
@@ -165,7 +165,7 @@ contributes to a different layer:
   resolve is canonical, and dilemmas can cancel themselves during projection recompute
   only because simplification is observer-independent. This is adoption item §4 in
   [`jj-adoption.md`](./jj-adoption.md).
-- **From none of them: the verification gate.** No lineage can say a merge is *wrong* —
+- **From none of them: the verification gate.** No lineage can say a merge is _wrong_ —
   CRDTs define wrongness away, patch theory and `jj` only promise well-formed structure.
   Sharp's Tier 2 intrinsic verification (parse, symbol resolution, language diagnostics;
   whitepaper §6.2) is the layer the mathematics cannot supply, because "compiles and

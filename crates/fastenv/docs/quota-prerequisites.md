@@ -2,10 +2,10 @@
 
 `fastenv fork --quota` supports two enforcement modes:
 
-| Mode | Host requirement | Behaviour |
-|------|-----------------|-----------|
-| **soft** | none (default) | Usage is measured. `fastenv du` emits a warning when usage exceeds the limit. Writes are never rejected. |
-| **hard** | ext4 or xfs with `prjquota` | Writes exceeding the quota fail immediately with `EDQUOT` (errno 122). Enforced by the kernel. |
+| Mode     | Host requirement            | Behaviour                                                                                                |
+| -------- | --------------------------- | -------------------------------------------------------------------------------------------------------- |
+| **soft** | none (default)              | Usage is measured. `fastenv du` emits a warning when usage exceeds the limit. Writes are never rejected. |
+| **hard** | ext4 or xfs with `prjquota` | Writes exceeding the quota fail immediately with `EDQUOT` (errno 122). Enforced by the kernel.           |
 
 ## How mode is selected
 
@@ -17,8 +17,14 @@ recorded in the JSON output. Otherwise **soft** mode is used.
 The mode is logged as a structured field:
 
 ```json
-{"fork_id":"agent-1","base_image":"my-workspace","snapshot_key":"agent-1",
- "creation_latency":"3.2ms","quota_bytes":10485760,"quota_mode":"hard"}
+{
+  "fork_id": "agent-1",
+  "base_image": "my-workspace",
+  "snapshot_key": "agent-1",
+  "creation_latency": "3.2ms",
+  "quota_bytes": 10485760,
+  "quota_mode": "hard"
+}
 ```
 
 ## Enabling hard quota enforcement (ext4)

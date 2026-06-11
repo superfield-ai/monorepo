@@ -36,23 +36,23 @@ keys in place.
 
 ## Fields
 
-| Field              | Type    | Meaning |
-|--------------------|---------|---------|
-| `backend`          | string  | `"crun"` or `"youki"`. |
-| `backend_verified` | bool    | True if `/proc/*/cmdline` scanning confirmed the backend identity after the last sample (crun must appear for the crun backend; must NOT appear for the youki backend). |
-| `fork_time`        | object  | Percentile summary for the fork_time metric (wall time from `backend.create()` to `backend.start()` return on a `/bin/true` workload). |
-| `first_write`      | object  | Percentile summary for the first_write metric (wall time from `backend.start()` until a sentinel file written by the container appears on the host). |
+| Field              | Type   | Meaning                                                                                                                                                                 |
+| ------------------ | ------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `backend`          | string | `"crun"` or `"youki"`.                                                                                                                                                  |
+| `backend_verified` | bool   | True if `/proc/*/cmdline` scanning confirmed the backend identity after the last sample (crun must appear for the crun backend; must NOT appear for the youki backend). |
+| `fork_time`        | object | Percentile summary for the fork_time metric (wall time from `backend.create()` to `backend.start()` return on a `/bin/true` workload).                                  |
+| `first_write`      | object | Percentile summary for the first_write metric (wall time from `backend.start()` until a sentinel file written by the container appears on the host).                    |
 
 ### Percentile summary object
 
-| Field       | Type    | Meaning |
-|-------------|---------|---------|
-| `n`         | integer | Number of successful samples that contributed to the percentiles. |
-| `p50_ms`    | integer | 50th percentile (median) latency in milliseconds (nearest-rank). |
-| `p95_ms`    | integer | 95th percentile latency in milliseconds (nearest-rank). |
-| `p99_ms`    | integer | 99th percentile latency in milliseconds (nearest-rank). |
-| `min_ms`    | integer | Minimum observed latency in milliseconds. |
-| `max_ms`    | integer | Maximum observed latency in milliseconds. |
+| Field       | Type    | Meaning                                                                                   |
+| ----------- | ------- | ----------------------------------------------------------------------------------------- |
+| `n`         | integer | Number of successful samples that contributed to the percentiles.                         |
+| `p50_ms`    | integer | 50th percentile (median) latency in milliseconds (nearest-rank).                          |
+| `p95_ms`    | integer | 95th percentile latency in milliseconds (nearest-rank).                                   |
+| `p99_ms`    | integer | 99th percentile latency in milliseconds (nearest-rank).                                   |
+| `min_ms`    | integer | Minimum observed latency in milliseconds.                                                 |
+| `max_ms`    | integer | Maximum observed latency in milliseconds.                                                 |
 | `stddev_ms` | integer | Population standard deviation of the sample vector, in milliseconds (rounded to integer). |
 
 A `(backend, metric)` pair only appears in the artifact when at least one

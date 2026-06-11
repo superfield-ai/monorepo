@@ -25,13 +25,13 @@ The host meets the Linux ≥ 5.11 requirement. overlayfs is a loadable module (`
 
 ### Kernel version and overlayfs support
 
-| Feature | Kernel requirement | This host |
-|---|---|---|
-| overlayfs (module) | 3.18 | Yes (5.15, module loaded) |
-| `userxattr` mount option | 5.11 | Yes |
-| `metacopy` | 4.19 (disabled with userxattr) | Yes |
-| New mount API (`fsopen`, `fsconfig`, `fsmount`, `move_mount`) | 5.2 | Yes |
-| `fsconfig` FSCONFIG_CREATE_EXCL | 5.11 | Yes |
+| Feature                                                       | Kernel requirement             | This host                 |
+| ------------------------------------------------------------- | ------------------------------ | ------------------------- |
+| overlayfs (module)                                            | 3.18                           | Yes (5.15, module loaded) |
+| `userxattr` mount option                                      | 5.11                           | Yes                       |
+| `metacopy`                                                    | 4.19 (disabled with userxattr) | Yes                       |
+| New mount API (`fsopen`, `fsconfig`, `fsmount`, `move_mount`) | 5.2                            | Yes                       |
+| `fsconfig` FSCONFIG_CREATE_EXCL                               | 5.11                           | Yes                       |
 
 Kernel config: `CONFIG_OVERLAY_FS=m`, `CONFIG_OVERLAY_FS_REDIRECT_ALWAYS_FOLLOW=y`, `CONFIG_OVERLAY_FS_XINO_AUTO=y`. `redirect_dir` and `metacopy` are disabled at compile time; `userxattr` availability depends on runtime user namespace context.
 
@@ -169,7 +169,9 @@ bundle/
     "terminal": false,
     "user": { "uid": 0, "gid": 0 },
     "args": ["/bin/sh", "-c", "echo hello"],
-    "env": ["PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"],
+    "env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ],
     "cwd": "/"
   },
   "root": {
@@ -178,11 +180,19 @@ bundle/
   },
   "hostname": "fastenv",
   "mounts": [
-    { "destination": "/proc",  "type": "proc",   "source": "proc" },
-    { "destination": "/dev",   "type": "tmpfs",  "source": "tmpfs",
-      "options": ["nosuid", "strictatime", "mode=755", "size=65536k"] },
-    { "destination": "/sys",   "type": "sysfs",  "source": "sysfs",
-      "options": ["nosuid", "noexec", "nodev", "ro"] }
+    { "destination": "/proc", "type": "proc", "source": "proc" },
+    {
+      "destination": "/dev",
+      "type": "tmpfs",
+      "source": "tmpfs",
+      "options": ["nosuid", "strictatime", "mode=755", "size=65536k"]
+    },
+    {
+      "destination": "/sys",
+      "type": "sysfs",
+      "source": "sysfs",
+      "options": ["nosuid", "noexec", "nodev", "ro"]
+    }
   ],
   "linux": {
     "namespaces": [
@@ -197,16 +207,17 @@ bundle/
 
 **Critical fields:**
 
-| Field | Required | Notes |
-|---|---|---|
-| `ociVersion` | Yes | Must be `"1.1.0"` for crun ≥ 1.8 |
-| `process.args` | Yes | Command to exec; must be an absolute path or resolvable in PATH |
-| `root.path` | Yes | Relative or absolute path to the rootfs; for overlayfs this is the mount point |
-| `linux.namespaces` | Yes | At minimum `pid` and `mount`; `network` recommended for isolation |
-| `mounts` | Recommended | `/proc` is needed by many tools; `/dev` for device access |
-| `linux.resources` | Optional | CPU/memory limits; empty object is valid |
+| Field              | Required    | Notes                                                                          |
+| ------------------ | ----------- | ------------------------------------------------------------------------------ |
+| `ociVersion`       | Yes         | Must be `"1.1.0"` for crun ≥ 1.8                                               |
+| `process.args`     | Yes         | Command to exec; must be an absolute path or resolvable in PATH                |
+| `root.path`        | Yes         | Relative or absolute path to the rootfs; for overlayfs this is the mount point |
+| `linux.namespaces` | Yes         | At minimum `pid` and `mount`; `network` recommended for isolation              |
+| `mounts`           | Recommended | `/proc` is needed by many tools; `/dev` for device access                      |
+| `linux.resources`  | Optional    | CPU/memory limits; empty object is valid                                       |
 
 **Fields that can be omitted for a minimal bundle:**
+
 - `hooks` (prestart, poststart, etc.)
 - `linux.seccomp` (crun applies a default policy)
 - `linux.capabilities` (crun inherits from the calling process)
@@ -228,14 +239,14 @@ Alternatively, an absolute path is accepted. The rootfs directory must be the **
 
 ### crun subprocess vs. containerd task API: key differences
 
-| Aspect | crun direct subprocess | containerd task API (current Go) |
-|---|---|---|
-| Shim overhead | None | ~10–30ms shim fork |
-| containerd dependency | None | containerd socket required |
-| Cleanup | Process exit cleans up namespaces | `task.Delete` required |
-| Container metadata | Not stored in containerd | Stored in containerd namespace |
-| Snapshot lifecycle | Must mount before exec, unmount after | containerd manages mount |
-| Exit code | Available via `wait4(2)` / `Child::wait()` | Available via `task.Wait` |
+| Aspect                | crun direct subprocess                     | containerd task API (current Go) |
+| --------------------- | ------------------------------------------ | -------------------------------- |
+| Shim overhead         | None                                       | ~10–30ms shim fork               |
+| containerd dependency | None                                       | containerd socket required       |
+| Cleanup               | Process exit cleans up namespaces          | `task.Delete` required           |
+| Container metadata    | Not stored in containerd                   | Stored in containerd namespace   |
+| Snapshot lifecycle    | Must mount before exec, unmount after      | containerd manages mount         |
+| Exit code             | Available via `wait4(2)` / `Child::wait()` | Available via `task.Wait`        |
 
 For the Rust rewrite the direct subprocess model is simpler and eliminates the shim latency, consistent with the Rust rewrite motivation.
 
@@ -302,12 +313,12 @@ flock(&lock_file, FlockOperation::Unlock)?;
 
 **Edge cases:**
 
-| Scenario | Behaviour | Mitigation |
-|---|---|---|
-| Writer crashes mid-rename | `registry.json` unchanged; temp file orphaned | Sweep temp files on startup |
-| Reader reads without lock | May see stale data if reading concurrently with a writer | Readers should also take `LOCK_SH` before reading |
-| Two processes `fork()` and share lock fd | Both hold the lock; child must explicitly unlock | Use `O_CLOEXEC` on lock file to prevent fd inheritance to `crun` subprocess |
-| Lock file deleted while held | Holder keeps the lock on the inode; new opener creates a new inode | Re-open lock file after acquiring if `stat(fd)` inode != `stat(path)` inode |
+| Scenario                                 | Behaviour                                                          | Mitigation                                                                  |
+| ---------------------------------------- | ------------------------------------------------------------------ | --------------------------------------------------------------------------- |
+| Writer crashes mid-rename                | `registry.json` unchanged; temp file orphaned                      | Sweep temp files on startup                                                 |
+| Reader reads without lock                | May see stale data if reading concurrently with a writer           | Readers should also take `LOCK_SH` before reading                           |
+| Two processes `fork()` and share lock fd | Both hold the lock; child must explicitly unlock                   | Use `O_CLOEXEC` on lock file to prevent fd inheritance to `crun` subprocess |
+| Lock file deleted while held             | Holder keeps the lock on the inode; new opener creates a new inode | Re-open lock file after acquiring if `stat(fd)` inode != `stat(path)` inode |
 
 ### TOCTTOU (inode deletion race) mitigation
 
@@ -354,16 +365,16 @@ flock(&lock_file, FlockOperation::Unlock)?;
 
 ## 4. Summary table
 
-| Area | Status | Key finding |
-|---|---|---|
-| rustix overlayfs (legacy API) | Confirmed functional | `rustix::mount::mount` wraps `mount(2)`; works on 5.15; requires `CAP_SYS_ADMIN` |
-| rustix overlayfs (new API) | Confirmed available | `fsopen`/`fsconfig`/`fsmount`/`move_mount` all present in rustix 1.1.4; Linux ≥ 5.2 required; new API preferred |
-| Multiple lowerdir stacking | Confirmed | Colon-separated `lowerdir` value works with both APIs |
-| crun availability | Not installed | Must be installed in CI; static binary or `apt-get install crun` |
-| crun direct subprocess | Architecture confirmed | `crun run --bundle <dir> <id>` with inherited stdio; no shim needed |
-| OCI bundle structure | Documented | `config.json` + `rootfs/`; minimal required fields identified |
-| flock concurrent safety | Confirmed safe | `LOCK_EX` serialises writers; inode check loop needed for TOCTTOU |
-| flock crash safety | Confirmed | Kernel releases lock on process exit; rename ensures registry atomicity |
+| Area                          | Status                 | Key finding                                                                                                     |
+| ----------------------------- | ---------------------- | --------------------------------------------------------------------------------------------------------------- |
+| rustix overlayfs (legacy API) | Confirmed functional   | `rustix::mount::mount` wraps `mount(2)`; works on 5.15; requires `CAP_SYS_ADMIN`                                |
+| rustix overlayfs (new API)    | Confirmed available    | `fsopen`/`fsconfig`/`fsmount`/`move_mount` all present in rustix 1.1.4; Linux ≥ 5.2 required; new API preferred |
+| Multiple lowerdir stacking    | Confirmed              | Colon-separated `lowerdir` value works with both APIs                                                           |
+| crun availability             | Not installed          | Must be installed in CI; static binary or `apt-get install crun`                                                |
+| crun direct subprocess        | Architecture confirmed | `crun run --bundle <dir> <id>` with inherited stdio; no shim needed                                             |
+| OCI bundle structure          | Documented             | `config.json` + `rootfs/`; minimal required fields identified                                                   |
+| flock concurrent safety       | Confirmed safe         | `LOCK_EX` serialises writers; inode check loop needed for TOCTTOU                                               |
+| flock crash safety            | Confirmed              | Kernel releases lock on process exit; rename ensures registry atomicity                                         |
 
 ---
 

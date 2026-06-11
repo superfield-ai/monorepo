@@ -2,6 +2,7 @@
 
 > This plan replaces the old containerd-era rewrite plan. It assumes the
 > product and architecture are now anchored on:
+>
 > - [docs/prd.md](docs/prd.md)
 > - [docs/architecture.md](docs/architecture.md)
 

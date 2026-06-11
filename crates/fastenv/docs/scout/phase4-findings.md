@@ -46,6 +46,7 @@ implement the `/proc/mounts` scan and fall back to soft mode gracefully, which
 matches the existing `docs/quota-prerequisites.md` specification.
 
 The `parse_proc_mounts()` function planned for #44 should:
+
 1. Locate the `/var/lib/fastenv` path (or its first ancestor present in mounts)
 2. Check if the mount options string contains `prjquota`
 3. Return `QuotaMode::Hard` if found, `QuotaMode::Soft` otherwise
@@ -261,34 +262,34 @@ overlayfs is unmounted, otherwise the overlayfs unmount returns `EBUSY`.
 
 ### #44 (per-fork disk quotas)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| `FS_IOC_FSSETXATTR` not in rustix 1.1.4 | High | Use custom `Ioctl` impl with `linux-raw-sys` constants (§2 above) |
-| `EOPNOTSUPP` when prjquota absent | Medium | Detect errno=95 and set `quota_mode=soft`; never error out |
-| prjquota requires `quotaon -P` + remount | Medium | Document in quota-prerequisites.md; do not attempt in soft mode |
-| Self-hosted runner has no prjquota on / | Confirmed | CI tests must not assert hard quota behavior; test soft mode only |
+| Risk                                     | Severity  | Mitigation                                                        |
+| ---------------------------------------- | --------- | ----------------------------------------------------------------- |
+| `FS_IOC_FSSETXATTR` not in rustix 1.1.4  | High      | Use custom `Ioctl` impl with `linux-raw-sys` constants (§2 above) |
+| `EOPNOTSUPP` when prjquota absent        | Medium    | Detect errno=95 and set `quota_mode=soft`; never error out        |
+| prjquota requires `quotaon -P` + remount | Medium    | Document in quota-prerequisites.md; do not attempt in soft mode   |
+| Self-hosted runner has no prjquota on /  | Confirmed | CI tests must not assert hard quota behavior; test soft mode only |
 
 ### #45 (shared cache mounts)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| lowerdir= ordering affects shadowing | Medium | Put base lower last; caches leftmost (§3 above) |
-| Stale mounts if cache layer evicted while overlay active | High | GC (#46) must check for active mounts (via /proc/mounts) before removing cache dirs |
-| Maximum lowerdir count | Low | Kernel 5.15 supports at least 500 lower layers; practical limit is inode lookup depth |
+| Risk                                                     | Severity | Mitigation                                                                            |
+| -------------------------------------------------------- | -------- | ------------------------------------------------------------------------------------- |
+| lowerdir= ordering affects shadowing                     | Medium   | Put base lower last; caches leftmost (§3 above)                                       |
+| Stale mounts if cache layer evicted while overlay active | High     | GC (#46) must check for active mounts (via /proc/mounts) before removing cache dirs   |
+| Maximum lowerdir count                                   | Low      | Kernel 5.15 supports at least 500 lower layers; practical limit is inode lookup depth |
 
 ### #46 (GC — TTL/LRU fork eviction)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Stale overlay mounts orphaned after crash | Medium | GC must scan /proc/mounts for all overlay entries, cross-reference registry, and unmount (MNT_DETACH) any orphans |
-| Bind mounts outliving their overlay source | Medium | GC should unmount bind mounts before their base overlay |
+| Risk                                       | Severity | Mitigation                                                                                                        |
+| ------------------------------------------ | -------- | ----------------------------------------------------------------------------------------------------------------- |
+| Stale overlay mounts orphaned after crash  | Medium   | GC must scan /proc/mounts for all overlay entries, cross-reference registry, and unmount (MNT_DETACH) any orphans |
+| Bind mounts outliving their overlay source | Medium   | GC should unmount bind mounts before their base overlay                                                           |
 
 ### #47 (mount-path and unmount)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Unbind before overlay unmount | High | Always unmount bind target first; see §4 above |
-| bind target left mounted if fastenv crashes | Medium | GC (#46) must detect bind mounts on forks/*/merged/ paths and clean up |
+| Risk                                        | Severity | Mitigation                                                              |
+| ------------------------------------------- | -------- | ----------------------------------------------------------------------- |
+| Unbind before overlay unmount               | High     | Always unmount bind target first; see §4 above                          |
+| bind target left mounted if fastenv crashes | Medium   | GC (#46) must detect bind mounts on forks/\*/merged/ paths and clean up |
 
 ### #48 (bench)
 
@@ -310,12 +311,12 @@ rustix 1.1.4 as `UnmountFlags::DETACH`.
 
 ## Summary
 
-| Capability | Status on kernel 5.15.0 + ext4 (no prjquota) | rustix 1.1.4 API |
-|---|---|---|
-| prjquota mount option | **ABSENT** — soft mode only on this runner | n/a — parse /proc/mounts in Rust |
-| FS_IOC_FSSETXATTR (project ID) | **EOPNOTSUPP** without prjquota; syscall itself available | Custom `Ioctl` impl needed; not in rustix |
-| Multi-lower overlayfs (lowerdir=a:b) | **PASS** — both files visible in merged/ | `rustix::mount::mount` with colon-separated data string |
-| MS_BIND bind-mount | **PASS** — content visible at bind target | `rustix::mount::mount_bind` |
-| MNT_DETACH unmount | **PASS** — bind and overlay both cleanly detach | `rustix::mount::unmount` with `UnmountFlags::DETACH` |
+| Capability                           | Status on kernel 5.15.0 + ext4 (no prjquota)              | rustix 1.1.4 API                                        |
+| ------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------- |
+| prjquota mount option                | **ABSENT** — soft mode only on this runner                | n/a — parse /proc/mounts in Rust                        |
+| FS_IOC_FSSETXATTR (project ID)       | **EOPNOTSUPP** without prjquota; syscall itself available | Custom `Ioctl` impl needed; not in rustix               |
+| Multi-lower overlayfs (lowerdir=a:b) | **PASS** — both files visible in merged/                  | `rustix::mount::mount` with colon-separated data string |
+| MS_BIND bind-mount                   | **PASS** — content visible at bind target                 | `rustix::mount::mount_bind`                             |
+| MNT_DETACH unmount                   | **PASS** — bind and overlay both cleanly detach           | `rustix::mount::unmount` with `UnmountFlags::DETACH`    |
 
 No production code was changed in this scout.

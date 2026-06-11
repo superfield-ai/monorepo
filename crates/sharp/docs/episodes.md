@@ -41,12 +41,12 @@ bun install
 ### `Sharp` — connection handle
 
 ```typescript
-import { Sharp, openEpisode } from '@sharp/episodes';
+import { Sharp, openEpisode } from "@sharp/episodes";
 
 const sharp = new Sharp({
-  url: 'http://localhost:5174',
+  url: "http://localhost:5174",
   token: process.env.SHARP_TOKEN,
-  repo: 'my-project',
+  repo: "my-project",
 });
 ```
 
@@ -58,11 +58,11 @@ const sharp = new Sharp({
 
 ```typescript
 const ep = await openEpisode(sharp, {
-  parent_commit: '<hex>', // commit the agent started from (required)
-  agent_identity: 'codex-worker-42',
-  model_id: 'claude-opus-4-7',
-  harness_version: '0.1.3',
-  tool_versions: { tsc: '5.5.0', cargo: '1.92.0' },
+  parent_commit: "<hex>", // commit the agent started from (required)
+  agent_identity: "codex-worker-42",
+  model_id: "claude-opus-4-7",
+  harness_version: "0.1.3",
+  tool_versions: { tsc: "5.5.0", cargo: "1.92.0" },
   decoding_params: { temperature: 0.2, top_p: 0.9 },
 });
 ```
@@ -98,18 +98,18 @@ Each call is fire-and-await. The library handles routing transparently — see t
 ```typescript
 // Success: promote the commit produced
 await ep.finish({
-  status: 'completed',
-  promoted_commit: '<hex>',
+  status: "completed",
+  promoted_commit: "<hex>",
 });
 
 // Failure: no commit produced
 await ep.finish({
-  status: 'failed',
+  status: "failed",
 });
 
 // Abandoned mid-run
 await ep.finish({
-  status: 'abandoned',
+  status: "abandoned",
 });
 ```
 
@@ -145,8 +145,8 @@ Creates `episode_links` rows with `relation = 'superseded_by'` pointing from eac
 
 ```typescript
 const replayed = await ep.replay({
-  model_id: 'claude-opus-4-8',
-  harness_version: '0.2.0',
+  model_id: "claude-opus-4-8",
+  harness_version: "0.2.0",
 });
 ```
 
@@ -236,35 +236,35 @@ Returns per-harness-version win rates for a given model. Use this to evaluate wh
 ## Complete Example
 
 ```typescript
-import { Sharp, openEpisode } from '@sharp/episodes';
+import { Sharp, openEpisode } from "@sharp/episodes";
 
 const sharp = new Sharp({
-  url: process.env.SHARP_URL ?? 'http://localhost:5174',
+  url: process.env.SHARP_URL ?? "http://localhost:5174",
   token: process.env.SHARP_TOKEN!,
-  repo: process.env.SHARP_REPO ?? 'my-project',
+  repo: process.env.SHARP_REPO ?? "my-project",
 });
 
 async function runAgent(parentCommit: string, task: string) {
   const ep = await openEpisode(sharp, {
     parent_commit: parentCommit,
     agent_identity: `worker-${process.pid}`,
-    model_id: 'claude-opus-4-7',
-    harness_version: '0.1.3',
-    tool_versions: { tsc: '5.5.0' },
+    model_id: "claude-opus-4-7",
+    harness_version: "0.1.3",
+    tool_versions: { tsc: "5.5.0" },
     decoding_params: { temperature: 0.2 },
   });
 
   try {
-    await ep.appendArtifact('prompt', { role: 'user', content: task });
+    await ep.appendArtifact("prompt", { role: "user", content: task });
 
     // ... run the agent, append tool_call / tool_result / validation artifacts ...
 
     const promotedCommit = await commitResult(); // your harness logic
 
-    await ep.finish({ status: 'completed', promoted_commit: promotedCommit });
+    await ep.finish({ status: "completed", promoted_commit: promotedCommit });
     return { episodeId: ep.id, promotedCommit };
   } catch (err) {
-    await ep.finish({ status: 'failed' });
+    await ep.finish({ status: "failed" });
     throw err;
   }
 }

@@ -21,7 +21,7 @@ the workload we are isolating:
 Two axes matter throughout: **boundary strength** (can a compromised guest
 reach the host or a neighboring tenant?) and **fan-out cost** (how cheap is it
 to start/stop the Nth unit of work?). Most designs trade one for the other.
-fastenv's thesis is that these two axes belong to *different layers* — so you
+fastenv's thesis is that these two axes belong to _different layers_ — so you
 should not pay for them with a single mechanism.
 
 ---
@@ -41,7 +41,7 @@ One namespace+cgroup sandbox per agent, sharing the host kernel directly.
 - **Verdict for our use case:** this is exactly the boundary the PRD names as a
   **non-goal** ("treating host containers as the security boundary for
   untrusted projects"). Great fan-out, wrong trust boundary. fastenv keeps this
-  mechanism but moves it *inside* the VM, where a shared kernel is acceptable
+  mechanism but moves it _inside_ the VM, where a shared kernel is acceptable
   because the tenant is already isolated by the VM.
 
 ### B. gVisor (`runsc`) — userspace kernel
@@ -51,14 +51,14 @@ narrower surface.
 
 - **Boundary strength:** stronger than plain containers — the host kernel is no
   longer directly reachable for most syscalls. But the sandbox is still a host
-  *process*, and the security argument rests on the correctness of a large
+  _process_, and the security argument rests on the correctness of a large
   syscall-emulation layer rather than a hardware boundary.
 - **Fan-out cost:** good, though syscall interception imposes a real per-call
   performance tax that bites hard on build/test workloads (lots of `fork`,
   `stat`, I/O — precisely what agents do).
 - **Verdict:** a reasonable middle point, but it taxes the exact syscall-heavy
-  workloads agents run, and it raises the boundary on the *per-agent* unit
-  rather than on the *project* trust domain. We would still need a separate
+  workloads agents run, and it raises the boundary on the _per-agent_ unit
+  rather than on the _project_ trust domain. We would still need a separate
   answer for cheap intra-project fan-out.
 
 ### C. Kata Containers — a VM behind every OCI container
@@ -67,10 +67,10 @@ Each OCI container is transparently backed by its own lightweight VM.
 
 - **Boundary strength:** strong — a real hardware/VM boundary per container.
 - **Fan-out cost:** every agent pays full VM provisioning (kernel boot, device
-  setup, guest agent handshake). This is VM cost on the *per-agent* axis, which
+  setup, guest agent handshake). This is VM cost on the _per-agent_ axis, which
   is the axis we most want to keep cheap.
 - **Verdict:** Kata puts the strong boundary in the right place but at the wrong
-  *granularity* for fan-out. It is essentially "design D below, per agent." It
+  _granularity_ for fan-out. It is essentially "design D below, per agent." It
   is the closest philosophical cousin to fastenv and the clearest illustration
   of our core bet: agents within one project share a trust domain, so paying a
   VM boot per agent is wasted money.
@@ -87,7 +87,7 @@ products): a fresh microVM per unit of work.
   device model. Ten agents on one repo means ten kernels and ten copies of the
   project's caches/objects — or a shared cache that quietly re-introduces a
   cross-tenant writable surface.
-- **Verdict:** over-isolates *within* a project. Agents on the same repo do not
+- **Verdict:** over-isolates _within_ a project. Agents on the same repo do not
   need to be protected from each other at hardware strength — they need
   workspace isolation so they "don't stomp on each other" (PRD §7), which a
   container delivers for far less. Per-agent VMs also fragment the project-local
@@ -109,13 +109,13 @@ separated only by users/namespaces.
 Hand-rolled or library sandboxes (bubblewrap, raw seccomp profiles, Landlock)
 with no container runtime and no VM.
 
-- **Boundary strength:** weak-to-medium and *fragile*. Security depends on a
+- **Boundary strength:** weak-to-medium and _fragile_. Security depends on a
   hand-maintained syscall allowlist; one missing filter or a kernel bug breaks
   it. Shares the host kernel.
 - **Fan-out cost:** excellent — lightest possible.
 - **Verdict:** the PRD explicitly refuses to make a filtering layer the primary
   boundary ("Using eBPF as the primary isolation boundary" is a non-goal; the
-  same logic applies to seccomp). Useful as defense-in-depth *inside* a layer,
+  same logic applies to seccomp). Useful as defense-in-depth _inside_ a layer,
   never as the layer itself.
 
 #### Deep dive: Landlock
@@ -124,7 +124,7 @@ Landlock deserves a closer look because it is the most modern and most
 promising member of design F, and because it is the mechanism people most often
 reach for when they want "a sandbox without root or a container runtime." It is
 an unprivileged Linux Security Module (LSM), available since kernel 5.13, that
-lets a process restrict *itself* and its future children. A launcher builds a
+lets a process restrict _itself_ and its future children. A launcher builds a
 ruleset (`landlock_create_ruleset`), grants specific access rights to specific
 resources (`landlock_add_rule`), then locks it in (`landlock_restrict_self`)
 before `exec`-ing the untrusted program.
@@ -135,12 +135,12 @@ before `exec`-ing the untrusted program.
   helper, no daemon. Any process can drop into a tighter sandbox on its own.
   This is the headline feature and the reason it is attractive for embedding
   directly in an agent launcher.
-- **Monotonic and stackable.** Restrictions only ever *tighten*. A child can add
+- **Monotonic and stackable.** Restrictions only ever _tighten_. A child can add
   more rules but can never loosen what a parent applied, and rulesets compose by
   stacking. A trusted launcher can drop privileges in stages, and untrusted code
   downstream physically cannot climb back out.
 - **Semantically aware, not string-matched.** Landlock mediates at LSM hooks on
-  the opened inode hierarchy, not by matching path *strings* or raw syscall
+  the opened inode hierarchy, not by matching path _strings_ or raw syscall
   arguments. That sidesteps the classic TOCTOU and path-canonicalization
   footguns that make hand-rolled seccomp path filtering so error-prone.
 - **Cheap.** It is in-kernel hook enforcement — none of gVisor's per-syscall
@@ -152,17 +152,17 @@ before `exec`-ing the untrusted program.
 **Why it is not enough against adversarial or incompetent AI agents:**
 
 1. **It shares the host kernel — so it is not a boundary against a kernel
-   exploit.** Landlock is an LSM running in the *same* kernel as the sandboxed
+   exploit.** Landlock is an LSM running in the _same_ kernel as the sandboxed
    code. A single kernel LPE bypasses it entirely. This matters more for AI
    agents than for almost any other workload: an agent legitimately runs
    compilers, JITs, package installers, `io_uring`, and arbitrary downloaded
    binaries — an enormous and unpredictable kernel-surface to fish for a bug in.
    This is the same structural ceiling as seccomp and eBPF, which the PRD names
-   a non-goal as a *primary* boundary, and exactly the gap the Firecracker layer
+   a non-goal as a _primary_ boundary, and exactly the gap the Firecracker layer
    exists to close.
 
 2. **It only mediates the operation classes it has hooks for; everything else
-   is unrestricted by default.** Landlock is allowlist-style *within* a covered
+   is unrestricted by default.** Landlock is allowlist-style _within_ a covered
    class, but anything outside a covered class is wide open. Coverage grew one
    kernel at a time: filesystem rights in 5.13, file reparenting in 5.19,
    truncate in 6.2, **TCP bind/connect only** in 6.7, device `ioctl` in 6.10,
@@ -174,7 +174,7 @@ before `exec`-ing the untrusted program.
    namespaces + cgroups around it — at which point you have rebuilt a container,
    still on the shared host kernel.
 
-3. **A missing hook fails *open*, not closed.** Because uncovered classes are
+3. **A missing hook fails _open_, not closed.** Because uncovered classes are
    unrestricted, a gap in coverage is silent permissiveness, not a denial. An
    adversarial agent only has to find the one thing your policy never mentioned.
 
@@ -187,7 +187,7 @@ before `exec`-ing the untrusted program.
 
 5. **It is a self-imposed sandbox, so it is only as good as the launcher — and
    AI is writing the launcher.** The security depends entirely on the launcher
-   building the ruleset correctly and calling `restrict_self` *before* handing
+   building the ruleset correctly and calling `restrict_self` _before_ handing
    control to untrusted code. There is no second line of defense if it forgets a
    `restrict_self`, grants an over-broad directory hierarchy, or starts the
    agent on the wrong side of the lock. For the "incompetent agent" case this is
@@ -197,13 +197,13 @@ before `exec`-ing the untrusted program.
    own its own boundary.
 
 6. **It provides none of the fan-out workspace isolation the PRD requires.**
-   Landlock is about *access rights*, not *resource partitioning*. It gives no
+   Landlock is about _access rights_, not _resource partitioning_. It gives no
    private PID namespace, no private mount view or per-agent `/tmp`, no
    CPU/memory/PID limits, no CoW workspace. The requirement that "agents don't
    stomp on each other" (PRD §4.3, §7) is entirely unmet by Landlock alone —
    that is namespaces + overlayfs + cgroups, i.e. the `crun` container layer.
 
-7. **A *useful* agent policy is necessarily a permissive one.** Agents must read
+7. **A _useful_ agent policy is necessarily a permissive one.** Agents must read
    most of `/usr`, write build and cache dirs, `exec` arbitrary toolchain and
    downloaded binaries, and reach package mirrors over TCP. A Landlock policy
    broad enough to let real dev work happen ends up granting most of what an
@@ -211,13 +211,13 @@ before `exec`-ing the untrusted program.
    buying you.
 
 **Where Landlock fits in fastenv.** None of this makes Landlock useless — it
-makes it a *defense-in-depth layer*, not a boundary, which is precisely the role
+makes it a _defense-in-depth layer_, not a boundary, which is precisely the role
 the PRD assigns to filtering planes ("eBPF observes and constrains, but does not
 replace the VM boundary"). The right place for Landlock in this architecture is
-*inside* the `crun` container, *inside* the project VM: a cheap extra rail that
+_inside_ the `crun` container, _inside_ the project VM: a cheap extra rail that
 narrows a specific agent run's filesystem and TCP reach below what the container
 already allows. If it is misconfigured or the kernel is too old, the container
-and the VM are still there. As the *outermost* answer to adversarial or
+and the VM are still there. As the _outermost_ answer to adversarial or
 incompetent AI agents, it fails for the structural reason that it shares the
 host kernel and only sees the operations it has hooks for — and AI agents
 present an unusually large, unpredictable, and self-modifying surface against
@@ -228,11 +228,11 @@ both of those limits.
 Outsource isolation to a third-party code-execution API.
 
 - **Boundary strength:** typically strong (most are microVM-backed internally),
-  but you inherit *their* trust model, network egress posture, and secret
+  but you inherit _their_ trust model, network egress posture, and secret
   handling — and project code leaves your infrastructure.
 - **Fan-out cost:** good, but gated by network round-trips and provisioning
   APIs, not local primitives. Interactive loops feel the latency.
-- **Verdict:** orthogonal to fastenv's goal. fastenv is the *substrate* that a
+- **Verdict:** orthogonal to fastenv's goal. fastenv is the _substrate_ that a
   control plane owns and instruments (host eBPF, artifact validation, secret
   brokering). Handing that to a remote service forfeits the host-owned policy
   plane the PRD requires and the local-loop latency the success criteria
@@ -244,21 +244,21 @@ A different kernel entirely. **Fuchsia** is Google's non-Linux OS; its
 microkernel, **Zircon**, keeps almost nothing in kernel space — scheduling,
 memory, and IPC only — and pushes drivers, filesystems, and network stacks out
 into user-space processes. Isolation is not bolted on with namespaces and
-filters; it is the kernel's native model. Every kernel resource is an *object*
+filters; it is the kernel's native model. Every kernel resource is an _object_
 reached only through an explicit, unforgeable **handle**, and a process can act
 only on the handles it has been granted (object-capability security). There is
 no ambient authority and no global namespace to escape into — the structural
 opposite of the Unix "a process can touch anything its UID permits" model that
 designs A–G all inherit.
 
-- **Boundary strength:** strong *by construction* on a different dimension than
+- **Boundary strength:** strong _by construction_ on a different dimension than
   the others. Where designs A/F narrow a huge ambient-authority surface with
   allowlists, and C/D wrap a hardware wall around a Linux guest, Zircon starts
   from zero authority and adds capabilities explicitly. The kernel attack
   surface is small (a microkernel exposes a few dozen syscalls, not Linux's
   ~400), and a compromised driver or network stack is "just" a user process
   holding a bounded set of handles, not kernel-resident code. This is the
-  cleanest *design* answer to the exact thing the Landlock deep dive flags as
+  cleanest _design_ answer to the exact thing the Landlock deep dive flags as
   Linux's structural ceiling: a sprawling, fail-open kernel surface that an
   agent running compilers, JITs, and downloaded binaries is unusually good at
   fishing for bugs in.
@@ -269,7 +269,7 @@ designs A–G all inherit.
   warm project-cache story comparable to what the PRD assumes.
 - **Verdict:** **aspirational and orthogonal, not deployable as fastenv's
   substrate today.** The disqualifier is not the security model — that model is
-  arguably *better* than anything in A–G — it is the workload. Agents run Linux
+  arguably _better_ than anything in A–G — it is the workload. Agents run Linux
   toolchains: `apt`/`pip`/`cargo`, prebuilt `x86_64` ELF binaries, `io_uring`,
   CUDA, the whole Linux userland. Fuchsia runs Linux binaries only through
   **Starnix**, a Linux-syscall compatibility layer that is young, partial, and
@@ -279,7 +279,7 @@ designs A–G all inherit.
   support. fastenv's bet is on **boundary placement on commodity Linux + KVM**
   (a hardware wall at the project, a cheap namespace wall at the agent), not on
   switching the kernel underneath the entire fleet. Zircon is the useful
-  *north-star*: it shows what "isolation as the kernel's native model" looks
+  _north-star_: it shows what "isolation as the kernel's native model" looks
   like, and it validates fastenv's instinct that the shared Linux kernel — not
   the choice of container vs. VM — is the real ceiling. But adopting it would
   mean giving up the Linux toolchain compatibility the workload is defined by,
@@ -288,23 +288,23 @@ designs A–G all inherit.
 #### Deep dive: the wider microkernel field
 
 Zircon is not the only kernel that treats isolation as a first-class primitive.
-Each of the projects below is disqualified as fastenv's *substrate* by the same
+Each of the projects below is disqualified as fastenv's _substrate_ by the same
 two facts that sink Fuchsia — no native Linux toolchain, no proven high-fan-out
 fleet ecosystem — so this is not a shortlist of replacements. It is a list of
-*ideas*, each of which isolates one thing fastenv's Linux-based design either
+_ideas_, each of which isolates one thing fastenv's Linux-based design either
 borrows already or could borrow later. They are grouped by what they contribute.
 
 **Formal verification of the boundary — seL4.** The high-assurance member of the
 L4 family: a capability-based microkernel (~10k LOC) with machine-checked proofs
-that the implementation matches its spec *and* that the spec enforces integrity
+that the implementation matches its spec _and_ that the spec enforces integrity
 and confidentiality. No Linux mechanism — namespaces, seccomp, Landlock, KVM —
 has anything close to a proof of its isolation. seL4 also runs as a **hypervisor**
 (via a VMM component / the seL4 Microkit), so the realistic way to run Linux
-agents on it is *as a guest VM on a verified hypervisor* — which lands you back
+agents on it is _as a guest VM on a verified hypervisor_ — which lands you back
 at a VM boundary, just with a far smaller, proven TCB underneath it instead of
 KVM+QEMU. That is the single most interesting long-horizon idea here: it attacks
 the exact gap the Landlock dive names (an unprovable, sprawling kernel surface)
-not by shrinking Linux but by shrinking and *proving* the thing that contains it.
+not by shrinking Linux but by shrinking and _proving_ the thing that contains it.
 
 **Hierarchical capability delegation — Genode.** Not one kernel but an OS
 framework that runs atop a choice of kernels (seL4, NOVA, Fiasco.OC, or even
@@ -314,20 +314,20 @@ explicitly hands down a bounded budget of capabilities and resources (RAM,
 caps, CPU), and a child can only ever sub-delegate, never widen, what it was
 given. That is, almost line for line, fastenv's host→project→agent policy
 hierarchy (PRD §4.6) and Landlock's monotonic-tightening property generalized to
-the whole OS. Genode is the strongest *conceptual* match in this document for
+the whole OS. Genode is the strongest _conceptual_ match in this document for
 fastenv's "different boundaries at different layers, each narrowing the last"
 thesis — it is what that thesis looks like when the kernel, not a stack of Linux
 mechanisms, enforces it.
 
 **Shrinking the VMM/hypervisor TCB — NOVA (and Hedron/Bedrock).** A
-*microhypervisor*: microkernel minimality applied to virtualization, so the
+_microhypervisor_: microkernel minimality applied to virtualization, so the
 trusted code that stands between guests is a few thousand lines rather than a
 general-purpose kernel plus QEMU. This is the same instinct as fastenv's
 "wrap the VMM itself in seccomp" posture (see the seccomp section), taken to its
 logical end — make the enforcer small enough to audit (or, with seL4, prove)
 rather than merely confining a large one after the fact. The most plausible
 future where a microkernel touches fastenv is here: a verified/minimal
-microhypervisor replacing KVM+Firecracker under the *project* boundary, with the
+microhypervisor replacing KVM+Firecracker under the _project_ boundary, with the
 agent-container layer unchanged on top.
 
 **Memory-safe kernels — Redox OS.** A Unix-like microkernel written in Rust,
@@ -347,17 +347,17 @@ with formally verified components shipping on consumer devices. Both rebut "micr
 kernels are only research toys." Neither fits us: QNX is tuned for real-time
 embedded determinism and is closed/commercially licensed, not multi-tenant
 server fan-out; HongMeng is a closed, vertically integrated ecosystem. They
-inform the *feasibility* argument, not the substrate choice.
+inform the _feasibility_ argument, not the substrate choice.
 
 **Reliability-oriented microkernels — MINIX 3 (and the Mach/Hurd lineage).**
-MINIX 3 isolates drivers in user space behind a *reincarnation server* that
+MINIX 3 isolates drivers in user space behind a _reincarnation server_ that
 restarts crashed components — a fault-isolation story, closer to "a buggy
 component can't take down the system" than to "adversarial code can't escape."
-Useful framing for the *incompetent-agent* half of the threat model (containment
+Useful framing for the _incompetent-agent_ half of the threat model (containment
 of accidents, not just attacks), but the project is largely dormant. The
 historical **Mach** microkernel (and GNU Hurd) is the ancestor of much of this
 lineage and survives in hybrid form inside XNU/macOS — a reminder that "micro­
-kernel ideas in a shipping OS" usually arrive as a *hybrid*, not a purist
+kernel ideas in a shipping OS" usually arrive as a _hybrid_, not a purist
 rewrite, which is effectively the pragmatic position fastenv takes on Linux.
 
 **Synthesis — what actually transfers.** Three ideas from this field are worth
@@ -366,10 +366,10 @@ keeping in view, in rough order of how reachable they are for fastenv:
 1. **Capability delegation matching the trust hierarchy (Genode).** fastenv
    already approximates this with host→project→agent policy layering; the
    microkernel world just shows the cleaner, kernel-enforced form of the same
-   shape. This is a *design influence we can apply now*, not a migration.
+   shape. This is a _design influence we can apply now_, not a migration.
 2. **A minimal/verified microhypervisor under the project boundary (NOVA,
    seL4-as-hypervisor).** The one place a microkernel could realistically slot
-   into fastenv without giving up Linux: swap the *enforcer* of the project VM
+   into fastenv without giving up Linux: swap the _enforcer_ of the project VM
    boundary for a smaller, auditable one, while Linux guests and the `crun`
    agent layer stay exactly as they are. A long-horizon option, not a near-term
    plan.
@@ -377,27 +377,27 @@ keeping in view, in rough order of how reachable they are for fastenv:
    answer to the shared-kernel ceiling — but only available by changing the
    kernel, which the workload forbids today.
 
-The through-line is the same as §H's: every one of these has a *better-than-Linux
-isolation model and a worse-than-Linux ability to run the agent workload*. They
+The through-line is the same as §H's: every one of these has a _better-than-Linux
+isolation model and a worse-than-Linux ability to run the agent workload_. They
 are north-stars and component-level ideas, not substrates. fastenv's commitment
-remains boundary *placement* on commodity Linux + KVM; the microkernel field
+remains boundary _placement_ on commodity Linux + KVM; the microkernel field
 mainly tells us which direction to evolve the enforcers, not to replace the OS.
 
 ---
 
 ## Side-by-side
 
-| Design | Tenant boundary | Per-agent fan-out | Boundary type | Fits our trust model? |
-|---|---|---|---|---|
-| A. Host containers | Weak | Excellent | Shared kernel | No — PRD non-goal |
-| B. gVisor | Medium | Good (syscall tax) | Userspace kernel | Partial; wrong granularity |
-| C. Kata (VM per container) | Strong | Poor (VM per agent) | Hardware/VM | Over-isolates fan-out |
-| D. Firecracker per agent | Strong | Medium | Hardware/VM | Over-isolates fan-out |
-| E. One giant VM | Weak | Excellent | Shared kernel | No — PRD non-goal |
-| F. Process sandboxes | Weak/fragile | Excellent | Syscall filter | No — PRD non-goal |
-| G. Remote service | Strong (theirs) | Good (network) | Hardware/VM | No — forfeits host plane |
-| H. Fuchsia / Zircon | Strong (capability) | Unproven | Microkernel/capability | No — not a Linux substrate |
-| **fastenv (VM/project + container/agent)** | **Strong** | **Excellent** | **Hardware + namespace** | **Yes** |
+| Design                                     | Tenant boundary     | Per-agent fan-out   | Boundary type            | Fits our trust model?      |
+| ------------------------------------------ | ------------------- | ------------------- | ------------------------ | -------------------------- |
+| A. Host containers                         | Weak                | Excellent           | Shared kernel            | No — PRD non-goal          |
+| B. gVisor                                  | Medium              | Good (syscall tax)  | Userspace kernel         | Partial; wrong granularity |
+| C. Kata (VM per container)                 | Strong              | Poor (VM per agent) | Hardware/VM              | Over-isolates fan-out      |
+| D. Firecracker per agent                   | Strong              | Medium              | Hardware/VM              | Over-isolates fan-out      |
+| E. One giant VM                            | Weak                | Excellent           | Shared kernel            | No — PRD non-goal          |
+| F. Process sandboxes                       | Weak/fragile        | Excellent           | Syscall filter           | No — PRD non-goal          |
+| G. Remote service                          | Strong (theirs)     | Good (network)      | Hardware/VM              | No — forfeits host plane   |
+| H. Fuchsia / Zircon                        | Strong (capability) | Unproven            | Microkernel/capability   | No — not a Linux substrate |
+| **fastenv (VM/project + container/agent)** | **Strong**          | **Excellent**       | **Hardware + namespace** | **Yes**                    |
 
 ---
 
@@ -447,7 +447,7 @@ single mechanism cannot do:
   kernel-local policy planes — impossible without the VM layer.
 - **Controlled output flow** (PRD §4.4): the host sees VM-level state and
   validated artifacts only, never a live writable guest workspace. The VM image
-  *is* the export boundary.
+  _is_ the export boundary.
 - **Trust-scoped caching** (architecture §6): project-local package/Git caches
   stay warm and shared **read-only within one trust domain** — which only makes
   sense when "one trust domain" is a concrete VM. Per-agent VMs (C/D) have no
@@ -458,34 +458,34 @@ single mechanism cannot do:
 
 ## Object-capability policy — the authority axis containment leaves open
 
-Everything above argues one axis: **containment** — *can a compromised unit
-reach beyond its box?* The microkernel section (§H) quietly introduced a second,
+Everything above argues one axis: **containment** — _can a compromised unit
+reach beyond its box?_ The microkernel section (§H) quietly introduced a second,
 orthogonal one, because capability security is not a containment model at all —
-it is an **authority** model: *given everything a unit legitimately holds inside
+it is an **authority** model: _given everything a unit legitimately holds inside
 its box, how much can it actually do, and how much of that can it hand to what it
-spawns?* These two axes are independent and multiplicative, and fastenv's
+spawns?_ These two axes are independent and multiplicative, and fastenv's
 workload makes the second one matter more than it does almost anywhere else. It
-is worth pulling out, because the object-capability (ocap) *discipline* transfers
+is worth pulling out, because the object-capability (ocap) _discipline_ transfers
 to commodity Linux without changing the kernel, while the kernel-native form
 (§H) does not.
 
 ### What ocap actually asks for
 
-An object-capability system has no *ambient authority*. Authority does not flow
+An object-capability system has no _ambient authority_. Authority does not flow
 from who you are (a UID, a role, an ACL the kernel checks on your behalf); it
-flows only from what you *hold*. A capability is an unforgeable reference that
+flows only from what you _hold_. A capability is an unforgeable reference that
 **fuses designation and authority** — naming the resource and being permitted to
 use it are the same act — so a subject can only ever act on the specific objects
 it was explicitly handed. Authority is **delegated, attenuated, and revoked**,
 never assumed. The design target is the **principle of least authority (POLA)**:
 each unit runs with the minimum set of capabilities its current task needs, and
-each thing it spawns gets a *narrowed* subset, never a copy of the parent's full
+each thing it spawns gets a _narrowed_ subset, never a copy of the parent's full
 reach.
 
 This is the structural opposite of Linux's defaults, which designs A–G all
-inherit: a process opens files *by path* against an ambient filesystem, reaches
+inherit: a process opens files _by path_ against an ambient filesystem, reaches
 the network through whatever routes exist, and reads secrets from an environment
-it was simply *given*. Authority is ambient and coarse; the boundary is the only
+it was simply _given_. Authority is ambient and coarse; the boundary is the only
 thing standing between the unit and everything its identity can touch.
 
 ### Why agents need the authority axis, not just the boundary
@@ -494,12 +494,12 @@ Two properties of the agent workload make ambient authority dangerous in a way
 containment cannot fix:
 
 1. **Prompt injection is a confused-deputy attack, and it happens entirely
-   *inside* the box.** A confused deputy is a program tricked into wielding its
+   _inside_ the box.** A confused deputy is a program tricked into wielding its
    legitimate authority on an attacker's behalf. An AI agent is a confused deputy
    waiting to happen: any content it ingests — a README, a web page, a
    dependency's post-install script, another tool's output — can steer it to
    exercise authority it holds for some unrelated purpose. Containment does
-   *nothing* here, because the agent never escapes; it acts within its box, using
+   _nothing_ here, because the agent never escapes; it acts within its box, using
    authority it genuinely has, against a target the attacker chose. Ocap is the
    one structural answer: if the agent only holds capabilities scoped to the
    current task, a hijacked agent can only reach what those capabilities name.
@@ -513,7 +513,7 @@ containment cannot fix:
    scripts. On ambient-authority Linux each child inherits the parent's full
    reach — its file access, its sockets, its environment secrets. Ocap reframes
    every spawn as a **delegation**: the child receives only an attenuated handle,
-   and *can only* sub-delegate, never widen. That is exactly Genode's recursive
+   and _can only_ sub-delegate, never widen. That is exactly Genode's recursive
    delegation (§H) and the hierarchical-policy requirement (PRD §4.6) —
    host → project → agent → tool as a chain where each link hands down strictly
    less than it holds.
@@ -526,17 +526,17 @@ pieces already exist:
 
 - **File descriptors are Linux's one true capability** — unforgeable, and
   transferable between processes over Unix sockets (`SCM_RIGHTS`). The canonical
-  move is to hand a unit an *fd* to the exact file/dir/socket it may use, never a
-  *path* into an ambient namespace.
-- **The filtering layers stop being mere defense-in-depth and start *enabling*
+  move is to hand a unit an _fd_ to the exact file/dir/socket it may use, never a
+  _path_ into an ambient namespace.
+- **The filtering layers stop being mere defense-in-depth and start _enabling_
   ocap.** Landlock and seccomp that strip open-by-path and the exotic syscall
   tail remove the ambient back-channels that would otherwise let a unit route
-  around its capabilities — leaving brokered fds/handles as the *only* way to
+  around its capabilities — leaving brokered fds/handles as the _only_ way to
   reach a resource. This is the deeper role of the §F/seccomp mechanisms: not
   just narrowing a surface, but making capabilities load-bearing.
 - **A host/project broker holds the real authority and vends scoped, revocable
   proxies.** The host already owns secrets, network egress, and artifact writes
-  (PRD §4.4, §4.6); ocap says the agent never holds the *real* secret or a
+  (PRD §4.4, §4.6); ocap says the agent never holds the _real_ secret or a
   wide-open socket — it holds a narrow, revocable handle, or a bearer-capability
   token (macaroon-style: independently attenuable, delegatable, caveat-scoped)
   for control-plane operations. Containment guarantees the agent cannot bypass
@@ -549,16 +549,16 @@ pieces already exist:
 Containment and ocap answer different questions and neither substitutes for the
 other:
 
-| | Ambient authority inside | Least authority (ocap) inside |
-|---|---|---|
-| **Weak boundary** | Worst case — escapable *and* maximal blast radius | Contained damage, but escapable |
-| **Strong boundary** | Today's default container: hard to escape, but a subverted or injected agent wields broad FS / egress / secrets inside | **The target** — hard to escape *and* a hijacked unit can reach only what it was handed |
+|                     | Ambient authority inside                                                                                               | Least authority (ocap) inside                                                           |
+| ------------------- | ---------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| **Weak boundary**   | Worst case — escapable _and_ maximal blast radius                                                                      | Contained damage, but escapable                                                         |
+| **Strong boundary** | Today's default container: hard to escape, but a subverted or injected agent wields broad FS / egress / secrets inside | **The target** — hard to escape _and_ a hijacked unit can reach only what it was handed |
 
 fastenv's main thesis (hardware wall at the project, namespace wall at the
 agent) buys the bottom row. Ocap policy is what moves it from the bottom-left
 cell — a strong box around a broadly-authorized interior — to the bottom-right.
 The boundary makes the broker unbypassable; the capability discipline makes what
-the agent holds *worth little to steal*. They multiply.
+the agent holds _worth little to steal_. They multiply.
 
 > **Current state.** fastenv today sits in the bottom-left cell: strong
 > containment around an interior that is still largely ambient-authority — the
@@ -568,33 +568,33 @@ the agent holds *worth little to steal*. They multiply.
 > capability model. An ocap interior — fd/handle vending, scoped revocable
 > control-plane tokens, attenuated delegation to spawned tools — is a direction
 > the existing requirements point at, not a shipped capability. It is the
-> highest-leverage place to harden the *inside* of the boundary fastenv already
+> highest-leverage place to harden the _inside_ of the boundary fastenv already
 > provides.
 
 ---
 
 ## Seccomp at both layers — defense-in-depth, not the boundary
 
-The same belt-and-suspenders logic that makes Landlock a *rail and not a wall*
+The same belt-and-suspenders logic that makes Landlock a _rail and not a wall_
 applies to seccomp, and fastenv's design uses seccomp at **both** of its
 boundary layers — notably, so does Firecracker itself.
 
 - **The VMM layer.** Firecracker installs a tight, argument-aware seccomp-bpf
   **allowlist** on its own VMM process (only the handful of syscalls and the
-  specific KVM `ioctl` codes it needs). This confines the *host-side* VMM, not
+  specific KVM `ioctl` codes it needs). This confines the _host-side_ VMM, not
   the guest: if a malicious guest finds a device-emulation or vmexit bug and
   pops the VMM, seccomp sharply limits what that compromised process can do to
-  the host. In other words, the project that *gives* you the hardware boundary
+  the host. In other words, the project that _gives_ you the hardware boundary
   still wraps its own enforcer in seccomp — because no single mechanism is
   trusted alone. fastenv inherits this: Firecracker is launched without
   `--no-seccomp`, so the default VMM filter is active whenever a VM boots.
 - **The agent layer.** Inside the guest, a seccomp profile on the `crun`
   container drops the exotic-syscall tail (`ptrace`, `bpf`, `keyctl`,
   `io_uring` setup, raw/packet sockets) that namespaces alone leave reachable in
-  the *guest* kernel. Paired with Landlock (path/port semantics) and namespaces
-  + cgroups (workspace and resource isolation), this is what brings the agent
-  layer up to a well-configured container's strength — see the Landlock deep
-  dive above for why that is container-strength, not VM-strength.
+  the _guest_ kernel. Paired with Landlock (path/port semantics) and namespaces
+  - cgroups (workspace and resource isolation), this is what brings the agent
+    layer up to a well-configured container's strength — see the Landlock deep
+    dive above for why that is container-strength, not VM-strength.
 
 So fastenv ends up running seccomp in both layers, pointed in opposite
 directions: hardening the **agent inside the VM**, and (via Firecracker)
@@ -610,7 +610,7 @@ load-bearing wall.
 
 ---
 
-## Where fastenv's choice is *not* better
+## Where fastenv's choice is _not_ better
 
 Stating the boundaries honestly:
 
@@ -621,7 +621,7 @@ Stating the boundaries honestly:
 - **One-agent-per-project workloads.** With no fan-out, the inner container
   layer earns little, and a VM-per-agent design (D) is comparably good and
   conceptually simpler.
-- **Hard per-agent hostile isolation.** If agents on the *same* repo must be
+- **Hard per-agent hostile isolation.** If agents on the _same_ repo must be
   mutually hardware-isolated (e.g. running genuinely adversarial code against
   each other within one project), the container layer is too weak and you want
   Kata/per-agent VMs (C/D) despite the cost. fastenv assumes intra-project

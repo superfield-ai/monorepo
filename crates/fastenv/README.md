@@ -26,17 +26,20 @@ similar coding agents.
 ## What fastenv isolates
 
 **Isolated per project VM**
+
 - Project code and dependency scripts
 - Project-local caches
 - Project-local network policy
 - Project-local secrets, if any
 
 **Isolated per agent container inside the VM**
+
 - Filesystem writes through copy-on-write overlays
 - Process trees and temp directories
 - Per-agent resource limits
 
 **Observed and governed by the host**
+
 - Firecracker lifecycle and jailer policy
 - Network attachment and egress policy
 - Artifact export and patch validation
@@ -125,5 +128,6 @@ protecting the host on its own.
 fastenv is a component of [Superfield](https://github.com/superfield-ai/superfield-cli-ts) - an Agent Integrated Development Environment. The role of fastenv is to provide the isolation and execution substrate for agent work, while the control plane retains policy and artifact ownership.
 
 Related:
+
 - [`superfield-ai/sharp`](https://github.com/superfield-ai/sharp) - agent-native VCS, backwards-compatible with Git
 - [`superfield-ai/nexum`](https://github.com/superfield-ai/nexum) - self-improving synthetic corpus for agent skills

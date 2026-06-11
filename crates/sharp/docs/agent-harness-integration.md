@@ -73,15 +73,15 @@ TS prototype). `seq` preserves intra-episode ordering, which replay relies on.
 directed `episode_relations` edge, idempotent via `ON CONFLICT DO NOTHING`. By
 convention:
 
-- *Fan-out siblings*: every worker links to every peer with `Sibling`.
-- *Winner selection*: each loser links to the winner with `SupersededBy`. The
+- _Fan-out siblings_: every worker links to every peer with `Sibling`.
+- _Winner selection_: each loser links to the winner with `SupersededBy`. The
   losing-sibling rows are the retained negative-example corpus.
-- *Retry*: a fresh attempt from the same parent links to its predecessor with `RetryOf`.
-- *Replay*: a re-run links to the original with `ReplayOf`.
+- _Retry_: a fresh attempt from the same parent links to its predecessor with `RetryOf`.
+- _Replay_: a re-run links to the original with `ReplayOf`.
 
 **Replay mechanics — how an episode ID maps to a runnable replay request.** An
 archived episode's provenance tuple (`parent_commit`, `agent_identity`,
-`tool_versions`) plus its `prompt`/`context` artifacts *are* the replay request.
+`tool_versions`) plus its `prompt`/`context` artifacts _are_ the replay request.
 To replay episode E against a new model: read `find`/`list_filtered` for the
 provenance, `list_artifacts(E)` for the inputs, open a new episode via
 `open_with_provenance` reusing `parent_commit`/`agent_identity`/`tool_versions`
@@ -243,8 +243,8 @@ best-effort: the signal row is committed even if the episode is already finished
   the TS library, but the harness owns the inline-vs-CAS decision and the
   payload-size discipline the TS server enforced server-side.
 - **Append-only facts, mutable annotations.** Redaction is destructive by design
-  (`redact` clears the payload, keeps an audit row) — provenance of *what was
-  scrubbed* survives; the original content does not.
+  (`redact` clears the payload, keeps an audit row) — provenance of _what was
+  scrubbed_ survives; the original content does not.
 - **Idempotent links** make double-linking safe but mean a wrong-direction edge
   is silently retained; the harness owns link-direction correctness.
 
@@ -270,4 +270,7 @@ best-effort: the signal row is committed even if the episode is already finished
   `PgPool`. The TS prototype's HTTP server + `@sharp/episodes` client
   (`openEpisode`/`appendArtifact`/`finish`/`replay`) is the only networked
   surface and is deprecated; a Rust server/client equivalent is not yet shipped.
+
+```
+
 ```

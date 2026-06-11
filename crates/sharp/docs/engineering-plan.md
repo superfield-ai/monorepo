@@ -585,8 +585,8 @@ Design notes:
 
 ```typescript
 const replayed = await ep.replay({
-  model_id: 'claude-opus-4-8', // override one or more provenance fields
-  harness_version: '0.2.0',
+  model_id: "claude-opus-4-8", // override one or more provenance fields
+  harness_version: "0.2.0",
 });
 ```
 

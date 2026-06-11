@@ -43,15 +43,15 @@ time.
 
 ### Kernel version requirements
 
-| Feature | Minimum kernel | Notes |
-|---|---|---|
-| `CONFIG_DEBUG_INFO_BTF` | 5.2 | First release with in-kernel BTF |
-| `BPF_PROG_TYPE_TRACEPOINT` | 4.7 | Available but not CO-RE-ready without BTF |
-| `BPF_PROG_TYPE_LSM` | 5.7 | Requires `CONFIG_BPF_LSM=y` + `lsm=bpf` boot param |
-| `BPF_PROG_TYPE_CGROUP_SKB` | 4.10 | cgroup v2 required; must be mounted |
-| CO-RE type relocation (libbpf) | 5.2 + BTF | `BPF_BTF_LOAD` syscall present |
-| Aya CO-RE relocation | 5.2 + BTF | Same requirement as libbpf CO-RE |
-| BTF-aware verifier | 5.2 | `bpftool prog dump` requires this |
+| Feature                        | Minimum kernel | Notes                                              |
+| ------------------------------ | -------------- | -------------------------------------------------- |
+| `CONFIG_DEBUG_INFO_BTF`        | 5.2            | First release with in-kernel BTF                   |
+| `BPF_PROG_TYPE_TRACEPOINT`     | 4.7            | Available but not CO-RE-ready without BTF          |
+| `BPF_PROG_TYPE_LSM`            | 5.7            | Requires `CONFIG_BPF_LSM=y` + `lsm=bpf` boot param |
+| `BPF_PROG_TYPE_CGROUP_SKB`     | 4.10           | cgroup v2 required; must be mounted                |
+| CO-RE type relocation (libbpf) | 5.2 + BTF      | `BPF_BTF_LOAD` syscall present                     |
+| Aya CO-RE relocation           | 5.2 + BTF      | Same requirement as libbpf CO-RE                   |
+| BTF-aware verifier             | 5.2            | `bpftool prog dump` requires this                  |
 
 **Minimum viable guest kernel for this scout's requirements: Linux 5.7**
 (covers LSM, CO-RE, tracepoint, cgroup_skb in one baseline).
@@ -60,11 +60,11 @@ The quickstart kernel (4.14.174) used in #72 satisfies **none** of these.
 
 ### Go/no-go decision
 
-| Capability | Decision | Condition |
-|---|---|---|
-| CO-RE / BTF support | **GO — conditional** | Guest kernel must be ≥ 5.2 with `CONFIG_DEBUG_INFO_BTF=y` |
-| Quickstart kernel (4.14.174) | **BLOCK** | Too old; must be replaced before #93 can proceed |
-| Host kernel (5.15) BTF | **GO** | `CONFIG_DEBUG_INFO_BTF=y` confirmed on host; serves as reference |
+| Capability                   | Decision             | Condition                                                        |
+| ---------------------------- | -------------------- | ---------------------------------------------------------------- |
+| CO-RE / BTF support          | **GO — conditional** | Guest kernel must be ≥ 5.2 with `CONFIG_DEBUG_INFO_BTF=y`        |
+| Quickstart kernel (4.14.174) | **BLOCK**            | Too old; must be replaced before #93 can proceed                 |
+| Host kernel (5.15) BTF       | **GO**               | `CONFIG_DEBUG_INFO_BTF=y` confirmed on host; serves as reference |
 
 **Finding:** The project VM must ship a custom guest kernel ≥ 5.7 with
 `CONFIG_DEBUG_INFO_BTF=y`, `CONFIG_BPF_LSM=y`, and cgroup v2 enabled.
@@ -98,12 +98,12 @@ BOOT: cgroup_no_v1=all         # optional: force cgroup v2 only
 
 ### Go/no-go per program type
 
-| Program type | Decision | Notes |
-|---|---|---|
-| `BPF_PROG_TYPE_TRACEPOINT` | **GO** | Available ≥ kernel 4.7; CO-RE requires 5.2+ BTF |
-| `BPF_PROG_TYPE_LSM` | **GO — conditional** | Requires `CONFIG_BPF_LSM=y` + `lsm=bpf` boot param; ≥ kernel 5.7 |
-| `BPF_PROG_TYPE_CGROUP_SKB` | **GO — conditional** | Requires `CONFIG_CGROUP_BPF=y` + cgroup v2 mount in guest |
-| CO-RE type relocation for all | **GO — conditional** | All three require `CONFIG_DEBUG_INFO_BTF=y` in guest kernel |
+| Program type                  | Decision             | Notes                                                            |
+| ----------------------------- | -------------------- | ---------------------------------------------------------------- |
+| `BPF_PROG_TYPE_TRACEPOINT`    | **GO**               | Available ≥ kernel 4.7; CO-RE requires 5.2+ BTF                  |
+| `BPF_PROG_TYPE_LSM`           | **GO — conditional** | Requires `CONFIG_BPF_LSM=y` + `lsm=bpf` boot param; ≥ kernel 5.7 |
+| `BPF_PROG_TYPE_CGROUP_SKB`    | **GO — conditional** | Requires `CONFIG_CGROUP_BPF=y` + cgroup v2 mount in guest        |
+| CO-RE type relocation for all | **GO — conditional** | All three require `CONFIG_DEBUG_INFO_BTF=y` in guest kernel      |
 
 **Finding for #93:** Guest kernel image for the project VM must be compiled
 with all four `CONFIG_` options set to `y`. The boot parameter `lsm=bpf` must
@@ -116,25 +116,26 @@ cgroup v2 must be mounted in the guest rootfs (`/sys/fs/cgroup` as cgroup2).
 
 ### Assessment criteria
 
-| Criterion | Aya | libbpf |
-|---|---|---|
-| Language | Rust (aligns with fastenv codebase) | C (foreign dependency) |
-| CO-RE support | Yes — via `aya` crate ≥ 0.13 | Yes — reference implementation |
-| Cargo integration | Yes (`aya`, `aya-bpf`, `aya-log`) | No — requires build.rs + bindgen |
-| No libc linking required | Yes | No — links against libc |
-| Binary size in guest | Smaller (no C runtime overhead) | Larger |
-| Maturity | Production use at major companies | Reference implementation, stable API |
-| BPF skeleton / CO-RE maps | `aya::maps` API | `BPF_MAP_TYPE_*` via libbpf skeleton |
-| LSM program support | Yes (≥ aya 0.13) | Yes |
-| tracepoint support | Yes | Yes |
-| cgroup_skb support | Yes | Yes |
-| Guest cross-compile complexity | Moderate (Rust cross-target: `x86_64-unknown-linux-musl`) | High (C cross-compile + sysroot) |
+| Criterion                      | Aya                                                       | libbpf                               |
+| ------------------------------ | --------------------------------------------------------- | ------------------------------------ |
+| Language                       | Rust (aligns with fastenv codebase)                       | C (foreign dependency)               |
+| CO-RE support                  | Yes — via `aya` crate ≥ 0.13                              | Yes — reference implementation       |
+| Cargo integration              | Yes (`aya`, `aya-bpf`, `aya-log`)                         | No — requires build.rs + bindgen     |
+| No libc linking required       | Yes                                                       | No — links against libc              |
+| Binary size in guest           | Smaller (no C runtime overhead)                           | Larger                               |
+| Maturity                       | Production use at major companies                         | Reference implementation, stable API |
+| BPF skeleton / CO-RE maps      | `aya::maps` API                                           | `BPF_MAP_TYPE_*` via libbpf skeleton |
+| LSM program support            | Yes (≥ aya 0.13)                                          | Yes                                  |
+| tracepoint support             | Yes                                                       | Yes                                  |
+| cgroup_skb support             | Yes                                                       | Yes                                  |
+| Guest cross-compile complexity | Moderate (Rust cross-target: `x86_64-unknown-linux-musl`) | High (C cross-compile + sysroot)     |
 
 ### Go/no-go decision
 
 **Decision: GO — Aya (Rust)**
 
 Rationale:
+
 1. fastenv is an all-Rust codebase. Adding libbpf would require a C toolchain
    in the build environment, bindgen, and a libc dependency in the guest image.
 2. Aya supports all three required program types (tracepoint, LSM, cgroup_skb)
@@ -169,12 +170,12 @@ directly observe each other's maps or programs**.
 
 ### Potential conflict surfaces
 
-| Surface | Risk | Mitigation |
-|---|---|---|
-| Host and guest both load tracepoint programs | None — separate kernel BPF tables | No action needed |
-| Host eBPF policy rejects guest BPF syscall from Firecracker | Low | Host policy must allow `BPF_PROG_LOAD` from the `firecracker` or `jailer` process group |
-| cgroup hierarchy overlap (host cgroup v2 path for Firecracker vs guest cgroup v2 path) | Medium | Firecracker mounts its own cgroup namespace; guest cgroup v2 is separate |
-| Host bpf prog list grows due to guest programs | None — guest BPF lives in guest kernel memory | Verified in #72: host `bpftool prog list` does not show guest programs |
+| Surface                                                                                | Risk                                          | Mitigation                                                                              |
+| -------------------------------------------------------------------------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Host and guest both load tracepoint programs                                           | None — separate kernel BPF tables             | No action needed                                                                        |
+| Host eBPF policy rejects guest BPF syscall from Firecracker                            | Low                                           | Host policy must allow `BPF_PROG_LOAD` from the `firecracker` or `jailer` process group |
+| cgroup hierarchy overlap (host cgroup v2 path for Firecracker vs guest cgroup v2 path) | Medium                                        | Firecracker mounts its own cgroup namespace; guest cgroup v2 is separate                |
+| Host bpf prog list grows due to guest programs                                         | None — guest BPF lives in guest kernel memory | Verified in #72: host `bpftool prog list` does not show guest programs                  |
 
 ### Go/no-go decision
 
@@ -197,28 +198,28 @@ from `/proc/mounts`.
 
 ### #93 (guest eBPF policy loader)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Guest kernel lacks `CONFIG_DEBUG_INFO_BTF` | **High** | Probe BTF at loader startup; return `GuestEbpfError::NoBtf` if absent |
-| `lsm=bpf` not in guest boot args | **High** | Detect by attempting `BPF_PROG_TYPE_LSM` load; fall back to tracepoint-only mode |
-| cgroup v2 not mounted in guest rootfs | **Medium** | Check `/proc/mounts` for `cgroup2` type before attaching `cgroup_skb` |
-| Aya CO-RE relocation fails for complex maps | **Medium** | Use flat `HashMap` BPF maps; avoid nested struct rewrites in initial implementation |
-| Guest kernel < 5.7 shipped in production image | **High** | Guest kernel version check must gate the entire loader; fail fast with clear error |
-| musl cross-compile target not in CI | **Low** | Add `x86_64-unknown-linux-musl` to rustup targets in CI; already supported by Rust toolchain |
+| Risk                                           | Severity   | Mitigation                                                                                   |
+| ---------------------------------------------- | ---------- | -------------------------------------------------------------------------------------------- |
+| Guest kernel lacks `CONFIG_DEBUG_INFO_BTF`     | **High**   | Probe BTF at loader startup; return `GuestEbpfError::NoBtf` if absent                        |
+| `lsm=bpf` not in guest boot args               | **High**   | Detect by attempting `BPF_PROG_TYPE_LSM` load; fall back to tracepoint-only mode             |
+| cgroup v2 not mounted in guest rootfs          | **Medium** | Check `/proc/mounts` for `cgroup2` type before attaching `cgroup_skb`                        |
+| Aya CO-RE relocation fails for complex maps    | **Medium** | Use flat `HashMap` BPF maps; avoid nested struct rewrites in initial implementation          |
+| Guest kernel < 5.7 shipped in production image | **High**   | Guest kernel version check must gate the entire loader; fail fast with clear error           |
+| musl cross-compile target not in CI            | **Low**    | Add `x86_64-unknown-linux-musl` to rustup targets in CI; already supported by Rust toolchain |
 
 ### #96 (guest harness)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Guest harness boots quickstart kernel (4.14) | **High** | Guest harness must use the upgraded guest kernel with BTF; block #96 on kernel image availability |
-| BTF probe step missing from guest harness | **Medium** | Add kernel config check (`/proc/config.gz` or `/boot/config`) as first step in guest harness |
+| Risk                                         | Severity   | Mitigation                                                                                        |
+| -------------------------------------------- | ---------- | ------------------------------------------------------------------------------------------------- |
+| Guest harness boots quickstart kernel (4.14) | **High**   | Guest harness must use the upgraded guest kernel with BTF; block #96 on kernel image availability |
+| BTF probe step missing from guest harness    | **Medium** | Add kernel config check (`/proc/config.gz` or `/boot/config`) as first step in guest harness      |
 
 ### #97 (benchmark harness)
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| eBPF overhead measured on non-BTF guest kernel | **High** | Benchmark must gate eBPF overhead measurement on guest BTF availability |
-| Aya loader startup latency not measured separately | **Low** | Benchmark should time loader init separately from program attach |
+| Risk                                               | Severity | Mitigation                                                              |
+| -------------------------------------------------- | -------- | ----------------------------------------------------------------------- |
+| eBPF overhead measured on non-BTF guest kernel     | **High** | Benchmark must gate eBPF overhead measurement on guest BTF availability |
+| Aya loader startup latency not measured separately | **Low**  | Benchmark should time loader init separately from program attach        |
 
 ---
 
@@ -247,15 +248,15 @@ integration point.
 
 ## Summary
 
-| Capability | Decision | Condition |
-|---|---|---|
-| CO-RE / BTF in guest kernel | **GO (conditional)** | Guest kernel ≥ 5.2 with `CONFIG_DEBUG_INFO_BTF=y` |
-| Quickstart kernel (4.14) as baseline | **BLOCK** | Must replace with kernel ≥ 5.7 before #93 |
-| `BPF_PROG_TYPE_TRACEPOINT` | **GO** | Available once BTF kernel is in place |
-| `BPF_PROG_TYPE_LSM` | **GO (conditional)** | Requires `CONFIG_BPF_LSM=y` + `lsm=bpf` boot arg |
-| `BPF_PROG_TYPE_CGROUP_SKB` | **GO (conditional)** | Requires `CONFIG_CGROUP_BPF=y` + cgroup v2 in guest |
-| Preferred loader: Aya (Rust) | **GO** | Aya ≥ 0.13 supports all required types; aligns with Rust codebase |
-| libbpf (C) as loader | **NO** | C foreign dependency unjustified given Aya coverage |
-| Guest vs host eBPF conflict | **GO (no conflict)** | Firecracker VM isolation prevents cross-kernel BPF visibility |
+| Capability                           | Decision             | Condition                                                         |
+| ------------------------------------ | -------------------- | ----------------------------------------------------------------- |
+| CO-RE / BTF in guest kernel          | **GO (conditional)** | Guest kernel ≥ 5.2 with `CONFIG_DEBUG_INFO_BTF=y`                 |
+| Quickstart kernel (4.14) as baseline | **BLOCK**            | Must replace with kernel ≥ 5.7 before #93                         |
+| `BPF_PROG_TYPE_TRACEPOINT`           | **GO**               | Available once BTF kernel is in place                             |
+| `BPF_PROG_TYPE_LSM`                  | **GO (conditional)** | Requires `CONFIG_BPF_LSM=y` + `lsm=bpf` boot arg                  |
+| `BPF_PROG_TYPE_CGROUP_SKB`           | **GO (conditional)** | Requires `CONFIG_CGROUP_BPF=y` + cgroup v2 in guest               |
+| Preferred loader: Aya (Rust)         | **GO**               | Aya ≥ 0.13 supports all required types; aligns with Rust codebase |
+| libbpf (C) as loader                 | **NO**               | C foreign dependency unjustified given Aya coverage               |
+| Guest vs host eBPF conflict          | **GO (no conflict)** | Firecracker VM isolation prevents cross-kernel BPF visibility     |
 
 No production code was changed in this scout.
