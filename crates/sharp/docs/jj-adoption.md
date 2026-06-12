@@ -10,8 +10,8 @@ representation is compared against CRDTs and patch theory in
 a snapshot substrate while still getting `jj`-style first-class conflicts (item §4 below)
 is argued in [`snapshots-vs-patches.md`](./snapshots-vs-patches.md).
 
-A framing note up front: we adopt these ideas because they are *better suited to agent
-fleets than to `jj`'s own human audience*. `jj` built lock-free concurrency for the rare
+A framing note up front: we adopt these ideas because they are _better suited to agent
+fleets than to `jj`'s own human audience_. `jj` built lock-free concurrency for the rare
 case of two terminals racing; Sharp's normal case is N agents racing. `jj` treats a
 divergent change as an anomaly; Sharp's fan-out makes divergence the workload. Most of
 what follows is `jj`'s mechanism with its polarity inverted.
@@ -47,8 +47,8 @@ just "point the repo at an earlier operation." Nothing is deleted; rewound commi
 hidden but stay addressable by commit ID.
 
 **What Sharp adopts.** Every operation is tagged with the **episode** that performed it.
-"Abort this agent run" becomes *restore the view to the operation before the episode
-began* — one atomic, total rollback of the run's ref and metadata effects. The episode
+"Abort this agent run" becomes _restore the view to the operation before the episode
+began_ — one atomic, total rollback of the run's ref and metadata effects. The episode
 record and all its commits survive as labeled (negative-example) corpus, per whitepaper
 §5.3.
 
@@ -63,7 +63,7 @@ from the commit ID that moves on every amend or rebase. When one change ID has m
 visible commits, `jj` calls it a **divergent change** — an anomaly to be repaired.
 
 **What Sharp adopts.** The primitive, with its polarity inverted. The change ID is the
-**task/intent ID**. A fan-out of N candidate implementations is a *deliberately*
+**task/intent ID**. A fan-out of N candidate implementations is a _deliberately_
 divergent change: N sibling commits sharing one change ID, addressable as `task/0`,
 `task/1`, …. Selection — judge, downstream oracle, or human — is what resolves the
 divergence to one visible commit. The losers become hidden-but-addressable, feeding the
@@ -83,7 +83,7 @@ recursive nesting — and reverting a conflicted commit cancels to a clean tree.
 Materialization is lazy. Resolutions, once made, propagate to descendants.
 
 **What Sharp adopts.** The Tier 3 **structured dilemma** (whitepaper §6.5) is upgraded
-from a terminal report to a *live algebraic term* over tree/AST states, re-simplified
+from a terminal report to a _live algebraic term_ over tree/AST states, re-simplified
 every time the speculative-merge projection (§6.7) recomputes. A dilemma whose
 conflicting side is later reverted, superseded by a sibling, or rendered moot by upstream
 changes cancels to a resolution with no agent ever touching it — the pipeline unsticks
@@ -92,8 +92,8 @@ resolution is memoized against the canonical term and applied automatically to e
 descendant projection carrying the same term, so the fleet pays for each genuine decision
 exactly once.
 
-**Why it matters for agents.** Both properties depend on the term being a *canonical,
-deterministic* description of the divergence — any node computing the same merge derives
+**Why it matters for agents.** Both properties depend on the term being a _canonical,
+deterministic_ description of the divergence — any node computing the same merge derives
 the byte-identical term. That determinism (not auto-convergence; see
 comparison-merge-theories.md) is what makes memoized resolution safe.
 
@@ -114,7 +114,7 @@ which, for Sharp's training and evaluation consumers, is precisely the point.
 
 ## 6. Automatic snapshotting: agents never have dirty state
 
-**The `jj` idea.** The working copy *is* a commit, snapshotted automatically before every
+**The `jj` idea.** The working copy _is_ a commit, snapshotted automatically before every
 command. "Uncommitted state" does not exist; the staging area is deleted.
 
 **What Sharp adopts.** The harness snapshots at every tool-step boundary, so an episode's
@@ -165,22 +165,22 @@ was.
   API abstracted from storage — but Sharp stays Postgres-only by design (whitepaper
   §2.2). Our workload wants one query engine, not a portability layer.
 - **CLI-first interaction and revsets as a user interface.** Sharp's primary surface is
-  library + HTTP + SQL (§2.5 of the comparison doc). We adopt the revset *vocabulary*
+  library + HTTP + SQL (§2.5 of the comparison doc). We adopt the revset _vocabulary_
   (§8 above), not the terminal-first posture.
 - **Conflict deferral to a human.** `jj` records a conflict and waits for a person; in a
   lights-out harness there is no person and no "later." Sharp dissolves conflicts
   deterministically or escalates a structured dilemma — the algebra of §4 makes deferral
-  *safe to represent*, but resolution remains the pipeline's job, on the pipeline's
+  _safe to represent_, but resolution remains the pipeline's job, on the pipeline's
   clock.
 
 ---
 
 ## Adoption order and dependencies
 
-| Stage | Items | Rationale |
-| --- | --- | --- |
-| 1 | §1 + §2 (operation/view layer, episode-scoped undo) | One feature; the highest-leverage structural change. Fleet-safe concurrency and atomic rollback at once. Everything else records into it. |
-| 2 | §3 + §7 (change IDs, anonymous heads) | One schema change; makes fan-out first-class. Depends on the view (stage 1) to track anonymous heads. |
-| 3 | §8 (revset vocabulary) | Cheap, immediately useful, independent — can land any time after stage 1 defines the view tables. |
-| 4 | §5 + §6 (workspaces, auto-snapshot) | Client/harness boundary work; depends on stage 1 (views record workspace commits) and benefits from stage 2 (recovery commits need episode identity). |
-| 5 | §4 (algebraic dilemma terms) | The deepest merge-engine investment; compounds with the projection machinery and pays off most once stages 1–2 give terms canonical identity. |
+| Stage | Items                                               | Rationale                                                                                                                                             |
+| ----- | --------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1     | §1 + §2 (operation/view layer, episode-scoped undo) | One feature; the highest-leverage structural change. Fleet-safe concurrency and atomic rollback at once. Everything else records into it.             |
+| 2     | §3 + §7 (change IDs, anonymous heads)               | One schema change; makes fan-out first-class. Depends on the view (stage 1) to track anonymous heads.                                                 |
+| 3     | §8 (revset vocabulary)                              | Cheap, immediately useful, independent — can land any time after stage 1 defines the view tables.                                                     |
+| 4     | §5 + §6 (workspaces, auto-snapshot)                 | Client/harness boundary work; depends on stage 1 (views record workspace commits) and benefits from stage 2 (recovery commits need episode identity). |
+| 5     | §4 (algebraic dilemma terms)                        | The deepest merge-engine investment; compounds with the projection machinery and pays off most once stages 1–2 give terms canonical identity.         |

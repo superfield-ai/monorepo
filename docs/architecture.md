@@ -176,11 +176,11 @@ Rejected alternatives:
 
 Every vector column across all stores must match the governed standard. Current inventory:
 
-| Component | Schema  | Table    | Column           | Declared dimension | Status                                                |
-| --------- | ------- | -------- | ---------------- | ------------------ | ----------------------------------------------------- |
-| Nexum     | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live                   |
-| Nexum     | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — stub; population tracked in issue #75    |
-| Sharp     | `sharp` | —        | —                | —                  | No vector columns yet; pgvector not installed         |
+| Component | Schema  | Table    | Column           | Declared dimension | Status                                             |
+| --------- | ------- | -------- | ---------------- | ------------------ | -------------------------------------------------- |
+| Nexum     | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live                |
+| Nexum     | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — stub; population tracked in issue #75 |
+| Sharp     | `sharp` | —        | —                | —                  | No vector columns yet; pgvector not installed      |
 
 When Sharp or any future component adds a vector column it **must** declare `vector(384)` and reference this section.
 
@@ -297,4 +297,3 @@ A real implementation will:
 1. Receive a [`BackupEvent`] from the backup job runner on successful `pg_basebackup` completion.
 2. Insert a row into a `substrate.backup_events` table (schema to be defined).
 3. Expose the latest event via [`SubstrateBackup::latest`] for health check queries.
-

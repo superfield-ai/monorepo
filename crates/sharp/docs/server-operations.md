@@ -4,8 +4,8 @@ Operational reference for running Sharp against PostgreSQL: provisioning,
 schema migration, scaling, monitoring, disaster recovery, and security.
 
 This document complements [`server-config.md`](./server-config.md), which is
-the environment-variable reference. Where that doc describes *what knobs exist*,
-this one describes *how to run the thing in production* and — importantly —
+the environment-variable reference. Where that doc describes _what knobs exist_,
+this one describes _how to run the thing in production_ and — importantly —
 calls out where the documented surface area is currently ahead of the
 authoritative Rust crate.
 
@@ -22,7 +22,7 @@ authoritative Rust crate.
 
 ## 1. Problem Statement
 
-Sharp stores a version-control object graph *and* an agent-episode forensic
+Sharp stores a version-control object graph _and_ an agent-episode forensic
 record in the same PostgreSQL instance. Operating it well means treating
 Postgres as the system of record for both blobs and metadata: a lost or
 corrupted database is a lost repository and a lost audit trail. The operational
@@ -51,7 +51,7 @@ columns rather than a dedicated CAS.
   XOR), `episode_relations`, and the `episode_redactions` audit log. Provenance
   columns (`model_id`, `agent_identity`, `harness_version`, `tool_versions`,
   `decoding_params`, `parent_commit`, `promoted_commit`) make Sharp a forensic
-  record of *what harness ran when a commit landed*.
+  record of _what harness ran when a commit landed_.
 - **Projections.** `sharp.projections` caches speculative-merge results per
   `(repo_id, branch_ref, target_ref)`; an `AFTER INSERT OR UPDATE` trigger on
   `sharp.refs` (`mark_projections_stale`) invalidates them lazily.
@@ -80,27 +80,27 @@ the template for the Rust server binary once it lands.
 Migrations are plain SQL files in `crates/sharp/migrations/`, applied in
 lexicographic order:
 
-| File | Adds |
-| --- | --- |
-| `0001_sharp_vcs_schema.sql` | `repos`, `objects`, `refs`, `commit_metadata`, `commit_paths` |
-| `0002_sharp_episode_schema.sql` | `episodes`, `episode_events`, `episode_artifacts`, `episode_links` |
-| `0003_sharp_git_interop.sql` | `git_objects`, `git_refs` |
-| `0004_sharp_runtime_signal.sql` | `runtime_signals` |
-| `0005_sharp_refs_model.sql` | refs `target_kind` + `symbolic_target`, XOR check |
-| `0006_sharp_episode_model.sql` | `episode_typed_artifacts`, provenance columns, `episode_relations`, `episode_redactions` |
-| `0007_sharp_projections.sql` | `projections` + `mark_projections_stale()` trigger |
+| File                            | Adds                                                                                     |
+| ------------------------------- | ---------------------------------------------------------------------------------------- |
+| `0001_sharp_vcs_schema.sql`     | `repos`, `objects`, `refs`, `commit_metadata`, `commit_paths`                            |
+| `0002_sharp_episode_schema.sql` | `episodes`, `episode_events`, `episode_artifacts`, `episode_links`                       |
+| `0003_sharp_git_interop.sql`    | `git_objects`, `git_refs`                                                                |
+| `0004_sharp_runtime_signal.sql` | `runtime_signals`                                                                        |
+| `0005_sharp_refs_model.sql`     | refs `target_kind` + `symbolic_target`, XOR check                                        |
+| `0006_sharp_episode_model.sql`  | `episode_typed_artifacts`, provenance columns, `episode_relations`, `episode_redactions` |
+| `0007_sharp_projections.sql`    | `projections` + `mark_projections_stale()` trigger                                       |
 
 **Forward-only, idempotent.** Every file opens with
 `CREATE SCHEMA IF NOT EXISTS` / `CREATE TABLE IF NOT EXISTS` / `ADD COLUMN IF
 NOT EXISTS`, and `0005`/`0007` guard constraint and trigger creation with
 `DO $$ … $$` / `CREATE OR REPLACE`. There are **no down-migrations** — rolling
-back a bad migration means shipping a *new* forward migration that undoes it.
+back a bad migration means shipping a _new_ forward migration that undoes it.
 `0005`/`0006` show the additive posture: `0005` makes `target_sha` nullable and
 adds the discriminator without dropping data; `0006` adds the complete episode
-model *alongside* the generic one (sf-cli and superfield depend on the original
+model _alongside_ the generic one (sf-cli and superfield depend on the original
 columns) rather than replacing it.
 
-**Implemented vs. planned.** The Rust crate ships the migration *files* but
+**Implemented vs. planned.** The Rust crate ships the migration _files_ but
 **not a runner** — there is no `schema_migrations` table, no `sqlx::migrate!`
 macro, and no `SHARP_MIGRATE_ON_BOOT` handling in the crate today. The
 prototype (`deprecated/sharp-ts/.../migrate.ts`) tracks applied files in
@@ -224,13 +224,13 @@ sum(rate(sharp_episode_writes_total[1m]))
 rate(sharp_ref_cas_retries_total[5m])
 ```
 
-| Signal | Target (v1-plan §3) | Alert |
-| --- | --- | --- |
-| commit creation p99 | < 50 ms | page if > 100 ms for 5 m |
-| 10k-file checkout/materialize | < 2 s | warn |
-| episode ingest | > 100 episodes/s | warn if sustained < 50/s |
-| ref CAS retries | low | warn on sustained climb (hot branch) |
-| slow queries (`SHARP_SLOW_QUERY_MS`, default 250 ms) | rare | warn on rate increase |
+| Signal                                               | Target (v1-plan §3) | Alert                                |
+| ---------------------------------------------------- | ------------------- | ------------------------------------ |
+| commit creation p99                                  | < 50 ms             | page if > 100 ms for 5 m             |
+| 10k-file checkout/materialize                        | < 2 s               | warn                                 |
+| episode ingest                                       | > 100 episodes/s    | warn if sustained < 50/s             |
+| ref CAS retries                                      | low                 | warn on sustained climb (hot branch) |
+| slow queries (`SHARP_SLOW_QUERY_MS`, default 250 ms) | rare                | warn on rate increase                |
 
 ---
 
@@ -258,7 +258,7 @@ rate(sharp_ref_cas_retries_total[5m])
 - **No server binary in the crate.** Auth, `/metrics`, health endpoints
   (`/healthz`, `/readyz`), structured request logging, and the migration runner
   exist only in the deprecated TS prototype. Everything in `server-config.md`'s
-  *Deployment*, *Issuing Tokens*, and *Migrations* sections describes that
+  _Deployment_, _Issuing Tokens_, and _Migrations_ sections describes that
   prototype / the target binary, not code in `crates/sharp/`.
 - **No token table in the authoritative migrations.** The prototype's
   `api_keys (token_hash bytea PK, principal, scope, created_at, revoked_at)` —
@@ -273,7 +273,7 @@ rate(sharp_ref_cas_retries_total[5m])
 - **SHA-1DC not wired.** Git intake accepts raw SHA-1 under
   `SHARP_ALLOW_RAW_SHA1`; collision-detection on intake is still a target.
 - **Metrics are targets, not measurements.** Every latency/throughput number
-  here comes from v1-plan §3 / the engineering plan as an acceptance *target*.
+  here comes from v1-plan §3 / the engineering plan as an acceptance _target_.
   v1's promise is "we measure"; hitting the thresholds is a v2 commitment.
 - **No observability deps.** `Cargo.toml` pulls in no `tracing`, `metrics`, or
   Prometheus crate — the observability surface must be added with the server

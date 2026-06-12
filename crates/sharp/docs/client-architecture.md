@@ -17,7 +17,7 @@ blobs, trees, and commits in Postgres. The client snapshots the working
 directory into canonical objects, pushes those objects and a commit to the
 server, materializes any commit's tree back onto disk byte-for-byte, and
 synchronizes refs without losing concurrent writes. Unlike Git, the object
-store is remote and shared, so the client is mostly a *projection* layer over
+store is remote and shared, so the client is mostly a _projection_ layer over
 server state rather than a self-contained repository.
 
 ## 2. Core Concepts
@@ -33,13 +33,13 @@ server state rather than a self-contained repository.
 - **Ref** — a named pointer in `sharp.refs`, either `Hash(sha)` (a branch/tag
   tip) or `Symbolic(name)` (e.g. `HEAD → refs/heads/main`); `refs.rs`
   `RefTarget`.
-- **Index / staging** *(planned)* — a local `(path, mode, blob_id, size,
-  mtime)` list under `.sharp/index`; `mtime` is staleness-only, never commit
+- **Index / staging** _(planned)_ — a local `(path, mode, blob_id, size,
+mtime)` list under `.sharp/index`; `mtime` is staleness-only, never commit
   content (`engineering-plan.md` §5.2).
 
 ## 3. Architecture / Design
 
-### 3.1 `.sharp/` shadow layout *(planned — engineering-plan §5.1)*
+### 3.1 `.sharp/` shadow layout _(planned — engineering-plan §5.1)_
 
 The Rust crate does not write this directory; it lists `.sharp` only in
 `IGNORED_DIRS` so snapshots never ingest it. The planned layout is:
@@ -57,7 +57,7 @@ my-repo/
 └── src/, README.md, …    actual working tree
 ```
 
-The token is *not* stored in `config`; `config` holds a reference into a system
+The token is _not_ stored in `config`; `config` holds a reference into a system
 credential store. What **is** persisted today is entirely server-side: objects
 in `sharp.objects`, refs in `sharp.refs`, commit metadata in
 `sharp.commit_metadata`/`commit_paths`. There is no on-disk client state in the
@@ -67,7 +67,7 @@ Rust crate yet.
 
 The client tracks three views of each path — `committed` (HEAD's tree),
 `index` (staged), and `working_dir` (on disk). The implemented Rust primitives
-realize the *transitions*, even though the persistent index that names the
+realize the _transitions_, even though the persistent index that names the
 states is still planned:
 
 ```
@@ -90,14 +90,14 @@ states is still planned:
   (everything except `.sharp/` and `.git/`) and rewrites it from a tree SHA,
   preserving modes `100644/100755/120000` and symlinks.
 
-### 3.3 Sync protocol *(planned — engineering-plan §5.4)*
+### 3.3 Sync protocol _(planned — engineering-plan §5.4)_
 
 v1 deliberately avoids Git's smart/packfile protocol. Negotiation is a
 HEAD-walk:
 
 1. Client `GET /repos/:repo/refs`, diffs against its local ref cache.
 2. For each missing ref, walk reachability by issuing `HEAD
-   /repos/:repo/objects/:id` until it hits an object it already has, building a
+/repos/:repo/objects/:id` until it hits an object it already has, building a
    "want" list. Cost is `O(refs × walk-depth)` HEAD requests.
 3. Stream `GET /repos/:repo/objects/:id` for each want.
 
@@ -148,17 +148,17 @@ implemented; the TS `cli.ts` only exposes `dev`, `admin`, `repo`, `ref`, and
 State snapshots below mix the implemented Rust calls with the planned client
 wrapper.
 
-1. **clone** *(planned)*: `init` writes `.sharp/`, sets `HEAD →
-   refs/heads/main`; negotiation (§3.3) fetches reachable objects; the default
+1. **clone** _(planned)_: `init` writes `.sharp/`, sets `HEAD →
+refs/heads/main`; negotiation (§3.3) fetches reachable objects; the default
    branch is materialized via `materialize_tree(pool, head_tree, ".")`.
-   *State:* `committed == index == working_dir`; index clean.
+   _State:_ `committed == index == working_dir`; index clean.
 
-2. **edit** `src/lib.rs` on disk. *State:* `working_dir ≠ index` (modified).
+2. **edit** `src/lib.rs` on disk. _State:_ `working_dir ≠ index` (modified).
 
 3. **add**: `snapshot_working_tree` walks the root (skipping
    `.git/.sharp/node_modules/target/dist/.cargo`), stores the new blob under
    its canonical SHA-256, and stages `("src/lib.rs", 100644, <blob_sha>)`.
-   *State:* `index ≠ committed`, `index == working_dir` (staged).
+   _State:_ `index ≠ committed`, `index == working_dir` (staged).
 
 4. **commit**: `build_tree_from_snapshot` produces `root_tree_sha`; then
 
@@ -169,10 +169,10 @@ wrapper.
    ```
 
    `commit` stores the commit object, writes `commit_metadata`/`commit_paths`,
-   and `set_ref`s `refs/heads/main → sha`. *State:* `committed' == index ==
-   working_dir`.
+   and `set_ref`s `refs/heads/main → sha`. _State:_ `committed' == index ==
+working_dir`.
 
-5. **push** *(planned)*: re-puts any objects the server lacks, then
+5. **push** _(planned)_: re-puts any objects the server lacks, then
    `update_ref(repo_id, "refs/heads/main", expected_old = remembered, sha)`.
    On `RefCasFailed`, the client refuses and reports the observed tip so the
    user can pull and retry.

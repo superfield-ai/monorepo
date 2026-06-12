@@ -21,7 +21,7 @@ means Sharp by itself will happily produce a merged tree that does not compile
 or lint. Hooks are the escape hatch: drop an executable into your workspace and
 Sharp runs it against the candidate merged tree, vetoing the merge if it fails.
 
-> Note: Rust merges have a *separate*, built-in `cargo check` gate
+> Note: Rust merges have a _separate_, built-in `cargo check` gate
 > (`cargo_check.rs`, invoked from `semantic_merge.rs`). That is **not** a hook —
 > it always runs on the Rust language path. Hooks are the toolchain-agnostic,
 > opt-in layer on top.
@@ -39,7 +39,7 @@ pub enum HookEvent { PreCommit, PostCommit, PreMerge, PostMerge, PrePush }
 **Only `PreMerge` is wired into the engine today.** It is the single event
 `tier1.rs` discovers and runs (`run_hook_gate`). The other four variants are
 declared but have no call sites anywhere in the crate — treat `PreCommit`,
-`PostCommit`, `PostMerge`, and `PrePush` as *planned*. The `pre-receive`
+`PostCommit`, `PostMerge`, and `PrePush` as _planned_. The `pre-receive`
 server-side event described in `hooks.md` does not exist as a `HookEvent`
 variant in the Rust crate at all.
 
@@ -83,11 +83,11 @@ Each hook is spawned (`run_hook`) with:
   the Rust gate emits today — do not rely on those fields.
 - **env** = the full inherited environment plus `SHARP_HOOK=1`.
 - **timeout** = **hardcoded 60 000 ms** in `tier1.rs`. The `SHARP_HOOK_TIMEOUT_MS`
-  variable mentioned in `hooks.md` is *not* read by the current Rust code; a
+  variable mentioned in `hooks.md` is _not_ read by the current Rust code; a
   slow cold `cargo check` can hit the wall and be killed.
 
 Hooks run **sequentially**, not in parallel (`run_hooks` loops in order). The
-run **short-circuits on the first failure**: a non-zero exit *or* a timeout
+run **short-circuits on the first failure**: a non-zero exit _or_ a timeout
 stops the run and the remaining hooks do not execute. A timeout kills the child
 (dropped tokio child) and is reported as `exit_code: 137, timed_out: true`.
 
@@ -142,7 +142,7 @@ run_pre_merge_hooks(workspace_root, candidate_root, context: Option<String>)
 `HookResult { hook_path, exit_code, stdout, stderr, timed_out, duration_ms }`;
 `HookResult::ok()` is `exit_code == 0 && !timed_out`.
 
-The hook *contract* from the executable's side is dead simple: **read JSON on
+The hook _contract_ from the executable's side is dead simple: **read JSON on
 stdin if you want it, do your work in cwd, exit 0 to pass or non-zero to veto.**
 
 ---

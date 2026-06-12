@@ -206,7 +206,7 @@ the boundary it wraps (see §7).
 - **VMM layer (host side).** Firecracker installs a built-in seccomp-bpf
   allowlist on the VMM process so that a guest-to-VMM escape (a device-emulation
   or vmexit bug) is contained before it reaches the host. This wraps the
-  *hardware* boundary, not the guest.
+  _hardware_ boundary, not the guest.
 - **Agent layer (guest side).** Each `crun` container should carry a seccomp
   profile in its OCI `config.json` (`linux.seccomp`) to drop the exotic-syscall
   tail (`ptrace`, `bpf`, `keyctl`, `io_uring` setup, raw/packet sockets, etc.)
@@ -286,11 +286,11 @@ pub trait ContainerRuntime: Send + Sync {
 
 All implementations emit identical tracing span names and field keys:
 
-| Span name          | Fields                                         |
-|--------------------|------------------------------------------------|
-| `container.create` | `fork_id`, `backend`, `duration_ms`            |
+| Span name          | Fields                                           |
+| ------------------ | ------------------------------------------------ |
+| `container.create` | `fork_id`, `backend`, `duration_ms`              |
 | `container.start`  | `fork_id`, `backend`, `duration_ms`, `exit_code` |
-| `container.delete` | `fork_id`, `backend`, `duration_ms`            |
+| `container.delete` | `fork_id`, `backend`, `duration_ms`              |
 
 ### CrunBackend
 

@@ -30,14 +30,14 @@ Overlay: nodev overlay (reported in /proc/filesystems)
 
 ### Test categories
 
-| Test | Result | Notes |
-|---|---|---|
-| `gate_closed_when_env_absent` | PASS | Gate logic correct when env var unset |
-| `overlayfs_mount_missing_lower_fails` | PASS | Correctly rejects nonexistent lower dir |
-| `overlayfs_mount_unmount_roundtrip` | PASS | overlayfs mount/unmount round-trip succeeds as root |
-| `host_ebpf_load_minimal_prog` | PASS | `bpf(BPF_PROG_LOAD)` succeeds; fd=13 returned and closed |
-| `firecracker_boot_smoke_skips_without_binary` | PASS | `locate_firecracker()` returns None correctly |
-| `firecracker_boot_smoke_socket_ready` | PASS (skip) | Firecracker binary not found on PATH — skip path exercised correctly |
+| Test                                          | Result      | Notes                                                                |
+| --------------------------------------------- | ----------- | -------------------------------------------------------------------- |
+| `gate_closed_when_env_absent`                 | PASS        | Gate logic correct when env var unset                                |
+| `overlayfs_mount_missing_lower_fails`         | PASS        | Correctly rejects nonexistent lower dir                              |
+| `overlayfs_mount_unmount_roundtrip`           | PASS        | overlayfs mount/unmount round-trip succeeds as root                  |
+| `host_ebpf_load_minimal_prog`                 | PASS        | `bpf(BPF_PROG_LOAD)` succeeds; fd=13 returned and closed             |
+| `firecracker_boot_smoke_skips_without_binary` | PASS        | `locate_firecracker()` returns None correctly                        |
+| `firecracker_boot_smoke_socket_ready`         | PASS (skip) | Firecracker binary not found on PATH — skip path exercised correctly |
 
 **Result summary:** 6 passed, 0 failed, 0 ignored
 
@@ -72,17 +72,17 @@ configured and the test suite is confirmed green on this hardware.
 
 ### Test categories
 
-| Test | Result | Notes |
-|---|---|---|
-| `guest_harness_vm_provisioned_layout` | PASS | Directory layout created correctly |
-| `guest_harness_vm_tears_down_cleanly` | PASS | VM teardown returns `Stopped` state |
-| `guest_harness_full_lifecycle_state_sequence` | PASS | All six state transitions pass |
-| `guest_harness_workspace_isolation_between_containers` | PASS | Write in A not visible in B |
-| `guest_harness_export_patch_to_artifacts_dir` | PASS | Patch artifact round-trips correctly |
-| `guest_harness_ebpf_emits_audit_events_per_container` | PASS | eBPF events emitted per container |
-| `guest_harness_ebpf_loaders_are_independent_per_container` | PASS | Loaders independently scoped |
-| `guest_harness_real_vm_boots_to_running` | IGNORED | Requires KVM + Firecracker binary + guest kernel |
-| `guest_harness_real_cross_container_isolation` | IGNORED | Requires KVM + Firecracker + crun + guest kernel |
+| Test                                                       | Result  | Notes                                            |
+| ---------------------------------------------------------- | ------- | ------------------------------------------------ |
+| `guest_harness_vm_provisioned_layout`                      | PASS    | Directory layout created correctly               |
+| `guest_harness_vm_tears_down_cleanly`                      | PASS    | VM teardown returns `Stopped` state              |
+| `guest_harness_full_lifecycle_state_sequence`              | PASS    | All six state transitions pass                   |
+| `guest_harness_workspace_isolation_between_containers`     | PASS    | Write in A not visible in B                      |
+| `guest_harness_export_patch_to_artifacts_dir`              | PASS    | Patch artifact round-trips correctly             |
+| `guest_harness_ebpf_emits_audit_events_per_container`      | PASS    | eBPF events emitted per container                |
+| `guest_harness_ebpf_loaders_are_independent_per_container` | PASS    | Loaders independently scoped                     |
+| `guest_harness_real_vm_boots_to_running`                   | IGNORED | Requires KVM + Firecracker binary + guest kernel |
+| `guest_harness_real_cross_container_isolation`             | IGNORED | Requires KVM + Firecracker + crun + guest kernel |
 
 **Result summary:** 7 passed, 0 failed, 2 ignored (require full VM stack)
 
@@ -107,20 +107,20 @@ on the target runner.
 
 ### Unit tests
 
-| Test | Result | Notes |
-|---|---|---|
-| `percentile_empty_returns_zero` | PASS | Edge case handled |
-| `percentile_single_element` | PASS | Single sample = p50/p95/p99 all equal |
-| `percentile_two_elements` | PASS | Two-sample interpolation correct |
-| `percentile_sorted_result` | PASS | Multi-sample percentiles correct |
-| `bench_result_json_fork_fields` | PASS | fork_latency_us p50/p95/p99 in JSON |
-| `bench_result_json_exec_fields_present_when_some` | PASS | exec_latency_us fields present when Some |
-| `bench_result_json_vm_fields_present_when_measured` | PASS | vm.* fields present in JSON when measured |
-| `bench_result_json_vm_skipped_no_kvm` | PASS | vm.* absent from JSON when KVM not used |
-| `bench_result_vm_fields_absent_without_vm_flag` | PASS | --vm flag gates VM tier correctly |
-| `bench_result_meets_budget_false_when_p95_exceeds_100` | PASS | Budget check rejects p95 > 100 ms |
-| `kvm_accessible_does_not_panic` | PASS | KVM probe returns stable bool |
-| `ebpf_probes_do_not_panic` | PASS | eBPF overhead probe handles absent binary |
+| Test                                                   | Result | Notes                                      |
+| ------------------------------------------------------ | ------ | ------------------------------------------ |
+| `percentile_empty_returns_zero`                        | PASS   | Edge case handled                          |
+| `percentile_single_element`                            | PASS   | Single sample = p50/p95/p99 all equal      |
+| `percentile_two_elements`                              | PASS   | Two-sample interpolation correct           |
+| `percentile_sorted_result`                             | PASS   | Multi-sample percentiles correct           |
+| `bench_result_json_fork_fields`                        | PASS   | fork_latency_us p50/p95/p99 in JSON        |
+| `bench_result_json_exec_fields_present_when_some`      | PASS   | exec_latency_us fields present when Some   |
+| `bench_result_json_vm_fields_present_when_measured`    | PASS   | vm.\* fields present in JSON when measured |
+| `bench_result_json_vm_skipped_no_kvm`                  | PASS   | vm.\* absent from JSON when KVM not used   |
+| `bench_result_vm_fields_absent_without_vm_flag`        | PASS   | --vm flag gates VM tier correctly          |
+| `bench_result_meets_budget_false_when_p95_exceeds_100` | PASS   | Budget check rejects p95 > 100 ms          |
+| `kvm_accessible_does_not_panic`                        | PASS   | KVM probe returns stable bool              |
+| `ebpf_probes_do_not_panic`                             | PASS   | eBPF overhead probe handles absent binary  |
 
 **Result summary:** 12 passed, 0 failed, 0 ignored
 
@@ -159,11 +159,11 @@ gated on Firecracker installation and a seeded registry.
 
 ## 4. Summary and Cutover Decision
 
-| Harness | Tests run | Results | Cutover gate |
-|---|---|---|---|
-| Privileged host harness | 6/6 (as root) | PASS | **GO** |
-| Guest harness | 7/7 (non-VM); 2 ignored (need FC+kernel) | PASS | **CONDITIONAL GO** |
-| Benchmark harness | 12/12 unit tests | PASS | **CONDITIONAL GO** |
+| Harness                 | Tests run                                | Results | Cutover gate       |
+| ----------------------- | ---------------------------------------- | ------- | ------------------ |
+| Privileged host harness | 6/6 (as root)                            | PASS    | **GO**             |
+| Guest harness           | 7/7 (non-VM); 2 ignored (need FC+kernel) | PASS    | **CONDITIONAL GO** |
+| Benchmark harness       | 12/12 unit tests                         | PASS    | **CONDITIONAL GO** |
 
 ### Overall cutover decision: **CONDITIONAL GO**
 
@@ -185,6 +185,7 @@ infrastructure, not by code defects.
 4. Re-run with `--include-ignored` to exercise the real-VM paths.
 
 Once Firecracker and the guest kernel are available, run:
+
 ```bash
 sudo FASTENV_PRIVILEGED_TESTS=1 \
      FASTENV_FIRECRACKER_BIN=/usr/local/bin/firecracker \

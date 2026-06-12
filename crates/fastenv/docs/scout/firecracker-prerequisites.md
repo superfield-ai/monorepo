@@ -39,6 +39,7 @@ binary. It is not available in the Ubuntu APT repository; it must be downloaded
 from GitHub releases or built from source.
 
 Upstream release URL pattern:
+
 ```
 https://github.com/firecracker-microvm/firecracker/releases/download/v<version>/
   firecracker-v<version>-x86_64.tgz  (contains firecracker + jailer)
@@ -137,6 +138,7 @@ jailer --id <vm-uuid> \
 ```
 
 The jailer:
+
 1. Creates a chroot jail at `<chroot-base-dir>/firecracker/<id>/root/`.
 2. Copies the Firecracker binary into the jail root.
 3. Uses `mknod` to create `/dev/net/tun` and `/dev/kvm` inside the jail.
@@ -162,7 +164,7 @@ pass `--cgroup-version 2` explicitly.
 
 The `ProjectVmSupervisor` currently stores `firecracker_sock` as
 `<vm_dir>/firecracker.sock` (`/var/lib/fastenv/vms/<project-id>/firecracker.sock`).
-When jailer is used, the socket is created *inside* the chroot jail at
+When jailer is used, the socket is created _inside_ the chroot jail at
 `<chroot-base-dir>/firecracker/<id>/root/<api-sock>` (default: `run/firecracker.socket`).
 These paths do not match — the supervisor design must be updated to either:
 
@@ -187,6 +189,7 @@ No dedicated `firecracker` user or group exists on this runner currently.
 **BLOCK — Cgroup v2 only; jailer defaults to cgroup v1.**
 
 The VM boot implementation must:
+
 - Pass `--cgroup-version 2` to jailer explicitly.
 - Reconcile the socket path convention between `ProjectVmSupervisor` and the
   jailer chroot layout (the two paths do not match today).
@@ -209,14 +212,17 @@ No cgroup v1 controllers exist on this runner, so the jailer's default behavior
 **Default socket path (no jailer):** `/run/firecracker.socket`
 
 **Socket path via jailer:** Created inside the chroot jail. From the host:
+
 ```
 /srv/jailer/firecracker/<id>/root/run/firecracker.socket
 ```
 
 The `host_control_plane.rs` supervisor records:
+
 ```
 firecracker_sock: <vm_dir>/firecracker.sock
 ```
+
 This does not match the jailer path convention. The socket path must be
 reconciled during the VM boot implementation.
 
@@ -233,6 +239,7 @@ DELETE /             → send CtrlAltDel / power off
 ```
 
 **InstanceInfo response format (GET /):**
+
 ```json
 {
   "app_name": "Firecracker",
@@ -241,6 +248,7 @@ DELETE /             → send CtrlAltDel / power off
   "vmm_version": "1.15.1"
 }
 ```
+
 `state` enum values: `"Not started"`, `"Running"`, `"Paused"`.
 
 **Minimal boot sequence over the API socket:**
@@ -295,27 +303,27 @@ implementation issue.
 
 ### Summary table
 
-| Finding | Status | Decision |
-|---|---|---|
-| Firecracker binary | **Not installed** | BLOCK — must download from GitHub Releases before VM boot impl |
-| KVM access (runner user) | **Permission denied** | BLOCK — runner needs kvm group or jailer must be invoked as root |
-| Cgroup v2 only | **v1 absent** | BLOCK — jailer must receive `--cgroup-version 2` explicitly |
-| Socket path mismatch | **supervisor != jailer** | BLOCK — `ProjectVmRecord.firecracker_sock` path convention must be reconciled |
-| Firecracker API format | **Well-specified, v1.15.1** | GO — HTTP/JSON over UDS, minimal boot sequence documented above |
-| Jailer uid/gid mapping | **No fc-worker user** | BLOCK — dedicated non-root user must be created |
+| Finding                  | Status                      | Decision                                                                      |
+| ------------------------ | --------------------------- | ----------------------------------------------------------------------------- |
+| Firecracker binary       | **Not installed**           | BLOCK — must download from GitHub Releases before VM boot impl                |
+| KVM access (runner user) | **Permission denied**       | BLOCK — runner needs kvm group or jailer must be invoked as root              |
+| Cgroup v2 only           | **v1 absent**               | BLOCK — jailer must receive `--cgroup-version 2` explicitly                   |
+| Socket path mismatch     | **supervisor != jailer**    | BLOCK — `ProjectVmRecord.firecracker_sock` path convention must be reconciled |
+| Firecracker API format   | **Well-specified, v1.15.1** | GO — HTTP/JSON over UDS, minimal boot sequence documented above               |
+| Jailer uid/gid mapping   | **No fc-worker user**       | BLOCK — dedicated non-root user must be created                               |
 
 ### Risks for the VM boot implementation issue
 
-| Risk | Severity | Mitigation |
-|---|---|---|
-| Firecracker binary not present | Critical | Add binary download step (GitHub Releases v1.15.1) to runner setup |
-| kvm group membership | High | Add runner user to `kvm` group, or document that jailer invocation requires root |
-| cgroup v2 only / jailer default v1 | High | Always pass `--cgroup-version 2` to jailer; add assertion |
-| Socket path inside chroot vs supervisor field | High | Update `ProjectVmRecord.firecracker_sock` to reflect the jailer chroot path; or pass `--api-sock` via jailer to a fixed host-accessible path |
-| Kernel and rootfs must be inside chroot | High | Supervisor must hard-link or copy images to `<chroot-dir>/` before starting VM |
-| No jailer chroot base dir | Medium | Create `/srv/jailer` or configure `--chroot-base-dir` to `/var/lib/fastenv/jails` and ensure it exists |
-| No dedicated fc user/group | Medium | Create `fc-worker` user and group as part of host provisioning |
-| CI smoke tests need direct KVM access | Medium | Add runner to `kvm` group, or use `sudo` wrapper in CI; gate bare-metal tests on Phase 5 |
+| Risk                                          | Severity | Mitigation                                                                                                                                   |
+| --------------------------------------------- | -------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| Firecracker binary not present                | Critical | Add binary download step (GitHub Releases v1.15.1) to runner setup                                                                           |
+| kvm group membership                          | High     | Add runner user to `kvm` group, or document that jailer invocation requires root                                                             |
+| cgroup v2 only / jailer default v1            | High     | Always pass `--cgroup-version 2` to jailer; add assertion                                                                                    |
+| Socket path inside chroot vs supervisor field | High     | Update `ProjectVmRecord.firecracker_sock` to reflect the jailer chroot path; or pass `--api-sock` via jailer to a fixed host-accessible path |
+| Kernel and rootfs must be inside chroot       | High     | Supervisor must hard-link or copy images to `<chroot-dir>/` before starting VM                                                               |
+| No jailer chroot base dir                     | Medium   | Create `/srv/jailer` or configure `--chroot-base-dir` to `/var/lib/fastenv/jails` and ensure it exists                                       |
+| No dedicated fc user/group                    | Medium   | Create `fc-worker` user and group as part of host provisioning                                                                               |
+| CI smoke tests need direct KVM access         | Medium   | Add runner to `kvm` group, or use `sudo` wrapper in CI; gate bare-metal tests on Phase 5                                                     |
 
 ### Newly discovered integration points in `src/host_control_plane.rs`
 

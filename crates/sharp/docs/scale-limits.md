@@ -31,23 +31,23 @@ The question this raises: at what repo size, file count, commit-graph depth, epi
 
 ## 4. Interface Limits (Hard Caps in Code)
 
-| Limit | Value | Where | Status |
-| --- | --- | --- | --- |
-| Episode query page size | clamped to `[1, 1000]`, default 100 | `episode.rs:686` (`list_filtered`) | MEASURED (enforced in code) |
-| Ref-resolution chain depth | `MAX_RESOLVE_DEPTH = 8` symbolic hops | `refs.rs:343` | MEASURED (enforced in code) |
-| Inline artifact payload cap | `octet_length(inline::text) < 64*1024` | `engineering-plan.md` §3.5 | **GAP** — specified in plan; the Rust migration `0002` ships a `content TEXT` column with no such CHECK constraint |
-| Ref update concurrency | optimistic CAS, loser retries | `refs.rs` CAS, `engineering-plan.md` §3.6 | MEASURED (semantics; no contention benchmark) |
+| Limit                       | Value                                  | Where                                     | Status                                                                                                             |
+| --------------------------- | -------------------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Episode query page size     | clamped to `[1, 1000]`, default 100    | `episode.rs:686` (`list_filtered`)        | MEASURED (enforced in code)                                                                                        |
+| Ref-resolution chain depth  | `MAX_RESOLVE_DEPTH = 8` symbolic hops  | `refs.rs:343`                             | MEASURED (enforced in code)                                                                                        |
+| Inline artifact payload cap | `octet_length(inline::text) < 64*1024` | `engineering-plan.md` §3.5                | **GAP** — specified in plan; the Rust migration `0002` ships a `content TEXT` column with no such CHECK constraint |
+| Ref update concurrency      | optimistic CAS, loser retries          | `refs.rs` CAS, `engineering-plan.md` §3.6 | MEASURED (semantics; no contention benchmark)                                                                      |
 
 ## 5. Limits Table (Performance Targets)
 
 Every row here is a **TARGET** from `engineering-plan.md` §3 (line 44) and `v1-plan.md` §3 — the "Postgres-as-store cutoff." None is currently measured by a Rust test.
 
-| Operation | Target threshold | Source | Status |
-| --- | --- | --- | --- |
-| Commit creation latency | < 50ms p99 | engineering-plan §3 / v1-plan §3 | TARGET — no benchmark in `crates/sharp` |
-| Checkout / materialize 10k-file tree | < 2s | engineering-plan §3 | TARGET — `materialize_tree` is N+1, unmeasured |
-| Episode ingest rate | > 100 episodes/sec, single node | engineering-plan §3 | TARGET — no ingest benchmark |
-| Object put/get p99 | (not separately bounded) | — | UNSPECIFIED |
+| Operation                            | Target threshold                | Source                           | Status                                         |
+| ------------------------------------ | ------------------------------- | -------------------------------- | ---------------------------------------------- |
+| Commit creation latency              | < 50ms p99                      | engineering-plan §3 / v1-plan §3 | TARGET — no benchmark in `crates/sharp`        |
+| Checkout / materialize 10k-file tree | < 2s                            | engineering-plan §3              | TARGET — `materialize_tree` is N+1, unmeasured |
+| Episode ingest rate                  | > 100 episodes/sec, single node | engineering-plan §3              | TARGET — no ingest benchmark                   |
+| Object put/get p99                   | (not separately bounded)        | —                                | UNSPECIFIED                                    |
 
 The bench harness that would produce these numbers is described in `engineering-plan.md` (lines 740–746) as living at `apps/server/bench/` and invoked via `bun run bench`. It targets the **TypeScript** server, not the Rust crate, and a failing bench is explicitly "not a CI-blocker in v1" (line 746). The crate's own `tests/` carry integration and scenario coverage only — no scale dimension.
 
