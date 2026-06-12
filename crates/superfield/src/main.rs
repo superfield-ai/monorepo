@@ -378,8 +378,8 @@ fn run_deploy(args: &[String]) {
 /// `SF_NO_DAEMON=1` skips the daemonize() call (runs in-process / foreground).
 async fn run_as_daemon() {
     use sf_cli::daemon::{
-        daemon_log_path, daemon_state_dir, remove_daemon_json, send_startup_result,
-        socket_path, write_daemon_json, DaemonJson, StartupResult,
+        daemon_log_path, daemon_state_dir, remove_daemon_json, send_startup_result, socket_path,
+        write_daemon_json, DaemonJson, StartupResult,
     };
     use sf_db::provisioner::{PostgresProvisioner, TestProvisioner};
     use std::time::{SystemTime, UNIX_EPOCH};
@@ -398,9 +398,7 @@ async fn run_as_daemon() {
         }
     };
 
-    let log_path = daemon_log_path(&state_dir)
-        .to_string_lossy()
-        .into_owned();
+    let log_path = daemon_log_path(&state_dir).to_string_lossy().into_owned();
 
     // Macro to send Err and exit.
     macro_rules! fail {

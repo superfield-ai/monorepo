@@ -88,18 +88,12 @@ pub enum DaemonError {
 pub enum StartupResult {
     /// Daemon is fully ready.  `version` is the semver string of the running
     /// daemon; `addr` is the Unix socket path for subsequent RPCs.
-    Ok {
-        version: String,
-        addr: String,
-    },
+    Ok { version: String, addr: String },
     /// The bind address was already occupied by another daemon instance.
     AddrInUse,
     /// Startup failed.  `reason` is a human-readable message; `log_path` is
     /// the absolute path to `daemon.log` for further diagnostics.
-    Err {
-        reason: String,
-        log_path: String,
-    },
+    Err { reason: String, log_path: String },
 }
 
 // ---------------------------------------------------------------------------
@@ -169,8 +163,7 @@ pub fn read_daemon_json(state_dir: &Path) -> Option<DaemonJson> {
 /// Write `daemon.json` atomically to `state_dir`.
 pub fn write_daemon_json(state_dir: &Path, info: &DaemonJson) -> Result<(), DaemonError> {
     let path = daemon_json_path(state_dir);
-    let data = serde_json::to_vec_pretty(info)
-        .map_err(|e| DaemonError::Protocol(e.to_string()))?;
+    let data = serde_json::to_vec_pretty(info).map_err(|e| DaemonError::Protocol(e.to_string()))?;
     // Write to a temp file then rename for atomicity.
     let tmp = path.with_extension("json.tmp");
     fs::write(&tmp, &data)?;
@@ -209,17 +202,15 @@ pub fn encode_startup_result(result: &StartupResult) -> Result<Vec<u8>, DaemonEr
 
 /// Decode a `StartupResult` from a 4-byte length-prefixed bincode payload
 /// read from `reader`.
-pub fn decode_startup_result<R: IoRead + ?Sized>(reader: &mut R) -> Result<StartupResult, DaemonError> {
+pub fn decode_startup_result<R: IoRead + ?Sized>(
+    reader: &mut R,
+) -> Result<StartupResult, DaemonError> {
     let mut len_buf = [0u8; 4];
-    reader
-        .read_exact(&mut len_buf)
-        .map_err(DaemonError::Io)?;
+    reader.read_exact(&mut len_buf).map_err(DaemonError::Io)?;
     let len = u32::from_le_bytes(len_buf) as usize;
 
     let mut payload = vec![0u8; len];
-    reader
-        .read_exact(&mut payload)
-        .map_err(DaemonError::Io)?;
+    reader.read_exact(&mut payload).map_err(DaemonError::Io)?;
 
     let (result, _) = bincode::serde::decode_from_slice::<StartupResult, _>(
         &payload,
@@ -425,8 +416,7 @@ pub fn connect_or_start_daemon() -> Result<DaemonHandle, DaemonError> {
 /// is a one-shot Unix stream socket: the daemon connects to it (the CLI is
 /// listening), sends the result, and closes the connection.
 pub fn send_startup_result(result: &StartupResult) -> Result<(), DaemonError> {
-    let path = env::var("SF_STARTUP_NOTIFY")
-        .map_err(|_| DaemonError::NoNotifySocket)?;
+    let path = env::var("SF_STARTUP_NOTIFY").map_err(|_| DaemonError::NoNotifySocket)?;
 
     let mut stream = std::os::unix::net::UnixStream::connect(&path)?;
     let encoded = encode_startup_result(result)?;
@@ -445,8 +435,7 @@ pub fn send_startup_result(result: &StartupResult) -> Result<(), DaemonError> {
 /// Once the daemon has passed the health gate it connects to this socket and
 /// sends the encoded `StartupResult`.
 pub fn wait_for_startup_result() -> Result<StartupResult, DaemonError> {
-    let path = env::var("SF_STARTUP_NOTIFY")
-        .map_err(|_| DaemonError::NoNotifySocket)?;
+    let path = env::var("SF_STARTUP_NOTIFY").map_err(|_| DaemonError::NoNotifySocket)?;
 
     // Bind and listen.
     let listener = std::os::unix::net::UnixListener::bind(&path)?;
@@ -605,8 +594,7 @@ mod tests {
                 addr: "/tmp/superfield.sock".to_string(),
             };
             let encoded = encode_startup_result(&result).unwrap();
-            let mut stream =
-                std::os::unix::net::UnixStream::connect(&socket_path_clone).unwrap();
+            let mut stream = std::os::unix::net::UnixStream::connect(&socket_path_clone).unwrap();
             stream.write_all(&encoded).unwrap();
         });
 
@@ -638,11 +626,7 @@ mod tests {
 
         let dir = TempDir::new().unwrap();
         let socket_path = dir.path().join("notify_err.sock");
-        let log_path = dir
-            .path()
-            .join("daemon.log")
-            .to_string_lossy()
-            .into_owned();
+        let log_path = dir.path().join("daemon.log").to_string_lossy().into_owned();
 
         let listener = UnixListener::bind(&socket_path).unwrap();
 
@@ -654,8 +638,7 @@ mod tests {
                 log_path: log_path_clone,
             };
             let encoded = encode_startup_result(&result).unwrap();
-            let mut stream =
-                std::os::unix::net::UnixStream::connect(&socket_path_clone).unwrap();
+            let mut stream = std::os::unix::net::UnixStream::connect(&socket_path_clone).unwrap();
             stream.write_all(&encoded).unwrap();
         });
 
@@ -664,7 +647,10 @@ mod tests {
         daemon_thread.join().unwrap();
 
         match received {
-            StartupResult::Err { reason: _, log_path: received_log } => {
+            StartupResult::Err {
+                reason: _,
+                log_path: received_log,
+            } => {
                 assert!(
                     received_log.contains("daemon.log"),
                     "log_path '{}' does not contain 'daemon.log'",
@@ -813,7 +799,7 @@ mod tests {
         // thread1 releases it, then checks daemon.json.
         let thread2 = std::thread::spawn(move || -> bool {
             barrier3.wait(); // wait until thread1 holds the lock
-            // Try to acquire the lock — will block until thread1 releases.
+                             // Try to acquire the lock — will block until thread1 releases.
             let _guard = flock_exclusive_blocking(&lp3).unwrap();
             // thread1 wrote daemon.json; loser should find it.
             let found = read_daemon_json(&state_dir).is_some();
@@ -837,7 +823,10 @@ mod tests {
             "winner should spawn exactly once"
         );
         // Loser found daemon.json — no spawn needed.
-        assert!(loser_found_daemon, "loser should find daemon.json after winner");
+        assert!(
+            loser_found_daemon,
+            "loser should find daemon.json after winner"
+        );
         // Total spawn count should still be 1.
         assert_eq!(
             spawn_count.load(Ordering::SeqCst),
@@ -879,7 +868,8 @@ mod tests {
         write_daemon_json(state_dir, &info).unwrap();
 
         // After health gate: daemon.json should exist and be valid.
-        let loaded = read_daemon_json(state_dir).expect("daemon.json should exist after health gate");
+        let loaded =
+            read_daemon_json(state_dir).expect("daemon.json should exist after health gate");
         assert_eq!(loaded.pid, info.pid);
         assert_eq!(loaded.version, current_version());
         assert!(loaded.started_at > 0);
