@@ -741,7 +741,7 @@ mod tests {
         // exec fields must be absent when None
         assert!(m
             .get("exec_p50_ms")
-            .map_or(true, |v| v.is_null() || v == &serde_json::Value::Null));
+            .is_none_or(|v| v.is_null() || v == &serde_json::Value::Null));
         assert!(m["meets_budget_p95"].as_bool().unwrap());
         // VM fields must be absent when not measured
         assert!(
