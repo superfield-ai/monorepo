@@ -262,7 +262,28 @@ pub async fn run(pool: &PgPool, cmd: Cmd) -> Result<(), CliError> {
 ///
 /// Convenience wrapper used by the binary entrypoint when no pool has been
 /// constructed yet.
+///
+/// For the [`Cmd::Page`] command, the daemon guard is checked **before** any
+/// database connection is attempted, so that a "daemon not running" error is
+/// returned cleanly without trying to reach Postgres (which the daemon manages).
 pub async fn connect_and_run(cmd: Cmd) -> Result<(), CliError> {
+    // Daemon guard for page commands: check before touching the DB.
+    // The daemon manages Postgres; without it the connection would also fail,
+    // but we want the error to say "daemon not running" rather than a DB error.
+    if let Cmd::Page { ref name } = cmd {
+        if !page::daemon_is_running() {
+            return Err(CliError::Page(page::PageError::DaemonNotRunning));
+        }
+        // Also validate the name before attempting a DB connection.
+        if !sf_db::KNOWN_PAGES.contains(&name.as_str()) {
+            let known = sf_db::KNOWN_PAGES.join(", ");
+            return Err(CliError::Page(page::PageError::UnknownPage(
+                name.clone(),
+                known,
+            )));
+        }
+    }
+
     let cfg = DbConfig::from_env()?;
     let pool = sf_db::connect(&cfg).await?;
     run(&pool, cmd).await
