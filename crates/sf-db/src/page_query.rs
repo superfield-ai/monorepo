@@ -177,7 +177,10 @@ mod tests {
             // attempted, but it must NOT be an UnknownPage error.
             match result {
                 Err(PageQueryError::UnknownPage(n)) => {
-                    panic!("'{}' should be a known page but got UnknownPage('{}')", name, n)
+                    panic!(
+                        "'{}' should be a known page but got UnknownPage('{}')",
+                        name, n
+                    )
                 }
                 // Database error is expected (no real DB) — test passes.
                 Err(PageQueryError::Database(_)) | Ok(_) => {}
@@ -196,7 +199,9 @@ mod tests {
     async fn page_query_returns_latest_version() {
         let cfg = crate::config::DbConfig::from_env()
             .expect("DATABASE_URL must be set for integration tests");
-        let pool = crate::pool::connect(&cfg).await.expect("pool creation failed");
+        let pool = crate::pool::connect(&cfg)
+            .await
+            .expect("pool creation failed");
 
         // Insert a corpus (required FK).
         let corpus_id: uuid::Uuid = sqlx::query_scalar(

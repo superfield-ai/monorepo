@@ -97,9 +97,7 @@ fn home_dir() -> Option<std::path::PathBuf> {
 /// running).  Returns `false` when the path cannot be resolved or the socket
 /// is absent.
 pub fn daemon_is_running() -> bool {
-    daemon_socket_path()
-        .map(|p| p.exists())
-        .unwrap_or(false)
+    daemon_socket_path().map(|p| p.exists()).unwrap_or(false)
 }
 
 /// Execute the `superfield page <name>` command.
@@ -199,7 +197,10 @@ mod tests {
         let tmp = tempfile::tempdir().expect("tempdir");
         // Do NOT create the socket file.
         let _guard = ScopedHome::set(tmp.path().to_str().unwrap());
-        assert!(!daemon_is_running(), "socket must be absent in a test home dir");
+        assert!(
+            !daemon_is_running(),
+            "socket must be absent in a test home dir"
+        );
     }
 
     // ── page_show: no-daemon guard ──────────────────────────────────────────
@@ -214,9 +215,7 @@ mod tests {
         let pool = sqlx::PgPool::connect_lazy("postgres://localhost/stub_db_never_connects")
             .expect("lazy connect should not fail");
 
-        let err = page_show_with_guard(&pool, "prd", false)
-            .await
-            .unwrap_err();
+        let err = page_show_with_guard(&pool, "prd", false).await.unwrap_err();
 
         assert!(
             matches!(err, PageError::DaemonNotRunning),

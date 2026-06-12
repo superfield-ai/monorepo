@@ -160,7 +160,10 @@ mod tests {
             .unwrap();
         let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
         assert!(
-            json["error"].as_str().unwrap_or("").contains("unknown page"),
+            json["error"]
+                .as_str()
+                .unwrap_or("")
+                .contains("unknown page"),
             "error must mention 'unknown page', got: {:?}",
             json
         );
