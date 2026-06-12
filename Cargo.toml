@@ -51,3 +51,5 @@ axum = { version = "0.8", features = ["macros"] }
 tower = { version = "0.5" }
 tower-http = { version = "0.6", features = ["fs", "trace"] }
 http = "1"
+bincode = { version = "2", features = ["serde"] }
+libc = "0.2"

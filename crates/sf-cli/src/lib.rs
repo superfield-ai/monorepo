@@ -29,6 +29,7 @@
 //! `PgPool` once, then dispatches the parsed [`Cmd`] here via [`run`].
 
 pub mod agent;
+pub mod daemon;
 pub mod deploy_ops;
 pub mod error;
 pub mod operator;
