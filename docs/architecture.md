@@ -297,3 +297,89 @@ A real implementation will:
 1. Receive a [`BackupEvent`] from the backup job runner on successful `pg_basebackup` completion.
 2. Insert a row into a `substrate.backup_events` table (schema to be defined).
 3. Expose the latest event via [`SubstrateBackup::latest`] for health check queries.
+
+---
+
+## Daemon Lifecycle
+
+The `superfield` binary is both the CLI and the daemon. Every user-facing command transparently starts the daemon when none is running; there is no separate daemon binary and no required `daemon start` step. This section defines how discovery, startup, versioning, logging, and shutdown work — derived from a study of sccache's client-spawns-server model and the failure modes that model accumulates over time.
+
+### State directory
+
+The daemon owns a per-user state directory: `~/.superfield/daemon/`. All rendezvous state lives on disk here, not only in a live socket. Files:
+
+| File | Purpose |
+|------|---------|
+| `superfield.sock` | Unix domain socket — the daemon's command endpoint |
+| `daemon.lock` | `flock`-based spawn-arbitration lock (holds PID while daemon is alive) |
+| `daemon.json` | Written by the daemon after successful startup: `{"pid": N, "version": "x.y.z", "started_at": "<ISO8601>"}` |
+| `daemon.log` | Always-on log file, opened before daemonization and `dup2`d onto stderr after |
+
+Unix domain socket rather than TCP: no port collisions, filesystem permissions for access control, and no exposure to OS port exclusion ranges (a recurring sccache failure on Windows). The state directory is never `$TMPDIR` — sandboxed builds and some macOS configurations randomize `TMPDIR` per process, which causes socket-path failures (sccache #1309).
+
+### Auto-spawn
+
+When a CLI command requires a running daemon and none is detected (socket absent or connection refused):
+
+1. The CLI acquires an `flock` lock on `daemon.lock`. Concurrent first invocations serialize here rather than racing — the thundering-herd root cause of sccache #340.
+2. The lock holder checks again whether the daemon is now up (another process may have won the race before this one acquired the lock). If yes, release and connect.
+3. If still not up: re-execute the current binary (`std::env::current_exe()`) with `SF_START_DAEMON=1` in the environment. The child will daemonize; the parent waits on a startup-notify socket (see below).
+4. The spawned child sets up logging (opens `daemon.log` before daemonizing), daemonizes (fork → setsid → redirect stdio to `/dev/null` on Unix; `CREATE_NO_WINDOW` on Windows), then starts the daemon. `SF_NO_DAEMON=1` skips daemonization for foreground mode.
+
+Commands that do not require the daemon running — `superfield status`, `superfield page`, `superfield logs` — report "daemon not running" and exit cleanly rather than auto-spawning. Only `superfield garden` (and an explicit `superfield daemon start`) trigger auto-spawn.
+
+### Startup-notify handshake
+
+The parent pre-binds a one-shot Unix socket and passes its path via `SF_STARTUP_NOTIFY`. The daemon reports a structured result on that socket only after the **full health gate** passes:
+
+1. Postgres container is up and accepting connections.
+2. All migrations have applied cleanly.
+3. Required schemas are reachable (`SELECT 1 FROM nexum.documents LIMIT 0`).
+
+Result variants written on the notify socket (length-prefixed bincode, matching sccache's `ServerStartup` pattern):
+
+```
+Ok { version: String, addr: PathBuf }
+AddrInUse                              -- another daemon won the race; client retries
+Err { reason: String }                 -- storage/migration failure; full detail in daemon.log
+```
+
+On `Err`, the error message always includes the absolute path to `daemon.log`. Every sccache failure mode that closes as "not planned" or produces "I can't find any logs" traces back to not having this.
+
+Startup timeout: 30 s (Postgres container pull + start on a cold machine can take longer than sccache's 10 s compile-cache scenario). Configurable via `SF_STARTUP_TIMEOUT_MS`.
+
+### Version handshake and stale-daemon replacement
+
+`daemon.json` and the `Ok` notify payload both carry the daemon's semver string. On every connect, the CLI compares the running daemon's version against its own:
+
+- **Match:** proceed.
+- **Mismatch:** send `Shutdown` RPC (graceful — see below), wait for the daemon to exit (detect via `daemon.lock` releasing), then auto-spawn the new version. The user sees one transparent restart; no manual `--stop-server` step is required.
+
+This closes the sccache failure class where a stale binary keeps running after an upgrade, with config frozen from the first spawning client's environment.
+
+### Shutdown
+
+`superfield daemon stop` sends a `Shutdown` RPC. The daemon:
+
+1. Stops accepting new gardening-loop work.
+2. Finishes the current gardening step (writes cursor and page revisions to Postgres).
+3. Stops the Postgres container cleanly.
+4. Exits.
+
+There is no idle-timeout auto-shutdown. The gardening loop is intended to run continuously until explicitly stopped; an idle timer is the most-disabled sccache feature (`SCCACHE_IDLE_TIMEOUT=0`) and provides no value here.
+
+`kill -9` safety: every gardening step commits its cursor and page revision to Postgres before starting the next step. The loop resumes from the last committed cursor on restart with no lost work. The Postgres volume is durable; no in-memory journal is load-bearing.
+
+### Logging
+
+`daemon.log` in the state directory is **always on** — opened in append mode before daemonization, `dup2`d onto stderr after. Log level is controlled by `SF_LOG` (same `env_logger` convention as `SCCACHE_LOG`). The path is printed:
+
+- In every startup error message.
+- In the `superfield status` output.
+- By `superfield logs`, which tails it live (`tail -f` equivalent).
+
+`SF_NO_DAEMON=1` runs the daemon in the foreground with stderr intact — the standard debugging and CI escape hatch.
+
+### Foreground and container mode
+
+In containerised builds and CI, daemonization is counterproductive: the process tree does not persist across build steps, and supervisors expect foreground processes. `SF_NO_DAEMON=1` (or `superfield daemon start --foreground`) skips the fork/detach entirely and runs the daemon as a foreground process with stdout/stderr going to the terminal. Readiness is still reported via the startup-notify socket so the CLI can confirm Postgres is up before proceeding.
