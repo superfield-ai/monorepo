@@ -38,6 +38,7 @@
 
 pub mod auth;
 pub mod error;
+pub mod loop_handle;
 pub mod routes;
 pub mod state;
 
@@ -58,6 +59,7 @@ use tower_http::services::{ServeDir, ServeFile};
 
 pub use auth::auth_middleware;
 pub use error::ServeError;
+pub use loop_handle::{LoopHandle, LoopHandleError, NoopLoopHandle};
 pub use state::AppState;
 
 // Re-export AuthContext so callers don't need to depend on sf-auth directly.
