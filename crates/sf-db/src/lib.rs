@@ -22,11 +22,15 @@
 //! - [`page_revision::insert_page_revision`]: write entrypoint for the
 //!   gardening loop page-revision path (issues #490, #491). Stub returns
 //!   `Ok(())` until the real INSERT is implemented.
+//! - [`page_query::fetch_page_content`]: read projection for the pages layer
+//!   (issue #492). Queries the latest Nexum document_version for a named page
+//!   and renders blocks as markdown.
 //!
 //! See `docs/architecture.md` §Single-Instance Database Schema Layout.
 
 pub mod backup;
 pub mod config;
+pub mod page_query;
 pub mod page_revision;
 pub mod pool;
 pub mod provisioner;
@@ -36,6 +40,7 @@ pub use backup::{
     NoopSubstrateBackup, PgBackup, SubstrateBackup,
 };
 pub use config::DbConfig;
+pub use page_query::{fetch_page_content, PageQueryError, KNOWN_PAGES};
 pub use page_revision::{insert_page_revision, PageRevisionError};
 pub use pool::{acquire_with_workspace_id, acquire_workspace, connect};
 pub use provisioner::{PostgresProvisioner, ProvisionerError, TestProvisioner};

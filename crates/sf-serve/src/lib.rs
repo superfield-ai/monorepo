@@ -110,6 +110,7 @@ impl Default for ServeConfig {
 /// | `/api/*`           | Yes           | App API (workspace-scoped)         |
 /// | `/studio/*`        | Yes           | Control-panel API                  |
 /// | `/orchestrator/*`  | Yes           | Orchestrator control endpoints     |
+/// | `/pages/*`         | No            | Knowledge-base page projections    |
 /// | `GET /*`           | No            | Static browser UI assets           |
 ///
 /// All authenticated routes use [`auth_middleware`], which validates the
@@ -122,6 +123,10 @@ pub fn build_router(pool: PgPool, cfg: &ServeConfig) -> Router {
 
     // Public auth routes — no session required.
     let auth_routes = routes::auth::router(state.clone());
+
+    // Public page projection routes — unauthenticated (localhost-only for
+    // milestone 1; see issue #492 scope).
+    let page_routes = routes::pages::router(state.clone());
 
     // Protected routes — all require a valid session.
     let protected = Router::new()
@@ -140,6 +145,7 @@ pub fn build_router(pool: PgPool, cfg: &ServeConfig) -> Router {
         // Liveness probe — unauthenticated, always returns 200.
         .route("/health", get(health))
         .merge(auth_routes)
+        .merge(page_routes)
         .merge(protected)
         .merge(static_fallback)
 }
