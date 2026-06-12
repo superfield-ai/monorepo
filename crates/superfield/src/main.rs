@@ -22,6 +22,7 @@
 //! | `repo`     | `sf_cli` operator commands  | Manage Sharp repos                  |
 //! | `session`  | `sf_cli` operator commands  | Manage auth sessions                |
 //! | `episode`  | `sf_cli` agent commands     | Manage agent episodes               |
+//! | `page`     | `sf_cli` page commands      | Print a knowledge-base page (requires daemon) |
 //! | `deploy`   | [`sf_deploy`]               | Deploy a build to a target          |
 //! | `noop`     | (built-in)                  | Smoke-test — exits cleanly          |
 
@@ -56,6 +57,10 @@ Deploy-operator commands (backed by sf-deploy):
                                       Deploy artifact to a target env
   rollback-env <record-json>          Roll back target to prior version
   doctor <config-json>                Validate target config (no I/O)
+
+Page commands (require running daemon):
+  page <name>                         Print a knowledge-base page as markdown
+                                      name: prd | architecture | plan | strategy | project
 
 Other:
   noop                                Smoke-test — exits with code 0
