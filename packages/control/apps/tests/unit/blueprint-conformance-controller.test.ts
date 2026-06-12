@@ -131,8 +131,9 @@ describe("BlueprintConformanceController", () => {
     });
     ctrl.start();
 
-    // The start() call triggers an immediate load()
-    await vi.runAllTilesAsync();
+    // The start() call triggers an immediate load() — advance by 0 ms to flush
+    // the microtask queue without spinning setInterval indefinitely.
+    await vi.advanceTimersByTimeAsync(0);
     const callsAfterStart = fetchMock.mock.calls.length;
     expect(callsAfterStart).toBeGreaterThanOrEqual(1);
 
@@ -157,8 +158,9 @@ describe("BlueprintConformanceController", () => {
     });
     ctrl.start();
 
-    // Drain the immediate load
-    await vi.runAllTilesAsync();
+    // Drain the immediate load — advance by 0 ms to flush microtasks without
+    // spinning the setInterval indefinitely.
+    await vi.advanceTimersByTimeAsync(0);
     const callsBeforeStop = fetchMock.mock.calls.length;
 
     ctrl.stop();
@@ -180,8 +182,8 @@ describe("BlueprintConformanceController", () => {
     const ctrl = new BlueprintConformanceController({ refreshIntervalMs: 0 });
     ctrl.start();
 
-    // Drain immediate load
-    await vi.runAllTilesAsync();
+    // Drain immediate load — advance by 0 ms to flush the microtask queue.
+    await vi.advanceTimersByTimeAsync(0);
     const callsAfterStart = fetchMock.mock.calls.length;
 
     // Advance time significantly — should not trigger any additional fetch

@@ -142,14 +142,24 @@ fn extract_token(req: &Request) -> Option<String> {
         }
     }
 
-    // Fall back to cookie.
+    // Fall back to cookies.  Accept both `superfield_auth` (set by the
+    // register/login endpoints and used by the browser UI) and the legacy
+    // `session` name for backwards compatibility.
     if let Some(cookie_hdr) = req.headers().get("cookie") {
         if let Ok(cookie_str) = cookie_hdr.to_str() {
+            let mut session_val: Option<&str> = None;
             for part in cookie_str.split(';') {
                 let part = part.trim();
-                if let Some(val) = part.strip_prefix("session=") {
+                if let Some(val) = part.strip_prefix("superfield_auth=") {
+                    // Prefer `superfield_auth` over legacy `session`.
                     return Some(val.to_owned());
                 }
+                if let Some(val) = part.strip_prefix("session=") {
+                    session_val = Some(val);
+                }
+            }
+            if let Some(val) = session_val {
+                return Some(val.to_owned());
             }
         }
     }
@@ -189,6 +199,21 @@ mod tests {
             .body(axum::body::Body::empty())
             .unwrap();
         assert_eq!(extract_token(&req), Some("header-token".to_owned()));
+    }
+
+    #[test]
+    fn extract_token_from_superfield_auth_cookie() {
+        let req = make_req_with_header("cookie", "superfield_auth=auth-token-789");
+        assert_eq!(extract_token(&req), Some("auth-token-789".to_owned()));
+    }
+
+    #[test]
+    fn superfield_auth_cookie_takes_precedence_over_session_cookie() {
+        let req = make_req_with_header(
+            "cookie",
+            "session=legacy-token; superfield_auth=preferred-token",
+        );
+        assert_eq!(extract_token(&req), Some("preferred-token".to_owned()));
     }
 
     #[test]

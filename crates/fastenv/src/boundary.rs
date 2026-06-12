@@ -443,7 +443,6 @@ mod tests {
             ("fork-a", GuestNetworkMode::None),
             ("fork-b", GuestNetworkMode::AuditedEgress),
         ] {
-            let guest = guest;
             let root_path = root_path.clone();
             handles.push(std::thread::spawn(move || {
                 let command = vec!["/bin/true".to_owned()];

@@ -3,33 +3,28 @@
 # -----------------------------------------------------------------------------
 # Guards the Studio Control Plane on every PR that touches its source.
 #
-# Scope: code under `packages/control` (the studio HTTP server + React
-# webapp), `packages/control-core` (shared protocol + types consumed by both),
-# and `packages/db` (schema/migrations the control plane depends on).
+# Scope: code under `packages/control` (the React browser UI assets),
+# `packages/control-core` (shared protocol types), `crates/sf-serve` (the
+# Rust HTTP backend that replaces the retired Bun server), and `packages/db`.
 #
-# Three independent jobs run in parallel; all must pass:
+# Two independent jobs run in parallel; both must pass:
 #
-#   1. control-build-typecheck — `tsc --noEmit` over packages/control plus the
-#      Vitest unit suite under packages/control/tests/unit. Catches type
-#      regressions and pure-logic bugs without spinning up a server.
-#
-#   2. control-browser-e2e — Builds the studio webapp, spawns the real
-#      `superfield control` CLI server pointed at an in-process
-#      superfield-API fixture, then drives it with Playwright/Chromium.
-#      Verifies the wire contract between the React app and the server: tab
-#      navigation, debug view, deploy view, error envelopes, a11y smoke,
+#   1. control-browser-e2e — Builds the studio React webapp, compiles the
+#      Rust sf-serve binary, then boots the real `superfield serve` binary
+#      against a Postgres service and drives it with Playwright/Chromium.
+#      Verifies the wire contract between the React app and the Rust backend:
+#      tab navigation, debug view, deploy view, error envelopes, a11y smoke,
 #      console cleanliness (see tests/e2e/fixtures.ts — no console.error /
 #      .warn is allowed). Does NOT require a real cluster (no k3d/kubectl);
 #      cluster-status SSE poller failures are expected and harmless.
 #
-#   3. control-integration — Runs every spec in
-#      packages/control/tests/integration/*.test.ts against a fresh Postgres
-#      service. Each spec is run in its own Vitest invocation so they can't
-#      pollute each other's process state (env vars, in-memory caches, etc.).
-#      Covers route-level behaviour that needs a real DB but not a browser.
+#   2. control-unit — Fast unit tests for the browser UI components.
 #
-# The template-side counterpart (pinned superfield-starter-ts repo, runs the
-# studio against a real template fixture) lives in ci-control-template.yml.
+# The Bun/Node control server (packages/control/src/) and its unit +
+# integration test suites were retired in issue #452.  All serving is now
+# handled by the Rust sf-serve crate.
+#
+# The template-side counterpart lives in ci-control-template.yml.
 # =============================================================================
 name: Control CI
 
@@ -40,12 +35,14 @@ on:
       - "packages/control/**"
       - "packages/control-core/**"
       - "packages/db/**"
+      - "crates/sf-serve/**"
   pull_request:
     branches: [main]
     paths:
       - "packages/control/**"
       - "packages/control-core/**"
       - "packages/db/**"
+      - "crates/sf-serve/**"
   workflow_call:
 
 concurrency:
@@ -54,83 +51,26 @@ concurrency:
 
 jobs:
   # ---------------------------------------------------------------------------
-  # Job 1: Static checks + unit tests.
-  # Fast (~30s). Catches type errors and pure-logic regressions before we pay
-  # the cost of spinning up the webapp + server in the e2e job.
-  # ---------------------------------------------------------------------------
-  control-build-typecheck:
-    name: Control build + typecheck
-    runs-on: [self-hosted, Linux, X64]
-    container:
-      image: ghcr.io/superfield-ai/ci-runner:latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
-      - run: bun install --frozen-lockfile
-      - name: Generate embedded-assets stub
-        run: bun packages/control/scripts/embed-assets.ts
-      - name: Typecheck
-        run: bunx tsc --noEmit --project packages/control/tsconfig.json
-      - name: Unit tests
-        run: bun --bun vitest run packages/control/tests/unit
-
-  # ---------------------------------------------------------------------------
-  # Job 2: Browser E2E.
-  # Builds the studio React app, boots the real CLI control server against an
-  # in-process superfield API fixture, then runs Playwright/Chromium specs
-  # under packages/control/tests/e2e/specs.
+  # Job 1: Browser E2E against the Rust sf-serve backend.
+  # Builds the studio React app and the Rust superfield binary, boots the
+  # server against a live Postgres, then runs Playwright/Chromium specs.
   #
   # The auto-fixture in tests/e2e/fixtures.ts fails any spec that emits a
-  # console.error / .warn from app code — the operating principle is "no
-  # surprises in the browser console". When adding specs that simulate debug
-  # entries via the __superfieldDebug seam, the `source` field MUST be a
-  # valid `DebugSource` (console | window | fetch | eventsource | websocket |
-  # react | backend | breadcrumb) or DebugView will silently filter it out.
+  # console.error / .warn from app code — no surprises in the browser console.
   # ---------------------------------------------------------------------------
   control-browser-e2e:
-    name: Control browser E2E tests
-    runs-on: [self-hosted, Linux, X64]
-    container:
-      image: ghcr.io/superfield-ai/ci-runner:latest
-    defaults:
-      run:
-        shell: bash
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
-      - run: bun install --frozen-lockfile
-      - name: Install Playwright chromium browser
-        # The ci-runner image ships bun + node but no npx; use `bun x` to drive
-        # the playwright CLI installed via bun install.
-        run: bun x playwright install chromium
-      - name: Build control web app
-        run: bun run build:control-web
-      - name: Generate embedded assets
-        run: bun packages/control/scripts/embed-assets.ts
-      - name: E2E tests (real control server + superfield fixture, no k3d)
-        run: bun run test:e2e:control
-
-  # ---------------------------------------------------------------------------
-  # Job 3: Integration tests against a real Postgres.
-  # Each *.test.ts file is invoked in its own Vitest process so module-level
-  # state (env vars, singleton caches, timers) cannot leak between files. The
-  # superfield API runs in-process inside each test; no cluster is involved.
-  # ---------------------------------------------------------------------------
-  control-integration:
-    name: Control integration tests
+    name: Control browser E2E (Rust backend)
     runs-on: [self-hosted, Linux, X64]
     container:
       image: ghcr.io/superfield-ai/ci-runner:latest
     services:
       postgres:
-        image: postgres:16
+        # pgvector/pgvector:pg16 includes the vector extension required by the
+        # nexum schema migration. The unified migrate runner applies every
+        # component migration (sf-db → sf-auth → nexum → sharp); the sf-auth
+        # migration creates auth.sessions, which the register/login handlers
+        # write to — without it POST /api/auth/register returns 500.
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: superfield
           POSTGRES_PASSWORD: superfield
@@ -149,12 +89,47 @@ jobs:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
       - run: bun install --frozen-lockfile
-      - name: Generate embedded-assets stub
-        run: bun packages/control/scripts/embed-assets.ts
-      - name: Integration tests (in-process superfield fixture, no k3d)
-        run: |
-          for f in packages/control/tests/integration/*.test.ts; do
-            bun --bun vitest run "$f" || exit 1
-          done
+      - name: Install Playwright chromium browser
+        run: bun x playwright install chromium
+      - name: Apply database migrations (creates auth schema)
+        run: bun packages/db/migrate.ts up
         env:
           DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
+      - name: Build control web app
+        run: bun run build:control-web
+      - name: Install C toolchain (required by Rust build scripts)
+        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libssl-dev
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Build Rust superfield binary
+        run: cargo build -p superfield --release
+      - name: E2E tests (Rust sf-serve backend + Postgres)
+        run: bun run test:e2e:control
+        env:
+          DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
+          # .cargo/config.toml sets target-dir = "~/.cache/cargo-target/cli".
+          # Cargo does NOT shell-expand ~ in target-dir, so the binary lands at
+          # the literal path <workspace>/~/.cache/cargo-target/cli/release/superfield.
+          SF_SERVE_BIN: ./~/.cache/cargo-target/cli/release/superfield
+
+  # ---------------------------------------------------------------------------
+  # Job 2: Browser UI unit tests (Vitest + jsdom, no server required).
+  # ---------------------------------------------------------------------------
+  control-unit:
+    name: Control UI unit tests
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+      - run: bun install --frozen-lockfile
+      - name: Install Playwright chromium browser
+        run: bun x playwright install chromium --with-deps
+      - name: Unit tests
+        run: bun --bun vitest run --config packages/control/apps/vitest.config.ts --project unit

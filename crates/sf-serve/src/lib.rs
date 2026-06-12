@@ -27,6 +27,14 @@
 //! - [`ServeError`] — top-level error type.
 //!
 //! See `docs/architecture.md` §Control Webapp for the full route inventory.
+//!
+//! # Static asset serving
+//!
+//! When `CONTROL_ASSETS_DIR` is set in the environment, `GET /*` requests are
+//! served from that directory using [`tower_http::services::ServeDir`].  Any
+//! path not found on disk falls back to `index.html` so client-side SPA routing
+//! works correctly.  When `CONTROL_ASSETS_DIR` is unset, a minimal placeholder
+//! HTML is returned so health checks always succeed.
 
 pub mod auth;
 pub mod error;
@@ -36,10 +44,17 @@ pub mod state;
 #[cfg(test)]
 mod tests;
 
-use axum::Router;
+use axum::{
+    body::Body,
+    http::Request,
+    response::{Html, IntoResponse, Response},
+    routing::get,
+    Router,
+};
 use sqlx::PgPool;
-use std::net::SocketAddr;
+use std::{net::SocketAddr, path::PathBuf};
 use tokio::net::TcpListener;
+use tower_http::services::{ServeDir, ServeFile};
 
 pub use auth::auth_middleware;
 pub use error::ServeError;
@@ -59,6 +74,13 @@ pub struct ServeConfig {
 
     /// Default session lifetime in seconds.  `None` → 86 400 (24 h).
     pub session_ttl_secs: Option<i64>,
+
+    /// Absolute path to the compiled browser UI static assets directory.
+    ///
+    /// When `Some`, `GET /*` is served from this directory with an SPA
+    /// fallback to `index.html`.  When `None`, a minimal placeholder HTML is
+    /// returned.  Populated from `CONTROL_ASSETS_DIR` by the entrypoint.
+    pub assets_dir: Option<PathBuf>,
 }
 
 impl Default for ServeConfig {
@@ -66,6 +88,7 @@ impl Default for ServeConfig {
         Self {
             bind_addr: "0.0.0.0:7000".parse().expect("static addr"),
             session_ttl_secs: None,
+            assets_dir: None,
         }
     }
 }
@@ -80,11 +103,12 @@ impl Default for ServeConfig {
 ///
 /// | Prefix             | Auth required | Description                        |
 /// |--------------------|---------------|------------------------------------|
+/// | `GET /health`      | No            | Liveness probe                     |
 /// | `/api/auth/*`      | No            | Session issue/revoke               |
 /// | `/api/*`           | Yes           | App API (workspace-scoped)         |
 /// | `/studio/*`        | Yes           | Control-panel API                  |
 /// | `/orchestrator/*`  | Yes           | Orchestrator control endpoints     |
-/// | `GET /*`           | Yes           | Static asset fallback              |
+/// | `GET /*`           | No            | Static browser UI assets           |
 ///
 /// All authenticated routes use [`auth_middleware`], which validates the
 /// session token and injects an [`AuthContext`] extension.
@@ -107,7 +131,58 @@ pub fn build_router(pool: PgPool, cfg: &ServeConfig) -> Router {
             auth::auth_middleware,
         ));
 
-    Router::new().merge(auth_routes).merge(protected)
+    // Static asset fallback — serves the compiled browser UI.
+    let static_fallback = build_static_router(cfg.assets_dir.clone());
+
+    Router::new()
+        // Liveness probe — unauthenticated, always returns 200.
+        .route("/health", get(health))
+        .merge(auth_routes)
+        .merge(protected)
+        .merge(static_fallback)
+}
+
+/// `GET /health` — unauthenticated liveness probe.
+///
+/// Returns `200 OK` with a plain JSON body so load balancers and E2E setup
+/// scripts can wait for the server to be ready without a database session.
+async fn health() -> impl IntoResponse {
+    axum::Json(serde_json::json!({"status": "ok"}))
+}
+
+/// Build the static asset fallback router.
+///
+/// When `assets_dir` is `Some`, requests to unknown paths are served from the
+/// given directory using [`tower_http::services::ServeDir`].  Any path not
+/// found on disk falls back to `index.html` (SPA routing).
+///
+/// When `assets_dir` is `None`, a minimal placeholder HTML is returned so
+/// the server is always reachable for health checks and integration tests.
+fn build_static_router(assets_dir: Option<PathBuf>) -> Router {
+    if let Some(dir) = assets_dir {
+        let index = dir.join("index.html");
+        let service = ServeDir::new(&dir).not_found_service(ServeFile::new(index));
+        // Route all remaining GET requests to the static file service.
+        // axum's `Router::fallback_service` is the correct integration point
+        // for tower services.
+        Router::new().fallback_service(service)
+    } else {
+        // Minimal placeholder — keeps GET / healthy without a built UI.
+        Router::new().fallback(placeholder_handler)
+    }
+}
+
+/// Fallback handler when no `assets_dir` is configured.
+///
+/// Returns a minimal HTML page so the server is reachable for health checks
+/// and E2E setup even when the browser UI has not been built.
+async fn placeholder_handler(_req: Request<Body>) -> Response {
+    Html(
+        "<!doctype html><html><head><title>Superfield Studio</title></head>\
+         <body><p>Studio server is running. Build the web app to serve the full UI.</p>\
+         </body></html>",
+    )
+    .into_response()
 }
 
 /// Bind to `cfg.bind_addr` and serve until the process is interrupted.

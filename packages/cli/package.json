@@ -8,7 +8,7 @@
   },
   "scripts": {
     "build": "tsc",
-    "build:assets": "bun run --cwd ../control/apps build && bun ../control/scripts/embed-assets.ts",
+    "build:assets": "bun run --cwd ../control/apps build",
     "build:bin": "bun run build:assets && bun run --cwd ../.. blueprint:compile && SUPERFIELD_BUILD_VERSION=$(git describe --tags --always 2>/dev/null || echo dev) SUPERFIELD_BUILD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) SUPERFIELD_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) SUPERFIELD_BUILD_BLUEPRINT_COMMIT=$(git -C ../../blueprint rev-parse --short HEAD 2>/dev/null || echo unknown) bun build --compile ./bin/superfield.ts --outfile \"$HOME/.bun/bin/superfield\"",
     "build:compile": "bun run build:assets && bun run --cwd ../.. blueprint:compile && mkdir -p dist && SUPERFIELD_BUILD_VERSION=$(git describe --tags --always 2>/dev/null || echo dev) SUPERFIELD_BUILD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) SUPERFIELD_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) SUPERFIELD_BUILD_BLUEPRINT_COMMIT=$(git -C ../../blueprint rev-parse --short HEAD 2>/dev/null || echo unknown) bun build --compile --target=bun-linux-x64-modern --outfile dist/superfield-linux-amd64 ./bin/superfield.ts",
     "build:compile:arm64": "bun run build:assets && bun run --cwd ../.. blueprint:compile && mkdir -p dist && SUPERFIELD_BUILD_VERSION=$(git describe --tags --always 2>/dev/null || echo dev) SUPERFIELD_BUILD_COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo unknown) SUPERFIELD_BUILD_DATE=$(date -u +%Y-%m-%dT%H:%M:%SZ) SUPERFIELD_BUILD_BLUEPRINT_COMMIT=$(git -C ../../blueprint rev-parse --short HEAD 2>/dev/null || echo unknown) bun build --compile --target=bun-linux-arm64 --outfile dist/superfield-linux-arm64 ./bin/superfield.ts",
@@ -20,7 +20,6 @@
     "@superfield/core": "workspace:*",
     "@superfield/github": "workspace:*",
     "@superfield/git": "workspace:*",
-    "@superfield/control": "workspace:*",
     "@superfield/control-core": "workspace:*",
     "@superfield/firecracker": "workspace:*"
   },

@@ -25,7 +25,7 @@
 import { mkdirSync, writeFileSync, appendFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 
-const REPO_ROOT = resolve(import.meta.dir, "..");
+const REPO_ROOT = resolve(import.meta.dirname, "..");
 const STUDIO_DIR = join(REPO_ROOT, ".studio", "demo");
 const LOG_DIR = process.env.CONTROL_LOG_DIR
   ? resolve(REPO_ROOT, process.env.CONTROL_LOG_DIR)

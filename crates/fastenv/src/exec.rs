@@ -1296,7 +1296,7 @@ mod tests {
         let expired = make_lease("OLD_SECRET", "leaked!", "2000-01-01T00:00:00Z");
         let active = make_lease("LIVE_SECRET", "safe!", "2099-01-01T00:00:00Z");
 
-        let leases = vec![expired.clone(), active.clone()];
+        let leases = [expired.clone(), active.clone()];
         let active_filtered: Vec<&SecretLease> = leases
             .iter()
             .filter(|l| {

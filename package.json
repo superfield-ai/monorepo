@@ -15,7 +15,7 @@
     "test": "bun run test:unit && bun run test:integration",
     "test:unit": "bun --bun vitest run --reporter=verbose packages/*/tests/unit",
     "test:integration": "bun --bun vitest run --reporter=verbose packages/*/tests/integration",
-    "test:e2e:control": "npx playwright test --config packages/control/tests/e2e/playwright.config.ts",
+    "test:e2e:control": "bun x playwright test --config packages/control/tests/e2e/playwright.config.ts",
     "build:control-web": "bun run --cwd packages/control/apps build",
     "typecheck": "tsc --noEmit",
     "lint": "bunx eslint .",

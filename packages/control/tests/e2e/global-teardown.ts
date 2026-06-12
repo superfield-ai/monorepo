@@ -4,8 +4,7 @@ export default async function globalTeardown() {
   const proc = (globalThis as Record<string, unknown>).__studioProc as
     | ChildProcess
     | undefined;
-  // No in-process API server to tear down — the TypeScript control server
-  // (Bun child process) handles all routes including auth.
+  // Shut down the Rust sf-serve process started by global-setup.ts.
   const origPath = (globalThis as Record<string, unknown>).__origPath as
     | string
     | undefined;

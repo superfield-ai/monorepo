@@ -259,8 +259,13 @@ describe("DeployController", () => {
 
     const rollbackPromise = ctrl.rollback("dev");
 
-    // Flush microtasks so the POST completes and EventSource is created
-    await new Promise((r) => setTimeout(r, 0));
+    // Poll until the EventSource is created. In headless Chromium, the Fetch
+    // API's Response.text() resolves asynchronously and may require multiple
+    // event-loop turns before fetchJson returns and openEventSource is called.
+    const deadline = Date.now() + 500;
+    while (!lastES && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
 
     // The EventSource should have been created for the rollback log
     expect(lastES).not.toBeNull();
@@ -299,7 +304,11 @@ describe("DeployController", () => {
     const ctrl = new DeployController();
     const rollbackPromise = ctrl.rollback("prod");
 
-    await new Promise((r) => setTimeout(r, 0));
+    // Poll until the EventSource is created (see scenario 7 comment).
+    const deadline = Date.now() + 500;
+    while (!lastES && Date.now() < deadline) {
+      await new Promise((r) => setTimeout(r, 10));
+    }
 
     // Verify the POST was called with the prod env in the URL
     const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;

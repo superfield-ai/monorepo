@@ -50,6 +50,7 @@ mod integration {
         let cfg = ServeConfig {
             bind_addr: "127.0.0.1:0".parse::<SocketAddr>().unwrap(),
             session_ttl_secs: Some(3600),
+            assets_dir: None,
         };
         let router = build_router(pool, &cfg);
         Some((router, session_store))
