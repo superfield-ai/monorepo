@@ -16,16 +16,26 @@
 //!   [`uuid::Uuid`].
 //! - [`backup::SubstrateBackup`]: seam interface for recording backup events.
 //!   RPO ≤ 5 min, RTO ≤ 15 min — see `docs/architecture.md` §Substrate Reliability.
+//! - [`provisioner::PostgresProvisioner`]: seam interface for starting and
+//!   stopping the local Postgres container (daemon lifecycle — issue #489).
+//!   No-op stub: [`provisioner::TestProvisioner`].
+//! - [`page_revision::insert_page_revision`]: write entrypoint for the
+//!   gardening loop page-revision path (issues #490, #491). Stub returns
+//!   `Ok(())` until the real INSERT is implemented.
 //!
 //! See `docs/architecture.md` §Single-Instance Database Schema Layout.
 
 pub mod backup;
 pub mod config;
+pub mod page_revision;
 pub mod pool;
+pub mod provisioner;
 
 pub use backup::{
     pg_basebackup_args, wal_archive_command_template, BackupError, BackupEvent, BackupOutcome,
     NoopSubstrateBackup, PgBackup, SubstrateBackup,
 };
 pub use config::DbConfig;
+pub use page_revision::{insert_page_revision, PageRevisionError};
 pub use pool::{acquire_with_workspace_id, acquire_workspace, connect};
+pub use provisioner::{PostgresProvisioner, ProvisionerError, TestProvisioner};
