@@ -25,6 +25,11 @@
 //! - [`page_query::fetch_page_content`]: read projection for the pages layer
 //!   (issue #492). Queries the latest Nexum document_version for a named page
 //!   and renders blocks as markdown.
+//! - [`project_graph`]: project management graph write and read paths (issue
+//!   #493). Typed nodes (Issue, Feature, RequiredTest, AcceptanceCriterion,
+//!   PullRequest) stored in `nexum.project_nodes`; edges in `nexum.links`
+//!   with `project:` prefixed `rel_type` values; recursive CTE traversal for
+//!   the `GET /pages/project` read path.
 //!
 //! See `docs/architecture.md` §Single-Instance Database Schema Layout.
 
@@ -33,6 +38,7 @@ pub mod config;
 pub mod page_query;
 pub mod page_revision;
 pub mod pool;
+pub mod project_graph;
 pub mod provisioner;
 
 pub use backup::{
@@ -43,4 +49,9 @@ pub use config::DbConfig;
 pub use page_query::{fetch_page_content, PageQueryError, KNOWN_PAGES};
 pub use page_revision::{insert_page_revision, PageRevisionError};
 pub use pool::{acquire_with_workspace_id, acquire_workspace, connect};
+pub use project_graph::{
+    fetch_project_page, insert_acceptance_criterion, insert_feature, insert_issue,
+    insert_required_test, link_pr_to_issue, traverse_project_graph, ProjectGraphError, ProjectNode,
+    PROJECT_GRAPH_DOC_TITLE,
+};
 pub use provisioner::{PostgresProvisioner, ProvisionerError, TestProvisioner};
