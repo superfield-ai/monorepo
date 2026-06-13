@@ -15,7 +15,7 @@
 --     replay_of / superseded_by), distinct from 0002's sharp.episode_links,
 --   * sharp.episode_redactions, tracking destructive artifact redactions.
 --
--- See docs/architecture.md §Sharp subsystem and docs/rust-reorg-decisions.md #4.
+-- See docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge and docs/rust-reorg-decisions.md #4.
 --
 -- Idempotent: safe to re-run.
 

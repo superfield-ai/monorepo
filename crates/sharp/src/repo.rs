@@ -4,7 +4,7 @@
 //! Every repo has a unique name; all objects, refs, and commits belong to a
 //! repo.
 //!
-//! See `docs/architecture.md` §sharp schema.
+//! See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp)`.
 
 use crate::error::SharpError;
 use chrono::{DateTime, Utc};

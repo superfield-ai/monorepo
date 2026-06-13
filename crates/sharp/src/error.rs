@@ -1,6 +1,6 @@
 //! Error types for the Sharp crate — VCS core, semantic merge, and analysis.
 //!
-//! See `docs/architecture.md` §Sharp schema and §Sharp subsystem.
+//! See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge`.
 
 use thiserror::Error;
 

@@ -5,7 +5,7 @@
 //! `sharp.commit_metadata`.  Refs (branches) point to commit objects via
 //! `sharp.refs`.
 //!
-//! See `docs/architecture.md` §sharp schema.
+//! See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp)`.
 
 use crate::error::SharpError;
 use crate::object::{self, ObjectType};

@@ -2,7 +2,7 @@
 --
 -- Episodes track the lifecycle of an agent's editing session against a Sharp
 -- repo.  All tables live in the `sharp` schema alongside the VCS core tables.
--- See docs/architecture.md §Schema namespace assignment and agent-warning:
+-- See docs/architecture.md §Single-Instance Database Schema Layout § Schema namespace assignment and agent-warning:
 --   "Sharp's episode schema goes in the `sharp` schema on the shared instance."
 --
 -- episode_state: 'open' | 'finished' | 'abandoned'

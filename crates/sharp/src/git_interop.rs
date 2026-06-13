@@ -18,11 +18,11 @@
 //! SHA-1 is the default (matching Git's default).  The `SHARP_ALLOW_RAW_SHA1`
 //! environment variable is checked before skipping the SHA-1DC collision guard;
 //! v1 simply uses the standard `sha1` crate (no DC check) and defers the DC
-//! posture decision per `docs/architecture.md §7 Current Gaps #10`.
+//! posture decision per `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp)`.
 //!
 //! Submodule recursion and Git LFS object fetch are explicit v1 punts.
 //!
-//! See `docs/architecture.md` §sharp schema and whitepaper §7.
+//! See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp)` and whitepaper §7.
 
 use crate::error::SharpError;
 use crate::git_canonical::{self, HashAlgo, ObjectKind};

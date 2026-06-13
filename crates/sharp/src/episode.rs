@@ -3,7 +3,7 @@
 //! An episode represents one agent editing session against a Sharp repo.
 //! Episodes live in the `sharp` schema alongside the VCS core tables.
 //!
-//! See `docs/architecture.md` §Schema namespace assignment and agent-warning:
+//! See `docs/architecture.md §Single-Instance Database Schema Layout § Schema namespace assignment` and agent-warning:
 //!   "Sharp's episode schema goes in the `sharp` schema on the shared instance."
 
 use crate::error::SharpError;

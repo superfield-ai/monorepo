@@ -4,7 +4,7 @@
 //! SHA-256 hex digest of its raw bytes.  The three object types mirror Git's
 //! model: blob (file content), tree (directory listing), commit (snapshot).
 //!
-//! See `docs/architecture.md` §sharp schema.
+//! See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp)`.
 
 use crate::error::SharpError;
 use crate::git_canonical::{hash_object, id_hex, HashAlgo, ObjectKind};

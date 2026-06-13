@@ -9,7 +9,7 @@
 --
 -- signal_kind: 'error' | 'crash' | 'health_failure' | 'behavior'
 --
--- See docs/architecture.md §Deploy and runtime-signal loop and issue #381.
+-- See docs/architecture.md §Daemon Lifecycle and issue #381.
 
 CREATE SCHEMA IF NOT EXISTS sharp;
 

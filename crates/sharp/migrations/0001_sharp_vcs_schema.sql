@@ -1,7 +1,7 @@
 -- Sharp VCS core schema — objects, refs, commits, DAG.
 --
 -- All tables live in the `sharp` PostgreSQL schema.
--- See docs/architecture.md §Schema namespace assignment.
+-- See docs/architecture.md §Single-Instance Database Schema Layout § Schema namespace assignment.
 --
 -- Idempotent: safe to run on a database that already has this migration applied.
 

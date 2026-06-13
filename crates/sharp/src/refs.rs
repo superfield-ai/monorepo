@@ -13,7 +13,7 @@
 //! Per `docs/rust-reorg-decisions.md` §2, ref ids (hash targets) are stored as
 //! hex `String`, matching the rest of the crate, rather than `bytea`.
 //!
-//! See `docs/architecture.md` §sharp schema.
+//! See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp)`.
 
 use crate::error::SharpError;
 use sqlx::{PgPool, Row};

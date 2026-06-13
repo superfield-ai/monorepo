@@ -5,7 +5,7 @@
 -- stored as hex text in `target_sha`) and a symbolic target (another ref's
 -- name, e.g. HEAD → refs/heads/main, stored in `symbolic_target`).
 --
--- See docs/rust-reorg-decisions.md §2 (Refs) and docs/architecture.md §sharp schema.
+-- See docs/rust-reorg-decisions.md §2 (Refs) and docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp).
 --
 -- Idempotent: safe to re-run.
 
