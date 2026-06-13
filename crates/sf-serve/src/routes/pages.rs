@@ -13,8 +13,9 @@
 //!
 //! The `/pages/project` route is registered first (more specific) and uses
 //! [`sf_db::fetch_project_page`] — a recursive CTE traversal over the project
-//! node graph — rather than the `nexum.documents` document model used by the
-//! other page routes.
+//! node graph — rather than the page-revision query used by the other page
+//! routes (see `sf_db::fetch_page_content` and `nexum.page_revisions`; the
+//! `nexum.documents` backing is tracked in issue #547).
 //!
 //! # Security note
 //!
