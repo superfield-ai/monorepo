@@ -80,10 +80,10 @@ Each component owns exactly one PostgreSQL schema. All tables, indexes, sequence
 
 | PostgreSQL schema | Owner component | Tables (current)                                                                                                                                                           |
 | ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                                                                   |
+| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `git_objects`, `git_refs`, `episodes`, `episode_events`, `episode_artifacts`, `episode_links`, `runtime_signals`, `episode_typed_artifacts`, `episode_relations`, `episode_redactions`, `projections` |
 | `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `relations`, `corpus_access`, `job_queue`, `project_nodes`, `page_revisions` |
 | `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                                           |
-| `orchestrator`    | Orchestrator    | `gardening_cursor` (current); `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces)                                                         |
+| `orchestrator`    | Orchestrator    | `gardening_cursor`                                                                                                                                                         |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -540,6 +540,7 @@ The `superfield page <name>` command and the `GET /pages/{name}` route share the
 | `architecture` | `nexum.page_revisions` for page name `architecture` |
 | `plan`         | `nexum.page_revisions` for page name `plan`         |
 | `strategy`     | `nexum.page_revisions` for page name `strategy`     |
+| `technical`    | `nexum.page_revisions` for page name `technical`    |
 | `project`      | Recursive CTE over `nexum.project_nodes` (special)  |
 
 Source: `sf_db::KNOWN_PAGES` (`crates/sf-db/src/`) and `sf_db::fetch_project_page`.
