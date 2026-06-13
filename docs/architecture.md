@@ -78,12 +78,12 @@ Rejected alternatives:
 
 Each component owns exactly one PostgreSQL schema. All tables, indexes, sequences, and functions for that component live in its schema. No component may create objects in another component's schema.
 
-| PostgreSQL schema | Owner component | Tables (current)                                                                                                           |
-| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                   |
-| `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `corpus_access`, `job_queue` |
-| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                           |
-| `orchestrator`    | Orchestrator    | `gardening_cursor` (current); `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces)         |
+| PostgreSQL schema | Owner component | Tables (current)                                                                                                                                               |
+| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                                                       |
+| `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `relations`, `corpus_access`, `job_queue`, `project_nodes`, `page_revisions` |
+| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                               |
+| `orchestrator`    | Orchestrator    | `gardening_cursor` (current); `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces)                                             |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -105,12 +105,12 @@ SELECT * FROM blocks;  -- which schema? ambiguous — never do this cross-compon
 
 Each component owns its schema's migrations exclusively. Migration files are colocated with the component's source code:
 
-| Component | Migration path                                                               |
-| --------- | ---------------------------------------------------------------------------- |
-| Sharp     | `superfield-ai/sharp/apps/server/migrations/`                                |
-| Nexum     | `superfield-ai/nexum/db/migrations/`                                         |
-| Auth      | `crates/sf-auth/src/migrations/` (Rust crate)                                |
-| Orchestrator | `orchestrator/migrations/` (current — `0001_gardening_cursor.sql`)        |
+| Component    | Migration path                                                               |
+| ------------ | ---------------------------------------------------------------------------- |
+| Sharp        | `crates/sharp/migrations/`                                                   |
+| Nexum        | `crates/nexum/migrations/`                                                   |
+| Auth         | `crates/sf-auth/src/migrations/` (Rust crate)                               |
+| Orchestrator | `orchestrator/migrations/` (current — `0001_gardening_cursor.sql`)           |
 
 The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
 
@@ -443,6 +443,34 @@ See: `crates/sf-serve/src/routes/` (especially `orchestrator.rs`). Content forth
 
 ## Nexum — Page Revision Schema
 
-<!-- STUB — content forthcoming in #504 -->
+The `nexum.page_revisions` table is the append-only store for computed knowledge-base page content produced by the gardening loop. It lives in the `nexum` PostgreSQL schema and is created by `crates/nexum/migrations/0003_page_revisions.sql`.
 
-Content forthcoming in #504.
+### DDL shape
+
+```sql
+CREATE TABLE IF NOT EXISTS nexum.page_revisions (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID        NOT NULL REFERENCES public.workspaces(id),
+    page_name    TEXT        NOT NULL,
+    content      TEXT        NOT NULL,
+    provenance   TEXT        NOT NULL DEFAULT '',
+    ingested_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS page_revisions_workspace_page_idx
+    ON nexum.page_revisions (workspace_id, page_name, ingested_at DESC);
+```
+
+### Write contract
+
+The single write entrypoint is `insert_page_revision` in `crates/sf-db/src/page_revision.rs`. Callers supply `workspace_id`, `page_name`, `content`, and `provenance`; the function inserts one row and returns `Ok(())`.
+
+### Idempotency (append-only, no update)
+
+Each invocation appends a new revision row — there is no `ON CONFLICT DO UPDATE`. Readers select the latest revision for a `(workspace_id, page_name)` pair by ordering on `ingested_at DESC`. Re-running the gardening step does not corrupt history — it appends a newer row that becomes the effective current revision.
+
+### Migration prerequisite
+
+The `nexum.page_revisions` table must exist before `insert_page_revision` is called. The daemon's health gate applies all component migrations (including `0003_page_revisions.sql`) before sending `StartupResult::Ok`, so the table is guaranteed to exist for any in-process caller.
+
+See also: `crates/sf-db/src/page_revision.rs` (write contract implementation).
