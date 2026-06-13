@@ -3336,6 +3336,7 @@ dependencies = [
  "bincode",
  "chrono",
  "libc",
+ "nexum",
  "serde",
  "serde_json",
  "sf-auth",

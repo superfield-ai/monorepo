@@ -19,6 +19,9 @@
 //! - **[`page`]** — knowledge-base page commands (`page <name>`).  Projects
 //!   over the Nexum graph to render named pages as markdown.  Includes the
 //!   no-spawn daemon guard (issue #492).
+//! - **[`garden`]** — seed document ingestion commands (`garden <file...>`).
+//!   Reads markdown files and ingests them into the Nexum knowledge graph as
+//!   versioned documents with 384-dim embeddings (issue #490).
 //!
 //! # Architecture
 //!
@@ -32,6 +35,7 @@ pub mod agent;
 pub mod daemon;
 pub mod deploy_ops;
 pub mod error;
+pub mod garden;
 pub mod operator;
 pub mod page;
 
@@ -66,6 +70,10 @@ pub enum CliError {
     /// A page-command error (unknown page, daemon not running, etc.).
     #[error("page error: {0}")]
     Page(#[from] page::PageError),
+
+    /// A garden-command error (file read, ingestion, embedding, etc.).
+    #[error("garden error: {0}")]
+    Garden(#[from] garden::GardenError),
 
     /// A UUID parse error.
     #[error("invalid UUID: {0}")]
@@ -138,6 +146,16 @@ pub enum Cmd {
     /// Exits non-zero if the daemon is not running or the name is unknown.
     /// Recognised names: `prd`, `architecture`, `plan`, `strategy`, `project`.
     Page { name: String },
+
+    // --- Garden commands ---
+    /// Ingest one or more markdown files into the Nexum knowledge graph.
+    ///
+    /// Each file becomes one versioned document.  Re-running with the same
+    /// file creates a new version without duplicating the document row.
+    Garden {
+        files: Vec<String>,
+        workspace_id: Uuid,
+    },
 }
 
 /// Parse `args` (the slice after the binary name) into a [`Cmd`].
@@ -218,8 +236,67 @@ pub fn parse(args: &[String]) -> Result<Cmd, CliError> {
         // page <name>
         [a, name] if a == "page" => Ok(Cmd::Page { name: name.clone() }),
 
+        // garden <file...> [--workspace-id <uuid>]
+        // garden requires at least one file argument.
+        args if args.first().map(String::as_str) == Some("garden") && args.len() >= 2 => {
+            parse_garden_cmd(args)
+        }
+
         _ => Err(CliError::Usage(USAGE.to_string())),
     }
+}
+
+/// Parse `garden <file...> [--workspace-id <uuid>]` into a [`Cmd::Garden`].
+///
+/// The workspace ID is read from:
+/// 1. `--workspace-id <uuid>` flag in the argument list.
+/// 2. `WORKSPACE_ID` environment variable as a fallback.
+///
+/// Returns a [`CliError::Usage`] if no files are given or the workspace ID
+/// cannot be resolved.
+fn parse_garden_cmd(args: &[String]) -> Result<Cmd, CliError> {
+    // args[0] == "garden"; args[1..] are files and optional flags.
+    let mut files = Vec::new();
+    let mut workspace_id_str: Option<String> = None;
+
+    let mut i = 1usize; // skip "garden"
+    while i < args.len() {
+        if args[i] == "--workspace-id" {
+            i += 1;
+            if let Some(v) = args.get(i) {
+                workspace_id_str = Some(v.clone());
+            } else {
+                return Err(CliError::Usage(
+                    "--workspace-id requires a UUID argument".to_string(),
+                ));
+            }
+        } else {
+            files.push(args[i].clone());
+        }
+        i += 1;
+    }
+
+    if files.is_empty() {
+        return Err(CliError::Usage(
+            "garden: no files specified; usage: superfield garden <file1> [file2...]".to_string(),
+        ));
+    }
+
+    // Resolve workspace_id: flag first, then env var.
+    let ws_str = workspace_id_str
+        .or_else(|| std::env::var("WORKSPACE_ID").ok())
+        .ok_or_else(|| {
+            CliError::Usage(
+                "garden: WORKSPACE_ID must be set (env var or --workspace-id <uuid>)".to_string(),
+            )
+        })?;
+
+    let workspace_id = ws_str.parse::<Uuid>()?;
+
+    Ok(Cmd::Garden {
+        files,
+        workspace_id,
+    })
 }
 
 /// Run a parsed [`Cmd`] against the shared pool.
@@ -255,6 +332,12 @@ pub async fn run(pool: &PgPool, cmd: Cmd) -> Result<(), CliError> {
 
         // Page commands.
         Cmd::Page { name } => page::page_show(pool, &name).await?,
+
+        // Garden commands — seed document ingestion.
+        Cmd::Garden {
+            files,
+            workspace_id,
+        } => garden::garden_ingest(pool, &files, workspace_id).await?,
     }
     Ok(())
 }
@@ -315,6 +398,11 @@ Deploy-operator commands (backed by sf-deploy):
 Page commands (require running daemon):
   page <name>                         Print a knowledge-base page as markdown
                                       name: prd | architecture | plan | strategy | project
+
+Garden commands (seed document ingestion):
+  garden <file1> [file2...] [--workspace-id <uuid>]
+                                      Ingest markdown files into the knowledge graph
+                                      workspace-id defaults to WORKSPACE_ID env var
 ";
 
 #[cfg(test)]

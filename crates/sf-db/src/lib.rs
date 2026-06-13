@@ -20,8 +20,8 @@
 //!   stopping the local Postgres container (daemon lifecycle — issue #489).
 //!   No-op stub: [`provisioner::TestProvisioner`].
 //! - [`page_revision::insert_page_revision`]: write entrypoint for the
-//!   gardening loop page-revision path (issues #490, #491). Stub returns
-//!   `Ok(())` until the real INSERT is implemented.
+//!   gardening loop page-revision path (issues #490, #491). Inserts a row
+//!   into `nexum.page_revisions` with the rendered content and provenance tag.
 //! - [`page_query::fetch_page_content`]: read projection for the pages layer
 //!   (issue #492). Queries the latest Nexum document_version for a named page
 //!   and renders blocks as markdown.
