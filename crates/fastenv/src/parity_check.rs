@@ -11,7 +11,7 @@
 // GuestRuntime or HostControlPlane surface is a parity gap.
 //
 // Supported command set (from docs/implementation-plan.md Phase 1):
-//   build-base, fork, exec, diff, du, export-patch, gc, bench
+//   build-base, fork, exec, diff, du, export-patch, gc, bench, doctor
 //
 // Deprecated commands retained for migration compatibility:
 //   mount-path, unmount
@@ -107,6 +107,12 @@ pub fn command_parity_table() -> Vec<CommandParityEntry> {
             note: "GuestRuntime::discard_fork — releases a fork's snapshot resources and removes its registry entry",
         },
         CommandParityEntry {
+            command: "doctor",
+            boundary: CommandBoundary::HostControlPlane,
+            deprecated: false,
+            note: "doctor — checks host prerequisites (KVM, CPU flags, binaries, overlayfs, kernel, memory); not routed through GuestRuntime boundary",
+        },
+        CommandParityEntry {
             command: "mount-path",
             boundary: CommandBoundary::GuestRuntime,
             deprecated: true,
@@ -187,27 +193,37 @@ mod tests {
         );
     }
 
-    /// Confirm the supported command set routes through the GuestRuntime boundary.
+    /// Confirm the supported command set routes through the correct boundary.
     ///
-    /// Each supported command must be reachable through the trait — not a raw
-    /// module call or a direct host path.
+    /// Most commands route through GuestRuntime.  The `doctor` command is a
+    /// host-side diagnostic that does not touch the guest workspace engine, so
+    /// it belongs to HostControlPlane.
     #[test]
     fn supported_commands_route_through_guest_runtime_boundary() {
         let table = command_parity_table();
         let non_deprecated: Vec<&CommandParityEntry> =
             table.iter().filter(|e| !e.deprecated).collect();
 
-        // Every non-deprecated command in the current set belongs to GuestRuntime.
-        // When the HostControlPlane surface gains its own CLI verbs, update
-        // this assertion to allow CommandBoundary::HostControlPlane as well.
+        // Commands that intentionally route through HostControlPlane rather than GuestRuntime.
+        let host_control_commands: HashSet<&str> = ["doctor"].iter().copied().collect();
+
         for entry in &non_deprecated {
-            assert_eq!(
-                entry.boundary,
-                CommandBoundary::GuestRuntime,
-                "command '{}' must route through GuestRuntime boundary; \
-                 update command_parity_table() if the boundary changed",
-                entry.command
-            );
+            if host_control_commands.contains(entry.command) {
+                assert_eq!(
+                    entry.boundary,
+                    CommandBoundary::HostControlPlane,
+                    "command '{}' must route through HostControlPlane boundary",
+                    entry.command
+                );
+            } else {
+                assert_eq!(
+                    entry.boundary,
+                    CommandBoundary::GuestRuntime,
+                    "command '{}' must route through GuestRuntime boundary; \
+                     update command_parity_table() if the boundary changed",
+                    entry.command
+                );
+            }
         }
     }
 
@@ -364,9 +380,10 @@ mod tests {
         }
     }
 
-    /// Confirm the supported command count matches the expected set from Phase 1.
+    /// Confirm the supported command count matches the expected set.
     ///
-    /// The supported set is: build-base, fork, discard, exec, diff, du, export-patch, gc, bench.
+    /// The supported set is: build-base, fork, discard, exec, diff, du,
+    /// export-patch, gc, bench, doctor.
     /// Deprecated (mount-path, unmount) are excluded from the supported count.
     #[test]
     fn supported_command_count_matches_phase1_set() {
@@ -381,6 +398,7 @@ mod tests {
             "export-patch",
             "gc",
             "bench",
+            "doctor",
         ]
         .iter()
         .copied()
@@ -388,7 +406,7 @@ mod tests {
         let actual: HashSet<&str> = supported.iter().copied().collect();
         assert_eq!(
             actual, expected,
-            "supported command set does not match the Phase 1 spec; \
+            "supported command set does not match the expected spec; \
              update command_parity_table() to reflect any changes"
         );
     }

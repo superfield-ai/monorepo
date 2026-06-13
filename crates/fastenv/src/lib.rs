@@ -10,6 +10,7 @@
 pub mod bench;
 pub mod boundary;
 pub mod build_base;
+pub mod doctor;
 pub mod container_runtime;
 pub mod diff;
 pub mod discard;
