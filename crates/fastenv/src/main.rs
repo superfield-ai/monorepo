@@ -10,7 +10,7 @@ pub mod parity_check;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use fastenv::{bench, boundary, exec, gc, quota};
+use fastenv::{bench, boundary, doctor, exec, gc, quota};
 use std::path::PathBuf;
 
 use boundary::{GuestRuntime, HostControlPlane, LocalHostControlPlane};
@@ -140,6 +140,26 @@ enum Commands {
         #[arg(long)]
         vm: bool,
     },
+    /// Check host prerequisites for running fastenv microVMs.
+    ///
+    /// Prints a pass/fail report for: /dev/kvm, CPU virtualisation flags,
+    /// firecracker binary, crun binary, /dev/net/tun, overlayfs, kernel
+    /// version, and free memory.  Exit code 0 = all required checks pass;
+    /// exit code 1 = one or more required checks failed.
+    Doctor {
+        /// Emit machine-readable JSON instead of human-readable output.
+        #[arg(long)]
+        json: bool,
+        /// Path to the firecracker binary.
+        #[arg(long, default_value = "/usr/local/bin/firecracker")]
+        firecracker_path: std::path::PathBuf,
+        /// Path to the crun binary.
+        #[arg(long, default_value = "/usr/bin/crun")]
+        crun_path: std::path::PathBuf,
+        /// Minimum free memory in MiB (advisory warning only).
+        #[arg(long, default_value = "512")]
+        min_free_mib: u64,
+    },
 }
 
 fn init_tracing() {
@@ -246,6 +266,25 @@ fn main() -> Result<()> {
             let json = serde_json::to_string_pretty(&result).context("serialize bench result")?;
             println!("{json}");
         }
+        Commands::Doctor {
+            json,
+            firecracker_path,
+            crun_path,
+            min_free_mib,
+        } => {
+            let env = doctor::DoctorEnv {
+                firecracker_path,
+                crun_path,
+                min_free_memory_bytes: min_free_mib * 1024 * 1024,
+                ..Default::default()
+            };
+            let exit_code = if json {
+                doctor::run_json(&env)?
+            } else {
+                doctor::run(&env)?
+            };
+            std::process::exit(exit_code);
+        }
     }
 
     Ok(())
@@ -278,6 +317,7 @@ mod tests {
             "mount-path",
             "unmount",
             "bench",
+            "doctor",
         ];
         for name in &expected {
             assert!(
