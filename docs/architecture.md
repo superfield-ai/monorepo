@@ -474,3 +474,9 @@ Each invocation appends a new revision row — there is no `ON CONFLICT DO UPDAT
 The `nexum.page_revisions` table must exist before `insert_page_revision` is called. The daemon's health gate applies all component migrations (including `0003_page_revisions.sql`) before sending `StartupResult::Ok`, so the table is guaranteed to exist for any in-process caller.
 
 See also: `crates/sf-db/src/page_revision.rs` (write contract implementation).
+
+---
+
+## Milestone 1 — Headless Gardening Appliance (completed)
+
+Milestone 1 delivered the headless binary: daemon auto-spawn, Postgres container lifecycle, seed document ingestion, continuous gardening loop, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
