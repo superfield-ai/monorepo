@@ -29,7 +29,7 @@
 //! let signals = query_by_deployment(&pool, "deploy-abc123").await?;
 //! ```
 //!
-//! See `docs/architecture.md` §Deploy and runtime-signal loop and
+//! See `docs/architecture.md §Daemon Lifecycle` and
 //! migration `0004_sharp_runtime_signal.sql`.
 
 use crate::error::SharpError;

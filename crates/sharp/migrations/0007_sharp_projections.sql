@@ -14,7 +14,7 @@
 -- JSON commit model (sharp.commit_metadata / sharp.commit_paths) rather than the
 -- TS two-parent git-canonical model.
 --
--- See docs/architecture.md §sharp schema and whitepaper §6.7.
+-- See docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp) and whitepaper §6.7.
 --
 -- Idempotent: safe to re-run.
 

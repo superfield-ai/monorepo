@@ -1,7 +1,7 @@
 -- Sharp Git interop schema — git_objects and git_refs.
 --
 -- All tables live in the `sharp` PostgreSQL schema.
--- See docs/architecture.md §sharp schema, and whitepaper §7.
+-- See docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp), and whitepaper §7.
 --
 -- git_objects stores the canonical (inflated) bytes of every Git object
 -- imported into Sharp, keyed by the Git SHA-1 hex.  The kind column is

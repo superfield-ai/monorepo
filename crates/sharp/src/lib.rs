@@ -45,9 +45,9 @@
 //! Sharp manages Superfield's own Rust source (the `crates/sharp` workspace)
 //! as its dogfood repo.  Any merge of Sharp's own code passes through the
 //! Rust semantic merge path, exercising the no-non-compiling-merge guarantee
-//! on production source.  See `docs/architecture.md` §Self-hosting gate.
+//! on production source.  See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Self-hosting gate`.
 //!
-//! See `docs/architecture.md` §Single-Instance Database Schema Layout.
+//! See `docs/architecture.md §Single-Instance Database Schema Layout`.
 
 pub mod ast_equivalence;
 pub mod cargo_check;
