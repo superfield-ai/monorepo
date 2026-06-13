@@ -242,6 +242,19 @@ Sharp performs semantic merge for Rust source files using **rust-analyzer** as a
 | `cargo_check`                | Structural verification gate — runs `cargo check --message-format=json` and parses compiler errors                                                         |
 | `semantic_merge`             | Tier-1 merge algorithm — rename detection, 3-way textual baseline, cargo check gate                                                                        |
 | `error`                      | Shared `SharpError` type                                                                                                                                   |
+| `ast_equivalence`            | AST whitespace-equivalence via tree-sitter — two Rust source strings are "AST-equal" when their canonical token streams are byte-identical                 |
+| `file_rename`                | File-level rename detection via Jaccard line-set similarity — pairs deleted/added files above a similarity threshold                                       |
+| `git_canonical`              | Git-canonical object encoding/decoding — the shared `<kind> <size>\0<payload>` hash format for blobs, trees, commits, and tags                             |
+| `hooks`                      | Pre-merge (and general) hooks — discovers and runs executables under `.sharp/hooks/<event>/`, treats non-zero exit as a merge veto                         |
+| `merge_flow`                 | Self-hosting merge flow — production entry point that orchestrates the full pipeline for Superfield's own Rust workspace through Sharp                     |
+| `oracle`                     | Tier-2 oracle scoring — classifies per-path conflicts between a candidate tree and oracle branches to prefer the most downstream-compatible merge          |
+| `projections`                | Continuous speculative merge projections — lazily maintains always-up-to-date Tier-1 merge results for `(repo_id, branch_ref, target_ref)` pairs           |
+| `refs`                       | Refs (branches, tags, HEAD) over `sharp.refs` — compare-and-swap updates, symbolic targets, hex-string hash ids                                            |
+| `runtime_signal`             | Runtime signal capture — records production crashes, health failures, and behavioral signals linked to Sharp episodes and deployments                      |
+| `semantic_merge_ts`          | Tier-1 semantic merge for TypeScript — drives `tsserver_bridge_client` for rename detection and propagation, then applies a 3-way textual baseline         |
+| `tier1`                      | Unified Tier-1 merge driver — wires classification, file-rename redirection, symbol-rename propagation, whitespace-equivalence, oracle, and hook gate      |
+| `tsserver_bridge_client`     | `tsserver-bridge` subprocess harness — spawns the TypeScript bridge script, communicates over newline-delimited JSON-RPC 2.0 on stdio                      |
+| `workspace`                  | Working-tree primitives — snapshot a directory to SHA-256 blobs/trees and materialize a tree back to disk, using git-canonical header-prefixed ids         |
 
 ### Merge algorithm (Tier-1)
 
