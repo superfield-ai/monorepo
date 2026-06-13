@@ -6,7 +6,7 @@
 #
 # Governed by: docs/adr-embedding-model.md (issue #432)
 # Constants:
-#   Rust  — sf_embed::GOVERNED_MODEL, sf_embed::GOVERNED_MODEL_REVISION, sf_embed::GOVERNED_DIM
+#   Rust  — nexum::embed::GOVERNED_MODEL, nexum::embed::GOVERNED_MODEL_REVISION, nexum::embed::GOVERNED_DIM
 #   TS    — GOVERNED_EMBEDDING in packages/db/index.ts
 #
 # To update: create a superseding ADR, update the revision here, update the
@@ -14,7 +14,7 @@
 # vector column.
 
 [model]
-# HuggingFace model ID (safetensors, used by the Rust sf-embed crate via hf-hub + candle)
+# HuggingFace model ID (safetensors, used by the Rust crates/nexum/src/embed.rs via hf-hub + candle)
 hf_model_id = "sentence-transformers/all-MiniLM-L6-v2"
 
 # HuggingFace model ID (ONNX, used by TypeScript via @xenova/transformers)
