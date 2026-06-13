@@ -31,13 +31,13 @@ the file is already conforming.
 
 Current table rows vs. `architecture.md` §Schema namespace assignment:
 
-| Schema | Current (adr-schema-boundary) | Correct (from architecture.md) |
-|--------|-------------------------------|-------------------------------|
-| `sharp` | 7 columns | Full current list (16 columns incl. `git_objects`, `git_refs`, episode tables, etc.) |
-| `nexum` | 9 columns | 12 columns (missing `relations`, `project_nodes`, `page_revisions`) |
-| `auth` | `sessions`, `oauth_tokens`, `app_installations` | Same — correct |
-| `episodes` (line 91) | `episodes`, `episode_events`, `episode_outcomes` | Wrong schema name — now `orchestrator`, table = `gardening_cursor` |
-| `substrate` | (missing) | New row: `substrate` / sf-db / `backups` |
+| Schema               | Current (adr-schema-boundary)                    | Correct (from architecture.md)                                                       |
+| -------------------- | ------------------------------------------------ | ------------------------------------------------------------------------------------ |
+| `sharp`              | 7 columns                                        | Full current list (16 columns incl. `git_objects`, `git_refs`, episode tables, etc.) |
+| `nexum`              | 9 columns                                        | 12 columns (missing `relations`, `project_nodes`, `page_revisions`)                  |
+| `auth`               | `sessions`, `oauth_tokens`, `app_installations`  | Same — correct                                                                       |
+| `episodes` (line 91) | `episodes`, `episode_events`, `episode_outcomes` | Wrong schema name — now `orchestrator`, table = `gardening_cursor`                   |
+| `substrate`          | (missing)                                        | New row: `substrate` / sf-db / `backups`                                             |
 
 **2. Migration ownership table (lines 148–154): nonexistent `packages/orchestrator/migrations/`**
 
@@ -49,7 +49,7 @@ The `packages/orchestrator` package was retired by PR #462. Replace with:
 **3. Dependency order (line 201): `episodes` → `orchestrator`**
 
 Current: `auth` → `nexum` → `sharp` → `episodes`
-Correct:  `auth` → `nexum` → `sharp` → `orchestrator`
+Correct: `auth` → `nexum` → `sharp` → `orchestrator`
 
 ---
 
@@ -60,6 +60,7 @@ Correct:  `auth` → `nexum` → `sharp` → `orchestrator`
 **1. Line 330 — stale table name and `(schema to be defined)` parenthetical**
 
 Current line 330:
+
 ```
 2. Insert a row into a `substrate.backup_events` table (schema to be defined).
 ```
@@ -68,6 +69,7 @@ The `substrate` schema IS defined. `crates/sf-db/src/backup.rs` implements `PgBa
 inserts into `substrate.backups` (not `backup_events`). The parenthetical is stale.
 
 Replacement:
+
 ```
 2. Insert a row into the `substrate.backups` table.
 ```
@@ -78,6 +80,7 @@ Current table ends at `orchestrator` (line 88). The `substrate` schema (owned by
 containing the `backups` table) is not listed.
 
 Row to insert after line 88:
+
 ```
 | `substrate`    | sf-db           | `backups`                                                                                                                                                                                                                                                            |
 ```
@@ -97,6 +100,7 @@ Row to insert after line 88:
 ```
 
 Stale in two ways:
+
 1. References the `episodes` schema — that is Sharp's VCS schema, not backup-related.
 2. Says "once that schema is defined" — `substrate.backups` IS defined (see `PgBackup` implementation below).
 
@@ -114,6 +118,7 @@ Stale in two ways:
 **File 1:** `crates/superfield/src/main.rs`
 
 **Lines 264–265 (current):**
+
 ```rust
     // Read CONTROL_ASSETS_DIR from the environment — set by the TypeScript CLI
     // control command after building the browser UI (packages/control/apps).
@@ -122,6 +127,7 @@ Stale in two ways:
 The TypeScript CLI control command and `packages/control/apps` were retired by PR #462.
 
 **Replacement:**
+
 ```rust
     // Read CONTROL_ASSETS_DIR from the environment — path to pre-built browser
     // UI assets served at the root by the Rust HTTP layer.
@@ -130,6 +136,7 @@ The TypeScript CLI control command and `packages/control/apps` were retired by P
 **File 2:** `crates/sf-serve/src/routes/auth.rs`
 
 **Lines 207–208 (current):**
+
 ```rust
             // HttpOnly + SameSite=Lax mirrors what the Bun backend sent so
             // existing E2E helpers can parse the cookie without changes.
@@ -138,6 +145,7 @@ The TypeScript CLI control command and `packages/control/apps` were retired by P
 The Bun backend was retired by PR #462.
 
 **Replacement:**
+
 ```rust
             // HttpOnly + SameSite=Lax for compatibility with E2E test helpers.
 ```
@@ -151,11 +159,13 @@ The Bun backend was retired by PR #462.
 **File:** `docs/architecture.md`
 
 The `GET /health` route is registered in `crates/sf-serve/src/lib.rs` line 146:
+
 ```rust
 .route("/health", get(health))
 ```
 
 Handler at lines 153–158:
+
 ```rust
 /// `GET /health` — unauthenticated liveness probe.
 ///
@@ -171,6 +181,7 @@ This is DISTINCT from `GET /api/auth/health` (already in docs at line 549, handl
 **Insertion point:** After the table header (line 548) and before `GET /api/auth/health` (line 549).
 
 **Row to insert:**
+
 ```
 | `GET`    | `/health`                   | None     | `lib`          | Unauthenticated liveness probe — returns `{"status":"ok"}` for load balancers and E2E setup   |
 ```
@@ -197,6 +208,7 @@ Serialization: #591 must run before #590 and #585.
 **File:** Plan issue #199 body
 
 Both issues are CLOSED:
+
 - #510: CLOSED
 - #508: CLOSED
 
