@@ -297,7 +297,7 @@ function DebugRow({ entry, expanded, onToggle }: DebugRowProps): JSX.Element {
       body: ["```", JSON.stringify(entry, null, 2), "```"].join("\n"),
     });
     window.open(
-      `https://github.com/superfield-ai/superfield-cli-ts/issues/new?${params.toString()}`,
+      `https://github.com/superfield-ai/monorepo/issues/new?${params.toString()}`,
       "_blank",
       "noreferrer",
     );
