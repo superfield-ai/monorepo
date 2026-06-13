@@ -7,8 +7,8 @@
 //!
 //! # Architecture
 //!
-//! See `docs/architecture.md` §5 (CLI, deploy tooling, and serving backend in
-//! Rust) and the agent-warning: "The single binary entrypoint is
+//! See `docs/architecture.md` §CLI — Command Surface and the agent-warning:
+//! "The single binary entrypoint is
 //! `crates/superfield/src/main.rs`".
 //!
 //! The pool is built once here from `DATABASE_URL` (via [`sf_db::DbConfig`]);

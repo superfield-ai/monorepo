@@ -25,8 +25,8 @@
 //!
 //! # Architecture
 //!
-//! See `docs/architecture.md` §5 (CLI, deploy tooling, and serving backend in
-//! Rust) and the agent-warning: "the CLI wraps sf-db, sf-auth, and Sharp".
+//! See `docs/architecture.md` §CLI — Command Surface and the agent-warning:
+//! "the CLI wraps sf-db, sf-auth, and Sharp".
 //!
 //! The binary entrypoint (`crates/superfield/src/main.rs`) builds the shared
 //! `PgPool` once, then dispatches the parsed [`Cmd`] here via [`run`].

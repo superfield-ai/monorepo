@@ -14,8 +14,8 @@
 //!
 //! # Architecture
 //!
-//! See `docs/architecture.md` §5 (CLI, deploy tooling, and serving backend in
-//! Rust). Lifecycle state lives in `crates/sf-deploy`; the single binary
+//! See `docs/architecture.md` §CLI — Command Surface. Lifecycle state lives in
+//! `crates/sf-deploy`; the single binary
 //! `superfield` surfaces it via the deploy subcommand.
 //!
 //! # Scope (issue #380)

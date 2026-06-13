@@ -8,8 +8,8 @@
 //!
 //! # Architecture
 //!
-//! See `docs/architecture.md` §5 (CLI, deploy tooling, and serving backend in
-//! Rust). Deploy tooling goes in `crates/sf-deploy`; the single binary
+//! See `docs/architecture.md` §CLI — Command Surface. Deploy tooling goes in
+//! `crates/sf-deploy`; the single binary
 //! `superfield` mounts it via `sf_deploy::deploy()`.
 //!
 //! # Scope (issue #379 + #380)
