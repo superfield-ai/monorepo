@@ -8,16 +8,16 @@ deployment targets can be evaluated accurately.
 
 ## Summary table
 
-| Provider | Standard VMs | Notes |
-|---|---|---|
-| AWS EC2 | Yes — C8i, M8i, R8i only (since Feb 2026) | Intel 8th-gen only; no Graviton; opt-in parameter |
-| GCP Compute Engine | Yes — Intel families | `--enable-nested-virtualization` flag; E2, AMD, ARM excluded |
-| Azure | Yes — Dv3/Ev3 and newer Intel; some AMD v6 | Hyper-V native; KVM works with caveats; "Standard" security type required |
-| DigitalOcean | Yes — all regions, all tiers | Unsupported; poor performance; live migration kills VMs |
-| OCI | Yes — E5.Flex (AMD), Standard3.Flex (Intel) | Officially documented by Oracle |
-| Vultr | Likely yes | Community-reported; not officially documented |
-| Hetzner Cloud | No | Cloud VMs (CX/CPX/CCX) do not expose KVM; dedicated servers do |
-| Linode / Akamai | No | Incompatible with their live-migration system; no bare metal yet |
+| Provider           | Standard VMs                                | Notes                                                                     |
+| ------------------ | ------------------------------------------- | ------------------------------------------------------------------------- |
+| AWS EC2            | Yes — C8i, M8i, R8i only (since Feb 2026)   | Intel 8th-gen only; no Graviton; opt-in parameter                         |
+| GCP Compute Engine | Yes — Intel families                        | `--enable-nested-virtualization` flag; E2, AMD, ARM excluded              |
+| Azure              | Yes — Dv3/Ev3 and newer Intel; some AMD v6  | Hyper-V native; KVM works with caveats; "Standard" security type required |
+| DigitalOcean       | Yes — all regions, all tiers                | Unsupported; poor performance; live migration kills VMs                   |
+| OCI                | Yes — E5.Flex (AMD), Standard3.Flex (Intel) | Officially documented by Oracle                                           |
+| Vultr              | Likely yes                                  | Community-reported; not officially documented                             |
+| Hetzner Cloud      | No                                          | Cloud VMs (CX/CPX/CCX) do not expose KVM; dedicated servers do            |
+| Linode / Akamai    | No                                          | Incompatible with their live-migration system; no bare metal yet          |
 
 ---
 
@@ -38,6 +38,7 @@ Firecracker itself runs in AWS Lambda and Fargate, but those environments sit on
 Nitro bare-metal capacity managed entirely by AWS — not on nested-virt instances.
 
 **References:**
+
 - [AWS EC2 Nested Virtualization announcement (InfoQ, Mar 2026)](https://www.infoq.com/news/2026/03/aws-ec2-nested-virtualization/)
 - [AWS re:Post thread on compute-optimized nested virt](https://repost.aws/questions/QUkOwmVhagQbOumNhdfc4YcA/nested-virtualisation-support-on-ec2-compute-optimized-instances)
 
@@ -58,6 +59,7 @@ memory-optimized (M1/M2/M3), H4D.
 nested KVM enabled.
 
 **References:**
+
 - [GCP docs: About nested virtualization](https://docs.cloud.google.com/compute/docs/instances/nested-virtualization/overview)
 - [GCP docs: Enable nested virtualization](https://docs.cloud.google.com/compute/docs/instances/nested-virtualization/enabling)
 - [firecracker-gcp (community project)](https://github.com/glikson/firecracker-gcp)
@@ -84,6 +86,7 @@ Azure uses Hyper-V as its hypervisor, but Linux KVM works inside a supported Azu
 Azure ARM (Cobalt) instances do not support nested virtualization.
 
 **References:**
+
 - [Microsoft: Nested Virtualization in Azure (blog)](https://azure.microsoft.com/en-us/blog/nested-virtualization-in-azure/)
 - [Microsoft Q&A: which Azure VM sizes support nested virt](https://learn.microsoft.com/en-us/answers/questions/813416/how-do-i-know-what-size-azure-vm-supports-nested-v)
 - [Microsoft Q&A: KVM environment inside Azure VM](https://learn.microsoft.com/en-us/answers/questions/2086756/about-nested-vms-when-building-a-kvm-environment-i)
@@ -124,6 +127,7 @@ Viable for development and testing. Not recommended as a production substrate wi
 explicit tolerance for unannounced VM restarts.
 
 **References:**
+
 - [DO community: KVM / nested virtualization support (official reply)](https://www.digitalocean.com/community/questions/does-digitalocean-support-kvm-or-nested-virtulzation)
 - [Alex Ellis: Running Firecracker without KVM on cloud VMs (Feb 2025)](https://blog.alexellis.io/how-to-run-firecracker-without-kvm-on-regular-cloud-vms/)
 
@@ -140,6 +144,7 @@ OCI's Always Free tier uses different shapes (A1 ARM and E2.Micro) that are not 
 supported for nested virt.
 
 **References:**
+
 - [Oracle blog: KVM Nested Virtualization in OCI](https://blogs.oracle.com/linux/kvm-nested-virtualization-in-oci)
 - [Oracle blog: Simple guide to nested KVM on OCI](https://blogs.oracle.com/cloud-infrastructure/post/a-simple-guide-to-nested-kvm-virtualization-on-oracle-cloud-infrastructure)
 
@@ -167,6 +172,7 @@ Hetzner's **dedicated servers** (Root Servers / AX/EX lines) are bare metal and 
 support KVM. Hetzner Cloud ≠ Hetzner dedicated — they are distinct product lines.
 
 **References:**
+
 - [GitHub: Proxmox on Hetzner Cloud — KVM limitation](https://bennetgallein.de/blog/proxmox-on-hetzner-cloud)
 - [hetzner-ocp issue: nested virtualization unavailable on cloud VMs](https://github.com/RedHat-EMEA-SSA-Team/hetzner-ocp/issues/10)
 
@@ -182,6 +188,7 @@ Linode has mentioned future bare-metal offerings as a path to KVM access, but no
 generally-available bare-metal product exists as of this writing.
 
 **References:**
+
 - [Linode community: nested VM/virtualization support](https://www.linode.com/community/questions/19459/do-any-linode-regionsinstances-support-nested-vmvirtualization)
 
 ---
@@ -189,16 +196,19 @@ generally-available bare-metal product exists as of this writing.
 ## Implications for fastenv
 
 **Well-supported targets (recommended):**
+
 - GCP N2/C2/C3 Intel instances with `--enable-nested-virtualization`
 - Azure Dv5/Ev5 Intel instances (security type: Standard)
 - AWS C8i/M8i/R8i with NestedVirtualization enabled (since Feb 2026)
 - OCI VM.Standard3.Flex or VM.Standard.E5.Flex
 
 **Works but unsupported / unstable:**
+
 - DigitalOcean: any Droplet, but expect poor performance and unannounced VM restarts
 - Vultr: likely works; treat as unsupported
 
 **Does not work:**
+
 - Hetzner Cloud VMs (CX/CPX/CCX/CAX)
 - Linode / Akamai standard instances
 - AWS Graviton, GCP E2 / ARM / AMD, Azure Cobalt (ARM)

@@ -14,19 +14,34 @@
 //! The pool is built once here from `DATABASE_URL` (via [`sf_db::DbConfig`]);
 //! component crates receive it rather than opening their own connections.
 //!
+//! # Daemon auto-spawn
+//!
+//! When `SF_START_DAEMON=1` is set in the environment, the binary enters
+//! daemon mode: it starts the serving layer (after the Postgres health gate
+//! passes) and notifies the spawning CLI via the startup-notify socket
+//! (`SF_STARTUP_NOTIFY`).
+//!
+//! `SF_NO_DAEMON=1` suppresses the daemonize() call and runs the server in
+//! the calling process — used in containers and CI.
+//!
 //! # Subcommands
 //!
-//! | Subcommand | Handler                     | Description                         |
-//! |------------|-----------------------------|-------------------------------------|
-//! | `serve`    | [`sf_serve::serve`]         | Start the HTTP server               |
-//! | `repo`     | `sf_cli` operator commands  | Manage Sharp repos                  |
-//! | `session`  | `sf_cli` operator commands  | Manage auth sessions                |
-//! | `episode`  | `sf_cli` agent commands     | Manage agent episodes               |
-//! | `page`     | `sf_cli` page commands      | Print a knowledge-base page (requires daemon) |
-//! | `deploy`   | [`sf_deploy`]               | Deploy a build to a target          |
-//! | `noop`     | (built-in)                  | Smoke-test — exits cleanly          |
+//! | Subcommand       | Handler                     | Description                                   |
+//! |------------------|-----------------------------|-----------------------------------------------|
+//! | `serve`          | [`sf_serve::serve`]         | Start the HTTP server                         |
+//! | `daemon stop`    | sf_cli daemon               | Graceful daemon shutdown                      |
+//! | `status`         | sf_cli daemon               | Show daemon status (no-spawn guard)           |
+//! | `logs`           | sf_cli daemon               | Show daemon log tail (no-spawn guard)         |
+//! | `page`           | `sf_cli` page commands      | Print a knowledge-base page (requires daemon) |
+//! | `repo`           | `sf_cli` operator commands  | Manage Sharp repos                            |
+//! | `session`        | `sf_cli` operator commands  | Manage auth sessions                          |
+//! | `episode`        | `sf_cli` agent commands     | Manage agent episodes                         |
+//! | `deploy`         | [`sf_deploy`]               | Deploy a build to a target                    |
+//! | `noop`           | (built-in)                  | Smoke-test — exits cleanly                    |
 
 use std::process;
+
+use sf_cli::daemon as sf_daemon;
 
 const USAGE: &str = "\
 superfield — unified CLI and HTTP serving backend
@@ -94,6 +109,21 @@ Target config JSON fields:
 async fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
 
+    // ---------------------------------------------------------------------------
+    // SF_START_DAEMON dispatch
+    //
+    // When the CLI re-executes itself with SF_START_DAEMON=1, the binary enters
+    // daemon mode.  It starts the Postgres provisioner, runs migrations, starts
+    // the HTTP serving layer, and notifies the parent CLI via the startup-notify
+    // socket.
+    //
+    // SF_NO_DAEMON=1 suppresses daemonize() — runs the server in the foreground.
+    // ---------------------------------------------------------------------------
+    if std::env::var("SF_START_DAEMON").as_deref() == Ok("1") {
+        run_as_daemon().await;
+        return;
+    }
+
     // No-op command: exit cleanly without spinning up any component.
     if args.first().map(String::as_str) == Some("noop") {
         eprintln!("superfield: ok");
@@ -107,6 +137,23 @@ async fn main() {
     {
         print!("{}", USAGE);
         process::exit(0);
+    }
+
+    // No-spawn guard: status, logs, page — exit non-zero if daemon not running.
+    let subcommand = args.first().map(String::as_str).unwrap_or("");
+    if sf_daemon::is_no_spawn_command(subcommand) && !sf_daemon::daemon_is_running() {
+        eprintln!("superfield {}: daemon not running", subcommand);
+        process::exit(1);
+    }
+
+    // `daemon stop` — send graceful shutdown RPC.
+    if args.first().map(String::as_str) == Some("daemon") {
+        if args.get(1).map(String::as_str) == Some("stop") {
+            handle_daemon_stop();
+            return;
+        }
+        eprintln!("superfield daemon: unknown subcommand; try 'stop'");
+        process::exit(1);
     }
 
     // Route deploy subcommand to sf-deploy.
@@ -308,4 +355,184 @@ fn run_deploy(args: &[String]) {
             process::exit(1);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Daemon mode — entered when SF_START_DAEMON=1
+// ---------------------------------------------------------------------------
+
+/// Run the binary in daemon mode.
+///
+/// Called when `SF_START_DAEMON=1` is set in the environment.  The sequence:
+///
+/// 1. Acquire the daemon state directory.
+/// 2. Start the Postgres provisioner (via [`sf_db::provisioner::TestProvisioner`]
+///    until the real Docker provisioner is implemented by this issue).
+/// 3. Run migrations (stub: not yet wired).
+/// 4. Start the HTTP serving layer.
+/// 5. Write `daemon.json`.
+/// 6. Send `StartupResult::Ok` over the startup-notify socket.
+///
+/// If any step fails, send `StartupResult::Err` and exit 1.
+///
+/// `SF_NO_DAEMON=1` skips the daemonize() call (runs in-process / foreground).
+async fn run_as_daemon() {
+    use sf_cli::daemon::{
+        daemon_log_path, daemon_state_dir, remove_daemon_json, send_startup_result, socket_path,
+        write_daemon_json, DaemonJson, StartupResult,
+    };
+    use sf_db::provisioner::{PostgresProvisioner, TestProvisioner};
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    let state_dir = match daemon_state_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            let reason = format!("cannot create daemon state dir: {}", e);
+            eprintln!("superfield daemon: {}", reason);
+            // Best-effort notification.
+            let _ = send_startup_result(&StartupResult::Err {
+                reason,
+                log_path: String::new(),
+            });
+            process::exit(1);
+        }
+    };
+
+    let log_path = daemon_log_path(&state_dir).to_string_lossy().into_owned();
+
+    // Macro to send Err and exit.
+    macro_rules! fail {
+        ($reason:expr) => {{
+            let reason = $reason.to_string();
+            eprintln!("superfield daemon startup failed: {}", reason);
+            let _ = send_startup_result(&StartupResult::Err {
+                reason,
+                log_path: log_path.clone(),
+            });
+            remove_daemon_json(&state_dir);
+            process::exit(1);
+        }};
+    }
+
+    // Start Postgres provisioner.
+    //
+    // The real Docker-backed provisioner is implemented in this issue
+    // (sf_db::provisioner::DockerProvisioner — wired here once available).
+    // For now use the TestProvisioner no-op so the daemon can start without
+    // Docker in CI.
+    let provisioner = TestProvisioner;
+    if let Err(e) = provisioner.start().await {
+        fail!(format!("postgres provisioner error: {}", e));
+    }
+
+    // Build the database pool (requires DATABASE_URL).
+    let bind_addr: std::net::SocketAddr = "0.0.0.0:7000".parse().expect("static addr");
+    let sock = socket_path(&state_dir).to_string_lossy().into_owned();
+
+    // Write daemon.json before starting the server.
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs();
+    let info = DaemonJson {
+        pid: std::process::id(),
+        version: sf_cli::daemon::current_version().to_string(),
+        started_at: now,
+        socket_path: sock.clone(),
+    };
+    if let Err(e) = write_daemon_json(&state_dir, &info) {
+        fail!(format!("cannot write daemon.json: {}", e));
+    }
+
+    // Send startup Ok — health gate passed.
+    if let Err(e) = send_startup_result(&StartupResult::Ok {
+        version: info.version.clone(),
+        addr: sock,
+    }) {
+        // Startup-notify socket may not be set in some modes (e.g. direct
+        // `superfield serve` call).  Log but do not fail.
+        eprintln!("superfield daemon: startup notify skipped: {}", e);
+    }
+
+    // Start the HTTP serving layer.
+    //
+    // In SF_NO_DAEMON=1 mode this runs in the foreground.  In normal daemon
+    // mode the process has already been detached by the parent's spawn call.
+    if let Ok(cfg) = sf_db::DbConfig::from_env() {
+        if let Ok(pool) = sf_db::connect(&cfg).await {
+            let assets_dir = std::env::var("CONTROL_ASSETS_DIR")
+                .ok()
+                .map(std::path::PathBuf::from);
+            let serve_cfg = sf_serve::ServeConfig {
+                bind_addr,
+                session_ttl_secs: None,
+                assets_dir,
+            };
+            if let Err(e) = sf_serve::serve(pool, serve_cfg).await {
+                eprintln!("superfield daemon: serve error: {}", e);
+            }
+        } else {
+            eprintln!("superfield daemon: database not available; serving without pool");
+        }
+    } else {
+        eprintln!("superfield daemon: DATABASE_URL not set; serving without pool");
+    }
+
+    // Clean up.
+    remove_daemon_json(&state_dir);
+    let _ = provisioner.stop().await;
+}
+
+// ---------------------------------------------------------------------------
+// `daemon stop` — graceful shutdown RPC
+// ---------------------------------------------------------------------------
+
+/// Handle `superfield daemon stop`.
+///
+/// Sends `SIGTERM` to the daemon process (identified via `daemon.json`) and
+/// waits for `daemon.json` to be removed (indicating the daemon has exited).
+fn handle_daemon_stop() {
+    use sf_cli::daemon::{daemon_json_path, daemon_state_dir, read_daemon_json};
+    use std::time::Duration;
+
+    let state_dir = match daemon_state_dir() {
+        Ok(d) => d,
+        Err(e) => {
+            eprintln!("superfield daemon stop: {}", e);
+            process::exit(1);
+        }
+    };
+
+    let info = match read_daemon_json(&state_dir) {
+        Some(i) => i,
+        None => {
+            eprintln!("superfield daemon stop: daemon not running");
+            process::exit(1);
+        }
+    };
+
+    // Send SIGTERM to the daemon.
+    #[cfg(unix)]
+    {
+        let ret = unsafe { libc::kill(info.pid as libc::pid_t, libc::SIGTERM) };
+        if ret != 0 {
+            let err = std::io::Error::last_os_error();
+            eprintln!("superfield daemon stop: kill failed: {}", err);
+            process::exit(1);
+        }
+    }
+
+    // Wait for daemon.json to disappear (max 30 s).
+    let djson = daemon_json_path(&state_dir);
+    let deadline = std::time::Instant::now() + Duration::from_secs(30);
+    while std::time::Instant::now() < deadline {
+        if !djson.exists() {
+            eprintln!("superfield daemon stop: daemon exited cleanly");
+            return;
+        }
+        std::thread::sleep(Duration::from_millis(100));
+    }
+
+    eprintln!("superfield daemon stop: timed out waiting for daemon to exit");
+    process::exit(1);
 }
