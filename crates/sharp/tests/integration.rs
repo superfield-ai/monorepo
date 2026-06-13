@@ -1271,7 +1271,7 @@ fn main() { let r = calculate_result(21); println!(\"{r}\"); }\n";
         "merge_result",
         serde_json::json!({
             "type": "rust_semantic_merge",
-            "repo": "superfield-ai/superfield-cli-ts",
+            "repo": "superfield-ai/monorepo",
             "workspace": "crates/sharp",
             "renames_propagated": ["compute_value → calculate_result"],
             "merged_files": 1,
