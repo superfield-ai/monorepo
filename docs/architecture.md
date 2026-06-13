@@ -58,7 +58,7 @@ Each component owns exactly one PostgreSQL schema. All tables, indexes, sequence
 | `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                   |
 | `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `corpus_access`, `job_queue` |
 | `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                           |
-| `episodes`        | Orchestrator    | `episodes`, `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces)                           |
+| `orchestrator`    | Orchestrator    | `gardening_cursor` (current); `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces)         |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -69,8 +69,8 @@ Within each schema, table names are unqualified (no prefix). The schema name pro
 ```sql
 -- Correct: qualified reference from an orchestrator query
 SELECT e.id, b.content
-FROM   episodes.episodes   e
-JOIN   nexum.blocks        b ON b.id = e.source_block_id;
+FROM   orchestrator.gardening_cursor   e
+JOIN   nexum.blocks                    b ON b.id = e.workspace_id;
 
 -- Wrong: bare table name from outside the owning schema
 SELECT * FROM blocks;  -- which schema? ambiguous — never do this cross-component
@@ -85,13 +85,13 @@ Each component owns its schema's migrations exclusively. Migration files are col
 | Sharp     | `superfield-ai/sharp/apps/server/migrations/`                                |
 | Nexum     | `superfield-ai/nexum/db/migrations/`                                         |
 | Auth      | `crates/sf-auth/src/migrations/` (Rust crate)                                |
-| Episodes  | `superfield-ai/superfield-cli-ts/packages/orchestrator/migrations/` (target) |
+| Orchestrator | `orchestrator/migrations/` (current — `0001_gardening_cursor.sql`)        |
 
 The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
 
 ### Cross-component joins and RLS scoping
 
-**Joins are cheap because all schemas live in the same instance.** A query can join `sharp.objects` to `nexum.blocks` to `episodes.episode_events` in a single statement with no network round-trip. This is the primary motivation for the single-instance architecture.
+**Joins are cheap because all schemas live in the same instance.** A query can join `sharp.objects` to `nexum.blocks` to `orchestrator.gardening_cursor` in a single statement with no network round-trip. This is the primary motivation for the single-instance architecture.
 
 **RLS policies are scoped per schema.** When row-level security is introduced (not yet implemented — see Current Gaps), each component's `ENABLE ROW LEVEL SECURITY` and policies apply to its own schema tables only. The `auth.sessions` table provides the identity context that all schemas' policies will reference via `current_setting('app.current_principal_id')`.
 
@@ -297,3 +297,27 @@ A real implementation will:
 1. Receive a [`BackupEvent`] from the backup job runner on successful `pg_basebackup` completion.
 2. Insert a row into a `substrate.backup_events` table (schema to be defined).
 3. Expose the latest event via [`SubstrateBackup::latest`] for health check queries.
+
+---
+
+## Daemon Lifecycle
+
+<!-- STUB — content forthcoming in #503 -->
+
+See: `crates/sf-cli/src/daemon.rs` and `crates/sf-serve/src/loop_handle.rs`. Content forthcoming in #503.
+
+---
+
+## HTTP Routes
+
+<!-- STUB — content forthcoming in #505 -->
+
+See: `crates/sf-serve/src/routes/` (especially `orchestrator.rs`). Content forthcoming in #505.
+
+---
+
+## Nexum — Page Revision Schema
+
+<!-- STUB — content forthcoming in #504 -->
+
+Content forthcoming in #504.
