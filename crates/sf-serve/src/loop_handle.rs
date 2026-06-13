@@ -2,9 +2,7 @@
 //!
 //! Defines the [`LoopHandle`] trait, which the daemon (issue #489) uses to
 //! control the gardening loop engine (issue #491) during graceful shutdown and
-//! on version-mismatch restart. The trait lives in `sf-serve` because the HTTP
-//! layer (orchestrator endpoints) also needs to be able to trigger a drain via
-//! the `/orchestrator/drain` route.
+//! on version-mismatch restart.
 //!
 //! # Canonical docs
 //!
@@ -28,27 +26,6 @@
 //!
 //! On abort (e.g. SIGKILL imminent) the daemon calls [`LoopHandle::abort`],
 //! which cancels any in-flight step immediately.
-//!
-//! # Implementation path (issue #491)
-//!
-//! Issue #491 (gardening loop engine) provides the real implementation. It will:
-//! - Hold a `tokio::sync::oneshot::Sender<()>` that the loop `select!` arms poll.
-//! - `drain`: send the drain signal, then await a `Receiver<()>` that fires
-//!   when the current step completes.
-//! - `abort`: call `tokio::task::JoinHandle::abort()` on the loop task.
-//!
-//! Discovered integration risks (captured by issue #494 scout):
-//!
-//! - **Ownership**: the loop engine task must be started before the daemon
-//!   registers a `LoopHandle`. Issue #489 (daemon) and #491 (loop engine) need
-//!   to agree on the startup ordering and the channel hand-off.
-//! - **HTTP exposure**: the orchestrator route `/orchestrator/drain` (issue #491)
-//!   needs access to a `Arc<dyn LoopHandle>` stored in [`sf_serve::AppState`].
-//!   Issue #491 must update `AppState` (in `crates/sf-serve/src/state.rs`) to
-//!   carry an `Option<Arc<dyn LoopHandle>>`.
-//! - **Drain timeout**: the daemon (issue #489) should impose a bounded drain
-//!   timeout (e.g. 30 s) and fall back to `abort()` if the loop does not drain
-//!   in time; the trait does not enforce a timeout but callers should.
 
 use std::future::Future;
 use std::pin::Pin;
