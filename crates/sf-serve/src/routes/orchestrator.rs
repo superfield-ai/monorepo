@@ -9,9 +9,6 @@
 //! | Method | Path                    | Description                                |
 //! |--------|-------------------------|--------------------------------------------|
 //! | GET    | `/orchestrator/status`  | Process, PID, and API reachability         |
-//!
-//! Additional routes (start/stop, logs SSE) will be added as the TypeScript
-//! orchestrator is progressively retired.
 
 use axum::{response::IntoResponse, routing::get, Extension, Json, Router};
 use serde_json::json;

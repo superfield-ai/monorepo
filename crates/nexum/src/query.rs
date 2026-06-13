@@ -1,9 +1,7 @@
 //! Nexum query layer — full-text, semantic (HNSW), graph, and hybrid.
 //!
 //! All four query modes run against the single shared Postgres instance via the
-//! `sf-db` pool.  The module mirrors the TypeScript `src/routes/query.ts`
-//! implementation in `superfield-ai/nexum` so that result shapes and SQL
-//! semantics are identical.
+//! `sf-db` pool.
 //!
 //! # Query modes
 //!

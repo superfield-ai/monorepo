@@ -26,7 +26,7 @@ Each node in the graph carries:
 
 ## Nexum — Company Knowledge Graph
 
-[`superfield-ai/nexum`](https://github.com/superfield-ai/nexum) is the unified operational store for all company knowledge: product vision, requirements, source code, issues, behavioral traces, errors, and the causal links among them — under one schema and one clock. Agents are first-class writers: they record observations, candidate corrections, and outcomes directly into the graph. It is not a log or a warehouse — it is the shared ground truth that every agent, human, and service reasons against without crossing a system boundary.
+[`crates/nexum`](crates/nexum) is the unified operational store for all company knowledge: product vision, requirements, source code, issues, behavioral traces, errors, and the causal links among them — under one schema and one clock. Agents are first-class writers: they record observations, candidate corrections, and outcomes directly into the graph. It is not a log or a warehouse — it is the shared ground truth that every agent, human, and service reasons against without crossing a system boundary.
 
 Nexum is distinct from the Blueprint: where the Blueprint defines the rules agents follow (encoded in the fine-tuned model), Nexum is the live company brain they reason against. The Blueprint tells an agent _how_ to build; Nexum tells it _what_ to build and _what is currently true_.
 
@@ -161,7 +161,10 @@ The Apache AGE graph shim (`nexum/db/migrations/0001_age_shim.sql`) that previou
 
 Apache AGE requires a patched Postgres build; the standard `postgres:16` image used throughout this stack does not ship it. Recursive CTEs over `nexum.links` deliver equivalent multi-hop traversal on any stock Postgres 14+ instance with no patched binary, no compose service, and no second port. AGE-in-instance remains the long-term option if Cypher query volume demands it, but recursive CTEs satisfy current parity and close the architectural gap.
 
-The `packages/db/nexum-graph.ts` module provides `traverseGraph()` (recursive CTE), `isGraphReady()`, and `NEXUM_GRAPH_SETUP_SQL`. Integration tests in `packages/db/tests/nexum-graph.test.ts` verify multi-hop traversal against a single containerised Postgres instance.
+The `crates/nexum/src/query.rs` module provides `traverseGraph()` (recursive CTE),
+`isGraphReady()`, and graph traversal over `nexum.links`. Integration tests in
+`crates/nexum/tests/` verify multi-hop traversal against a single containerised
+Postgres instance.
 
 ---
 
