@@ -86,6 +86,7 @@ Each component owns exactly one PostgreSQL schema. All tables, indexes, sequence
 | `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `relations`, `corpus_access`, `job_queue`, `project_nodes`, `page_revisions`                                                                                           |
 | `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                                                                                                                                     |
 | `orchestrator`    | Orchestrator    | `gardening_cursor`                                                                                                                                                                                                                                                   |
+| `substrate`       | sf-db           | `backups`                                                                                                                                                                                                                                                            |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -327,7 +328,7 @@ The `sf-db` crate defines [`SubstrateBackup`] (`crates/sf-db/src/backup.rs`): a 
 A real implementation will:
 
 1. Receive a [`BackupEvent`] from the backup job runner on successful `pg_basebackup` completion.
-2. Insert a row into a `substrate.backup_events` table (schema to be defined).
+2. Insert a row into the `substrate.backups` table.
 3. Expose the latest event via [`SubstrateBackup::latest`] for health check queries.
 
 ---
