@@ -13,8 +13,8 @@
 //!
 //! # Architecture
 //!
-//! See `docs/architecture.md` §5 (CLI, deploy tooling, and serving backend in
-//! Rust).  Operator commands are the human-steering surface of the owned stack;
+//! See `docs/architecture.md` §CLI — Command Surface.  Operator commands are
+//! the human-steering surface of the owned stack;
 //! they use the same `sf-db` pool and `sharp` crate as agent commands.
 
 use sf_auth::{Role, Session, SessionStore};
