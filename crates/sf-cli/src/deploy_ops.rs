@@ -18,8 +18,8 @@
 //!
 //! # Architecture
 //!
-//! See `docs/architecture.md` §5 and `docs/scout/375-cli-and-control-api-contracts.md`
-//! §2 (Operator Commands).  Deploy-ops commands live here rather than in
+//! See `docs/architecture.md` §CLI — Command Surface (deploy subcommands) and
+//! §Daemon Lifecycle (auto-spawn flow).  Deploy-ops commands live here rather than in
 //! `operator.rs` to keep the operator module focused on Sharp repo/session
 //! management.
 
