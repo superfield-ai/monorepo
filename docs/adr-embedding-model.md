@@ -27,7 +27,6 @@ All Superfield components **must** embed text using:
 
 | Property               | Value                                                                           |
 | ---------------------- | ------------------------------------------------------------------------------- |
-| **Model (JS/TS)**      | `Xenova/all-MiniLM-L6-v2` (ONNX, via `@xenova/transformers`)                    |
 | **Model (Rust)**       | `sentence-transformers/all-MiniLM-L6-v2` (safetensors, via `hf-hub` + `candle`) |
 | **Underlying weights** | Same weights; different packaging for each runtime                              |
 | **HF revision**        | `c9745ed` — `sentence-transformers/all-MiniLM-L6-v2@c9745ed`                    |
@@ -98,18 +97,6 @@ pub const GOVERNED_MODEL_REVISION: &str = "c9745ed";
 pub const GOVERNED_DIM: usize = 384;
 ```
 
-### TypeScript (`packages/db/index.ts`)
-
-```typescript
-export const GOVERNED_EMBEDDING = {
-  model: "Xenova/all-MiniLM-L6-v2",
-  revision: "c9745ed",
-  dimensions: 384,
-  distanceFunction: "cosine",
-  indexType: "hnsw",
-} as const;
-```
-
 ### Model checkpoint lockfile (`models/embedding.lock`)
 
 The canonical pinned revision is declared in `models/embedding.lock`. CI
@@ -142,6 +129,4 @@ New vector columns added by any component must:
   they reference `GOVERNED_EMBEDDING` / `GOVERNED_DIM`.
 - Changing the model requires a new ADR, a schema migration for every `vector`
   column, and a corpus re-embedding pipeline run.
-- The `crates/nexum/src/embed.rs` module is the canonical implementation for Rust consumers;
-  TypeScript consumers use `@xenova/transformers` with the same underlying
-  model weights.
+- The `crates/nexum/src/embed.rs` module is the canonical implementation; all embedding calls go through the Rust service layer.
