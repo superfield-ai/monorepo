@@ -544,17 +544,17 @@ The auth middleware validates the token against `auth.sessions` and injects an `
 
 ### Route table
 
-| Method   | Path                        | Auth     | Handler module | Description                                                                       |
-| -------- | --------------------------- | -------- | -------------- | --------------------------------------------------------------------------------- |
-| `GET`    | `/api/auth/health`          | None     | `auth`         | Liveness probe — always returns `{"status":"ok"}`                                 |
-| `POST`   | `/api/auth/session`         | None     | `auth`         | Issue a session token for a `(workspace_id, user_id, role)` triple                |
-| `DELETE` | `/api/auth/session/{token}` | None     | `auth`         | Revoke an existing session token (idempotent, 204)                                |
-| `POST`   | `/api/auth/register`        | None     | `auth`         | Dev/E2E bootstrap: mint a fresh workspace + user, issue a token                   |
-| `GET`    | `/api/status`               | Required | `api`          | Authenticated liveness probe — echoes workspace/user/role                         |
-| `GET`    | `/api/me`                   | Required | `api`          | Current principal identity + RLS session-variable verification                    |
-| `GET`    | `/studio/status`            | Required | `studio`       | Studio mode flag + auth context (browser UI health check)                         |
-| `GET`    | `/orchestrator/status`      | Required | `orchestrator` | Daemon process status (PID, uptime — stub in milestone 1)                         |
-| `GET`    | `/pages/project`            | None     | `pages`        | Project management graph rendered as markdown                                     |
+| Method   | Path                        | Auth     | Handler module | Description                                                                                    |
+| -------- | --------------------------- | -------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| `GET`    | `/api/auth/health`          | None     | `auth`         | Liveness probe — always returns `{"status":"ok"}`                                              |
+| `POST`   | `/api/auth/session`         | None     | `auth`         | Issue a session token for a `(workspace_id, user_id, role)` triple                             |
+| `DELETE` | `/api/auth/session/{token}` | None     | `auth`         | Revoke an existing session token (idempotent, 204)                                             |
+| `POST`   | `/api/auth/register`        | None     | `auth`         | Dev/E2E bootstrap: mint a fresh workspace + user, issue a token                                |
+| `GET`    | `/api/status`               | Required | `api`          | Authenticated liveness probe — echoes workspace/user/role                                      |
+| `GET`    | `/api/me`                   | Required | `api`          | Current principal identity + RLS session-variable verification                                 |
+| `GET`    | `/studio/status`            | Required | `studio`       | Studio mode flag + auth context (browser UI health check)                                      |
+| `GET`    | `/orchestrator/status`      | Required | `orchestrator` | Daemon process status (PID, uptime — stub in milestone 1)                                      |
+| `GET`    | `/pages/project`            | None     | `pages`        | Project management graph rendered as markdown                                                  |
 | `GET`    | `/pages/{name}`             | None     | `pages`        | Named knowledge-base page as markdown (`prd`, `architecture`, `plan`, `strategy`, `technical`) |
 
 ### Route module layout
