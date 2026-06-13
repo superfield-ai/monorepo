@@ -9,7 +9,7 @@
 --
 -- References:
 --   docs/architecture.md §6 (Single Postgres instance, namespaced schemas)
---   docs/scout/386-postgres-provisioning-migration-schemas.md (Nexum inventory)
+--   docs/architecture.md §Single-Instance Database Schema Layout
 --   issue #355 (schema boundary decision)
 --   issue #368 (this migration)
 

@@ -15,7 +15,7 @@
  *
  * See: packages/firecracker/ for VM lifecycle internals.
  * See: https://github.com/superfield-ai/fastenv for the workspace forking tool.
- * See: docs/scout/281-oci-firecracker-toolchain.md for environment constraints.
+ * See: crates/fastenv/docs/scout/firecracker-prerequisites.md for environment constraints.
  */
 
 import { randomBytes } from "node:crypto";

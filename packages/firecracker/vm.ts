@@ -10,7 +10,7 @@
  *   2. restoreVm()       — restore saved snapshot in <1s.
  *   3. kill()            — SIGTERM Firecracker + virtiofsd child.
  *
- * See also: docs/scout/281-oci-firecracker-toolchain.md
+ * See also: crates/fastenv/docs/scout/firecracker-prerequisites.md
  */
 
 import { spawn } from "node:child_process";

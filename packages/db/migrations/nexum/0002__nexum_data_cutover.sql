@@ -20,7 +20,7 @@
 -- References:
 --   docs/architecture.md §6 (namespaced schemas)
 --   docs/architecture.md §7 gap #3 (RLS — not yet implemented)
---   docs/scout/386-postgres-provisioning-migration-schemas.md
+--   docs/architecture.md §Single-Instance Database Schema Layout
 --   issue #368 (this migration)
 --
 -- RLS note (§7 gap #3): RLS policies on nexum.* tables are deferred until

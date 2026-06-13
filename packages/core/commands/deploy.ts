@@ -30,7 +30,7 @@ import {
  * health probes) have no episode-ingestion path yet. Issues #380-#382 will
  * build the deploy/rollback and signal-capture layer.
  *
- * @see docs/scout/388-deployment-targets-and-runtime-error-sources.md
+ * @see docs/architecture.md §CLI — Command Surface
  */
 export const DEPLOY_PHASES = ["provision", "deploy"] as const;
 
@@ -39,7 +39,7 @@ export type DeployPhase = (typeof DEPLOY_PHASES)[number];
 /**
  * Stub: runtime-signal source descriptor — placeholder for issue #381.
  *
- * @see docs/scout/388-deployment-targets-and-runtime-error-sources.md §Runtime-Signal Sources
+ * @see docs/architecture.md §CLI — Command Surface
  */
 export interface RuntimeSignalSource {
   name: string;
