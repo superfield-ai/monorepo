@@ -172,20 +172,20 @@ The `packages/db/nexum-graph.ts` module provides `traverseGraph()` (recursive CT
 
 ### Standard
 
-| Property       | Value                                                    |
-| -------------- | -------------------------------------------------------- |
-| **Model**      | `Xenova/all-MiniLM-L6-v2`                                |
-| **Dimensions** | 384                                                      |
-| **Runtime**    | Local inference via Xenova (ONNX) — no external API call |
-| **Distance**   | Cosine similarity                                        |
-| **Index type** | HNSW (cosine) via pgvector                               |
+| Property       | Value                                                               |
+| -------------- | ------------------------------------------------------------------- |
+| **Model**      | `Xenova/all-MiniLM-L6-v2`                                           |
+| **Dimensions** | 384                                                                 |
+| **Runtime**    | Local inference via `candle` (Rust, CPU/GPU) — no external API call |
+| **Distance**   | Cosine similarity                                                   |
+| **Index type** | HNSW (cosine) via pgvector                                          |
 
 All vector columns across every store **must** use 384-dimensional vectors produced by this model. No other embedding model or dimensionality is permitted without a superseding architecture decision.
 
 ### Rationale
 
 - Nexum has shipped `blocks.embedding vector(384)` with `Xenova/all-MiniLM-L6-v2` as its production embedding layer. Standardising on the existing implementation avoids a re-embedding migration.
-- Local ONNX inference (Xenova) keeps all vector production inside the one-binary boundary. No external API key, no network call, no vendor dependency at inference time.
+- Local inference via candle (Rust) keeps all vector production inside the one-binary boundary. No external API key, no network call, no vendor dependency at inference time.
 - 384 dimensions provide adequate semantic resolution for document-block retrieval while keeping index size and query latency low.
 - A single vector space means a Sharp episode can join semantically to a Nexum block in one SQL query, without coordinate-system translation.
 
@@ -201,11 +201,11 @@ Rejected alternatives:
 
 Every vector column across all stores must match the governed standard. Current inventory:
 
-| Component | Schema  | Table    | Column           | Declared dimension | Status                                             |
-| --------- | ------- | -------- | ---------------- | ------------------ | -------------------------------------------------- |
-| Nexum     | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live                |
-| Nexum     | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — stub; population tracked in issue #75 |
-| Sharp     | `sharp` | —        | —                | —                  | No vector columns yet; pgvector not installed      |
+| Component | Schema  | Table    | Column           | Declared dimension | Status                                                           |
+| --------- | ------- | -------- | ---------------- | ------------------ | ---------------------------------------------------------------- |
+| Nexum     | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live                              |
+| Nexum     | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — stub; edge_embedding population not yet implemented |
+| Sharp     | `sharp` | —        | —                | —                  | No vector columns yet; pgvector not installed                    |
 
 When Sharp or any future component adds a vector column it **must** declare `vector(384)` and reference this section.
 
