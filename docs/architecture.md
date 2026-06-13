@@ -547,6 +547,7 @@ The auth middleware validates the token against `auth.sessions` and injects an `
 
 | Method   | Path                        | Auth     | Handler module | Description                                                                                    |
 | -------- | --------------------------- | -------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| `GET`    | `/health`                   | None     | `lib`          | Unauthenticated liveness probe — returns `{"status":"ok"}` for load balancers and E2E setup    |
 | `GET`    | `/api/auth/health`          | None     | `auth`         | Liveness probe — always returns `{"status":"ok"}`                                              |
 | `POST`   | `/api/auth/session`         | None     | `auth`         | Issue a session token for a `(workspace_id, user_id, role)` triple                             |
 | `DELETE` | `/api/auth/session/{token}` | None     | `auth`         | Revoke an existing session token (idempotent, 204)                                             |
