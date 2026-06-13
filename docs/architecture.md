@@ -435,9 +435,108 @@ Tests and phase crates use [`NoopLoopHandle`] — a no-op stub that returns `Ok(
 
 ## HTTP Routes
 
-<!-- STUB — content forthcoming in #505 -->
+The daemon serves a single HTTP API over TCP (default bind `0.0.0.0:7000`). All source lives in `crates/sf-serve/src/routes/`. The Unix socket at `~/.superfield/daemon/superfield.sock` is used exclusively for CLI-to-daemon RPC (startup-notify and shutdown); the HTTP routes below are served over the TCP listener.
 
-See: `crates/sf-serve/src/routes/` (especially `orchestrator.rs`). Content forthcoming in #505.
+### Authentication model
+
+Session tokens are issued via `POST /api/auth/session` and accepted as:
+
+- `X-Session-Token: <uuid>` request header, or
+- `session` or `superfield_auth` cookie.
+
+The auth middleware validates the token against `auth.sessions` and injects an `AuthContext` extension (workspace UUID + user UUID + role) into every request. Routes marked "Required" return `401 Unauthorized` without a valid token; routes marked "None" are unauthenticated for milestone 1 (localhost-only).
+
+### Route table
+
+| Method   | Path                          | Auth     | Handler module    | Description                                                     |
+| -------- | ----------------------------- | -------- | ----------------- | --------------------------------------------------------------- |
+| `GET`    | `/api/auth/health`            | None     | `auth`            | Liveness probe — always returns `{"status":"ok"}`               |
+| `POST`   | `/api/auth/session`           | None     | `auth`            | Issue a session token for a `(workspace_id, user_id, role)` triple |
+| `DELETE` | `/api/auth/session/{token}`   | None     | `auth`            | Revoke an existing session token (idempotent, 204)              |
+| `POST`   | `/api/auth/register`          | None     | `auth`            | Dev/E2E bootstrap: mint a fresh workspace + user, issue a token |
+| `GET`    | `/api/status`                 | Required | `api`             | Authenticated liveness probe — echoes workspace/user/role       |
+| `GET`    | `/api/me`                     | Required | `api`             | Current principal identity + RLS session-variable verification  |
+| `GET`    | `/studio/status`              | Required | `studio`          | Studio mode flag + auth context (browser UI health check)       |
+| `GET`    | `/orchestrator/status`        | Required | `orchestrator`    | Daemon process status (PID, uptime — stub in milestone 1)       |
+| `GET`    | `/pages/project`              | None     | `pages`           | Project management graph rendered as markdown                   |
+| `GET`    | `/pages/{name}`               | None     | `pages`           | Named knowledge-base page as markdown (`prd`, `architecture`, `plan`, `strategy`) |
+
+### Route module layout
+
+```
+crates/sf-serve/src/routes/
+├── mod.rs          — module declarations and route-table doc comment
+├── auth.rs         — /api/auth/* (public — session lifecycle, register)
+├── api.rs          — /api/* (auth required — app API)
+├── studio.rs       — /studio/* (auth required — control-panel API)
+├── orchestrator.rs — /orchestrator/* (auth required — orchestrator control)
+└── pages.rs        — /pages/* (unauthenticated for milestone 1)
+```
+
+### Notes
+
+- `/pages/project` uses `sf_db::fetch_project_page` — a recursive CTE traversal over `nexum.project_nodes` and `nexum.links`. All other `/pages/{name}` routes use `sf_db::fetch_page_content` against `nexum.page_revisions`.
+- Authentication on `/pages/*` is explicitly deferred for milestone 1; the route is expected to be reachable only from localhost during this phase.
+- The `/orchestrator/status` route returns a minimal stub (PID = null, apiReachable = false) until the gardening-loop process manager is ported (issue #491).
+- Static browser assets are served from a configurable directory (`CONTROL_ASSETS_DIR`) mounted at the root; the asset-serving layer is composed on top of the API router in `crates/sf-serve/src/lib.rs`.
+
+---
+
+## CLI — Command Surface
+
+The `superfield` binary (`crates/superfield/src/main.rs`) is the single entrypoint for all CLI operations. Commands are parsed by `sf_cli::parse` (`crates/sf-cli/src/lib.rs`) and dispatched to the appropriate module.
+
+### Subcommand reference
+
+| Subcommand                                         | Module              | Requires daemon | Description                                                       |
+| -------------------------------------------------- | ------------------- | --------------- | ----------------------------------------------------------------- |
+| `superfield serve [--bind <addr>] [--session-ttl <secs>]` | `sf_serve`   | No              | Start the HTTP server in the foreground (default: `0.0.0.0:7000`) |
+| `superfield daemon stop`                           | `sf_cli::daemon`    | Yes             | Send SIGTERM to the daemon; waits for clean exit (max 30 s)       |
+| `superfield status`                                | `sf_cli::daemon`    | No              | Show daemon status from `daemon.json`; exits 1 if not running     |
+| `superfield logs`                                  | `sf_cli::daemon`    | No              | Tail `daemon.log`; exits 1 if daemon not running                  |
+| `superfield page <name>`                           | `sf_cli::page`      | Yes             | Fetch a named page from Nexum and print as markdown               |
+| `superfield garden <file...> [--workspace-id <uuid>]` | `sf_cli::garden` | Yes             | Ingest markdown files into the Nexum knowledge graph              |
+| `superfield repo init <name>`                      | `sf_cli::operator`  | Yes             | Create or get a Sharp repo by name                                |
+| `superfield repo list`                             | `sf_cli::operator`  | Yes             | List all Sharp repos                                              |
+| `superfield session issue <ws-id> <uid> <role>`    | `sf_cli::operator`  | Yes             | Issue a session token (`role`: `admin`, `member`, `viewer`)       |
+| `superfield episode open <repo-id> <title>`        | `sf_cli::agent`     | Yes             | Open a new agent episode against a repo                           |
+| `superfield episode append <ep-id> <type> <json>`  | `sf_cli::agent`     | Yes             | Append an event to an existing episode                            |
+| `superfield episode finish <ep-id>`                | `sf_cli::agent`     | Yes             | Close an episode                                                  |
+| `superfield episode list <repo-id>`                | `sf_cli::agent`     | Yes             | List episodes for a repo                                          |
+| `superfield deploy validate <config-json>`         | `sf_deploy`         | No              | Validate a deploy target config (no I/O)                          |
+| `superfield deploy ship <config-json> <path>`      | `sf_deploy`         | No              | Deploy an artifact to a target                                    |
+| `superfield deploy rollback <record-json>`         | `sf_deploy`         | No              | Roll back target to its prior version                             |
+
+### Daemon auto-spawn
+
+Commands that require the daemon (`page`, `garden`, `repo`, `session`, `episode`) call `connect_or_start_daemon()` automatically if the daemon is not running. The auto-spawn flow is described in full in the `## Daemon Lifecycle` section above.
+
+Three commands are **no-spawn guards** — they exit with code 1 rather than auto-spawning if the daemon is not running: `status`, `logs`, and `page`.
+
+### Environment variables
+
+| Variable              | Default          | Description                                                      |
+| --------------------- | ---------------- | ---------------------------------------------------------------- |
+| `DATABASE_URL`        | (required)       | Postgres connection string used by all DB-backed commands        |
+| `WORKSPACE_ID`        | (none)           | Default workspace UUID for `garden` commands (overridden by `--workspace-id`) |
+| `SF_START_DAEMON`     | (unset)          | Set to `1` by the CLI when re-executing itself as the daemon     |
+| `SF_NO_DAEMON`        | (unset)          | Set to `1` to suppress `daemonize()` — foreground/container mode |
+| `SF_STARTUP_NOTIFY`   | (unset)          | Path to the startup-notify socket created by the parent CLI      |
+| `CONTROL_ASSETS_DIR`  | (none)           | Directory of pre-built browser UI assets to serve at `/`         |
+
+### Known page names
+
+The `superfield page <name>` command and the `GET /pages/{name}` route share the same registry of known names:
+
+| Name           | Content source                                        |
+| -------------- | ----------------------------------------------------- |
+| `prd`          | `nexum.page_revisions` for page name `prd`            |
+| `architecture` | `nexum.page_revisions` for page name `architecture`   |
+| `plan`         | `nexum.page_revisions` for page name `plan`           |
+| `strategy`     | `nexum.page_revisions` for page name `strategy`       |
+| `project`      | Recursive CTE over `nexum.project_nodes` (special)   |
+
+Source: `sf_db::KNOWN_PAGES` (`crates/sf-db/src/`) and `sf_db::fetch_project_page`.
 
 ---
 
