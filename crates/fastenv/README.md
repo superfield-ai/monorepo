@@ -125,7 +125,7 @@ protecting the host on its own.
 
 ## Context
 
-fastenv is a component of [Superfield](https://github.com/superfield-ai/superfield-cli-ts) - an Agent Integrated Development Environment. The role of fastenv is to provide the isolation and execution substrate for agent work, while the control plane retains policy and artifact ownership.
+fastenv is a component of [Superfield](https://github.com/superfield-ai/monorepo) - an Agent Integrated Development Environment. The role of fastenv is to provide the isolation and execution substrate for agent work, while the control plane retains policy and artifact ownership.
 
 Related:
 
