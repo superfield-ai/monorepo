@@ -8,6 +8,8 @@
 //! # Governance constants
 //!
 //! [`GOVERNED_MODEL`] names the embedding model that every component must use.
+//! [`GOVERNED_MODEL_REVISION`] pins the HuggingFace Hub commit SHA for
+//! reproducible weight downloads; it matches `models/embedding.lock`.
 //! [`GOVERNED_DIM`] is the output vector size that schema columns, index
 //! parameters, and cosine-similarity queries depend on.  Any change requires a
 //! corpus re-embedding pass and a schema migration — treat them as major
@@ -30,6 +32,12 @@ use tokenizers::Tokenizer;
 
 /// HuggingFace model ID of the governed embedding model.
 pub const GOVERNED_MODEL: &str = "sentence-transformers/all-MiniLM-L6-v2";
+
+/// Pinned HuggingFace Hub commit SHA for the governed model.
+///
+/// Pass this to `Repo::with_revision` to guarantee reproducible weight
+/// downloads in CI and production.  See `models/embedding.lock`.
+pub const GOVERNED_MODEL_REVISION: &str = "c9745ed";
 
 /// Output dimension of the governed embedding model.
 ///
@@ -133,7 +141,12 @@ impl Embedder {
     pub fn new() -> Result<Self, EmbedError> {
         let device = Device::Cpu;
         let api = Api::new().map_err(|e| EmbedError::ModelLoad(e.to_string()))?;
-        let repo = api.repo(Repo::new(GOVERNED_MODEL.to_string(), RepoType::Model));
+        // Use the pinned revision from GOVERNED_MODEL_REVISION for reproducibility.
+        let repo = api.repo(Repo::with_revision(
+            GOVERNED_MODEL.to_string(),
+            RepoType::Model,
+            GOVERNED_MODEL_REVISION.to_string(),
+        ));
 
         let config_path = repo
             .get("config.json")
