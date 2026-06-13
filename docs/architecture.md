@@ -433,7 +433,7 @@ Tests and phase crates use [`NoopLoopHandle`] — a no-op stub that returns `Ok(
 
 ---
 
-## Gardening Loop
+## Gardening Loop Engine
 
 The gardening loop is the continuous background worker that keeps the workspace's knowledge base current. It cycles through six steps in a fixed order, calling the LLM for each step and writing the result as a `nexum.page_revisions` row. After a full pass it pauses 60 seconds before repeating. A daemon crash is safe: the loop resumes from the last committed cursor step rather than restarting from the beginning.
 
