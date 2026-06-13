@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md §4.5
-//   - docs/architecture.md §eBPF
+//   - crates/fastenv/docs/architecture.md §eBPF
 //
 // # Design
 //

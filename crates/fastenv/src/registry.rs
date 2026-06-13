@@ -1,7 +1,7 @@
 // registry.rs — On-disk snapshot registry backed by registry.json.
 //
 // Canonical docs:
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
 //
 // The registry is the single source of truth for the /var/lib/fastenv data

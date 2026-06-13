@@ -1,7 +1,7 @@
 // mount_path.rs — `fastenv mount-path <fork-id>` and `fastenv unmount <fork-id>` implementation.
 //
 // Canonical docs:
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
 //
 // mount-path pipeline

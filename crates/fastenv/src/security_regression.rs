@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md          §Security model
-//   - docs/architecture.md §Host/guest boundary
+//   - crates/fastenv/docs/architecture.md §Host/guest boundary
 //   - docs/implementation-plan.md §Phase: Test harnesses
 //
 // These tests validate the three key security properties of the fork isolation

@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
 
 // parity_check references crate::Cli so it must be declared in main.rs.

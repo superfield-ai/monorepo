@@ -1,7 +1,7 @@
 // du.rs — `fastenv du <fork-id>` implementation.
 //
 // Canonical docs:
-//   - docs/architecture.md §5 OD-4 (quota / du)
+//   - crates/fastenv/docs/architecture.md §5 OD-4 (quota / du)
 //   - docs/implementation-plan.md Phase 4 (inspection: du)
 //
 // Pipeline

@@ -1,7 +1,7 @@
 // quota.rs — Per-fork disk quota management.
 //
 // Canonical docs:
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
 //   - docs/quota-prerequisites.md
 //

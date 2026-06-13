@@ -1,7 +1,7 @@
 // export_patch.rs — `fastenv export-patch <fork-id>` implementation.
 //
 // Canonical docs:
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
 //
 // Pipeline

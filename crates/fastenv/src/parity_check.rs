@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md             §4 Functional Requirements, §7 Success Criteria
-//   - docs/architecture.md    §1 Overview, §4 Execution Model
+//   - crates/fastenv/docs/architecture.md    §1 Overview, §4 Execution Model
 //   - docs/implementation-plan.md  Phase 6 — Parity and Cutover
 //
 // This module confirms that every command in the supported product command set
