@@ -599,24 +599,28 @@ The `superfield` binary (`crates/superfield/src/main.rs`) is the single entrypoi
 
 ### Subcommand reference
 
-| Subcommand                                                | Module             | Requires daemon | Description                                                                        |
-| --------------------------------------------------------- | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
-| `superfield serve [--bind <addr>] [--session-ttl <secs>]` | `sf_serve`         | No              | Start the HTTP server in the foreground (default: `0.0.0.0:7000`)                  |
-| `superfield daemon stop`                                  | `sf_cli::daemon`   | Yes             | Send SIGTERM to the daemon; waits for clean exit (max 30 s)                        |
-| `superfield status`                                       | `sf_cli::daemon`   | No              | Show daemon status from `daemon.json`; exits 1 if not running                      |
-| `superfield logs`                                         | `sf_cli::daemon`   | No              | Tail `daemon.log`; exits 1 if daemon not running                                   |
-| `superfield page <name>`                                  | `sf_cli::page`     | No              | Fetch a named page from Nexum and print as markdown; exits 1 if daemon not running |
-| `superfield garden <file...> [--workspace-id <uuid>]`     | `sf_cli::garden`   | Yes             | Ingest markdown files into the Nexum knowledge graph                               |
-| `superfield repo init <name>`                             | `sf_cli::operator` | Yes             | Create or get a Sharp repo by name                                                 |
-| `superfield repo list`                                    | `sf_cli::operator` | Yes             | List all Sharp repos                                                               |
-| `superfield session issue <ws-id> <uid> <role>`           | `sf_cli::operator` | Yes             | Issue a session token (`role`: `admin`, `member`, `viewer`)                        |
-| `superfield episode open <repo-id> <title>`               | `sf_cli::agent`    | Yes             | Open a new agent episode against a repo                                            |
-| `superfield episode append <ep-id> <type> <json>`         | `sf_cli::agent`    | Yes             | Append an event to an existing episode                                             |
-| `superfield episode finish <ep-id>`                       | `sf_cli::agent`    | Yes             | Close an episode                                                                   |
-| `superfield episode list <repo-id>`                       | `sf_cli::agent`    | Yes             | List episodes for a repo                                                           |
-| `superfield deploy validate <config-json>`                | `sf_deploy`        | No              | Validate a deploy target config (no I/O)                                           |
-| `superfield deploy ship <config-json> <path>`             | `sf_deploy`        | No              | Deploy an artifact to a target                                                     |
-| `superfield deploy rollback <record-json>`                | `sf_deploy`        | No              | Roll back target to its prior version                                              |
+| Subcommand                                                | Module               | Requires daemon | Description                                                                        |
+| --------------------------------------------------------- | -------------------- | --------------- | ---------------------------------------------------------------------------------- |
+| `superfield serve [--bind <addr>] [--session-ttl <secs>]` | `sf_serve`           | No              | Start the HTTP server in the foreground (default: `0.0.0.0:7000`)                  |
+| `superfield daemon stop`                                  | `sf_cli::daemon`     | Yes             | Send SIGTERM to the daemon; waits for clean exit (max 30 s)                        |
+| `superfield status`                                       | `sf_cli::daemon`     | No              | Show daemon status from `daemon.json`; exits 1 if not running                      |
+| `superfield logs`                                         | `sf_cli::daemon`     | No              | Tail `daemon.log`; exits 1 if daemon not running                                   |
+| `superfield page <name>`                                  | `sf_cli::page`       | No              | Fetch a named page from Nexum and print as markdown; exits 1 if daemon not running |
+| `superfield garden <file...> [--workspace-id <uuid>]`     | `sf_cli::garden`     | Yes             | Ingest markdown files into the Nexum knowledge graph                               |
+| `superfield repo init <name>`                             | `sf_cli::operator`   | Yes             | Create or get a Sharp repo by name                                                 |
+| `superfield repo list`                                    | `sf_cli::operator`   | Yes             | List all Sharp repos                                                               |
+| `superfield session issue <ws-id> <uid> <role>`           | `sf_cli::operator`   | Yes             | Issue a session token (`role`: `admin`, `member`, `viewer`)                        |
+| `superfield episode open <repo-id> <title>`               | `sf_cli::agent`      | Yes             | Open a new agent episode against a repo                                            |
+| `superfield episode append <ep-id> <type> <json>`         | `sf_cli::agent`      | Yes             | Append an event to an existing episode                                             |
+| `superfield episode finish <ep-id>`                       | `sf_cli::agent`      | Yes             | Close an episode                                                                   |
+| `superfield episode list <repo-id>`                       | `sf_cli::agent`      | Yes             | List episodes for a repo                                                           |
+| `superfield deploy validate <config-json>`                | `sf_deploy`          | No              | Validate a deploy target config (no I/O)                                           |
+| `superfield deploy ship <config-json> <path>`             | `sf_deploy`          | No              | Deploy an artifact to a target                                                     |
+| `superfield deploy rollback <record-json>`                | `sf_deploy`          | No              | Roll back target to its prior version                                              |
+| `superfield deploy-env <config-json> <artifact-path>`     | `sf_cli::deploy_ops` | No              | Validate config and deploy artifact to target env via pluggable transport          |
+| `superfield rollback-env <record-json>`                   | `sf_cli::deploy_ops` | No              | Roll back target to prior version using a serialised deployment record             |
+| `superfield doctor <config-json>`                         | `sf_cli::deploy_ops` | No              | Run preflight validation on a target config; prints errors without performing I/O  |
+| `superfield noop`                                         | (built-in)           | No              | Smoke-test — prints `superfield: ok` to stderr and exits with code 0               |
 
 ### Daemon auto-spawn
 
