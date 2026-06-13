@@ -6,9 +6,15 @@
 //!
 //! # Route inventory
 //!
-//! | Method | Path            | Auth     | Description                         |
-//! |--------|-----------------|----------|-------------------------------------|
-//! | GET    | `/pages/{name}` | None     | Render a named page as markdown     |
+//! | Method | Path               | Auth     | Description                           |
+//! |--------|--------------------|----------|---------------------------------------|
+//! | GET    | `/pages/project`   | None     | Render the project management graph   |
+//! | GET    | `/pages/{name}`    | None     | Render a named page as markdown       |
+//!
+//! The `/pages/project` route is registered first (more specific) and uses
+//! [`sf_db::fetch_project_page`] — a recursive CTE traversal over the project
+//! node graph — rather than the `nexum.documents` document model used by the
+//! other page routes.
 //!
 //! # Security note
 //!
@@ -27,7 +33,8 @@
 //! # Canonical docs
 //!
 //! - Issue #492 scope.
-//! - `docs/architecture.md` §Nexum — page-revision schema.
+//! - Issue #493 scope.
+//! - `docs/architecture.md` §Nexum — page-revision schema and project graph.
 
 use axum::{
     extract::{Path, State},
@@ -37,9 +44,50 @@ use axum::{
     Json, Router,
 };
 use serde_json::json;
-use sf_db::{fetch_page_content, PageQueryError};
+use sf_db::{fetch_page_content, fetch_project_page, PageQueryError};
 
 use crate::state::AppState;
+
+/// `GET /pages/project` — render the project management graph as markdown.
+///
+/// Uses [`sf_db::fetch_project_page`]: a recursive CTE traversal over
+/// `nexum.project_nodes` and `nexum.links` (with `project:` edge types).
+/// This is a different backing query from the document-model pages (prd,
+/// architecture, plan, strategy).
+///
+/// # Responses
+///
+/// - `200 OK` with `Content-Type: text/plain; charset=utf-8` and the project
+///   graph markdown in the body.
+/// - `404 Not Found` with JSON `{"error": "no content yet"}` when there are
+///   no Issue nodes in the project graph.
+/// - `500 Internal Server Error` with JSON `{"error": "..."}` on DB errors.
+pub async fn get_page_project(State(state): State<AppState>) -> impl IntoResponse {
+    match fetch_project_page(state.pool()).await {
+        Ok(Some(content)) => (
+            StatusCode::OK,
+            [(header::CONTENT_TYPE, "text/plain; charset=utf-8")],
+            content,
+        )
+            .into_response(),
+
+        Ok(None) => (
+            StatusCode::NOT_FOUND,
+            Json(json!({
+                "error": "no content yet",
+                "page": "project",
+                "hint": "the project graph has no Issue nodes yet"
+            })),
+        )
+            .into_response(),
+
+        Err(e) => (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            Json(json!({"error": format!("database error: {}", e)})),
+        )
+            .into_response(),
+    }
+}
 
 /// `GET /pages/{name}` — render a named page as markdown.
 ///
@@ -91,8 +139,13 @@ pub async fn get_page(
 ///
 /// Routes here are **not** wrapped in the auth middleware — they are
 /// unauthenticated for milestone 1 (localhost-only).
+///
+/// The `/pages/project` route is registered first (axum resolves static
+/// routes before parameterised ones, so order here does not matter for
+/// correctness, but the explicit route makes the intent clear).
 pub fn router(state: AppState) -> Router {
     Router::new()
+        .route("/pages/project", get(get_page_project))
         .route("/pages/{name}", get(get_page))
         .with_state(state)
 }
@@ -108,7 +161,7 @@ mod tests {
     use tower::ServiceExt as _;
 
     use crate::{build_router, ServeConfig};
-    use sf_db::{connect, DbConfig};
+    use sf_db::{connect, insert_feature, insert_issue, DbConfig};
 
     /// Build a test router backed by a live Postgres pool.
     ///
@@ -283,5 +336,99 @@ mod tests {
             .execute(&pool)
             .await
             .ok();
+    }
+
+    /// Integration test: `GET /pages/project` returns 200 with fixture
+    /// content.
+    ///
+    /// Inserts fixture project graph nodes (one Issue, one Feature); GETs
+    /// /pages/project; asserts HTTP 200 and response body contains at least
+    /// one issue title.
+    ///
+    /// Acceptance criterion: get_page_project_returns_200
+    ///
+    /// Skipped unless `DATABASE_URL` is set with the nexum schema migrated.
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with nexum migrations applied"]
+    async fn get_page_project_returns_200() {
+        let router = match make_test_router().await {
+            Some(r) => r,
+            None => {
+                eprintln!("skip: DATABASE_URL not set");
+                return;
+            }
+        };
+
+        // Insert fixture data via the project graph API.
+        let cfg = DbConfig::from_env().expect("DATABASE_URL must be set");
+        let pool = connect(&cfg).await.expect("pool creation failed");
+
+        let issue_id = insert_issue(
+            &pool,
+            "Fixture issue for GET /pages/project test",
+            Some("serve-test-issue"),
+        )
+        .await
+        .expect("insert_issue failed");
+
+        let _feature_id = insert_feature(&pool, issue_id, "Fixture feature for serve test")
+            .await
+            .expect("insert_feature failed");
+
+        // Request the project page.
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/pages/project")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::OK,
+            "GET /pages/project must return 200"
+        );
+
+        let body = axum::body::to_bytes(resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let body_str = String::from_utf8(body.to_vec()).unwrap();
+        assert!(
+            body_str.contains("Fixture issue for GET /pages/project test"),
+            "body must contain fixture issue title, got: {:?}",
+            body_str
+        );
+
+        // Cleanup — delete project nodes in reverse order.
+        for node_id in [_feature_id, issue_id] {
+            let block_id: Option<uuid::Uuid> = sqlx::query_scalar(
+                "SELECT block_id FROM nexum.project_nodes WHERE id = $1",
+            )
+            .bind(node_id)
+            .fetch_optional(&pool)
+            .await
+            .ok()
+            .flatten();
+
+            if let Some(bid) = block_id {
+                sqlx::query("DELETE FROM nexum.links WHERE src = $1 OR dst = $1")
+                    .bind(bid)
+                    .execute(&pool)
+                    .await
+                    .ok();
+            }
+            sqlx::query("DELETE FROM nexum.project_nodes WHERE id = $1")
+                .bind(node_id)
+                .execute(&pool)
+                .await
+                .ok();
+            if let Some(bid) = block_id {
+                sqlx::query("DELETE FROM nexum.blocks WHERE id = $1")
+                    .bind(bid)
+                    .execute(&pool)
+                    .await
+                    .ok();
+            }
+        }
     }
 }
