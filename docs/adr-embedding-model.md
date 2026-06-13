@@ -132,7 +132,7 @@ New vector columns added by any component must:
 
 1. Declare `vector(384)`.
 2. Add `CREATE INDEX … USING hnsw (col vector_cosine_ops)`.
-3. Include the comment `-- embedding model: Xenova/all-MiniLM-L6-v2 (Rust: sentence-transformers/all-MiniLM-L6-v2), rev c9745ed, 384-dim`.
+3. Include the comment `-- embedding model: sentence-transformers/all-MiniLM-L6-v2, rev c9745ed, 384-dim`.
 
 ---
 
