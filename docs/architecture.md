@@ -639,42 +639,6 @@ Source: `sf_db::KNOWN_PAGES` (`crates/sf-db/src/`) and `sf_db::fetch_project_pag
 
 ---
 
-## Nexum — Page Revision Schema
-
-The `nexum.page_revisions` table is the append-only store for computed knowledge-base page content produced by the gardening loop. It lives in the `nexum` PostgreSQL schema and is created by `crates/nexum/migrations/0003_page_revisions.sql`.
-
-### DDL shape
-
-```sql
-CREATE TABLE IF NOT EXISTS nexum.page_revisions (
-    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id UUID        NOT NULL REFERENCES public.workspaces(id),
-    page_name    TEXT        NOT NULL,
-    content      TEXT        NOT NULL,
-    provenance   TEXT        NOT NULL DEFAULT '',
-    ingested_at  TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE INDEX IF NOT EXISTS page_revisions_workspace_page_idx
-    ON nexum.page_revisions (workspace_id, page_name, ingested_at DESC);
-```
-
-### Write contract
-
-The single write entrypoint is `insert_page_revision` in `crates/sf-db/src/page_revision.rs`. Callers supply `workspace_id`, `page_name`, `content`, and `provenance`; the function inserts one row and returns `Ok(())`.
-
-### Idempotency (append-only, no update)
-
-Each invocation appends a new revision row — there is no `ON CONFLICT DO UPDATE`. Readers select the latest revision for a `(workspace_id, page_name)` pair by ordering on `ingested_at DESC`. Re-running the gardening step does not corrupt history — it appends a newer row that becomes the effective current revision.
-
-### Migration prerequisite
-
-The `nexum.page_revisions` table must exist before `insert_page_revision` is called. The daemon's health gate applies all component migrations (including `0003_page_revisions.sql`) before sending `StartupResult::Ok`, so the table is guaranteed to exist for any in-process caller.
-
-See also: `crates/sf-db/src/page_revision.rs` (write contract implementation).
-
----
-
 ## Milestone 1 — Headless Gardening Appliance (completed)
 
 Milestone 1 delivered the headless binary: daemon auto-spawn, Postgres container lifecycle, seed document ingestion, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
