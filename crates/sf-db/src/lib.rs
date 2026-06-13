@@ -51,7 +51,7 @@ pub use page_revision::{insert_page_revision, PageRevisionError};
 pub use pool::{acquire_with_workspace_id, acquire_workspace, connect};
 pub use project_graph::{
     fetch_project_page, insert_acceptance_criterion, insert_feature, insert_issue,
-    insert_required_test, link_pr_to_issue, traverse_project_graph, ProjectGraphError,
-    ProjectNode, PROJECT_GRAPH_DOC_TITLE,
+    insert_required_test, link_pr_to_issue, traverse_project_graph, ProjectGraphError, ProjectNode,
+    PROJECT_GRAPH_DOC_TITLE,
 };
 pub use provisioner::{PostgresProvisioner, ProvisionerError, TestProvisioner};

@@ -401,14 +401,13 @@ mod tests {
 
         // Cleanup — delete project nodes in reverse order.
         for node_id in [_feature_id, issue_id] {
-            let block_id: Option<uuid::Uuid> = sqlx::query_scalar(
-                "SELECT block_id FROM nexum.project_nodes WHERE id = $1",
-            )
-            .bind(node_id)
-            .fetch_optional(&pool)
-            .await
-            .ok()
-            .flatten();
+            let block_id: Option<uuid::Uuid> =
+                sqlx::query_scalar("SELECT block_id FROM nexum.project_nodes WHERE id = $1")
+                    .bind(node_id)
+                    .fetch_optional(&pool)
+                    .await
+                    .ok()
+                    .flatten();
 
             if let Some(bid) = block_id {
                 sqlx::query("DELETE FROM nexum.links WHERE src = $1 OR dst = $1")

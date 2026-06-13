@@ -106,12 +106,11 @@ async fn ensure_project_doc(pool: &PgPool) -> Result<Uuid, ProjectGraphError> {
 
     // Insert the sentinel document.  corpus_id is NULL (no corpus — this is
     // a synthetic graph container, not an ingested document).
-    let doc_id: Uuid = sqlx::query_scalar(
-        "INSERT INTO nexum.documents (title) VALUES ($1) RETURNING id",
-    )
-    .bind(PROJECT_GRAPH_DOC_TITLE)
-    .fetch_one(pool)
-    .await?;
+    let doc_id: Uuid =
+        sqlx::query_scalar("INSERT INTO nexum.documents (title) VALUES ($1) RETURNING id")
+            .bind(PROJECT_GRAPH_DOC_TITLE)
+            .fetch_one(pool)
+            .await?;
 
     Ok(doc_id)
 }
@@ -251,7 +250,13 @@ pub async fn insert_feature(
     // Link: Issue → Feature
     let issue_block = block_id_for_node(pool, issue_id).await?;
     let feature_block = block_id_for_node(pool, feature_id).await?;
-    insert_project_edge(pool, issue_block, feature_block, "project:issue_has_feature").await?;
+    insert_project_edge(
+        pool,
+        issue_block,
+        feature_block,
+        "project:issue_has_feature",
+    )
+    .await?;
 
     Ok(feature_id)
 }
@@ -311,8 +316,7 @@ pub async fn insert_acceptance_criterion(
     title: &str,
 ) -> Result<Uuid, ProjectGraphError> {
     let doc_id = ensure_project_doc(pool).await?;
-    let ac_id =
-        insert_project_node(pool, doc_id, title, "AcceptanceCriterion", None).await?;
+    let ac_id = insert_project_node(pool, doc_id, title, "AcceptanceCriterion", None).await?;
 
     // Link: Feature → AcceptanceCriterion
     let feature_block = block_id_for_node(pool, feature_id).await?;
@@ -357,8 +361,7 @@ pub async fn link_pr_to_issue(
     external_ref: Option<&str>,
 ) -> Result<Uuid, ProjectGraphError> {
     let doc_id = ensure_project_doc(pool).await?;
-    let pr_id =
-        insert_project_node(pool, doc_id, title, "PullRequest", external_ref).await?;
+    let pr_id = insert_project_node(pool, doc_id, title, "PullRequest", external_ref).await?;
 
     // Resolve block IDs for the edge.
     let pr_block = block_id_for_node(pool, pr_id).await?;
@@ -367,13 +370,8 @@ pub async fn link_pr_to_issue(
     // Insert edge PR → Issue.  The unique partial index on
     // nexum.links(src) WHERE rel_type = 'project:pr_resolves_issue'
     // enforces the one-PR-per-issue constraint at the database level.
-    let edge_result = insert_project_edge(
-        pool,
-        pr_block,
-        issue_block,
-        "project:pr_resolves_issue",
-    )
-    .await;
+    let edge_result =
+        insert_project_edge(pool, pr_block, issue_block, "project:pr_resolves_issue").await;
 
     match edge_result {
         Ok(_) => Ok(pr_id),
@@ -436,7 +434,19 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
     // Recursive CTE:
     // 1. Seed: all Issue nodes (no parent).
     // 2. Recurse: follow any project: edge from each reached node.
-    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, Option<String>, Option<String>, Option<Uuid>)>(
+    let rows = sqlx::query_as::<
+        _,
+        (
+            Uuid,
+            Uuid,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<Uuid>,
+        ),
+    >(
         r#"
         WITH RECURSIVE project_tree AS (
             -- Seed: all Issue nodes
@@ -491,7 +501,16 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
     let nodes = rows
         .into_iter()
         .map(
-            |(id, block_id, content, node_type, state, external_ref, via_rel_type, parent_block_id)| {
+            |(
+                id,
+                block_id,
+                content,
+                node_type,
+                state,
+                external_ref,
+                via_rel_type,
+                parent_block_id,
+            )| {
                 ProjectNode {
                     id,
                     block_id,
@@ -686,11 +705,7 @@ mod tests {
         );
 
         // Cleanup.
-        cleanup_test_nodes(
-            &pool,
-            &[issue_id, _feature_b_id, feature_a_id],
-        )
-        .await;
+        cleanup_test_nodes(&pool, &[issue_id, _feature_b_id, feature_a_id]).await;
     }
 
     /// Integration test: insert a PullRequest linked to Issue A; attempt to
