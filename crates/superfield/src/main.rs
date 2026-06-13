@@ -262,8 +262,8 @@ async fn run_serve(args: &[String]) {
         }
     };
 
-    // Read CONTROL_ASSETS_DIR from the environment — set by the TypeScript CLI
-    // control command after building the browser UI (packages/control/apps).
+    // Read CONTROL_ASSETS_DIR from the environment — path to pre-built browser
+    // UI assets served at the root by the Rust HTTP layer.
     let assets_dir = std::env::var("CONTROL_ASSETS_DIR")
         .ok()
         .map(std::path::PathBuf::from);

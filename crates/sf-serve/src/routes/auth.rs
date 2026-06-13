@@ -203,8 +203,7 @@ pub async fn register(
             };
 
             // Encode the session token in the `superfield_auth` cookie.
-            // HttpOnly + SameSite=Lax mirrors what the Bun backend sent so
-            // existing E2E helpers can parse the cookie without changes.
+            // HttpOnly + SameSite=Lax for compatibility with E2E test helpers.
             let cookie = format!(
                 "superfield_auth={}; Path=/; HttpOnly; SameSite=Lax",
                 session.token
