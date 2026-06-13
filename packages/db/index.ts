@@ -62,7 +62,7 @@ export type GovernedEmbeddingModel = typeof GOVERNED_EMBEDDING.model;
  *  - One `PgPool` shared across all component crates
  *  - `CREATE SCHEMA IF NOT EXISTS <component>` as the first migration step
  *
- * @see docs/scout/387-existing-service-runtimes-and-shared-boundaries.md
+ * @see docs/architecture.md §Single-Instance Database Schema Layout
  */
 export interface RustWorkspaceCrate {
   /** Cargo crate name inside the workspace. */
@@ -79,7 +79,7 @@ export interface RustWorkspaceCrate {
  * Not used at runtime — acts as a typed anchor so the scout findings are
  * reachable from TypeScript tooling and doc generators.
  *
- * @see docs/scout/387-existing-service-runtimes-and-shared-boundaries.md
+ * @see docs/architecture.md §Single-Instance Database Schema Layout
  */
 export const RUST_WORKSPACE_PLAN: readonly RustWorkspaceCrate[] = [
   {
@@ -393,7 +393,8 @@ export async function openClaudeSessionStore(
  * opened here. The unified migration runner (substrate-foundations phase)
  * will own real Postgres migrations; this package will not grow a runner.
  *
- * @see docs/scout/386-postgres-provisioning-migration-schemas.md
+ * @see docs/architecture.md §Single-Instance Database Schema Layout
+ * @see docs/architecture.md §Migration ownership
  */
 export async function migrate(_opts?: MigrateOptions): Promise<void> {
   // The embedded issue store initializes itself on demand.

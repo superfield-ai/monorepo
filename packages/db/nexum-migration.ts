@@ -18,7 +18,7 @@
  * without spinning up Postgres.
  *
  * @see docs/architecture.md §6 — namespaced schemas
- * @see docs/scout/386-postgres-provisioning-migration-schemas.md — Nexum inventory
+ * @see docs/architecture.md §Single-Instance Database Schema Layout
  * @see migrations/nexum/0001__nexum_schema.sql
  * @see migrations/nexum/0002__nexum_data_cutover.sql
  * @see issue #368

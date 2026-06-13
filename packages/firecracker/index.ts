@@ -21,7 +21,7 @@
  *   - virtiofsd binary (must be provisioned separately; see VIRTIOFSD_PATH env)
  *   - fastenv binary with `ebpf` subcommand (for eBPF attach/detach)
  *
- * See: docs/scout/281-oci-firecracker-toolchain.md
+ * See: crates/fastenv/docs/scout/firecracker-prerequisites.md
  *
  * Host-side eBPF monitoring (#384): the `attachEbpf` / `detachEbpf` functions
  * in `ebpf.ts` define the TypeScript surface for wiring host-kernel BPF
@@ -32,7 +32,7 @@
  * `CrunBackend` in the fastenv binary (`src/container_runtime.rs`). The CLI
  * `exec` subcommand accepts `--crun-path` to override the binary path.
  *
- * @see docs/scout/389-fastenv-host-control-plane-and-substrate-reliability.md
+ * @see docs/architecture.md §Substrate Reliability
  */
 
 export {
@@ -84,7 +84,7 @@ export type {
  * Today the control plane is entirely single-host (Unix-socket per process).
  * This interface marks the integration boundary for the federated scheduler.
  *
- * @see docs/scout/389-fastenv-host-control-plane-and-substrate-reliability.md §Host Control Plane
+ * @see docs/architecture.md §Substrate Reliability
  */
 export interface HostScheduler {
   readonly implemented: false;

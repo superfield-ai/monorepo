@@ -30,7 +30,7 @@
  * inside `fastenv`. The TypeScript caller receives a structured
  * `EbpfAttachResult` on success.
  *
- * See: docs/scout/389-fastenv-host-control-plane-and-substrate-reliability.md
+ * See: docs/architecture.md §Substrate Reliability
  * See: superfield-ai/fastenv src/host_ebpf.rs
  */
 
