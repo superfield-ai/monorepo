@@ -44,12 +44,12 @@ The `superfield garden` subcommand exposes the gardening loop to human operators
 
 **Subcommands:**
 
-| Subcommand           | Description                                                                             |
-| -------------------- | --------------------------------------------------------------------------------------- |
-| `garden run`         | Execute one gardening cycle (research → reconcile → commit cursor) and exit             |
-| `garden start`       | Ensure the daemon is running and the loop is active; idempotent                         |
-| `garden status`      | Print the current gardening cursor, last step timestamp, and loop health                |
-| `garden step <n>`    | Force-advance the cursor by `n` steps without waiting for the normal loop cadence       |
+| Subcommand        | Description                                                                       |
+| ----------------- | --------------------------------------------------------------------------------- |
+| `garden run`      | Execute one gardening cycle (research → reconcile → commit cursor) and exit       |
+| `garden start`    | Ensure the daemon is running and the loop is active; idempotent                   |
+| `garden status`   | Print the current gardening cursor, last step timestamp, and loop health          |
+| `garden step <n>` | Force-advance the cursor by `n` steps without waiting for the normal loop cadence |
 
 The `garden run` path is the reference implementation for the loop step contract: it must succeed from a cold start (no prior cursor) and produce an observable change in the knowledge base (at minimum, one new document block or one updated link).
 
@@ -80,6 +80,7 @@ See also: `crates/sf-loop/src/lib.rs` for the loop engine implementation.
 The HTTP API (`superfield serve`) must not accept external connections before the health gate passes. The serving layer binds the listener socket only after `StartupResult::Ok` has been sent over the startup-notify socket. This prevents race conditions where a client connects before migrations have run.
 
 The `/health` endpoint returns HTTP 200 only when:
+
 - Postgres is accepting connections.
 - All migrations are applied (verified by querying `schema_migrations`).
 - The gardening loop task is running (i.e. `LoopHandle` is registered in `AppState`).
