@@ -500,7 +500,7 @@ The `superfield` binary (`crates/superfield/src/main.rs`) is the single entrypoi
 | `superfield daemon stop`                                  | `sf_cli::daemon`   | Yes             | Send SIGTERM to the daemon; waits for clean exit (max 30 s)       |
 | `superfield status`                                       | `sf_cli::daemon`   | No              | Show daemon status from `daemon.json`; exits 1 if not running     |
 | `superfield logs`                                         | `sf_cli::daemon`   | No              | Tail `daemon.log`; exits 1 if daemon not running                  |
-| `superfield page <name>`                                  | `sf_cli::page`     | Yes             | Fetch a named page from Nexum and print as markdown               |
+| `superfield page <name>`                                  | `sf_cli::page`     | No              | Fetch a named page from Nexum and print as markdown; exits 1 if daemon not running |
 | `superfield garden <file...> [--workspace-id <uuid>]`     | `sf_cli::garden`   | Yes             | Ingest markdown files into the Nexum knowledge graph              |
 | `superfield repo init <name>`                             | `sf_cli::operator` | Yes             | Create or get a Sharp repo by name                                |
 | `superfield repo list`                                    | `sf_cli::operator` | Yes             | List all Sharp repos                                              |
@@ -515,7 +515,7 @@ The `superfield` binary (`crates/superfield/src/main.rs`) is the single entrypoi
 
 ### Daemon auto-spawn
 
-Commands that require the daemon (`page`, `garden`, `repo`, `session`, `episode`) call `connect_or_start_daemon()` automatically if the daemon is not running. The auto-spawn flow is described in full in the `## Daemon Lifecycle` section above.
+Commands that require the daemon (`garden`, `repo`, `session`, `episode`) call `connect_or_start_daemon()` automatically if the daemon is not running. The auto-spawn flow is described in full in the `## Daemon Lifecycle` section above.
 
 Three commands are **no-spawn guards** — they exit with code 1 rather than auto-spawning if the daemon is not running: `status`, `logs`, and `page`.
 
