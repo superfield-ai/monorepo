@@ -31,7 +31,7 @@ import { JSONFilePreset } from "lowdb/node";
  * is permitted without a superseding architecture decision.
  *
  * The `revision` field pins the HuggingFace Hub commit SHA for reproducible
- * weight downloads. It matches `GOVERNED_MODEL_REVISION` in `crates/sf-embed`
+ * weight downloads. It matches `GOVERNED_MODEL_REVISION` in `crates/nexum/src/embed.rs`
  * and the canonical entry in `models/embedding.lock`.
  *
  * @see docs/adr-embedding-model.md (issue #432)
