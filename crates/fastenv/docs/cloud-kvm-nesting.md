@@ -219,4 +219,6 @@ deployments.
 
 fastenv should check for `/dev/kvm` at startup and fail with a clear diagnostic message
 identifying the likely cause, rather than producing obscure errors from Firecracker
-initialization failure.
+initialization failure. This is implemented by the `fastenv doctor` subcommand — see
+[§9 Doctor](architecture.md#9-doctor) in `crates/fastenv/docs/architecture.md` for the
+full check inventory, exit codes, and `--json` output format.
