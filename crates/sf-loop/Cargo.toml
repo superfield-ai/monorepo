@@ -1,0 +1,32 @@
+[package]
+name = "sf-loop"
+description = "Gardening loop engine — continuous resumable knowledge-base improvement via six research/reconcile agent steps"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sf_loop"
+path = "src/lib.rs"
+
+[dependencies]
+sf-db = { workspace = true }
+sf-serve = { path = "../sf-serve" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+serde_yaml = "0.9"
+tracing = "0.1"
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+uuid = { version = "1", features = ["v4"] }
+tempfile = { workspace = true }
+sqlx = { workspace = true }
