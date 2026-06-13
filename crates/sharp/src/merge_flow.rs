@@ -30,7 +30,7 @@
 //!
 //! async fn example(pool: &PgPool) {
 //!     let req = MergeRequest {
-//!         repo_name: "superfield-ai/superfield-cli-ts".to_string(),
+//!         repo_name: "superfield-ai/monorepo".to_string(),
 //!         workspace_root: PathBuf::from("/path/to/workspace"),
 //!         base_files: vec![],
 //!         our_files: vec![],
@@ -57,7 +57,7 @@ use uuid::Uuid;
 /// A merge request through the Sharp self-hosting gate.
 #[derive(Debug)]
 pub struct MergeRequest {
-    /// The Sharp repo name (e.g. `"superfield-ai/superfield-cli-ts"`).
+    /// The Sharp repo name (e.g. `"superfield-ai/monorepo"`).
     pub repo_name: String,
     /// Absolute path to the Cargo workspace root.
     pub workspace_root: std::path::PathBuf,
@@ -206,7 +206,7 @@ mod tests {
     #[test]
     fn merge_request_fields_are_correct() {
         let req = MergeRequest {
-            repo_name: "superfield-ai/superfield-cli-ts".to_string(),
+            repo_name: "superfield-ai/monorepo".to_string(),
             workspace_root: PathBuf::from("/repo/crates/sharp"),
             base_files: vec![FileVersion {
                 path: PathBuf::from("src/lib.rs"),
@@ -228,7 +228,7 @@ mod tests {
             pr_title: "feat(sharp): self-hosting gate".to_string(),
         };
 
-        assert_eq!(req.repo_name, "superfield-ai/superfield-cli-ts");
+        assert_eq!(req.repo_name, "superfield-ai/monorepo");
         assert_eq!(req.workspace_root, PathBuf::from("/repo/crates/sharp"));
         assert_eq!(req.base_files.len(), 1);
         assert_eq!(req.our_files.len(), 1);
