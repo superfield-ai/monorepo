@@ -10,7 +10,7 @@
 // Firecracker API socket, and tracks state transitions from Provisioned →
 // Running → Stopped.
 //
-// # Firecracker boot design (see docs/scout/firecracker-prerequisites.md)
+// # Firecracker boot design (see crates/fastenv/docs/scout/firecracker-prerequisites.md)
 //
 // - Firecracker is spawned directly (without jailer) using
 //   `std::process::Command`. This avoids the jailer chroot path complexity on
@@ -219,7 +219,7 @@ pub struct ProjectVmRecord {
 /// to `/usr/local/bin/firecracker`. Override `binary_path` in tests to point
 /// at a mock binary.
 ///
-/// See docs/scout/firecracker-prerequisites.md for environment-specific
+/// See crates/fastenv/docs/scout/firecracker-prerequisites.md for environment-specific
 /// requirements (KVM group membership, cgroup v2, no jailer by default).
 #[derive(Debug, Clone)]
 pub struct FirecrackerConfig {
@@ -680,7 +680,7 @@ fn boot_firecracker(record: &mut ProjectVmRecord, config: &FirecrackerConfig) ->
 
     // 7. Drive the Firecracker API boot sequence.
     //    Paths used in API calls are host-side paths (no jailer chroot).
-    //    See docs/scout/firecracker-prerequisites.md §4 for the API format.
+    //    See crates/fastenv/docs/scout/firecracker-prerequisites.md §4 for the API format.
     let sock_str = sock.to_string_lossy();
 
     // 7a. Configure boot source (kernel image + boot args).

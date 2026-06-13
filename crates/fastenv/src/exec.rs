@@ -3,8 +3,8 @@
 // Canonical docs:
 //   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
-//   - docs/scout/phase2-findings.md
-//   - docs/scout/phase3-findings.md
+//   - crates/fastenv/docs/scout/phase2-findings.md
+//   - crates/fastenv/docs/scout/phase3-findings.md
 //
 // Pipeline
 // --------
@@ -220,7 +220,7 @@ pub fn run_exec(fork_id: &str, command: &[String], root: &Path, opts: &ExecOptio
     // support BPF (e.g. Firecracker quickstart kernel 4.14.174), the loader
     // degrades gracefully to synthetic lifecycle events — it never blocks exec.
     //
-    // Integration note (docs/scout/guest-ebpf-findings.md §1):
+    // Integration note (crates/fastenv/docs/scout/guest-ebpf-findings.md §1):
     //   Current quickstart kernel 4.14.174 lacks CONFIG_DEBUG_INFO_BTF; the
     //   loader will emit guest_ebpf.loader_unavailable and continue.
     //   A real guest kernel ≥ 5.7 is required for BPF attachment.
