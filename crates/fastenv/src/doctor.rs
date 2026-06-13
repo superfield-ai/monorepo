@@ -142,11 +142,7 @@ fn check_cpu_virt_flag(env: &DoctorEnv) -> CheckResult {
             return CheckResult {
                 key: "cpu_virt_flag".to_owned(),
                 status: CheckStatus::Fail,
-                message: format!(
-                    "cannot read {}: {}",
-                    env.cpuinfo_path.display(),
-                    e
-                ),
+                message: format!("cannot read {}: {}", env.cpuinfo_path.display(), e),
             }
         }
     };
@@ -180,11 +176,7 @@ fn check_unrestricted_guest(env: &DoctorEnv) -> CheckResult {
             return CheckResult {
                 key: "cpu_unrestricted_guest".to_owned(),
                 status: CheckStatus::Fail,
-                message: format!(
-                    "cannot read {}: {}",
-                    env.cpuinfo_path.display(),
-                    e
-                ),
+                message: format!("cannot read {}: {}", env.cpuinfo_path.display(), e),
             }
         }
     };
@@ -223,11 +215,7 @@ fn check_ept(env: &DoctorEnv) -> CheckResult {
             return CheckResult {
                 key: "cpu_ept".to_owned(),
                 status: CheckStatus::Fail,
-                message: format!(
-                    "cannot read {}: {}",
-                    env.cpuinfo_path.display(),
-                    e
-                ),
+                message: format!("cannot read {}: {}", env.cpuinfo_path.display(), e),
             }
         }
     };
@@ -263,11 +251,7 @@ fn check_vpid(env: &DoctorEnv) -> CheckResult {
             return CheckResult {
                 key: "cpu_vpid".to_owned(),
                 status: CheckStatus::Fail,
-                message: format!(
-                    "cannot read {}: {}",
-                    env.cpuinfo_path.display(),
-                    e
-                ),
+                message: format!("cannot read {}: {}", env.cpuinfo_path.display(), e),
             }
         }
     };
@@ -283,9 +267,8 @@ fn check_vpid(env: &DoctorEnv) -> CheckResult {
             CheckResult {
                 key: "cpu_vpid".to_owned(),
                 status: CheckStatus::Fail,
-                message:
-                    "Intel vmx present but vpid flag missing — vpid required for Firecracker"
-                        .to_owned(),
+                message: "Intel vmx present but vpid flag missing — vpid required for Firecracker"
+                    .to_owned(),
             }
         }
     } else {
@@ -315,10 +298,7 @@ fn check_firecracker_binary(env: &DoctorEnv) -> CheckResult {
             CheckResult {
                 key: "firecracker_binary".to_owned(),
                 status: CheckStatus::Fail,
-                message: format!(
-                    "firecracker binary at {} is not executable",
-                    path.display()
-                ),
+                message: format!("firecracker binary at {} is not executable", path.display()),
             }
         }
     } else {
@@ -357,10 +337,7 @@ fn check_crun_binary(env: &DoctorEnv) -> CheckResult {
         CheckResult {
             key: "crun_binary".to_owned(),
             status: CheckStatus::Fail,
-            message: format!(
-                "crun binary not found at {} — install crun",
-                path.display()
-            ),
+            message: format!("crun binary not found at {} — install crun", path.display()),
         }
     }
 }
@@ -392,11 +369,7 @@ fn check_overlayfs(env: &DoctorEnv) -> CheckResult {
             return CheckResult {
                 key: "overlayfs".to_owned(),
                 status: CheckStatus::Fail,
-                message: format!(
-                    "cannot read {}: {}",
-                    env.filesystems_path.display(),
-                    e
-                ),
+                message: format!("cannot read {}: {}", env.filesystems_path.display(), e),
             }
         }
     };
@@ -455,10 +428,7 @@ fn check_kernel_version(env: &DoctorEnv) -> CheckResult {
         Some((major, minor)) if major > 5 || (major == 5 && minor >= 10) => CheckResult {
             key: "kernel_version".to_owned(),
             status: CheckStatus::Pass,
-            message: format!(
-                "kernel version {}.{} >= 5.10 requirement met",
-                major, minor
-            ),
+            message: format!("kernel version {}.{} >= 5.10 requirement met", major, minor),
         },
         Some((major, minor)) => CheckResult {
             key: "kernel_version".to_owned(),
@@ -483,11 +453,7 @@ fn check_kernel_version(env: &DoctorEnv) -> CheckResult {
 fn parse_meminfo_free_kb(content: &str) -> Option<u64> {
     for line in content.lines() {
         if line.starts_with("MemAvailable:") || line.starts_with("MemFree:") {
-            let kb: u64 = line
-                .split_whitespace()
-                .nth(1)?
-                .parse()
-                .ok()?;
+            let kb: u64 = line.split_whitespace().nth(1)?.parse().ok()?;
             return Some(kb);
         }
     }
@@ -611,8 +577,7 @@ fn print_human(report: &DoctorReport) {
             CheckStatus::Fail => "✗",
             CheckStatus::Warn => "⚠",
         };
-        writeln!(out, "{} [{}] {}", icon, check.key, check.message)
-            .expect("stdout write failed");
+        writeln!(out, "{} [{}] {}", icon, check.key, check.message).expect("stdout write failed");
     }
 }
 
@@ -671,7 +636,11 @@ pub mod tests {
         .unwrap();
 
         // Firecracker dummy binary
-        let firecracker_path = root.join("usr").join("local").join("bin").join("firecracker");
+        let firecracker_path = root
+            .join("usr")
+            .join("local")
+            .join("bin")
+            .join("firecracker");
         fs::create_dir_all(firecracker_path.parent().unwrap()).unwrap();
         fs::write(&firecracker_path, b"#!/bin/sh\n").unwrap();
         let mut perms = fs::metadata(&firecracker_path).unwrap().permissions();
@@ -704,8 +673,16 @@ pub mod tests {
         let env = mock_env_all_pass(tmp.path());
         let report = build_report(&env);
         let exit_code = exit_code_for(&report.checks);
-        assert_eq!(exit_code, 0, "expected exit 0; failing checks: {:?}",
-            report.checks.iter().filter(|c| c.status == CheckStatus::Fail).collect::<Vec<_>>());
+        assert_eq!(
+            exit_code,
+            0,
+            "expected exit 0; failing checks: {:?}",
+            report
+                .checks
+                .iter()
+                .filter(|c| c.status == CheckStatus::Fail)
+                .collect::<Vec<_>>()
+        );
     }
 
     #[test]
@@ -715,8 +692,16 @@ pub mod tests {
         // Remove /dev/kvm
         fs::remove_file(env.dev_root.join("dev").join("kvm")).unwrap();
         let report = build_report(&env);
-        let kvm_check = report.checks.iter().find(|c| c.key == "kvm_device").unwrap();
-        assert_eq!(kvm_check.status, CheckStatus::Fail, "expected kvm_device to fail");
+        let kvm_check = report
+            .checks
+            .iter()
+            .find(|c| c.key == "kvm_device")
+            .unwrap();
+        assert_eq!(
+            kvm_check.status,
+            CheckStatus::Fail,
+            "expected kvm_device to fail"
+        );
         assert_eq!(exit_code_for(&report.checks), 1);
     }
 
@@ -727,8 +712,16 @@ pub mod tests {
         // Write cpuinfo without vmx or svm
         fs::write(&env.cpuinfo_path, "flags\t\t: fpu vme de\n").unwrap();
         let report = build_report(&env);
-        let check = report.checks.iter().find(|c| c.key == "cpu_virt_flag").unwrap();
-        assert_eq!(check.status, CheckStatus::Fail, "expected cpu_virt_flag to fail");
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.key == "cpu_virt_flag")
+            .unwrap();
+        assert_eq!(
+            check.status,
+            CheckStatus::Fail,
+            "expected cpu_virt_flag to fail"
+        );
         assert_eq!(exit_code_for(&report.checks), 1);
     }
 
@@ -739,8 +732,16 @@ pub mod tests {
         // cpuinfo has vmx but NOT unrestricted_guest
         fs::write(&env.cpuinfo_path, "flags\t\t: vmx ept vpid\n").unwrap();
         let report = build_report(&env);
-        let check = report.checks.iter().find(|c| c.key == "cpu_unrestricted_guest").unwrap();
-        assert_eq!(check.status, CheckStatus::Fail, "expected cpu_unrestricted_guest to fail");
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.key == "cpu_unrestricted_guest")
+            .unwrap();
+        assert_eq!(
+            check.status,
+            CheckStatus::Fail,
+            "expected cpu_unrestricted_guest to fail"
+        );
         assert_eq!(exit_code_for(&report.checks), 1);
     }
 
@@ -751,8 +752,16 @@ pub mod tests {
         // Remove firecracker
         fs::remove_file(&env.firecracker_path).unwrap();
         let report = build_report(&env);
-        let check = report.checks.iter().find(|c| c.key == "firecracker_binary").unwrap();
-        assert_eq!(check.status, CheckStatus::Fail, "expected firecracker_binary to fail");
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.key == "firecracker_binary")
+            .unwrap();
+        assert_eq!(
+            check.status,
+            CheckStatus::Fail,
+            "expected firecracker_binary to fail"
+        );
         assert_eq!(exit_code_for(&report.checks), 1);
     }
 
@@ -763,8 +772,16 @@ pub mod tests {
         // Remove crun
         fs::remove_file(&env.crun_path).unwrap();
         let report = build_report(&env);
-        let check = report.checks.iter().find(|c| c.key == "crun_binary").unwrap();
-        assert_eq!(check.status, CheckStatus::Fail, "expected crun_binary to fail");
+        let check = report
+            .checks
+            .iter()
+            .find(|c| c.key == "crun_binary")
+            .unwrap();
+        assert_eq!(
+            check.status,
+            CheckStatus::Fail,
+            "expected crun_binary to fail"
+        );
         assert_eq!(exit_code_for(&report.checks), 1);
     }
 
@@ -776,7 +793,11 @@ pub mod tests {
         fs::write(&env.filesystems_path, "nodev\tsysfs\nnodev\ttmpfs\n").unwrap();
         let report = build_report(&env);
         let check = report.checks.iter().find(|c| c.key == "overlayfs").unwrap();
-        assert_eq!(check.status, CheckStatus::Fail, "expected overlayfs to fail");
+        assert_eq!(
+            check.status,
+            CheckStatus::Fail,
+            "expected overlayfs to fail"
+        );
         assert_eq!(exit_code_for(&report.checks), 1);
     }
 
@@ -818,10 +839,7 @@ pub mod tests {
             assert!(!message.is_empty(), "message must not be empty");
         }
         // All 11 expected keys present
-        let present_keys: Vec<&str> = checks
-            .iter()
-            .map(|c| c["key"].as_str().unwrap())
-            .collect();
+        let present_keys: Vec<&str> = checks.iter().map(|c| c["key"].as_str().unwrap()).collect();
         for key in &expected_keys {
             assert!(
                 present_keys.contains(key),
