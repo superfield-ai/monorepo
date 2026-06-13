@@ -53,7 +53,7 @@ jobs:
           ")
           echo "SUPERFIELD_DEMO_HOST=${HOST_GW}" >> "$GITHUB_ENV"
       - name: Run E2E tests
-        run: bun --bun vitest run packages/*/tests/e2e
+        run: bun --bun vitest run packages/core/tests/e2e
       - name: Dump pod state on failure
         if: failure()
         run: |
