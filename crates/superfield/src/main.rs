@@ -33,6 +33,7 @@
 //! | `status`         | sf_cli daemon               | Show daemon status (no-spawn guard)           |
 //! | `logs`           | sf_cli daemon               | Show daemon log tail (no-spawn guard)         |
 //! | `page`           | `sf_cli` page commands      | Print a knowledge-base page (requires daemon) |
+//! | `garden`         | `sf_cli` garden commands    | Ingest seed documents into the knowledge graph|
 //! | `repo`           | `sf_cli` operator commands  | Manage Sharp repos                            |
 //! | `session`        | `sf_cli` operator commands  | Manage auth sessions                          |
 //! | `episode`        | `sf_cli` agent commands     | Manage agent episodes                         |
@@ -76,6 +77,11 @@ Deploy-operator commands (backed by sf-deploy):
 Page commands (require running daemon):
   page <name>                         Print a knowledge-base page as markdown
                                       name: prd | architecture | plan | strategy | project
+
+Garden commands (seed document ingestion):
+  garden <file1> [file2...] [--workspace-id <uuid>]
+                                      Ingest markdown files into the knowledge graph
+                                      workspace-id defaults to WORKSPACE_ID env var
 
 Other:
   noop                                Smoke-test — exits with code 0
