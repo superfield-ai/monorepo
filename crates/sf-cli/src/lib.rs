@@ -16,6 +16,9 @@
 //! - **[`deploy_ops`]** — deploy-operator commands (`deploy-env`, `rollback-env`,
 //!   `doctor`).  These are backed by [`sf_deploy`] without requiring any
 //!   TypeScript/Node runtime, GCP SDK, or GitHub client.
+//! - **[`page`]** — knowledge-base page commands (`page <name>`).  Projects
+//!   over the Nexum graph to render named pages as markdown.  Includes the
+//!   no-spawn daemon guard (issue #492).
 //!
 //! # Architecture
 //!
@@ -29,6 +32,7 @@ pub mod agent;
 pub mod deploy_ops;
 pub mod error;
 pub mod operator;
+pub mod page;
 
 use sf_db::DbConfig;
 use sqlx::PgPool;
@@ -57,6 +61,10 @@ pub enum CliError {
     /// A deploy-operator command error.
     #[error("deploy-ops error: {0}")]
     DeployOps(#[from] deploy_ops::DeployOpsError),
+
+    /// A page-command error (unknown page, daemon not running, etc.).
+    #[error("page error: {0}")]
+    Page(#[from] page::PageError),
 
     /// A UUID parse error.
     #[error("invalid UUID: {0}")]
@@ -122,6 +130,13 @@ pub enum Cmd {
     /// Equivalent to the TypeScript `doctor` command's config-validation pass.
     /// Does not perform any network I/O.
     Doctor { config_json: String },
+
+    // --- Page commands ---
+    /// Print a named knowledge-base page as markdown.
+    ///
+    /// Exits non-zero if the daemon is not running or the name is unknown.
+    /// Recognised names: `prd`, `architecture`, `plan`, `strategy`, `project`.
+    Page { name: String },
 }
 
 /// Parse `args` (the slice after the binary name) into a [`Cmd`].
@@ -199,6 +214,9 @@ pub fn parse(args: &[String]) -> Result<Cmd, CliError> {
             config_json: config_json.clone(),
         }),
 
+        // page <name>
+        [a, name] if a == "page" => Ok(Cmd::Page { name: name.clone() }),
+
         _ => Err(CliError::Usage(USAGE.to_string())),
     }
 }
@@ -233,6 +251,9 @@ pub async fn run(pool: &PgPool, cmd: Cmd) -> Result<(), CliError> {
         } => deploy_ops::deploy_env(&config_json, &artifact_path)?,
         Cmd::RollbackEnv { record_json } => deploy_ops::rollback_env(&record_json)?,
         Cmd::Doctor { config_json } => deploy_ops::doctor(&config_json)?,
+
+        // Page commands.
+        Cmd::Page { name } => page::page_show(pool, &name).await?,
     }
     Ok(())
 }
@@ -241,7 +262,28 @@ pub async fn run(pool: &PgPool, cmd: Cmd) -> Result<(), CliError> {
 ///
 /// Convenience wrapper used by the binary entrypoint when no pool has been
 /// constructed yet.
+///
+/// For the [`Cmd::Page`] command, the daemon guard is checked **before** any
+/// database connection is attempted, so that a "daemon not running" error is
+/// returned cleanly without trying to reach Postgres (which the daemon manages).
 pub async fn connect_and_run(cmd: Cmd) -> Result<(), CliError> {
+    // Daemon guard for page commands: check before touching the DB.
+    // The daemon manages Postgres; without it the connection would also fail,
+    // but we want the error to say "daemon not running" rather than a DB error.
+    if let Cmd::Page { ref name } = cmd {
+        if !page::daemon_is_running() {
+            return Err(CliError::Page(page::PageError::DaemonNotRunning));
+        }
+        // Also validate the name before attempting a DB connection.
+        if !sf_db::KNOWN_PAGES.contains(&name.as_str()) {
+            let known = sf_db::KNOWN_PAGES.join(", ");
+            return Err(CliError::Page(page::PageError::UnknownPage(
+                name.clone(),
+                known,
+            )));
+        }
+    }
+
     let cfg = DbConfig::from_env()?;
     let pool = sf_db::connect(&cfg).await?;
     run(&pool, cmd).await
@@ -268,6 +310,10 @@ Deploy-operator commands (backed by sf-deploy):
                                       Deploy artifact to a target env
   rollback-env <record-json>          Roll back target to prior version
   doctor <config-json>                Validate target config (no I/O)
+
+Page commands (require running daemon):
+  page <name>                         Print a knowledge-base page as markdown
+                                      name: prd | architecture | plan | strategy | project
 ";
 
 #[cfg(test)]
