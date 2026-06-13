@@ -113,6 +113,7 @@ Each component owns its schema's migrations exclusively. Migration files are col
 | Nexum        | `crates/nexum/migrations/`                                         |
 | Auth         | `crates/sf-auth/src/migrations/` (Rust crate)                      |
 | Orchestrator | `orchestrator/migrations/` (current — `0001_gardening_cursor.sql`) |
+| sf-db        | `crates/sf-db/migrations/` (substrate workspace tables)            |
 
 The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
 
