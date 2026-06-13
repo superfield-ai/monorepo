@@ -78,12 +78,12 @@ Rejected alternatives:
 
 Each component owns exactly one PostgreSQL schema. All tables, indexes, sequences, and functions for that component live in its schema. No component may create objects in another component's schema.
 
-| PostgreSQL schema | Owner component | Tables (current)                                                                                                                                               |
-| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                                                       |
+| PostgreSQL schema | Owner component | Tables (current)                                                                                                                                                           |
+| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                                                                   |
 | `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `relations`, `corpus_access`, `job_queue`, `project_nodes`, `page_revisions` |
-| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                               |
-| `orchestrator`    | Orchestrator    | `gardening_cursor` (current); `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces)                                             |
+| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                                           |
+| `orchestrator`    | Orchestrator    | `gardening_cursor` (current); `episode_events`, `episode_outcomes` (to be defined; tracks agent behavioral traces)                                                         |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -105,12 +105,12 @@ SELECT * FROM blocks;  -- which schema? ambiguous — never do this cross-compon
 
 Each component owns its schema's migrations exclusively. Migration files are colocated with the component's source code:
 
-| Component    | Migration path                                                               |
-| ------------ | ---------------------------------------------------------------------------- |
-| Sharp        | `crates/sharp/migrations/`                                                   |
-| Nexum        | `crates/nexum/migrations/`                                                   |
-| Auth         | `crates/sf-auth/src/migrations/` (Rust crate)                               |
-| Orchestrator | `orchestrator/migrations/` (current — `0001_gardening_cursor.sql`)           |
+| Component    | Migration path                                                     |
+| ------------ | ------------------------------------------------------------------ |
+| Sharp        | `crates/sharp/migrations/`                                         |
+| Nexum        | `crates/nexum/migrations/`                                         |
+| Auth         | `crates/sf-auth/src/migrations/` (Rust crate)                      |
+| Orchestrator | `orchestrator/migrations/` (current — `0001_gardening_cursor.sql`) |
 
 The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
 
@@ -333,12 +333,12 @@ The Superfield daemon is a long-running background process that owns the Postgre
 
 All daemon runtime state lives under `~/.superfield/daemon/`:
 
-| File                  | Purpose                                                                                                                  |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| `superfield.sock`     | Unix stream socket for client RPCs (created after the health gate passes)                                               |
-| `daemon.lock`         | `flock(2)` file used to serialise concurrent spawn attempts (thundering-herd prevention)                                |
-| `daemon.json`         | JSON record of the running daemon (`pid`, `version`, `started_at`, `socket_path`); absent when no daemon is running     |
-| `daemon.log`          | All daemon and agent-step output; opened before `daemonize()` and dup2'd after so nothing is lost during the fork       |
+| File              | Purpose                                                                                                             |
+| ----------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `superfield.sock` | Unix stream socket for client RPCs (created after the health gate passes)                                           |
+| `daemon.lock`     | `flock(2)` file used to serialise concurrent spawn attempts (thundering-herd prevention)                            |
+| `daemon.json`     | JSON record of the running daemon (`pid`, `version`, `started_at`, `socket_path`); absent when no daemon is running |
+| `daemon.log`      | All daemon and agent-step output; opened before `daemonize()` and dup2'd after so nothing is lost during the fork   |
 
 The directory is created on first access (`fs::create_dir_all`). All files are owned by the user running the CLI; no root privileges are required.
 
@@ -364,11 +364,11 @@ After the daemon process starts, it runs the full health gate before signalling 
 5. Bind `superfield.sock`.
 6. Send `StartupResult` over the startup-notify socket — a 4-byte little-endian length followed by a bincode-encoded payload:
 
-| Variant                       | Meaning                                                                           |
-| ----------------------------- | --------------------------------------------------------------------------------- |
-| `Ok { version, addr }`        | Daemon fully ready; `addr` is the path to `superfield.sock`                       |
-| `AddrInUse`                   | Another daemon raced to the socket; caller should re-read `daemon.json`           |
-| `Err { reason, log_path }`    | Startup failed; `log_path` is the absolute path to `daemon.log` for diagnostics  |
+| Variant                    | Meaning                                                                         |
+| -------------------------- | ------------------------------------------------------------------------------- |
+| `Ok { version, addr }`     | Daemon fully ready; `addr` is the path to `superfield.sock`                     |
+| `AddrInUse`                | Another daemon raced to the socket; caller should re-read `daemon.json`         |
+| `Err { reason, log_path }` | Startup failed; `log_path` is the absolute path to `daemon.log` for diagnostics |
 
 The CLI decodes the result and either proceeds (`Ok`) or surfaces the error to the user (`Err`).
 
@@ -409,10 +409,10 @@ Setting `SF_NO_DAEMON=1` suppresses `daemonize()`. The CLI still re-executes the
 
 `crates/sf-db/src/provisioner.rs` defines the [`PostgresProvisioner`] trait — the interface through which the daemon owns the Postgres container lifecycle without coupling the `sf-db` crate to Docker or any specific container runtime.
 
-| Method   | Contract                                                                                                                          |
-| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `start`  | Ensure the Postgres container is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running               |
-| `stop`   | Stop the container cleanly after the gardening loop has drained; idempotent — no-op if already stopped                           |
+| Method  | Contract                                                                                                           |
+| ------- | ------------------------------------------------------------------------------------------------------------------ |
+| `start` | Ensure the Postgres container is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running |
+| `stop`  | Stop the container cleanly after the gardening loop has drained; idempotent — no-op if already stopped             |
 
 The real implementation (issue #489) checks for a running container via the Docker socket, starts the container with a durable local volume if absent, and polls `pg_isready` until the health gate passes. Tests and crates that do not own the container lifecycle use [`TestProvisioner`] — a no-op that returns `Ok(())` immediately.
 
@@ -422,10 +422,10 @@ The daemon calls `start` during the health gate (before sending `StartupResult::
 
 `crates/sf-serve/src/loop_handle.rs` defines the [`LoopHandle`] trait — the interface through which the daemon controls the gardening loop engine (issue #491) during graceful shutdown and version-mismatch restart. The trait lives in `sf-serve` because the HTTP layer also exposes a `/orchestrator/drain` route that triggers it.
 
-| Method  | Contract                                                                                                                                             |
-| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `drain` | Signal the loop to finish its current gardening step, commit the cursor, and stop accepting new steps; resolves when the loop has stopped cleanly    |
-| `abort` | Cancel any in-flight step immediately (`tokio::task::JoinHandle::abort()`); used when the daemon needs to exit without waiting for the current step  |
+| Method  | Contract                                                                                                                                            |
+| ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drain` | Signal the loop to finish its current gardening step, commit the cursor, and stop accepting new steps; resolves when the loop has stopped cleanly   |
+| `abort` | Cancel any in-flight step immediately (`tokio::task::JoinHandle::abort()`); used when the daemon needs to exit without waiting for the current step |
 
 Callers of `drain` should impose an external timeout (30 s) and fall back to `abort` if the loop does not drain in time. The trait does not enforce a timeout internally.
 
