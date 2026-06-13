@@ -10,7 +10,6 @@ members = [
     "crates/sf-serve",
     "crates/sf-loop",
     "crates/sf-deploy",
-    "crates/sf-embed",
     "crates/fastenv",
 ]
 
@@ -32,7 +31,6 @@ nexum = { path = "crates/nexum" }
 sf-cli = { path = "crates/sf-cli" }
 sf-serve = { path = "crates/sf-serve" }
 sf-deploy = { path = "crates/sf-deploy" }
-sf-embed = { path = "crates/sf-embed" }
 fastenv = { path = "crates/fastenv" }
 
 # third-party deps shared across crates

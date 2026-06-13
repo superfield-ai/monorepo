@@ -3507,19 +3507,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "sf-embed"
-version = "0.1.0"
-dependencies = [
- "candle-core",
- "candle-nn",
- "candle-transformers",
- "hf-hub",
- "serde_json",
- "thiserror 2.0.18",
- "tokenizers 0.20.4",
-]
-
-[[package]]
 name = "sf-loop"
 version = "0.1.0"
 dependencies = [
