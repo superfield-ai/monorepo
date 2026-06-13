@@ -95,9 +95,10 @@ Within each schema, table names are unqualified (no prefix). The schema name pro
 
 ```sql
 -- Correct: qualified reference from an orchestrator query
-SELECT e.id, b.content
+-- Both tables carry workspace_id as the tenant key; join on that shared column.
+SELECT e.workspace_id, e.step_name, pr.page_name
 FROM   orchestrator.gardening_cursor   e
-JOIN   nexum.blocks                    b ON b.id = e.workspace_id;
+JOIN   nexum.page_revisions            pr ON pr.workspace_id = e.workspace_id;
 
 -- Wrong: bare table name from outside the owning schema
 SELECT * FROM blocks;  -- which schema? ambiguous — never do this cross-component
