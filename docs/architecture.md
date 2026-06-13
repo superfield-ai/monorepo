@@ -39,12 +39,14 @@ The `nexum.page_revisions` table is the append-only store for computed knowledge
 ```sql
 CREATE TABLE IF NOT EXISTS nexum.page_revisions (
     id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
-    workspace_id UUID        NOT NULL,   -- tenant UUID (per-workspace RLS context)
-    page_name    TEXT        NOT NULL,   -- human-readable page identifier
-    content      TEXT        NOT NULL,   -- rendered Markdown / plain-text content
-    provenance   TEXT        NOT NULL,   -- free-text provenance tag (URL or agent ID)
-    ingested_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    workspace_id UUID        NOT NULL REFERENCES public.workspaces(id),
+    page_name    TEXT        NOT NULL,
+    content      TEXT        NOT NULL,
+    provenance   TEXT        NOT NULL DEFAULT '',
+    ingested_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Index for reading latest revision by (workspace_id, page_name).
 CREATE INDEX IF NOT EXISTS page_revisions_workspace_page_idx
     ON nexum.page_revisions (workspace_id, page_name, ingested_at DESC);
 ```
@@ -177,7 +179,7 @@ Postgres instance.
 
 | Property       | Value                                                               |
 | -------------- | ------------------------------------------------------------------- |
-| **Model**      | `Xenova/all-MiniLM-L6-v2`                                           |
+| **Model**      | `sentence-transformers/all-MiniLM-L6-v2`                            |
 | **Dimensions** | 384                                                                 |
 | **Runtime**    | Local inference via `candle` (Rust, CPU/GPU) — no external API call |
 | **Distance**   | Cosine similarity                                                   |
@@ -187,7 +189,7 @@ All vector columns across every store **must** use 384-dimensional vectors produ
 
 ### Rationale
 
-- Nexum has shipped `blocks.embedding vector(384)` with `Xenova/all-MiniLM-L6-v2` as its production embedding layer. Standardising on the existing implementation avoids a re-embedding migration.
+- Nexum has shipped `blocks.embedding vector(384)` with `sentence-transformers/all-MiniLM-L6-v2` as its production embedding layer. Standardising on the existing implementation avoids a re-embedding migration.
 - Local inference via candle (Rust) keeps all vector production inside the one-binary boundary. No external API key, no network call, no vendor dependency at inference time.
 - 384 dimensions provide adequate semantic resolution for document-block retrieval while keeping index size and query latency low.
 - A single vector space means a Sharp episode can join semantically to a Nexum block in one SQL query, without coordinate-system translation.
@@ -218,7 +220,7 @@ Any migration that introduces a vector column must:
 
 1. Declare the column as `vector(384)`.
 2. Add an HNSW cosine index: `CREATE INDEX … USING hnsw (col vector_cosine_ops)`.
-3. Reference the governed model in a migration comment: `-- embedding model: Xenova/all-MiniLM-L6-v2, 384-dim`.
+3. Reference the governed model in a migration comment: `-- embedding model: sentence-transformers/all-MiniLM-L6-v2, 384-dim`.
 
 ---
 
