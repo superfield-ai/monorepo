@@ -435,7 +435,90 @@ Tests and phase crates use [`NoopLoopHandle`] — a no-op stub that returns `Ok(
 
 ## Gardening Loop
 
-Content forthcoming in #522.
+The gardening loop is the continuous background worker that keeps the workspace's knowledge base current. It cycles through six steps in a fixed order, calling the LLM for each step and writing the result as a `nexum.page_revisions` row. After a full pass it pauses 60 seconds before repeating. A daemon crash is safe: the loop resumes from the last committed cursor step rather than restarting from the beginning.
+
+Source: `crates/sf-loop/src/lib.rs`
+
+### GardeningLoop::start()
+
+```rust
+pub fn start(
+    pool: sqlx::PgPool,
+    config: LoopConfig,
+    executor: Arc<dyn AgentExecutor>,
+) -> GardeningLoopHandle
+```
+
+Spawns the background Tokio task and returns a `GardeningLoopHandle`. The daemon stores this handle in `AppState` and calls `drain()` on graceful shutdown (which sends a drain signal and waits for the loop to finish its current step before returning).
+
+`LoopConfig` is built from environment variables via `LoopConfig::from_env()`:
+
+| Field            | Env var              | Default                                       |
+| ---------------- | -------------------- | --------------------------------------------- |
+| `workspace_id`   | `WORKSPACE_ID`       | random UUID                                   |
+| `blueprint_path` | `BLUEPRINT_PATH`     | `blueprint/rules/graph.yaml`                  |
+| `llm_api_key`    | `SF_LLM_API_KEY`     | empty string                                  |
+| `llm_endpoint`   | `SF_LLM_ENDPOINT`    | `https://api.anthropic.com/v1/messages`       |
+| `llm_model`      | `SF_LLM_MODEL`       | `claude-haiku-4-5-20251001`                   |
+
+### GardeningStep variants
+
+Defined in `crates/sf-loop/src/steps/mod.rs` as `STEP_ORDER`:
+
+| # | Variant                | Cursor name              | Output page      | Description                                                           |
+| - | ---------------------- | ------------------------ | ---------------- | --------------------------------------------------------------------- |
+| 1 | `StrategyResearch`     | `strategy_research`      | `strategy`       | Web research on company strategy → "strategy" page revision           |
+| 2 | `PrdReconcile`         | `prd_reconcile`          | `prd`            | Reconcile PRD against strategy research → "prd" page revision         |
+| 3 | `TechnicalResearch`    | `technical_research`     | `technical`      | Research technical implementation options → "technical" page revision |
+| 4 | `ArchitectureProposal` | `architecture_proposal`  | `architecture`   | Derive architecture from PRD + technical + Blueprint rules            |
+| 5 | `PlanProposal`         | `plan_proposal`          | `plan`           | Derive implementation plan from architecture → "plan" page revision   |
+| 6 | `HolisticReconcile`    | `holistic_reconcile`     | (all five)       | Re-read all five pages and propagate consistency changes               |
+
+### AgentExecutor trait
+
+```rust
+pub trait AgentExecutor: Send + Sync {
+    fn run<'a>(&'a self, req: AgentRequest) -> BoxFuture<'a, Result<AgentResponse, AgentError>>;
+}
+```
+
+All six steps call `AgentExecutor::run` to produce page revision content. `AgentRequest` carries a `system` prompt and a `user` prompt. `AgentResponse` returns `content` (stored as the page revision body) and `provenance` (metadata tag).
+
+Two implementations are provided:
+
+- **`LlmAgentExecutor`** — real implementation. POSTs to `SF_LLM_ENDPOINT` using `SF_LLM_API_KEY` and `SF_LLM_MODEL`. When `SF_OTEL_DISABLED=1` or the API key is empty, all outbound HTTP is skipped and a canned response is returned (safe for CI).
+- **`FixtureAgentExecutor`** — deterministic test double. Returns a fixed `AgentResponse` for every call and exposes a `call_count()` counter for test assertions.
+
+Source: `crates/sf-loop/src/agent.rs`
+
+### BlueprintRules
+
+```rust
+pub fn load(path: &Path) -> Result<BlueprintRules, BlueprintError>
+pub fn query(&self, keywords: &[&str]) -> String
+```
+
+`BlueprintRules::load` reads `blueprint/rules/graph.yaml` once at loop startup. The file is a YAML mapping of rule-name to rule-body. If the file is missing or unreadable, `run_loop` falls back to `BlueprintRules::empty()` (no rules) with a warning log rather than aborting.
+
+`query(keywords)` filters the rule mapping to entries whose key or body contains any of the given keywords. If `keywords` is empty it returns all rules. Used by the `ArchitectureProposal` step to inject relevant architectural constraints into the LLM prompt.
+
+Source: `crates/sf-loop/src/blueprint.rs`
+
+### Cursor resume
+
+The loop's resumable position is stored in `orchestrator.gardening_cursor` (one row per workspace):
+
+```rust
+// Commit after a step succeeds:
+commit_cursor(&pool, workspace_id, step.name()).await?;
+
+// Load on startup to find the resume index:
+let last_step: Option<String> = load_cursor(&pool, workspace_id).await?;
+```
+
+`commit_cursor` issues an `INSERT … ON CONFLICT DO UPDATE` (upsert) with the step's canonical name and a `updated_at` timestamp. `load_cursor` reads it back as `Option<String>`. On restart, the loop finds `last_step` in `STEP_ORDER` and resumes from the next index — skipping all already-completed steps in the current pass.
+
+Source: `crates/sf-loop/src/cursor.rs`
 
 ---
 
