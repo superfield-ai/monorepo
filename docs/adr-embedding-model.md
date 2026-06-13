@@ -3,7 +3,7 @@
 **Date:** 2026-05-31
 **Status:** Accepted
 **Closes:** #432
-**Related:** architecture.md §Governed Embedding Standard, `crates/sf-embed`, `packages/db/index.ts`
+**Related:** architecture.md §Governed Embedding Standard, `crates/nexum/src/embed.rs`, `packages/db/index.ts`
 
 ---
 
@@ -85,7 +85,7 @@ ADR that also covers corpus re-embedding and schema migration.
 
 ## Governance constants
 
-### Rust (`crates/sf-embed`)
+### Rust (`crates/nexum/src/embed.rs`)
 
 ```rust
 /// HuggingFace model ID for the governed embedding model.
@@ -132,7 +132,7 @@ New vector columns added by any component must:
 
 1. Declare `vector(384)`.
 2. Add `CREATE INDEX … USING hnsw (col vector_cosine_ops)`.
-3. Include the comment `-- embedding model: Xenova/all-MiniLM-L6-v2 (Rust: sentence-transformers/all-MiniLM-L6-v2), rev c9745ed, 384-dim`.
+3. Include the comment `-- embedding model: sentence-transformers/all-MiniLM-L6-v2, rev c9745ed, 384-dim`.
 
 ---
 
@@ -142,6 +142,6 @@ New vector columns added by any component must:
   they reference `GOVERNED_EMBEDDING` / `GOVERNED_DIM`.
 - Changing the model requires a new ADR, a schema migration for every `vector`
   column, and a corpus re-embedding pipeline run.
-- The `sf-embed` Rust crate is the canonical implementation for Rust consumers;
+- The `crates/nexum/src/embed.rs` module is the canonical implementation for Rust consumers;
   TypeScript consumers use `@xenova/transformers` with the same underlying
   model weights.
