@@ -83,12 +83,13 @@ traversal on any stock Postgres 14+ instance with no extra binary or port.
 Each component owns exactly one PostgreSQL schema. No component may create
 objects in another component's schema.
 
-| PostgreSQL schema | Owner component | Tables (current)                                                                                                           |
-| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `api_keys`, `projections`                                   |
-| `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `corpus_access`, `job_queue` |
-| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations`                                                                            |
-| `episodes`        | Orchestrator    | `episodes`, `episode_events`, `episode_outcomes`                                                                           |
+| PostgreSQL schema | Owner component | Tables (current)                                                                                                                                                                                                                                                     |
+| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `git_objects`, `git_refs`, `episodes`, `episode_events`, `episode_artifacts`, `episode_links`, `runtime_signals`, `episode_typed_artifacts`, `episode_relations`, `episode_redactions`, `projections` |
+| `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `relations`, `corpus_access`, `job_queue`, `project_nodes`, `page_revisions`                                                                                           |
+| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations`                                                                                                                                                                                                                      |
+| `orchestrator`    | Orchestrator    | `gardening_cursor`                                                                                                                                                                                                                                                   |
+| `substrate`       | sf-db           | `backups`                                                                                                                                                                                                                                                            |
 
 ---
 
@@ -145,13 +146,13 @@ Examples:
 
 ### Component migration paths
 
-| Component             | Source migration path                        |
-| --------------------- | -------------------------------------------- |
-| Sharp (Rust)          | `crates/sharp/migrations/`                   |
-| Nexum (Rust)          | `crates/nexum/migrations/`                   |
-| Auth (Rust)           | `crates/sf-auth/src/migrations/`             |
-| Episodes (TypeScript) | `packages/orchestrator/migrations/` (target) |
-| Substrate / sf-db     | `crates/sf-db/migrations/`                   |
+| Component         | Source migration path                                              |
+| ----------------- | ------------------------------------------------------------------ |
+| Sharp (Rust)      | `crates/sharp/migrations/`                                         |
+| Nexum (Rust)      | `crates/nexum/migrations/`                                         |
+| Auth (Rust)       | `crates/sf-auth/src/migrations/`                                   |
+| Orchestrator      | `orchestrator/migrations/` (current — `0001_gardening_cursor.sql`) |
+| Substrate / sf-db | `crates/sf-db/migrations/`                                         |
 
 ---
 
@@ -198,7 +199,7 @@ layout does not constrain embedding dimensionality or model selection.
 - All new DDL must be placed in the correct component schema directory.
 - Cross-component SQL must always use `<schema>.<table>` qualified names.
 - The migration runner (tracked separately) must apply migrations in component
-  dependency order: `auth` → `nexum` → `sharp` → `episodes`.
+  dependency order: `auth` → `nexum` → `sharp` → `orchestrator`.
 - Future components add a row to the schema namespace table above and a new
   migrations directory before writing any DDL.
 - RLS policy work can proceed schema-by-schema without coordination between
