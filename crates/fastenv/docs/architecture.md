@@ -332,7 +332,63 @@ Results are written to `docs/benchmarks/container-runtime-comparison.json`.
 
 ---
 
-## 9. Open Decisions
+## 9. Doctor
+
+`fastenv doctor` checks whether the host satisfies every prerequisite for
+running Firecracker microVMs before any `run`, `start`, or `build` command is
+attempted. It is the first command a new operator should run.
+
+### Purpose
+
+A missing kernel module, inaccessible device node, or absent binary causes
+opaque runtime failures deep inside the VM lifecycle. `doctor` surfaces those
+gaps early, in one place, with a clear pass / warn / fail verdict per check and
+a non-zero exit code when any required check fails.
+
+### Checks performed
+
+| Key                      | Required / Advisory | What is verified                                                                   |
+| ------------------------ | ------------------- | ---------------------------------------------------------------------------------- |
+| `kvm_device`             | Required            | `/dev/kvm` exists and is accessible — the KVM character device used by Firecracker |
+| `cpu_virt_flag`          | Required            | `/proc/cpuinfo` contains `vmx` (Intel VT-x) or `svm` (AMD-V)                       |
+| `cpu_unrestricted_guest` | Required (Intel)    | `unrestricted_guest` CPU flag present when `vmx` detected                          |
+| `cpu_ept`                | Required (Intel)    | `ept` (Extended Page Tables) flag present when `vmx` detected                      |
+| `cpu_vpid`               | Required (Intel)    | `vpid` (Virtual Processor ID) flag present when `vmx` detected                     |
+| `firecracker_binary`     | Required            | Firecracker binary exists at the configured path and is executable                 |
+| `crun_binary`            | Required            | `crun` binary exists at the configured path and is executable                      |
+| `dev_net_tun`            | Required            | `/dev/net/tun` exists — TUN/TAP device required for VM networking                  |
+| `overlayfs`              | Required            | `overlay` listed in `/proc/filesystems` — kernel overlayfs module loaded           |
+| `kernel_version`         | Required            | Kernel version ≥ 5.10                                                              |
+| `free_memory`            | Advisory            | Available memory ≥ configurable floor (default 512 MiB); emits `warn` not `fail`   |
+
+Intel-only checks (`cpu_unrestricted_guest`, `cpu_ept`, `cpu_vpid`) degrade to
+`warn` on AMD-V or non-virtualised hosts because those flags are not applicable.
+Warnings do not affect the exit code.
+
+### Output modes
+
+Human-readable output (default) prints one line per check:
+
+```
+✓ [kvm_device] /dev/kvm exists and is accessible
+✗ [firecracker_binary] firecracker binary not found at /usr/local/bin/firecracker — install firecracker
+⚠ [free_memory] 256 MiB free memory available — below recommended 512 MiB floor
+```
+
+Pass `--json` for machine-readable output (a `checks` array with `key`,
+`status`, and `message` fields). Exit code is 0 when all required checks pass;
+1 when one or more required checks fail.
+
+### Implementation
+
+`crates/fastenv/src/doctor.rs` — `DoctorEnv` holds all injectable filesystem
+and binary paths so the full check suite runs under unit tests without root, KVM
+hardware, or real binaries. `build_report()` assembles the `DoctorReport`;
+`run()` and `run_json()` print it and return the exit code.
+
+---
+
+## 10. Open Decisions
 
 ### OD-1 - Boundary key
 
