@@ -420,7 +420,7 @@ The daemon calls `start` during the health gate (before sending `StartupResult::
 
 ### Seam: LoopHandle
 
-`crates/sf-serve/src/loop_handle.rs` defines the [`LoopHandle`] trait — the interface through which the daemon controls the gardening loop engine (issue #491) during graceful shutdown and version-mismatch restart. The trait lives in `sf-serve` because the HTTP layer also exposes a `/orchestrator/drain` route that triggers it.
+`crates/sf-serve/src/loop_handle.rs` defines the [`LoopHandle`] trait — the interface through which the daemon controls the gardening loop engine (issue #491) during graceful shutdown and version-mismatch restart. The trait lives in `sf-serve` because the HTTP layer owns the daemon lifecycle. The HTTP layer does not currently expose a drain route; draining is triggered via the daemon lifecycle (SIGTERM → drain → exit).
 
 | Method  | Contract                                                                                                                                            |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
