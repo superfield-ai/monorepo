@@ -3,7 +3,7 @@
 // Canonical docs:
 //   - docs/prd.md §4.5
 //   - crates/fastenv/docs/architecture.md §eBPF
-//   - docs/scout/guest-ebpf-findings.md
+//   - crates/fastenv/docs/scout/guest-ebpf-findings.md
 //
 // # Design
 //
@@ -263,7 +263,7 @@ impl GuestEbpfLoader {
     /// # Canonical docs
     ///
     /// - `docs/prd.md §4.5` — guest eBPF observability requirement
-    /// - `docs/scout/guest-ebpf-findings.md` — kernel capability analysis
+    /// - `crates/fastenv/docs/scout/guest-ebpf-findings.md` — kernel capability analysis
     pub fn attach(policy: &GuestEbpfPolicy) -> Self {
         let attached_at = now_rfc3339();
         let container_id = &policy.container_id;
@@ -302,7 +302,7 @@ impl GuestEbpfLoader {
                         tracepoint = %tp,
                         error = %e,
                         "guest eBPF tracepoint not available on this kernel; \
-                         degrading to synthetic events (see docs/scout/guest-ebpf-findings.md)"
+                         degrading to synthetic events (see crates/fastenv/docs/scout/guest-ebpf-findings.md)"
                     );
                     None
                 }
@@ -332,7 +332,7 @@ impl GuestEbpfLoader {
                         "guest kernel does not support BPF or CAP_BPF is absent; \
                          degrading to synthetic lifecycle events only. \
                          Guest kernel must be ≥ 5.7 with CONFIG_DEBUG_INFO_BTF=y. \
-                         See docs/scout/guest-ebpf-findings.md for upgrade path."
+                         See crates/fastenv/docs/scout/guest-ebpf-findings.md for upgrade path."
                     );
                     None
                 }
@@ -544,7 +544,7 @@ impl GuestEbpfLoader {
 /// Returns the BPF program file descriptor on success, or an error if the
 /// kernel does not support BPF (EINVAL/EPERM on old kernels).
 ///
-/// # Integration note (docs/scout/guest-ebpf-findings.md)
+/// # Integration note (crates/fastenv/docs/scout/guest-ebpf-findings.md)
 ///
 /// The Firecracker quickstart kernel 4.14.174 returns `EINVAL` from
 /// `BPF_PROG_LOAD` for `BPF_PROG_TYPE_CGROUP_SOCK_ADDR` (confirmed in scout #72)
@@ -1010,7 +1010,7 @@ mod tests {
     /// the BPF program attaches (or degrades gracefully).
     ///
     /// Requires: a guest VM with kernel ≥ 5.7, CAP_BPF, and crun installed.
-    /// See docs/scout/guest-ebpf-findings.md for the kernel upgrade path.
+    /// See crates/fastenv/docs/scout/guest-ebpf-findings.md for the kernel upgrade path.
     ///
     /// Run with: sudo cargo test -- --ignored guest_ebpf_integration_attach_inside_vm
     #[test]
