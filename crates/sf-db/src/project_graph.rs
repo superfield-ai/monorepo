@@ -125,9 +125,9 @@ async fn ensure_project_doc(pool: &PgPool) -> Result<Uuid, ProjectGraphError> {
 ///
 /// * `pool`         — shared [`sqlx::PgPool`].
 /// * `doc_id`       — the sentinel project-graph document ID (from
-///                    [`ensure_project_doc`]).
+///   [`ensure_project_doc`]).
 /// * `title`        — human-readable title / name for this node (stored as
-///                    the block `content`).
+///   the block `content`).
 /// * `node_type`    — discriminator string: `"Issue"`, `"Feature"`, etc.
 /// * `external_ref` — optional external reference (e.g. GitHub issue number).
 async fn insert_project_node(
@@ -213,7 +213,7 @@ async fn block_id_for_node(pool: &PgPool, node_id: Uuid) -> Result<Uuid, Project
 /// * `pool`         — shared [`sqlx::PgPool`].
 /// * `title`        — the issue title / description.
 /// * `external_ref` — optional external reference (e.g. `"493"` for GitHub
-///                    issue #493).
+///   issue #493).
 ///
 /// # Errors
 ///
