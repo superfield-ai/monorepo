@@ -554,7 +554,7 @@ The auth middleware validates the token against `auth.sessions` and injects an `
 | `GET`    | `/studio/status`            | Required | `studio`       | Studio mode flag + auth context (browser UI health check)                         |
 | `GET`    | `/orchestrator/status`      | Required | `orchestrator` | Daemon process status (PID, uptime — stub in milestone 1)                         |
 | `GET`    | `/pages/project`            | None     | `pages`        | Project management graph rendered as markdown                                     |
-| `GET`    | `/pages/{name}`             | None     | `pages`        | Named knowledge-base page as markdown (`prd`, `architecture`, `plan`, `strategy`) |
+| `GET`    | `/pages/{name}`             | None     | `pages`        | Named knowledge-base page as markdown (`prd`, `architecture`, `plan`, `strategy`, `technical`) |
 
 ### Route module layout
 
