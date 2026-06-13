@@ -12,7 +12,7 @@
 
 set -euo pipefail
 
-REPO="superfield-ai/superfield-cli-ts"
+REPO="superfield-ai/monorepo"
 BINARY="superfield"
 DEFAULT_INSTALL_DIR="${HOME}/.local/bin"
 
