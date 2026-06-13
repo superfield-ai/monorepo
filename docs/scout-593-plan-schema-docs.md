@@ -233,3 +233,4 @@ Serialization: #585 must run after both #591 and #590.
 - [x] Pinning comment posted on #591 (four early phases plan marks)
 - [x] Pinning comment posted on #592 (GET /health route table row)
 - [x] Scout artifact `docs/scout-593-plan-schema-docs.md` committed
+- [x] #591 implemented: 12 ✓ (completed) markers applied to Plan #199 — Substrate foundations (#426-#432), Nexum schema migration (#441), Sharp TypeScript bridge (#444, #447), Browser UI cutover (#452, #459)
