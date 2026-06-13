@@ -105,6 +105,21 @@ crash-recovery and rehydration a hard requirement rather than a nice-to-have.
 
 Performance is described as "often very poor" in the official response.
 
+**First-hand validation:** Firecracker v1.16.0 was tested on a DigitalOcean Ubuntu droplet
+(kernel 6.8.0-111-generic, x86_64) and confirmed fully functional:
+
+- `/dev/kvm` present and accessible
+- CPU exposes `vmx` with `unrestricted_guest`, `ept`, `vpid` — all required by Firecracker
+- Firecracker API server started without errors
+- Ubuntu 24.04 microVM booted to login prompt in ~4 seconds
+- Guest kernel and systemd both reported `virtualization: kvm`
+
+The key prerequisite to check before assuming a DO Droplet is usable:
+
+```bash
+grep 'unrestricted_guest' /proc/cpuinfo   # must be present for Firecracker
+```
+
 Viable for development and testing. Not recommended as a production substrate without
 explicit tolerance for unannounced VM restarts.
 
