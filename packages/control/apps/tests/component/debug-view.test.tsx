@@ -208,7 +208,7 @@ describe("DebugView", () => {
     expect(features).toContain("noreferrer");
     const parsed = new URL(String(url));
     expect(parsed.origin + parsed.pathname).toBe(
-      "https://github.com/superfield-ai/superfield-cli-ts/issues/new",
+      "https://github.com/superfield-ai/monorepo/issues/new",
     );
     expect(parsed.searchParams.get("title")).toBe("[debug] Issue link test");
     expect(parsed.searchParams.get("body")).toContain('"status": 500');
