@@ -106,7 +106,10 @@ mod tests {
 
         let meta: serde_json::Value = serde_json::from_str(&prov).expect("provenance is JSON");
         assert!(meta.get("step").is_some(), "provenance must contain 'step'");
-        assert!(meta.get("sources").is_some(), "provenance must contain 'sources'");
+        assert!(
+            meta.get("sources").is_some(),
+            "provenance must contain 'sources'"
+        );
 
         // Cleanup.
         sqlx::query(

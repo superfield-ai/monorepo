@@ -198,7 +198,10 @@ mod tests {
             .unwrap_or(0);
 
         // prd_reconcile is index 1, so resume idx should be 2.
-        assert_eq!(idx, 2, "resume index must be one past the last committed step");
+        assert_eq!(
+            idx, 2,
+            "resume index must be one past the last committed step"
+        );
 
         // Cleanup.
         sqlx::query("DELETE FROM orchestrator.gardening_cursor WHERE workspace_id = $1")

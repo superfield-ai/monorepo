@@ -60,7 +60,14 @@ pub(super) async fn run(
     })
     .to_string();
 
-    insert_page_revision(pool, workspace_id, "architecture", &resp.content, &provenance).await?;
+    insert_page_revision(
+        pool,
+        workspace_id,
+        "architecture",
+        &resp.content,
+        &provenance,
+    )
+    .await?;
 
     Ok(())
 }

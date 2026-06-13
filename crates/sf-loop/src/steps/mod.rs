@@ -104,18 +104,14 @@ pub async fn run_step(
         GardeningStep::StrategyResearch => {
             strategy_research::run(pool, workspace_id, executor).await
         }
-        GardeningStep::PrdReconcile => {
-            prd_reconcile::run(pool, workspace_id, executor).await
-        }
+        GardeningStep::PrdReconcile => prd_reconcile::run(pool, workspace_id, executor).await,
         GardeningStep::TechnicalResearch => {
             technical_research::run(pool, workspace_id, executor).await
         }
         GardeningStep::ArchitectureProposal => {
             architecture_proposal::run(pool, workspace_id, executor, blueprint).await
         }
-        GardeningStep::PlanProposal => {
-            plan_proposal::run(pool, workspace_id, executor).await
-        }
+        GardeningStep::PlanProposal => plan_proposal::run(pool, workspace_id, executor).await,
         GardeningStep::HolisticReconcile => {
             holistic_reconcile::run(pool, workspace_id, executor).await
         }

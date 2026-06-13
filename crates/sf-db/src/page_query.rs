@@ -42,7 +42,14 @@ use thiserror::Error;
 ///
 /// Only these names are accepted by [`fetch_page_content`]; any other name
 /// is rejected with [`PageQueryError::UnknownPage`].
-pub const KNOWN_PAGES: &[&str] = &["prd", "architecture", "plan", "strategy", "technical", "project"];
+pub const KNOWN_PAGES: &[&str] = &[
+    "prd",
+    "architecture",
+    "plan",
+    "strategy",
+    "technical",
+    "project",
+];
 
 /// Errors that can occur during a page query.
 #[derive(Debug, Error)]
@@ -52,7 +59,9 @@ pub enum PageQueryError {
     Database(#[from] sqlx::Error),
 
     /// The caller requested a page name that is not in the registry.
-    #[error("unknown page '{0}'; known pages: prd, architecture, plan, strategy, technical, project")]
+    #[error(
+        "unknown page '{0}'; known pages: prd, architecture, plan, strategy, technical, project"
+    )]
     UnknownPage(String),
 }
 

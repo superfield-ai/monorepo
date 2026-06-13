@@ -13,11 +13,7 @@
 //! - `abort()`:  aborts the Tokio task immediately (no cursor commit guarantee).
 
 use sf_serve::loop_handle::{LoopHandle, LoopHandleError};
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::Mutex,
-};
+use std::{future::Future, pin::Pin, sync::Mutex};
 use tokio::{sync::oneshot, task::JoinHandle};
 
 type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
@@ -110,7 +106,10 @@ mod tests {
 
         let handle = GardeningLoopHandle::new(drain_tx, done_rx, task);
         let result = handle.drain().await;
-        assert!(result.is_ok(), "drain must return Ok(()) when loop exits cleanly");
+        assert!(
+            result.is_ok(),
+            "drain must return Ok(()) when loop exits cleanly"
+        );
     }
 
     /// Double drain returns Ok(()) without panicking.

@@ -61,7 +61,10 @@ mod tests {
 
     #[test]
     fn step_name() {
-        assert_eq!(GardeningStep::TechnicalResearch.name(), "technical_research");
+        assert_eq!(
+            GardeningStep::TechnicalResearch.name(),
+            "technical_research"
+        );
     }
 
     #[tokio::test]

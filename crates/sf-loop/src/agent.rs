@@ -14,9 +14,12 @@
 //!   times it was invoked (supports the call-counter assertions in the test
 //!   plan).
 
-use std::sync::{Arc, atomic::{AtomicUsize, Ordering}};
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::{
+    atomic::{AtomicUsize, Ordering},
+    Arc,
+};
 use thiserror::Error;
 
 /// Boxed async future alias.

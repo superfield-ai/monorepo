@@ -93,9 +93,10 @@ impl BlueprintRules {
                     for (k, v) in map {
                         let key_str = k.as_str().unwrap_or_default();
                         let val_str = serde_yaml::to_string(v).unwrap_or_default();
-                        if keywords.iter().any(|kw| {
-                            key_str.contains(kw) || val_str.to_lowercase().contains(kw)
-                        }) {
+                        if keywords
+                            .iter()
+                            .any(|kw| key_str.contains(kw) || val_str.to_lowercase().contains(kw))
+                        {
                             matched.insert(k.clone(), v.clone());
                         }
                     }

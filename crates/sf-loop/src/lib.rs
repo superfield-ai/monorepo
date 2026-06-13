@@ -39,7 +39,9 @@ pub mod cursor;
 pub mod handle;
 pub mod steps;
 
-pub use agent::{AgentExecutor, AgentRequest, AgentResponse, FixtureAgentExecutor, LlmAgentExecutor};
+pub use agent::{
+    AgentExecutor, AgentRequest, AgentResponse, FixtureAgentExecutor, LlmAgentExecutor,
+};
 pub use blueprint::BlueprintRules;
 pub use cursor::{commit_cursor, load_cursor, CursorError};
 pub use handle::GardeningLoopHandle;
@@ -190,9 +192,7 @@ async fn run_loop(
 
             match result {
                 Ok(()) => {
-                    if let Err(e) =
-                        commit_cursor(&pool, config.workspace_id, step.name()).await
-                    {
+                    if let Err(e) = commit_cursor(&pool, config.workspace_id, step.name()).await {
                         tracing::error!("commit_cursor failed for {}: {}", step.name(), e);
                     }
                 }

@@ -124,7 +124,10 @@ mod tests {
 
     #[test]
     fn step_name() {
-        assert_eq!(GardeningStep::HolisticReconcile.name(), "holistic_reconcile");
+        assert_eq!(
+            GardeningStep::HolisticReconcile.name(),
+            "holistic_reconcile"
+        );
     }
 
     #[test]
@@ -182,8 +185,7 @@ mod tests {
         // Fixture executor returns an UPDATE for strategy.
         let fixture_content =
             "## UPDATE: strategy\n# Updated strategy\n\nReconciled with prd.".to_string();
-        let executor =
-            crate::agent::FixtureAgentExecutor::new(fixture_content, "fixture:holistic");
+        let executor = crate::agent::FixtureAgentExecutor::new(fixture_content, "fixture:holistic");
 
         // Count before.
         let before: i64 = sqlx::query_scalar(
@@ -207,15 +209,17 @@ mod tests {
         .await
         .expect("count after");
 
-        assert_eq!(after, before + 1, "holistic reconcile must write a new revision");
+        assert_eq!(
+            after,
+            before + 1,
+            "holistic reconcile must write a new revision"
+        );
 
         // Cleanup.
-        sqlx::query(
-            "DELETE FROM nexum.page_revisions WHERE workspace_id = $1",
-        )
-        .bind(workspace_id)
-        .execute(&pool)
-        .await
-        .ok();
+        sqlx::query("DELETE FROM nexum.page_revisions WHERE workspace_id = $1")
+            .bind(workspace_id)
+            .execute(&pool)
+            .await
+            .ok();
     }
 }
