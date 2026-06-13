@@ -433,6 +433,12 @@ Tests and phase crates use [`NoopLoopHandle`] — a no-op stub that returns `Ok(
 
 ---
 
+## Gardening Loop
+
+Content forthcoming in #522.
+
+---
+
 ## HTTP Routes
 
 The daemon serves a single HTTP API over TCP (default bind `0.0.0.0:7000`). All source lives in `crates/sf-serve/src/routes/`. The Unix socket at `~/.superfield/daemon/superfield.sock` is used exclusively for CLI-to-daemon RPC (startup-notify and shutdown); the HTTP routes below are served over the TCP listener.
