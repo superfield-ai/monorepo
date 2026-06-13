@@ -30,6 +30,31 @@ Each node in the graph carries:
 
 Nexum is distinct from the Blueprint: where the Blueprint defines the rules agents follow (encoded in the fine-tuned model), Nexum is the live company brain they reason against. The Blueprint tells an agent _how_ to build; Nexum tells it _what_ to build and _what is currently true_.
 
+### Page-revision schema and write contract
+
+The `nexum.page_revisions` table is the append-only store for computed knowledge-base page content produced by the gardening loop. It lives in the `nexum` PostgreSQL schema and is created by `crates/nexum/migrations/0003_page_revisions.sql`.
+
+**DDL shape:**
+
+```sql
+CREATE TABLE IF NOT EXISTS nexum.page_revisions (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID        NOT NULL,   -- tenant UUID (per-workspace RLS context)
+    page_name    TEXT        NOT NULL,   -- human-readable page identifier
+    content      TEXT        NOT NULL,   -- rendered Markdown / plain-text content
+    provenance   TEXT        NOT NULL,   -- free-text provenance tag (URL or agent ID)
+    ingested_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS page_revisions_workspace_page_idx
+    ON nexum.page_revisions (workspace_id, page_name, ingested_at DESC);
+```
+
+**Write contract:** The single write entrypoint is `insert_page_revision` in `crates/sf-db/src/page_revision.rs`. Callers supply `workspace_id`, `page_name`, `content`, and `provenance`; the function inserts one row and returns `Ok(())`.
+
+**Idempotency:** Each invocation appends a new revision row. Readers select the latest revision for a `(workspace_id, page_name)` pair by ordering on `ingested_at DESC`. Re-running the gardening step does not corrupt history — it appends a newer row that becomes the effective current revision.
+
+**Migration prerequisite:** The `nexum.page_revisions` table must exist before `insert_page_revision` is called. The daemon's health gate applies all component migrations (including `0003_page_revisions.sql`) before sending `StartupResult::Ok`, so the table is guaranteed to exist for any in-process caller.
+
 ---
 
 ## Single-Instance Database Schema Layout
@@ -379,6 +404,32 @@ The daemon runs until it receives SIGTERM (via `superfield daemon stop`) or is k
 ### Foreground / container mode
 
 Setting `SF_NO_DAEMON=1` suppresses `daemonize()`. The CLI still re-executes the binary with `SF_START_DAEMON=1` but the child runs in-process (no fork, no detach, stdio unchanged). This is the intended mode for containers and CI where process supervision is handled externally. The startup-notify handshake still runs; the only difference is that the serving layer occupies the foreground process.
+
+### Seam: PostgresProvisioner
+
+`crates/sf-db/src/provisioner.rs` defines the [`PostgresProvisioner`] trait — the interface through which the daemon owns the Postgres container lifecycle without coupling the `sf-db` crate to Docker or any specific container runtime.
+
+| Method   | Contract                                                                                                                          |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `start`  | Ensure the Postgres container is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running               |
+| `stop`   | Stop the container cleanly after the gardening loop has drained; idempotent — no-op if already stopped                           |
+
+The real implementation (issue #489) checks for a running container via the Docker socket, starts the container with a durable local volume if absent, and polls `pg_isready` until the health gate passes. Tests and crates that do not own the container lifecycle use [`TestProvisioner`] — a no-op that returns `Ok(())` immediately.
+
+The daemon calls `start` during the health gate (before sending `StartupResult::Ok`) and `stop` after `LoopHandle::drain()` completes on shutdown.
+
+### Seam: LoopHandle
+
+`crates/sf-serve/src/loop_handle.rs` defines the [`LoopHandle`] trait — the interface through which the daemon controls the gardening loop engine (issue #491) during graceful shutdown and version-mismatch restart. The trait lives in `sf-serve` because the HTTP layer also exposes a `/orchestrator/drain` route that triggers it.
+
+| Method  | Contract                                                                                                                                             |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drain` | Signal the loop to finish its current gardening step, commit the cursor, and stop accepting new steps; resolves when the loop has stopped cleanly    |
+| `abort` | Cancel any in-flight step immediately (`tokio::task::JoinHandle::abort()`); used when the daemon needs to exit without waiting for the current step  |
+
+Callers of `drain` should impose an external timeout (30 s) and fall back to `abort` if the loop does not drain in time. The trait does not enforce a timeout internally.
+
+Tests and phase crates use [`NoopLoopHandle`] — a no-op stub that returns `Ok(())` from both methods immediately.
 
 ---
 
