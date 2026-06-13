@@ -30,6 +30,31 @@ Each node in the graph carries:
 
 Nexum is distinct from the Blueprint: where the Blueprint defines the rules agents follow (encoded in the fine-tuned model), Nexum is the live company brain they reason against. The Blueprint tells an agent _how_ to build; Nexum tells it _what_ to build and _what is currently true_.
 
+### Page-revision schema and write contract
+
+The `nexum.page_revisions` table is the append-only store for computed knowledge-base page content produced by the gardening loop. It lives in the `nexum` PostgreSQL schema and is created by `crates/nexum/migrations/0003_page_revisions.sql`.
+
+**DDL shape:**
+
+```sql
+CREATE TABLE IF NOT EXISTS nexum.page_revisions (
+    id           UUID        PRIMARY KEY DEFAULT gen_random_uuid(),
+    workspace_id UUID        NOT NULL,   -- tenant UUID (per-workspace RLS context)
+    page_name    TEXT        NOT NULL,   -- human-readable page identifier
+    content      TEXT        NOT NULL,   -- rendered Markdown / plain-text content
+    provenance   TEXT        NOT NULL,   -- free-text provenance tag (URL or agent ID)
+    ingested_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS page_revisions_workspace_page_idx
+    ON nexum.page_revisions (workspace_id, page_name, ingested_at DESC);
+```
+
+**Write contract:** The single write entrypoint is `insert_page_revision` in `crates/sf-db/src/page_revision.rs`. Callers supply `workspace_id`, `page_name`, `content`, and `provenance`; the function inserts one row and returns `Ok(())`.
+
+**Idempotency:** Each invocation appends a new revision row. Readers select the latest revision for a `(workspace_id, page_name)` pair by ordering on `ingested_at DESC`. Re-running the gardening step does not corrupt history — it appends a newer row that becomes the effective current revision.
+
+**Migration prerequisite:** The `nexum.page_revisions` table must exist before `insert_page_revision` is called. The daemon's health gate applies all component migrations (including `0003_page_revisions.sql`) before sending `StartupResult::Ok`, so the table is guaranteed to exist for any in-process caller.
+
 ---
 
 ## Single-Instance Database Schema Layout
@@ -302,9 +327,109 @@ A real implementation will:
 
 ## Daemon Lifecycle
 
-<!-- STUB — content forthcoming in #503 -->
+The Superfield daemon is a long-running background process that owns the Postgres container, runs the gardening loop engine, and serves the HTTP API. The CLI auto-spawns it on first use and communicates with it over a Unix socket. All implementation lives in `crates/sf-cli/src/daemon.rs` and `crates/sf-serve/src/loop_handle.rs`.
 
-See: `crates/sf-cli/src/daemon.rs` and `crates/sf-serve/src/loop_handle.rs`. Content forthcoming in #503.
+### State directory
+
+All daemon runtime state lives under `~/.superfield/daemon/`:
+
+| File                  | Purpose                                                                                                                  |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| `superfield.sock`     | Unix stream socket for client RPCs (created after the health gate passes)                                               |
+| `daemon.lock`         | `flock(2)` file used to serialise concurrent spawn attempts (thundering-herd prevention)                                |
+| `daemon.json`         | JSON record of the running daemon (`pid`, `version`, `started_at`, `socket_path`); absent when no daemon is running     |
+| `daemon.log`          | All daemon and agent-step output; opened before `daemonize()` and dup2'd after so nothing is lost during the fork       |
+
+The directory is created on first access (`fs::create_dir_all`). All files are owned by the user running the CLI; no root privileges are required.
+
+### Auto-spawn flow
+
+When the CLI receives any subcommand **except** `status`, `logs`, and `page`, it calls `connect_or_start_daemon()`:
+
+1. **Pre-bind startup-notify socket** — the CLI creates a one-shot Unix stream socket (`~/.superfield/daemon/startup_notify.sock` or the path in `SF_STARTUP_NOTIFY`) and begins listening before the daemon process exists.
+2. **Acquire flock** — `flock(daemon.lock, LOCK_EX)` blocks until the calling process is the sole holder. This serialises concurrent invocations and prevents a thundering herd of spawns.
+3. **Check `daemon.json`** — if the file exists and the version matches, the daemon is already running; release the lock and connect.
+4. **Version mismatch** — if `daemon.json` exists but records a different version, send SIGTERM to the old PID, remove `daemon.json`, and fall through to spawn.
+5. **Spawn** — re-execute the current binary (`current_exe()`) with `SF_START_DAEMON=1` in the environment. The child detaches (double-fork / stdin+stdout+stderr redirected to `/dev/null`) and starts the serving layer.
+6. **Wait up to 30 s** — the CLI blocks on the startup-notify socket for a `StartupResult` from the daemon. A 60-second wall-clock timeout is enforced by a background thread; expiry returns `DaemonError::StartupTimeout`.
+
+### Startup-notify handshake
+
+After the daemon process starts, it runs the full health gate before signalling the CLI:
+
+1. Call `PostgresProvisioner::start` — start the Postgres container and wait for `pg_isready` (max 60 s).
+2. Run the migration runner against the now-live instance.
+3. Probe schemas (`CREATE SCHEMA IF NOT EXISTS …` idempotently).
+4. Write `daemon.json` atomically (write to `.json.tmp`, then `rename`).
+5. Bind `superfield.sock`.
+6. Send `StartupResult` over the startup-notify socket — a 4-byte little-endian length followed by a bincode-encoded payload:
+
+| Variant                       | Meaning                                                                           |
+| ----------------------------- | --------------------------------------------------------------------------------- |
+| `Ok { version, addr }`        | Daemon fully ready; `addr` is the path to `superfield.sock`                       |
+| `AddrInUse`                   | Another daemon raced to the socket; caller should re-read `daemon.json`           |
+| `Err { reason, log_path }`    | Startup failed; `log_path` is the absolute path to `daemon.log` for diagnostics  |
+
+The CLI decodes the result and either proceeds (`Ok`) or surfaces the error to the user (`Err`).
+
+### Version handshake
+
+On every connect, the client and daemon exchange their semver version strings as the first RPC. If they differ:
+
+1. The client sends a `Shutdown` RPC to the running daemon.
+2. The daemon drains the `LoopHandle` (waits for the current gardening step to commit its cursor), stops Postgres, removes `daemon.json`, and exits cleanly.
+3. The client waits for the `flock` on `daemon.lock` to cycle (the old daemon released it on exit), then re-spawns with the new binary.
+
+This ensures the client and daemon always run the same binary version with no manual intervention.
+
+### Shutdown
+
+`superfield daemon stop` sends SIGTERM to the daemon PID recorded in `daemon.json`. The daemon's SIGTERM handler:
+
+1. Calls `LoopHandle::drain()` — signals the gardening loop to finish its current step and stop accepting new ones. The daemon imposes a bounded drain timeout (default 30 s) and falls back to `LoopHandle::abort()` if the loop does not drain in time.
+2. Calls `PostgresProvisioner::stop()` — flushes WAL, closes connections, and stops the container.
+3. Removes `daemon.json`.
+4. Exits with code 0.
+
+The `LoopHandle` and `PostgresProvisioner` seams are defined in `crates/sf-serve/src/loop_handle.rs` and `crates/sf-db/src/provisioner.rs` respectively.
+
+### No idle timeout
+
+The daemon runs until it receives SIGTERM (via `superfield daemon stop`) or is killed. There is no idle-timeout or inactivity shutdown. This matches the always-on appliance model: the gardening loop runs continuously, so an idle daemon is still actively working.
+
+### Always-on logging
+
+`daemon.log` is opened before the `daemonize()` call and dup2'd onto stdout and stderr immediately after forking, so no output is lost during the fork. All agent-step output — including stdout/stderr from subprocess calls and any panic backtraces — is captured in this file. The `status` and `logs` subcommands read it without requiring the daemon to be running.
+
+### Foreground / container mode
+
+Setting `SF_NO_DAEMON=1` suppresses `daemonize()`. The CLI still re-executes the binary with `SF_START_DAEMON=1` but the child runs in-process (no fork, no detach, stdio unchanged). This is the intended mode for containers and CI where process supervision is handled externally. The startup-notify handshake still runs; the only difference is that the serving layer occupies the foreground process.
+
+### Seam: PostgresProvisioner
+
+`crates/sf-db/src/provisioner.rs` defines the [`PostgresProvisioner`] trait — the interface through which the daemon owns the Postgres container lifecycle without coupling the `sf-db` crate to Docker or any specific container runtime.
+
+| Method   | Contract                                                                                                                          |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `start`  | Ensure the Postgres container is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running               |
+| `stop`   | Stop the container cleanly after the gardening loop has drained; idempotent — no-op if already stopped                           |
+
+The real implementation (issue #489) checks for a running container via the Docker socket, starts the container with a durable local volume if absent, and polls `pg_isready` until the health gate passes. Tests and crates that do not own the container lifecycle use [`TestProvisioner`] — a no-op that returns `Ok(())` immediately.
+
+The daemon calls `start` during the health gate (before sending `StartupResult::Ok`) and `stop` after `LoopHandle::drain()` completes on shutdown.
+
+### Seam: LoopHandle
+
+`crates/sf-serve/src/loop_handle.rs` defines the [`LoopHandle`] trait — the interface through which the daemon controls the gardening loop engine (issue #491) during graceful shutdown and version-mismatch restart. The trait lives in `sf-serve` because the HTTP layer also exposes a `/orchestrator/drain` route that triggers it.
+
+| Method  | Contract                                                                                                                                             |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `drain` | Signal the loop to finish its current gardening step, commit the cursor, and stop accepting new steps; resolves when the loop has stopped cleanly    |
+| `abort` | Cancel any in-flight step immediately (`tokio::task::JoinHandle::abort()`); used when the daemon needs to exit without waiting for the current step  |
+
+Callers of `drain` should impose an external timeout (30 s) and fall back to `abort` if the loop does not drain in time. The trait does not enforce a timeout internally.
+
+Tests and phase crates use [`NoopLoopHandle`] — a no-op stub that returns `Ok(())` from both methods immediately.
 
 ---
 
