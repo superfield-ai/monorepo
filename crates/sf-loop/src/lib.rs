@@ -1,7 +1,7 @@
 //! Gardening loop engine — continuous resumable knowledge-base improvement.
 //!
 //! This crate implements the `GardeningLoop` and a real [`sf_serve::LoopHandle`]
-//! that the daemon (issue #489) stores in `AppState` and calls on graceful
+//! that the daemon will store in `AppState` and calls on graceful
 //! shutdown.
 //!
 //! # Architecture

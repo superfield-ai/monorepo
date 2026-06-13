@@ -422,13 +422,13 @@ Setting `SF_NO_DAEMON=1` suppresses `daemonize()`. The CLI still re-executes the
 | `start` | Ensure the Postgres container is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running |
 | `stop`  | Stop the container cleanly after the gardening loop has drained; idempotent — no-op if already stopped             |
 
-The real implementation (issue #489) checks for a running container via the Docker socket, starts the container with a durable local volume if absent, and polls `pg_isready` until the health gate passes. Tests and crates that do not own the container lifecycle use [`TestProvisioner`] — a no-op that returns `Ok(())` immediately.
+The real implementation checks for a running container via the Docker socket, starts the container with a durable local volume if absent, and polls `pg_isready` until the health gate passes. Tests and crates that do not own the container lifecycle use [`TestProvisioner`] — a no-op that returns `Ok(())` immediately.
 
 The daemon calls `start` during the health gate (before sending `StartupResult::Ok`) and `stop` after `LoopHandle::drain()` completes on shutdown.
 
 ### Seam: LoopHandle
 
-`crates/sf-serve/src/loop_handle.rs` defines the [`LoopHandle`] trait — the interface through which the daemon controls the gardening loop engine (issue #491) during graceful shutdown and version-mismatch restart. The trait lives in `sf-serve` because the HTTP layer owns the daemon lifecycle. The HTTP layer does not currently expose a drain route; draining is triggered via the daemon lifecycle (SIGTERM → drain → exit).
+`crates/sf-serve/src/loop_handle.rs` defines the [`LoopHandle`] trait — the interface through which the daemon controls the gardening loop engine during graceful shutdown and version-mismatch restart. The trait lives in `sf-serve` because the HTTP layer owns the daemon lifecycle. The HTTP layer does not currently expose a drain route; draining is triggered via the daemon lifecycle (SIGTERM → drain → exit).
 
 | Method  | Contract                                                                                                                                            |
 | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -457,7 +457,7 @@ pub fn start(
 ) -> GardeningLoopHandle
 ```
 
-Spawns the background Tokio task and returns a `GardeningLoopHandle`. **Planned wiring (not yet implemented):** the daemon will store this handle (via `AppState`) and call `drain()` on graceful shutdown once issues #489 (daemon lifecycle) and #491 (loop engine) complete their integration work. Until then, `NoopLoopHandle` is used as a stub.
+Spawns the background Tokio task and returns a `GardeningLoopHandle`. **Planned wiring (not yet implemented):** the daemon will store this handle (via `AppState`) and call `drain()` on graceful shutdown. Until then, `NoopLoopHandle` is used as a stub.
 
 `LoopConfig` is built from environment variables via `LoopConfig::from_env()`:
 
@@ -575,7 +575,7 @@ crates/sf-serve/src/routes/
 
 - `/pages/project` uses `sf_db::fetch_project_page` — a recursive CTE traversal over `nexum.project_nodes` and `nexum.links`. All other `/pages/{name}` routes use `sf_db::fetch_page_content` against `nexum.page_revisions`.
 - Authentication on `/pages/*` is explicitly deferred for milestone 1; the route is expected to be reachable only from localhost during this phase.
-- The `/orchestrator/status` route returns a minimal stub (PID = null, apiReachable = false) until the gardening-loop process manager is ported (issue #491).
+- The `/orchestrator/status` route returns a minimal stub (PID = null, apiReachable = false) until the gardening-loop process manager is ported.
 - Static browser assets are served from a configurable directory (`CONTROL_ASSETS_DIR`) mounted at the root; the asset-serving layer is composed on top of the API router in `crates/sf-serve/src/lib.rs`.
 
 ---
@@ -679,4 +679,4 @@ See also: `crates/sf-db/src/page_revision.rs` (write contract implementation).
 
 Milestone 1 delivered the headless binary: daemon auto-spawn, Postgres container lifecycle, seed document ingestion, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
 
-**Note:** The `crates/sf-loop` gardening loop crate is fully implemented and tested, but the daemon-loop wiring (storing `GardeningLoopHandle` in `AppState` and calling `drain()` on shutdown) is not yet complete. The daemon currently calls `orchestrator.run().await` directly. The wiring integration is tracked separately.
+**Note:** The `crates/sf-loop` gardening loop crate is fully implemented and tested, but the daemon-loop wiring (storing `GardeningLoopHandle` in `AppState` and calling `drain()` on shutdown) is not yet complete. The daemon calls `sf_serve::serve()` and does not start the gardening loop. The wiring integration is tracked separately.
