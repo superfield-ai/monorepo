@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
 //
 // This module does not change product behavior. It makes the current runtime

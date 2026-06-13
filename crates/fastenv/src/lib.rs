@@ -5,7 +5,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 
 pub mod bench;
 pub mod boundary;

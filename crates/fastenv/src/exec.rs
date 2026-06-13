@@ -1,7 +1,7 @@
 // exec.rs — `fastenv exec <fork-id> -- <cmd>` implementation.
 //
 // Canonical docs:
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
 //   - docs/scout/phase2-findings.md
 //   - docs/scout/phase3-findings.md

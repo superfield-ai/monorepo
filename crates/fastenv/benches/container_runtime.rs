@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md §5 (Guest Runtime)
-//   - docs/architecture.md §Container Lifecycle
+//   - crates/fastenv/docs/architecture.md §Container Lifecycle
 //   - docs/benchmarks/README.md (JSON artifact schema)
 //   - Issue #113: ContainerRuntime trait and youki backend
 //   - Issue #124: Make crun-vs-youki benchmark signal trustworthy

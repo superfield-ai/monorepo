@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md         §4 Execution model, §4.5 Guest eBPF observability
-//   - docs/architecture.md §Host/guest boundary, §VM lifecycle
+//   - crates/fastenv/docs/architecture.md §Host/guest boundary, §VM lifecycle
 //   - docs/implementation-plan.md §Phase: Integration Test Harnesses
 //
 // This harness exercises the full PRD execution path end-to-end:

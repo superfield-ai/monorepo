@@ -1,7 +1,7 @@
 // bench.rs — `fastenv bench --base <key> [--iterations N] [--exec] [--vm]` implementation.
 //
 // Canonical docs:
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - docs/implementation-plan.md
 //
 // Pipeline

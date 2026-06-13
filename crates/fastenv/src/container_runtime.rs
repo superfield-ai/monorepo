@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md §5 (Guest Runtime)
-//   - docs/architecture.md §Container Lifecycle
+//   - crates/fastenv/docs/architecture.md §Container Lifecycle
 //
 // This module defines the ContainerRuntime trait that isolates the container
 // lifecycle boundary in code. All callers go through the trait — no direct
@@ -42,7 +42,7 @@ use anyhow::{bail, Context, Result};
 ///   2. Mock implementations for unit tests.
 ///   3. Identical telemetry regardless of backend.
 ///
-/// Canonical docs: docs/architecture.md §Container Lifecycle
+/// Canonical docs: crates/fastenv/docs/architecture.md §Container Lifecycle
 pub trait ContainerRuntime: Send + Sync {
     /// Returns a short identifier for this backend (e.g. "crun", "youki").
     ///
@@ -86,7 +86,7 @@ pub trait ContainerRuntime: Send + Sync {
 /// This wraps the existing logic in `exec.rs` so all crun subprocess calls
 /// are encapsulated in one place. Callers use `ContainerRuntime` only.
 ///
-/// Canonical docs: docs/architecture.md §CrunBackend
+/// Canonical docs: crates/fastenv/docs/architecture.md §CrunBackend
 #[derive(Debug, Clone)]
 pub struct CrunBackend {
     /// Path to the crun binary (default: /usr/bin/crun).
@@ -275,7 +275,7 @@ fn waitpid_exit_code(pid: i32) -> Result<i32> {
 /// Both backends emit identical span names and field keys so telemetry and the
 /// control surface remain backend-agnostic.
 ///
-/// Canonical docs: docs/architecture.md §Container Lifecycle
+/// Canonical docs: crates/fastenv/docs/architecture.md §Container Lifecycle
 /// Integration note (issue #116): the YoukiBackend is experimental; promoting
 /// it to the production default is deferred to post-benchmark analysis.
 #[cfg(feature = "youki")]

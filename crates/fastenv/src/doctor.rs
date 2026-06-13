@@ -2,7 +2,7 @@
 //
 // Canonical docs:
 //   - docs/prd.md
-//   - docs/architecture.md
+//   - crates/fastenv/docs/architecture.md
 //   - crates/fastenv/docs/scout/firecracker-prerequisites.md
 //
 // Checks all host prerequisites required to run fastenv microVMs:
