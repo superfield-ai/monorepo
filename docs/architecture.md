@@ -78,12 +78,12 @@ Rejected alternatives:
 
 Each component owns exactly one PostgreSQL schema. All tables, indexes, sequences, and functions for that component live in its schema. No component may create objects in another component's schema.
 
-| PostgreSQL schema | Owner component | Tables (current)                                                                                                                                                           |
-| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| PostgreSQL schema | Owner component | Tables (current)                                                                                                                                                                                                                                                     |
+| ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `sharp`           | Sharp           | `repos`, `objects`, `refs`, `commit_paths`, `commit_metadata`, `git_objects`, `git_refs`, `episodes`, `episode_events`, `episode_artifacts`, `episode_links`, `runtime_signals`, `episode_typed_artifacts`, `episode_relations`, `episode_redactions`, `projections` |
-| `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `relations`, `corpus_access`, `job_queue`, `project_nodes`, `page_revisions` |
-| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                                           |
-| `orchestrator`    | Orchestrator    | `gardening_cursor`                                                                                                                                                         |
+| `nexum`           | Nexum           | `corpora`, `documents`, `document_versions`, `blocks`, `version_blocks`, `links`, `entities`, `relations`, `corpus_access`, `job_queue`, `project_nodes`, `page_revisions`                                                                                           |
+| `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                                                                                                                                     |
+| `orchestrator`    | Orchestrator    | `gardening_cursor`                                                                                                                                                                                                                                                   |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -449,30 +449,30 @@ pub fn start(
 ) -> GardeningLoopHandle
 ```
 
-Spawns the background Tokio task and returns a `GardeningLoopHandle`. The daemon stores this handle in `AppState` and calls `drain()` on graceful shutdown (which sends a drain signal and waits for the loop to finish its current step before returning).
+Spawns the background Tokio task and returns a `GardeningLoopHandle`. **Planned wiring (not yet implemented):** the daemon will store this handle (via `AppState`) and call `drain()` on graceful shutdown once issues #489 (daemon lifecycle) and #491 (loop engine) complete their integration work. Until then, `NoopLoopHandle` is used as a stub.
 
 `LoopConfig` is built from environment variables via `LoopConfig::from_env()`:
 
-| Field            | Env var              | Default                                       |
-| ---------------- | -------------------- | --------------------------------------------- |
-| `workspace_id`   | `WORKSPACE_ID`       | random UUID                                   |
-| `blueprint_path` | `BLUEPRINT_PATH`     | `blueprint/rules/graph.yaml`                  |
-| `llm_api_key`    | `SF_LLM_API_KEY`     | empty string                                  |
-| `llm_endpoint`   | `SF_LLM_ENDPOINT`    | `https://api.anthropic.com/v1/messages`       |
-| `llm_model`      | `SF_LLM_MODEL`       | `claude-haiku-4-5-20251001`                   |
+| Field            | Env var           | Default                                 |
+| ---------------- | ----------------- | --------------------------------------- |
+| `workspace_id`   | `WORKSPACE_ID`    | random UUID                             |
+| `blueprint_path` | `BLUEPRINT_PATH`  | `blueprint/rules/graph.yaml`            |
+| `llm_api_key`    | `SF_LLM_API_KEY`  | empty string                            |
+| `llm_endpoint`   | `SF_LLM_ENDPOINT` | `https://api.anthropic.com/v1/messages` |
+| `llm_model`      | `SF_LLM_MODEL`    | `claude-haiku-4-5-20251001`             |
 
 ### GardeningStep variants
 
 Defined in `crates/sf-loop/src/steps/mod.rs` as `STEP_ORDER`:
 
-| # | Variant                | Cursor name              | Output page      | Description                                                           |
-| - | ---------------------- | ------------------------ | ---------------- | --------------------------------------------------------------------- |
-| 1 | `StrategyResearch`     | `strategy_research`      | `strategy`       | Web research on company strategy → "strategy" page revision           |
-| 2 | `PrdReconcile`         | `prd_reconcile`          | `prd`            | Reconcile PRD against strategy research → "prd" page revision         |
-| 3 | `TechnicalResearch`    | `technical_research`     | `technical`      | Research technical implementation options → "technical" page revision |
-| 4 | `ArchitectureProposal` | `architecture_proposal`  | `architecture`   | Derive architecture from PRD + technical + Blueprint rules            |
-| 5 | `PlanProposal`         | `plan_proposal`          | `plan`           | Derive implementation plan from architecture → "plan" page revision   |
-| 6 | `HolisticReconcile`    | `holistic_reconcile`     | (all five)       | Re-read all five pages and propagate consistency changes               |
+| #   | Variant                | Cursor name             | Output page    | Description                                                           |
+| --- | ---------------------- | ----------------------- | -------------- | --------------------------------------------------------------------- |
+| 1   | `StrategyResearch`     | `strategy_research`     | `strategy`     | Web research on company strategy → "strategy" page revision           |
+| 2   | `PrdReconcile`         | `prd_reconcile`         | `prd`          | Reconcile PRD against strategy research → "prd" page revision         |
+| 3   | `TechnicalResearch`    | `technical_research`    | `technical`    | Research technical implementation options → "technical" page revision |
+| 4   | `ArchitectureProposal` | `architecture_proposal` | `architecture` | Derive architecture from PRD + technical + Blueprint rules            |
+| 5   | `PlanProposal`         | `plan_proposal`         | `plan`         | Derive implementation plan from architecture → "plan" page revision   |
+| 6   | `HolisticReconcile`    | `holistic_reconcile`    | (all five)     | Re-read all five pages and propagate consistency changes              |
 
 ### AgentExecutor trait
 
@@ -577,24 +577,24 @@ The `superfield` binary (`crates/superfield/src/main.rs`) is the single entrypoi
 
 ### Subcommand reference
 
-| Subcommand                                                | Module             | Requires daemon | Description                                                       |
-| --------------------------------------------------------- | ------------------ | --------------- | ----------------------------------------------------------------- |
-| `superfield serve [--bind <addr>] [--session-ttl <secs>]` | `sf_serve`         | No              | Start the HTTP server in the foreground (default: `0.0.0.0:7000`) |
-| `superfield daemon stop`                                  | `sf_cli::daemon`   | Yes             | Send SIGTERM to the daemon; waits for clean exit (max 30 s)       |
-| `superfield status`                                       | `sf_cli::daemon`   | No              | Show daemon status from `daemon.json`; exits 1 if not running     |
-| `superfield logs`                                         | `sf_cli::daemon`   | No              | Tail `daemon.log`; exits 1 if daemon not running                  |
+| Subcommand                                                | Module             | Requires daemon | Description                                                                        |
+| --------------------------------------------------------- | ------------------ | --------------- | ---------------------------------------------------------------------------------- |
+| `superfield serve [--bind <addr>] [--session-ttl <secs>]` | `sf_serve`         | No              | Start the HTTP server in the foreground (default: `0.0.0.0:7000`)                  |
+| `superfield daemon stop`                                  | `sf_cli::daemon`   | Yes             | Send SIGTERM to the daemon; waits for clean exit (max 30 s)                        |
+| `superfield status`                                       | `sf_cli::daemon`   | No              | Show daemon status from `daemon.json`; exits 1 if not running                      |
+| `superfield logs`                                         | `sf_cli::daemon`   | No              | Tail `daemon.log`; exits 1 if daemon not running                                   |
 | `superfield page <name>`                                  | `sf_cli::page`     | No              | Fetch a named page from Nexum and print as markdown; exits 1 if daemon not running |
-| `superfield garden <file...> [--workspace-id <uuid>]`     | `sf_cli::garden`   | Yes             | Ingest markdown files into the Nexum knowledge graph              |
-| `superfield repo init <name>`                             | `sf_cli::operator` | Yes             | Create or get a Sharp repo by name                                |
-| `superfield repo list`                                    | `sf_cli::operator` | Yes             | List all Sharp repos                                              |
-| `superfield session issue <ws-id> <uid> <role>`           | `sf_cli::operator` | Yes             | Issue a session token (`role`: `admin`, `member`, `viewer`)       |
-| `superfield episode open <repo-id> <title>`               | `sf_cli::agent`    | Yes             | Open a new agent episode against a repo                           |
-| `superfield episode append <ep-id> <type> <json>`         | `sf_cli::agent`    | Yes             | Append an event to an existing episode                            |
-| `superfield episode finish <ep-id>`                       | `sf_cli::agent`    | Yes             | Close an episode                                                  |
-| `superfield episode list <repo-id>`                       | `sf_cli::agent`    | Yes             | List episodes for a repo                                          |
-| `superfield deploy validate <config-json>`                | `sf_deploy`        | No              | Validate a deploy target config (no I/O)                          |
-| `superfield deploy ship <config-json> <path>`             | `sf_deploy`        | No              | Deploy an artifact to a target                                    |
-| `superfield deploy rollback <record-json>`                | `sf_deploy`        | No              | Roll back target to its prior version                             |
+| `superfield garden <file...> [--workspace-id <uuid>]`     | `sf_cli::garden`   | Yes             | Ingest markdown files into the Nexum knowledge graph                               |
+| `superfield repo init <name>`                             | `sf_cli::operator` | Yes             | Create or get a Sharp repo by name                                                 |
+| `superfield repo list`                                    | `sf_cli::operator` | Yes             | List all Sharp repos                                                               |
+| `superfield session issue <ws-id> <uid> <role>`           | `sf_cli::operator` | Yes             | Issue a session token (`role`: `admin`, `member`, `viewer`)                        |
+| `superfield episode open <repo-id> <title>`               | `sf_cli::agent`    | Yes             | Open a new agent episode against a repo                                            |
+| `superfield episode append <ep-id> <type> <json>`         | `sf_cli::agent`    | Yes             | Append an event to an existing episode                                             |
+| `superfield episode finish <ep-id>`                       | `sf_cli::agent`    | Yes             | Close an episode                                                                   |
+| `superfield episode list <repo-id>`                       | `sf_cli::agent`    | Yes             | List episodes for a repo                                                           |
+| `superfield deploy validate <config-json>`                | `sf_deploy`        | No              | Validate a deploy target config (no I/O)                                           |
+| `superfield deploy ship <config-json> <path>`             | `sf_deploy`        | No              | Deploy an artifact to a target                                                     |
+| `superfield deploy rollback <record-json>`                | `sf_deploy`        | No              | Roll back target to its prior version                                              |
 
 ### Daemon auto-spawn
 
@@ -668,4 +668,6 @@ See also: `crates/sf-db/src/page_revision.rs` (write contract implementation).
 
 ## Milestone 1 — Headless Gardening Appliance (completed)
 
-Milestone 1 delivered the headless binary: daemon auto-spawn, Postgres container lifecycle, seed document ingestion, continuous gardening loop, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
+Milestone 1 delivered the headless binary: daemon auto-spawn, Postgres container lifecycle, seed document ingestion, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
+
+**Note:** The `crates/sf-loop` gardening loop crate is fully implemented and tested, but the daemon-loop wiring (storing `GardeningLoopHandle` in `AppState` and calling `drain()` on shutdown) is not yet complete. The daemon currently calls `orchestrator.run().await` directly. The wiring integration is tracked separately.
