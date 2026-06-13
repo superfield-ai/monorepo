@@ -72,8 +72,7 @@ type BoxFuture<'a, T> = Pin<Box<dyn Future<Output = T> + Send + 'a>>;
 /// Seam interface for recording and querying substrate backup events.
 ///
 /// Operations tooling provides a real implementation that writes to the
-/// `episodes` schema (or a dedicated `substrate.backups` table once that
-/// schema is defined). Tests and components that do not own backup logic
+/// `substrate.backups` table. Tests and components that do not own backup logic
 /// use [`NoopSubstrateBackup`].
 ///
 /// # Required interface
