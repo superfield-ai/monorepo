@@ -1,39 +1,47 @@
-//! Page query — read projection over the Nexum graph.
+//! Page query — read projection over `nexum.page_revisions`.
 //!
 //! Implements [`fetch_page_content`]: the single read entrypoint for the pages
-//! projection layer (issue #492).  A "page" is a named document stored in the
-//! `nexum.documents` table (by title) whose latest version's blocks are
-//! rendered as markdown.
+//! projection layer (issue #492).  A "page" is a named document produced by
+//! the gardening loop and stored as the latest row in `nexum.page_revisions`.
 //!
 //! # Registry
 //!
 //! The following page names are recognised:
 //!
-//! | Name           | Nexum document title                   |
-//! |----------------|----------------------------------------|
-//! | `prd`          | `prd`                                  |
-//! | `architecture` | `architecture`                         |
-//! | `plan`         | `plan`                                 |
-//! | `strategy`     | `strategy`                             |
-//! | `technical`    | `technical`                            |
-//! | `project`      | `project`                              |
+//! | Name           | Content source                                      |
+//! |----------------|-----------------------------------------------------|
+//! | `prd`          | `nexum.page_revisions` for page name `prd`          |
+//! | `architecture` | `nexum.page_revisions` for page name `architecture` |
+//! | `plan`         | `nexum.page_revisions` for page name `plan`         |
+//! | `strategy`     | `nexum.page_revisions` for page name `strategy`     |
+//! | `technical`    | `nexum.page_revisions` for page name `technical`    |
+//! | `project`      | `nexum.page_revisions` for page name `project`      |
 //!
 //! # Query design
 //!
-//! 1. Look up `nexum.documents` by `title = page_name`.
-//! 2. Find the latest `nexum.document_versions` row for that document
-//!    (highest `id` / latest `ingested_at`).
-//! 3. Fetch all `nexum.blocks` for that version via `nexum.version_blocks`,
-//!    ordered by `seq`.
-//! 4. Concatenate block content as markdown and return it.
+//! `fetch_page_content` performs a single-table lookup:
 //!
-//! Returns `Ok(None)` when the document or version does not exist yet (the
-//! gardening loop has not produced a page revision for this name).
+//! ```sql
+//! SELECT content
+//! FROM nexum.page_revisions
+//! WHERE page_name = $1
+//! ORDER BY ingested_at DESC
+//! LIMIT 1
+//! ```
+//!
+//! The read path is workspace-agnostic: it returns the most recent revision
+//! for a given `page_name` regardless of which workspace produced it.  This
+//! matches the gardening loop contract — loop steps append rows via
+//! `insert_page_revision` and the reader always sees the latest.
+//!
+//! Returns `Ok(None)` when no revision exists yet for the requested name (the
+//! gardening loop has not yet produced a page revision for this name).
 //!
 //! # Canonical docs
 //!
 //! - `docs/architecture.md` §Nexum — page-revision schema.
-//! - Issue #492 scope.
+//! - Issue #492 scope, issue #547 decision: Option A (`nexum.page_revisions`
+//!   is the canonical source for `fetch_page_content`).
 
 use sqlx::PgPool;
 use thiserror::Error;
@@ -65,7 +73,7 @@ pub enum PageQueryError {
     UnknownPage(String),
 }
 
-/// Fetch the current markdown content of a named page from the Nexum graph.
+/// Fetch the current markdown content of a named page from `nexum.page_revisions`.
 ///
 /// # Arguments
 ///
@@ -74,20 +82,20 @@ pub enum PageQueryError {
 ///
 /// # Returns
 ///
-/// - `Ok(Some(markdown))` — the page exists and has at least one version with
-///   blocks; the blocks are concatenated in sequence order.
-/// - `Ok(None)` — the document or version does not exist in the database yet
-///   (the gardening loop has not yet produced a page revision for this name).
+/// - `Ok(Some(markdown))` — the page exists; the most recent revision's
+///   content is returned.
+/// - `Ok(None)` — no revision exists in `nexum.page_revisions` yet for this
+///   page name (the gardening loop has not yet produced a revision).
 /// - `Err(PageQueryError::UnknownPage)` — `page_name` is not in the registry.
 /// - `Err(PageQueryError::Database)` — a Postgres query failed.
 ///
 /// # Implementation note
 ///
-/// This function queries `nexum.documents` by `title` (not `external_id`),
-/// following the convention established by the `insert_page_revision` stub in
-/// `sf-db::page_revision`.  The latest version is determined by the highest
-/// `id` (UUID v4, lexicographically monotone within a single session) — in
-/// practice `ingested_at` would also work, but `id` is more reliably unique.
+/// This function queries `nexum.page_revisions` by `page_name`, ordering by
+/// `ingested_at DESC` and taking the most recent row.  The read path is
+/// workspace-agnostic (no `workspace_id` filter) — the gardening loop is
+/// the sole writer and the latest row always represents the current page state.
+/// Decision recorded in issue #547 (Option A).
 pub async fn fetch_page_content(
     pool: &PgPool,
     page_name: &str,
@@ -97,52 +105,19 @@ pub async fn fetch_page_content(
         return Err(PageQueryError::UnknownPage(page_name.to_string()));
     }
 
-    // Step 1: find the document by title.
-    let doc_id: Option<uuid::Uuid> =
-        sqlx::query_scalar("SELECT id FROM nexum.documents WHERE title = $1 LIMIT 1")
-            .bind(page_name)
-            .fetch_optional(pool)
-            .await?;
-
-    let doc_id = match doc_id {
-        Some(id) => id,
-        None => return Ok(None),
-    };
-
-    // Step 2: find the latest version for that document.
-    let version_id: Option<uuid::Uuid> = sqlx::query_scalar(
-        "SELECT id FROM nexum.document_versions \
-         WHERE doc_id = $1 \
-         ORDER BY ingested_at DESC, id DESC \
+    // Single-table lookup: latest revision for this page name.
+    let content: Option<String> = sqlx::query_scalar(
+        "SELECT content \
+         FROM nexum.page_revisions \
+         WHERE page_name = $1 \
+         ORDER BY ingested_at DESC \
          LIMIT 1",
     )
-    .bind(doc_id)
+    .bind(page_name)
     .fetch_optional(pool)
     .await?;
 
-    let version_id = match version_id {
-        Some(id) => id,
-        None => return Ok(None),
-    };
-
-    // Step 3: fetch blocks for this version in sequence order.
-    let blocks: Vec<String> = sqlx::query_scalar(
-        "SELECT b.content \
-         FROM nexum.blocks b \
-         JOIN nexum.version_blocks vb ON vb.block_id = b.id \
-         WHERE vb.version_id = $1 \
-         ORDER BY vb.seq ASC",
-    )
-    .bind(version_id)
-    .fetch_all(pool)
-    .await?;
-
-    if blocks.is_empty() {
-        return Ok(None);
-    }
-
-    // Step 4: join blocks with double-newline separators (markdown convention).
-    Ok(Some(blocks.join("\n\n")))
+    Ok(content)
 }
 
 // ---------------------------------------------------------------------------
@@ -198,93 +173,46 @@ mod tests {
         }
     }
 
-    /// Integration test: fetch latest version for a named page.
+    /// Integration test: fetch latest revision for a named page.
     ///
-    /// Inserts two document_versions for the same document; asserts that the
-    /// query returns only the content from the later version.
+    /// Inserts two page_revisions rows for the same page_name; asserts that the
+    /// query returns only the content from the later revision.
     ///
     /// Skipped unless `DATABASE_URL` is set with the nexum schema migrated.
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL with nexum schema migrated"]
-    async fn page_query_returns_latest_version() {
+    async fn page_query_returns_latest_revision() {
         let cfg = crate::config::DbConfig::from_env()
             .expect("DATABASE_URL must be set for integration tests");
         let pool = crate::pool::connect(&cfg)
             .await
             .expect("pool creation failed");
 
-        // Insert a corpus (required FK).
-        let corpus_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.corpora (name) VALUES ('test-page-query') RETURNING id",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("corpus insert failed");
+        // Use a workspace_id placeholder (the read path ignores it but the
+        // table has a NOT NULL constraint on workspace_id).
+        let workspace_id = uuid::Uuid::new_v4();
 
-        // Insert a document with title 'prd'.
-        let doc_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.documents (corpus_id, title) VALUES ($1, 'prd') RETURNING id",
-        )
-        .bind(corpus_id)
-        .fetch_one(&pool)
-        .await
-        .expect("document insert failed");
-
-        // Insert version 1 with one block containing 'v1 content'.
-        let ver1_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.document_versions (doc_id, version_num, status) \
-             VALUES ($1, 1, 'done') RETURNING id",
-        )
-        .bind(doc_id)
-        .fetch_one(&pool)
-        .await
-        .expect("version 1 insert failed");
-
-        let block1_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type) \
-             VALUES ($1, 'v1 content', 'hash_v1', 'paragraph') RETURNING id",
-        )
-        .bind(doc_id)
-        .fetch_one(&pool)
-        .await
-        .expect("block v1 insert failed");
-
+        // Insert revision 1 with 'v1 content' (older — will be shadowed).
         sqlx::query(
-            "INSERT INTO nexum.version_blocks (version_id, block_id, seq) VALUES ($1, $2, 0)",
+            "INSERT INTO nexum.page_revisions \
+             (workspace_id, page_name, content, provenance, ingested_at) \
+             VALUES ($1, 'prd', 'v1 content', 'test', now() - interval '1 second')",
         )
-        .bind(ver1_id)
-        .bind(block1_id)
+        .bind(workspace_id)
         .execute(&pool)
         .await
-        .expect("version_block v1 insert failed");
+        .expect("revision 1 insert failed");
 
-        // Insert version 2 (later) with a block containing 'v2 content'.
-        let ver2_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.document_versions (doc_id, version_num, status) \
-             VALUES ($1, 2, 'done') RETURNING id",
-        )
-        .bind(doc_id)
-        .fetch_one(&pool)
-        .await
-        .expect("version 2 insert failed");
-
-        let block2_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type) \
-             VALUES ($1, 'v2 content', 'hash_v2', 'paragraph') RETURNING id",
-        )
-        .bind(doc_id)
-        .fetch_one(&pool)
-        .await
-        .expect("block v2 insert failed");
-
+        // Insert revision 2 with 'v2 content' (newer — must be returned).
         sqlx::query(
-            "INSERT INTO nexum.version_blocks (version_id, block_id, seq) VALUES ($1, $2, 0)",
+            "INSERT INTO nexum.page_revisions \
+             (workspace_id, page_name, content, provenance, ingested_at) \
+             VALUES ($1, 'prd', 'v2 content', 'test', now())",
         )
-        .bind(ver2_id)
-        .bind(block2_id)
+        .bind(workspace_id)
         .execute(&pool)
         .await
-        .expect("version_block v2 insert failed");
+        .expect("revision 2 insert failed");
 
         // Query — must return v2 content, not v1 content.
         let content = fetch_page_content(&pool, "prd")
@@ -299,36 +227,18 @@ mod tests {
         );
         assert!(
             !content.contains("v1 content"),
-            "v1 content must not appear in latest-version result, got: {:?}",
+            "v1 content must not appear in latest-revision result, got: {:?}",
             content
         );
 
-        // Cleanup — delete in reverse dependency order.
-        sqlx::query("DELETE FROM nexum.version_blocks WHERE version_id IN ($1, $2)")
-            .bind(ver1_id)
-            .bind(ver2_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM nexum.document_versions WHERE doc_id = $1")
-            .bind(doc_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM nexum.blocks WHERE doc_id = $1")
-            .bind(doc_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM nexum.documents WHERE id = $1")
-            .bind(doc_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM nexum.corpora WHERE id = $1")
-            .bind(corpus_id)
-            .execute(&pool)
-            .await
-            .ok();
+        // Cleanup.
+        sqlx::query(
+            "DELETE FROM nexum.page_revisions \
+             WHERE page_name = 'prd' AND workspace_id = $1",
+        )
+        .bind(workspace_id)
+        .execute(&pool)
+        .await
+        .ok();
     }
 }
