@@ -5,6 +5,7 @@ import { getAuthToken } from "../github/auth.ts";
 import type { GitHubHttpDeps } from "../github/types.ts";
 import { deriveHmacToken, deriveEd25519Key } from "../secrets/index.ts";
 import { SshClient } from "../ssh/client.ts";
+import type { DeployBackend } from "./deploy.ts";
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -21,10 +22,24 @@ export interface DoctorReport {
   allOk: boolean;
 }
 
+// `DeployBackend` ("k3s" | "fastenv") is owned by ./deploy.ts and imported
+// above so doctor and deploy share a single source of truth for the
+// deployment-tier runtime selector. doctor defaults to "fastenv" — the engine
+// Superfield now dogfoods (issue #660): the runtime check runs `fastenv doctor`
+// over SSH and the db check runs `pg_isready` against the fastenv-run Postgres
+// workload WITHOUT exec-ing into a Kubernetes pod. The "k3s" backend is the
+// legacy coexistence path (`kubectl get nodes` / `kubectl exec`).
+
 export interface DoctorOpts {
   repo: string;
   env: string;
   json?: boolean;
+  /**
+   * Deployment-tier runtime to verify. Defaults to `"fastenv"` — the engine
+   * Superfield now dogfoods. Set to `"k3s"` during coexistence to verify the
+   * legacy Kubernetes path instead.
+   */
+  backend?: DeployBackend;
   /**
    * BIP-39 mnemonic used to derive secrets for comparison. Required for the
    * `secret-fingerprints` and `ssh-reachable` checks. When omitted those
@@ -426,6 +441,70 @@ async function checkSshReachable(
   }
 }
 
+async function checkFastenvRuntimeHealthy(
+  opts: DoctorOpts,
+  deps: DoctorDeps,
+): Promise<CheckResult> {
+  if (!opts.mnemonic) {
+    return {
+      name: "fastenv-runtime-healthy",
+      ok: false,
+      detail: "No mnemonic provided — skipping fastenv runtime check",
+    };
+  }
+  const githubDeps = deps.githubDeps ?? makeDefaultGithubDeps();
+  const sshExec = deps.sshExec ?? defaultSshExec;
+
+  const host = await getDeployHost(opts, githubDeps);
+  if (!host) {
+    return {
+      name: "fastenv-runtime-healthy",
+      ok: false,
+      detail: `DEPLOY_HOST_${opts.env.toUpperCase()} not set as a repo variable`,
+    };
+  }
+
+  try {
+    const mnemonicCopy = Buffer.from(opts.mnemonic);
+    const { privateKeyPem } = deriveEd25519Key(
+      mnemonicCopy,
+      opts.env,
+      "ssh-deploy-key",
+    );
+    const knownHostsPath = `${process.env["HOME"] ?? "/root"}/.ssh/known_hosts.superfield`;
+
+    // `fastenv doctor` verifies the host container runtime is ready. No k3s,
+    // no Kubernetes control plane, no kubectl.
+    const result = await sshExec({
+      host,
+      user: "root",
+      privateKeyPem,
+      command: "fastenv doctor 2>&1",
+      knownHostsPath,
+    });
+
+    if (result.exitCode !== 0) {
+      return {
+        name: "fastenv-runtime-healthy",
+        ok: false,
+        detail: `fastenv doctor failed (exit ${result.exitCode}): ${result.stderr.trim() || result.stdout.trim() || "(no output)"}`,
+      };
+    }
+
+    return {
+      name: "fastenv-runtime-healthy",
+      ok: true,
+      detail: `fastenv runtime healthy: ${result.stdout.trim().split("\n").pop() || "ok"}`,
+    };
+  } catch (err) {
+    return {
+      name: "fastenv-runtime-healthy",
+      ok: false,
+      detail: `fastenv runtime check failed: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+}
+
 async function checkK3sHealthy(
   opts: DoctorOpts,
   deps: DoctorDeps,
@@ -534,14 +613,24 @@ async function checkDbReachable(
     );
     const knownHostsPath = `${process.env["HOME"] ?? "/root"}/.ssh/known_hosts.superfield`;
 
-    // Find a postgres pod and run pg_isready via kubectl exec
+    // Backend-aware DB reachability probe.
+    //
+    // fastenv (default, issue #660): run pg_isready inside the fastenv-run
+    //   postgres workload via `fastenv exec`. This does NOT touch kubectl or a
+    //   Kubernetes pod — it goes straight through the fastenv container engine.
+    // k3s (legacy coexistence): find the postgres pod and `kubectl exec` into it.
+    const backend = opts.backend ?? "fastenv";
+    const command =
+      backend === "k3s"
+        ? "POD=$(kubectl get pod -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null); " +
+          '[ -n "$POD" ] && kubectl exec "$POD" -- pg_isready 2>&1 || echo \'no-postgres-pod\''
+        : "fastenv exec superfield-postgres -- pg_isready 2>&1 || echo 'no-postgres-workload'";
+
     const result = await sshExec({
       host,
       user: "root",
       privateKeyPem,
-      command:
-        "POD=$(kubectl get pod -l app=postgres -o jsonpath='{.items[0].metadata.name}' 2>/dev/null); " +
-        '[ -n "$POD" ] && kubectl exec "$POD" -- pg_isready 2>&1 || echo \'no-postgres-pod\'',
+      command,
       knownHostsPath,
     });
 
@@ -554,11 +643,17 @@ async function checkDbReachable(
     }
 
     const out = result.stdout.trim();
-    if (out.includes("no-postgres-pod")) {
+    if (
+      out.includes("no-postgres-pod") ||
+      out.includes("no-postgres-workload")
+    ) {
       return {
         name: "db-reachable",
         ok: false,
-        detail: "No postgres pod found in cluster",
+        detail:
+          backend === "k3s"
+            ? "No postgres pod found in cluster"
+            : "No postgres workload found in fastenv runtime",
       };
     }
     if (out.includes("accepting connections")) {
@@ -595,13 +690,22 @@ export async function doctor(
   opts: DoctorOpts,
   deps: DoctorDeps = {},
 ): Promise<DoctorReport> {
+  // The deployment-tier runtime check is backend-aware. fastenv (the default,
+  // dogfooded path) verifies the fastenv container engine; k3s is the legacy
+  // coexistence path. Only one runtime check runs per report.
+  const backend = opts.backend ?? "fastenv";
+  const runtimeCheck =
+    backend === "k3s"
+      ? checkK3sHealthy(opts, deps)
+      : checkFastenvRuntimeHealthy(opts, deps);
+
   const checks = await Promise.all([
     checkGhAuth(deps),
     checkGhcrPull(opts, deps),
     checkSecretsPresent(opts, deps),
     checkSecretFingerprints(opts, deps),
     checkSshReachable(opts, deps),
-    checkK3sHealthy(opts, deps),
+    runtimeCheck,
     checkDbReachable(opts, deps),
   ]);
 

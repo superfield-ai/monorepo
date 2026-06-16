@@ -48,4 +48,20 @@ describe("parseDoctorArgs", () => {
     expect(result.env).toBeUndefined();
     expect(result.repo).toBeUndefined();
   });
+
+  it("parses --backend fastenv and --backend k3s", () => {
+    expect(parseDoctorArgs(["--backend", "fastenv"]).backend).toBe("fastenv");
+    expect(parseDoctorArgs(["--backend=k3s"]).backend).toBe("k3s");
+  });
+
+  it("leaves backend undefined when not supplied (defaults to fastenv downstream)", () => {
+    const result = parseDoctorArgs(["--env", "demo", "--repo", "a/b"]);
+    expect(result.backend).toBeUndefined();
+  });
+
+  it("rejects an unknown backend value", () => {
+    const result = parseDoctorArgs(["--backend", "docker"]);
+    expect(result.backend).toBeUndefined();
+    expect(result.unknown).toContain("--backend docker");
+  });
 });
