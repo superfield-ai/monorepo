@@ -455,12 +455,12 @@ artifact is the source of truth for the wire shape**; the Rust types must be
 kept in sync field-for-field when #662 implements real deserialization. The
 scout's Rust sketch models only the fields the supervisor must read:
 
-| Concept (k8s / compose)              | fastenv deployment-tier equivalent                              |
-| ------------------------------------ | --------------------------------------------------------------- |
-| Deployment / Pod / compose service   | `Workload` (long-lived process under the manifest supervisor)   |
-| Service + cluster DNS (kube-proxy)   | in-process service registry + host-local addressing (no CoreDNS)|
-| readiness / liveness probe           | `HealthProbe` consumed by the `doctor` readiness surface        |
-| StatefulSet (Postgres)               | `Workload` with a persistent data volume                        |
+| Concept (k8s / compose)            | fastenv deployment-tier equivalent                               |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| Deployment / Pod / compose service | `Workload` (long-lived process under the manifest supervisor)    |
+| Service + cluster DNS (kube-proxy) | in-process service registry + host-local addressing (no CoreDNS) |
+| readiness / liveness probe         | `HealthProbe` consumed by the `doctor` readiness surface         |
+| StatefulSet (Postgres)             | `Workload` with a persistent data volume                         |
 
 ### Integration points and risks (for issue #662)
 
