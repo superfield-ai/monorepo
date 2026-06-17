@@ -10,7 +10,7 @@ pub mod parity_check;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use fastenv::{bench, boundary, doctor, exec, gc, quota};
+use fastenv::{bench, boundary, deployment, doctor, exec, gc, quota};
 use std::path::PathBuf;
 
 use boundary::{GuestRuntime, HostControlPlane, LocalHostControlPlane};
@@ -160,6 +160,23 @@ enum Commands {
         #[arg(long, default_value = "512")]
         min_free_mib: u64,
     },
+    /// Deployment-tier entrypoint: bring up long-lived workloads from a manifest.
+    ///
+    /// SCOUT STUB (issue #663): this subcommand parses its arguments and drives
+    /// the deployment-tier supervisor SEAM, but the supervisor is a NO-OP in the
+    /// scout build — it starts NO workloads and changes NO runtime behavior. The
+    /// real long-lived app + Postgres supervision is built in issue #662.
+    ///
+    /// Consumes a `FastenvManifest` (the engine-agnostic spec emitted by the
+    /// planned packages/control-core/fastenv-translate.ts translation layer).
+    ///
+    /// Canonical docs: crates/fastenv/docs/architecture.md,
+    /// docs/technical-requirements.md.
+    Up {
+        /// Path to the FastenvManifest JSON file describing the workloads.
+        #[arg(long)]
+        manifest: PathBuf,
+    },
 }
 
 fn init_tracing() {
@@ -285,6 +302,27 @@ fn main() -> Result<()> {
             };
             std::process::exit(exit_code);
         }
+        Commands::Up { manifest } => {
+            // SCOUT STUB (issue #663): drive the deployment-tier seam without
+            // changing runtime behavior. The NoopSupervisor starts nothing.
+            // Issue #662 replaces NoopSupervisor with a real supervisor and
+            // wires real manifest deserialization here.
+            use deployment::ManifestSupervisor;
+
+            let raw = std::fs::read_to_string(&manifest)
+                .with_context(|| format!("read manifest: {}", manifest.display()))?;
+            let parsed: deployment::FastenvManifest = serde_json::from_str(&raw)
+                .with_context(|| format!("parse FastenvManifest: {}", manifest.display()))?;
+
+            let supervisor = deployment::NoopSupervisor;
+            supervisor.apply(&parsed)?;
+            tracing::warn!(
+                command = "up",
+                manifest = %manifest.display(),
+                "deployment-tier 'up' is a scout no-op stub (issue #662); \
+                 no workloads were started"
+            );
+        }
     }
 
     Ok(())
@@ -318,6 +356,9 @@ mod tests {
             "unmount",
             "bench",
             "doctor",
+            // Deployment-tier entrypoint (scout stub, issue #663). The seam is
+            // present and parses args, but supervision is a no-op until #662.
+            "up",
         ];
         for name in &expected {
             assert!(
@@ -332,5 +373,19 @@ mod tests {
             "unexpected number of subcommands: {:?}",
             subcommands
         );
+    }
+
+    #[test]
+    fn up_subcommand_parses_manifest_arg() {
+        // The deployment-tier entrypoint (scout stub, issue #663) must parse
+        // its --manifest argument into the Up variant.
+        let cli = Cli::try_parse_from(["fastenv", "up", "--manifest", "/tmp/m.json"])
+            .expect("up should parse with --manifest");
+        match cli.command {
+            Commands::Up { manifest } => {
+                assert_eq!(manifest, PathBuf::from("/tmp/m.json"));
+            }
+            _ => panic!("expected Commands::Up variant"),
+        }
     }
 }

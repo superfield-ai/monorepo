@@ -412,3 +412,75 @@ latency, but the reuse policy must not blur trust domains.
 Which caches can be seeded host-side as read-only inputs, and which must remain
 project-local? The rule should be conservative: seed only data that does not
 create writable cross-tenant sharing.
+
+## 11. Deployment Tier (scout seam — issue #663)
+
+> Status: **SCOUT STUB.** This section documents a compile-safe, no-op seam
+> added by the dev-scout for issue #663. No long-lived workload supervision is
+> implemented yet. The real runtime is built by issue #662.
+
+### Motivation
+
+Sections 1–10 describe the **CI inner-loop / ephemeral-workspace** tier:
+short-lived agent containers forked from base snapshots (`build-base`, `fork`,
+`exec`, `discard`, …). There is a separate, additional tier: a **deployment
+runtime** that runs **long-lived application + Postgres workloads** from a
+manifest, so Superfield can dogfood fastenv as its own deployment container
+engine with no `kubectl` and no Docker daemon (the dogfooding goal tracked by
+issue #660 criterion 4).
+
+### The seam
+
+Two compile-safe stubs were added (no runtime behavior change):
+
+1. **`fastenv up --manifest <path>`** — the deployment-tier CLI entrypoint
+   skeleton (`crates/fastenv/src/main.rs`, `Commands::Up`). It reads and parses
+   a `FastenvManifest` JSON file and drives the supervisor seam, but the
+   supervisor is a no-op, so nothing is started. Routed through the new
+   `CommandBoundary::DeploymentTier` in `src/parity_check.rs` (distinct from the
+   `GuestRuntime` / `HostControlPlane` boundaries of the CI tier).
+
+2. **`deployment::ManifestSupervisor`** (`crates/fastenv/src/deployment.rs`) — a
+   trait with `apply` / `health` / `down`, plus a `NoopSupervisor` stub impl
+   that starts/stops nothing and always reports `HealthStatus::Stopped`. This is
+   the seam issue #662 fills in.
+
+### FastenvManifest consumer contract
+
+`deployment::FastenvManifest` (Rust) is the consumer-side mirror of the
+**engine-agnostic** `FastenvManifest` emitted by the planned translation layer
+`packages/control-core/fastenv-translate.ts` (which translates Kubernetes
+manifests / docker-compose into the engine-agnostic spec). **That TypeScript
+artifact is the source of truth for the wire shape**; the Rust types must be
+kept in sync field-for-field when #662 implements real deserialization. The
+scout's Rust sketch models only the fields the supervisor must read:
+
+| Concept (k8s / compose)            | fastenv deployment-tier equivalent                               |
+| ---------------------------------- | ---------------------------------------------------------------- |
+| Deployment / Pod / compose service | `Workload` (long-lived process under the manifest supervisor)    |
+| Service + cluster DNS (kube-proxy) | in-process service registry + host-local addressing (no CoreDNS) |
+| readiness / liveness probe         | `HealthProbe` consumed by the `doctor` readiness surface         |
+| StatefulSet (Postgres)             | `Workload` with a persistent data volume                         |
+
+### Integration points and risks (for issue #662)
+
+- **Postgres workload supervision.** Postgres is a stateful, long-lived workload
+  with a durable data volume and an ordered start/stop lifecycle. The CI tier's
+  fork/discard model assumes ephemeral upper layers; the deployment tier must
+  add persistent-volume semantics. RISK: data durability across restarts and
+  clean shutdown ordering (app before Postgres).
+- **Networking / service discovery.** Replacing k8s `Service` + cluster DNS
+  without kube-proxy/CoreDNS. The seam assumes host-local addressing + an
+  in-process registry. RISK: workloads that hard-code k8s DNS names
+  (`svc.namespace.svc.cluster.local`) need a translation/resolution shim.
+- **Health-probe surface for `doctor`.** Section 9 `doctor` today checks host
+  prerequisites. The deployment tier needs `doctor` (or a new readiness gate) to
+  report per-workload `HealthStatus` so `init -> deploy-env -> health gate` can
+  pass on the fastenv backend. RISK: scope creep of `doctor` vs. a dedicated
+  deployment health command.
+- **Backend selector wiring.** The deploy/init path must be able to target the
+  fastenv backend instead of k3s/kubectl (coexisting until parity). Out of scope
+  for the scout; owned by #662.
+
+See `crates/fastenv/src/deployment.rs` for the typed contract and stub, and
+`docs/technical-requirements.md` for the broader deployment requirements.
