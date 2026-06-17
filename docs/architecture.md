@@ -656,6 +656,47 @@ Source: `sf_db::KNOWN_PAGES` (`crates/sf-db/src/`) and `sf_db::fetch_project_pag
 
 ---
 
+## fastenv — Appliance Execution Environment
+
+fastenv is the execution environment the whole appliance is built on. PRD §9 makes it a hard appliance constraint: every Superfield workload — the Forge, validation jobs, and delivered app instances — runs in fastenv, with **no general-purpose container orchestration** (no `kubectl`, no Docker daemon, no k3s in the target state). This section is an overview of that seam; the canonical detailed source is [`crates/fastenv/docs/architecture.md`](../crates/fastenv/docs/architecture.md), and the implementation lives in `crates/fastenv` (25+ modules including `container_runtime`, `boundary`, `deployment`, `host_control_plane`, and `doctor`).
+
+### Workload isolation tiers
+
+fastenv is a host/control-plane plus project-VM system with three nested isolation tiers:
+
+1. **Host control plane** — the physical host runs the scheduler, Firecracker supervisor, secret broker, artifact validator, and policy monitors. It never executes project code directly. Named in code by `HostControlPlane` (current CLI routes through `LocalHostControlPlane`).
+2. **Project microVM** — each project gets one Firecracker microVM as the durable security boundary: one repo / tenant / project trust domain, with its own guest kernel, project-local caches, and network policy. A compromised project must not compromise the host or another project.
+3. **Agent container** — inside the VM, agent work runs in `crun` containers with overlayfs copy-on-write workspaces, private mount/PID namespaces, and restricted capabilities, so one agent cannot corrupt another's workspace or runtime state.
+
+The host/guest split is made explicit in code through the `boundary` module: `GuestRuntime` (workspace-engine primitives, `LocalGuestRuntime`) versus `HostControlPlane`. Trust boundaries, the filesystem layout, the policy model (network, secrets, eBPF, seccomp), and the security invariants are detailed in the canonical crate doc.
+
+### Two execution tiers: CI inner-loop and deployment
+
+fastenv runs workloads in two distinct tiers:
+
+- **CI inner-loop / ephemeral-workspace tier** — short-lived agent containers forked from base snapshots (`build-base`, `fork`, `exec`, `discard`), backed by the `ContainerRuntime` trait (`CrunBackend` / `YoukiBackend`).
+- **Deployment tier** (#662 / #665 / #661) — a long-lived **deployment runtime** that supervises application + Postgres workloads from a manifest, letting Superfield dogfood fastenv as its own deployment container engine with no `kubectl` and no Docker daemon (dogfooding goal tracked by issue #660).
+
+### Deployment-tier runtime
+
+The deployment-tier entrypoint is `fastenv up --manifest <path> [--health-gate] [--health-timeout-secs N]` (`crates/fastenv/src/main.rs`, `Commands::Up`), routed through `CommandBoundary::DeploymentTier`. It drives `deployment::ManifestSupervisor` (`crates/fastenv/src/deployment.rs`) — a trait with `apply` / `health` / `down`. The production impl, `FastenvSupervisor`:
+
+- starts workloads in dependency order (stateful workloads such as Postgres before stateless app workloads) and stops them in reverse order on `down`;
+- reports per-workload `HealthStatus` via each workload's `HealthProbe`, and with `--health-gate` blocks until every workload is `Healthy` or times out;
+- is idempotent on `apply` (already-running workloads skipped) and validates the manifest before starting anything.
+
+The host-process backend behind the supervisor is `deployment::WorkloadLauncher` (`HostProcessLauncher` in production). Launchers **must not** shell out to kubectl / k3d / docker — the deployment tier runs workloads on the fastenv backend directly. `NoopSupervisor` is retained only for dry-run / parity callers.
+
+### FastenvManifest consumer contract
+
+The deployment tier is driven by the **engine-agnostic `FastenvManifest`**. The source of truth for the wire shape is the TypeScript artifact emitted by `packages/control-core/fastenv-translate.ts` (which translates Kubernetes manifests / docker-compose into the engine-agnostic spec); the Rust `deployment::FastenvManifest` is the consumer-side mirror, kept in sync field-for-field with JSON round-trip / contract tests on both sides. The supervisor reads each `Workload`'s `name`, `image`, `command`, `env`, `stateful`, and optional `health` probe. A `Workload` with `stateful: true` is the StatefulSet equivalent (Postgres), an in-process service registry plus host-local addressing replaces kube-proxy + CoreDNS, and `HealthProbe` is consumed by the `doctor` readiness surface.
+
+### Backend selector and doctor
+
+The deploy path coexists with k3s until parity. `runDeployCommand` (`packages/core/commands/deploy.ts`) takes a `backend: "k3s" | "fastenv"` option (default `k3s`; CLI flag `superfield deploy --backend fastenv`). On the fastenv backend it translates `deploy/base/*.yaml` into a `FastenvManifest`, runs `fastenv doctor` for provision, then `fastenv up --manifest … --health-gate` for deploy + readiness — and the recorded command trace contains **only `fastenv` commands** (issue #660 criterion 4). `fastenv doctor` (the subcommand that shipped with Milestone 1, see below) is the host-prerequisite preflight: it verifies KVM, CPU virtualisation flags, the Firecracker and `crun` binaries, TUN/TAP, overlayfs, and kernel version before any VM lifecycle command is attempted.
+
+---
+
 ## Milestone 1 — Headless Gardening Appliance (completed)
 
 Milestone 1 delivered the headless binary: daemon auto-spawn, Postgres container lifecycle, seed document ingestion, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
