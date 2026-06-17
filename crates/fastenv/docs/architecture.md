@@ -413,11 +413,13 @@ Which caches can be seeded host-side as read-only inputs, and which must remain
 project-local? The rule should be conservative: seed only data that does not
 create writable cross-tenant sharing.
 
-## 11. Deployment Tier (scout seam — issue #663)
+## 11. Deployment Tier (issue #662)
 
-> Status: **SCOUT STUB.** This section documents a compile-safe, no-op seam
-> added by the dev-scout for issue #663. No long-lived workload supervision is
-> implemented yet. The real runtime is built by issue #662.
+> Status: **IMPLEMENTED.** The dev-scout no-op seam (#663) is now a real
+> supervisor (#662) that starts, health-checks, supervises, and stops
+> long-lived workloads from a `FastenvManifest` — with no `kubectl`, Docker
+> daemon, k3d, kube-proxy, or CoreDNS. `NoopSupervisor` is retained only for
+> dry-run/parity callers.
 
 ### Motivation
 
@@ -429,58 +431,73 @@ manifest, so Superfield can dogfood fastenv as its own deployment container
 engine with no `kubectl` and no Docker daemon (the dogfooding goal tracked by
 issue #660 criterion 4).
 
-### The seam
+### The runtime
 
-Two compile-safe stubs were added (no runtime behavior change):
-
-1. **`fastenv up --manifest <path>`** — the deployment-tier CLI entrypoint
-   skeleton (`crates/fastenv/src/main.rs`, `Commands::Up`). It reads and parses
-   a `FastenvManifest` JSON file and drives the supervisor seam, but the
-   supervisor is a no-op, so nothing is started. Routed through the new
-   `CommandBoundary::DeploymentTier` in `src/parity_check.rs` (distinct from the
-   `GuestRuntime` / `HostControlPlane` boundaries of the CI tier).
+1. **`fastenv up --manifest <path> [--health-gate] [--health-timeout-secs N]`** —
+   the deployment-tier CLI entrypoint (`crates/fastenv/src/main.rs`,
+   `Commands::Up`). It deserializes a `FastenvManifest` and drives
+   `FastenvSupervisor`. With `--health-gate` it blocks until every workload
+   reports `Healthy` (or times out) — the path the
+   `init -> deploy-env -> health gate` flow drives on the fastenv backend.
+   Routed through `CommandBoundary::DeploymentTier` in `src/parity_check.rs`
+   (distinct from the `GuestRuntime` / `HostControlPlane` boundaries).
 
 2. **`deployment::ManifestSupervisor`** (`crates/fastenv/src/deployment.rs`) — a
-   trait with `apply` / `health` / `down`, plus a `NoopSupervisor` stub impl
-   that starts/stops nothing and always reports `HealthStatus::Stopped`. This is
-   the seam issue #662 fills in.
+   trait with `apply` / `health` / `down`. The real impl is `FastenvSupervisor`;
+   `NoopSupervisor` is retained for dry-run/parity callers.
+
+3. **`deployment::WorkloadLauncher`** — the host-process backend behind the
+   supervisor. It keeps `FastenvSupervisor` host-agnostic and unit-testable:
+   `HostProcessLauncher` runs each workload as a host child process (default
+   production backend); tests use a recording launcher. **Launchers MUST NOT
+   shell out to kubectl/k3d/docker** — the deployment tier runs workloads on the
+   fastenv backend directly. Richer launchers can back the same trait with the
+   container runtime (§ Container Lifecycle) or the VM boundary.
+
+`FastenvSupervisor` starts workloads in dependency order (stateful workloads —
+Postgres — before stateless app workloads), reports per-workload `HealthStatus`
+via each workload's `HealthProbe`, and on `down` stops in reverse order (app
+before Postgres). `apply` is idempotent (already-running workloads are skipped)
+and validates the manifest (non-empty name/image, no duplicate names) before
+starting anything.
 
 ### FastenvManifest consumer contract
 
 `deployment::FastenvManifest` (Rust) is the consumer-side mirror of the
-**engine-agnostic** `FastenvManifest` emitted by the planned translation layer
+**engine-agnostic** `FastenvManifest` emitted by
 `packages/control-core/fastenv-translate.ts` (which translates Kubernetes
 manifests / docker-compose into the engine-agnostic spec). **That TypeScript
-artifact is the source of truth for the wire shape**; the Rust types must be
-kept in sync field-for-field when #662 implements real deserialization. The
-scout's Rust sketch models only the fields the supervisor must read:
+artifact is the source of truth for the wire shape**; the Rust types are kept in
+sync field-for-field, and both sides have JSON round-trip / contract tests. The
+`Workload` fields the supervisor reads: `name`, `image`, `command`, `env`,
+`stateful`, and an optional `health` probe.
 
 | Concept (k8s / compose)            | fastenv deployment-tier equivalent                               |
 | ---------------------------------- | ---------------------------------------------------------------- |
 | Deployment / Pod / compose service | `Workload` (long-lived process under the manifest supervisor)    |
 | Service + cluster DNS (kube-proxy) | in-process service registry + host-local addressing (no CoreDNS) |
 | readiness / liveness probe         | `HealthProbe` consumed by the `doctor` readiness surface         |
-| StatefulSet (Postgres)             | `Workload` with a persistent data volume                         |
+| StatefulSet (Postgres)             | `Workload` with `stateful: true` (start-before / stop-after app) |
 
-### Integration points and risks (for issue #662)
+### Backend selector wiring (TypeScript)
 
-- **Postgres workload supervision.** Postgres is a stateful, long-lived workload
-  with a durable data volume and an ordered start/stop lifecycle. The CI tier's
-  fork/discard model assumes ephemeral upper layers; the deployment tier must
-  add persistent-volume semantics. RISK: data durability across restarts and
-  clean shutdown ordering (app before Postgres).
-- **Networking / service discovery.** Replacing k8s `Service` + cluster DNS
-  without kube-proxy/CoreDNS. The seam assumes host-local addressing + an
-  in-process registry. RISK: workloads that hard-code k8s DNS names
-  (`svc.namespace.svc.cluster.local`) need a translation/resolution shim.
-- **Health-probe surface for `doctor`.** Section 9 `doctor` today checks host
-  prerequisites. The deployment tier needs `doctor` (or a new readiness gate) to
-  report per-workload `HealthStatus` so `init -> deploy-env -> health gate` can
-  pass on the fastenv backend. RISK: scope creep of `doctor` vs. a dedicated
-  deployment health command.
-- **Backend selector wiring.** The deploy/init path must be able to target the
-  fastenv backend instead of k3s/kubectl (coexisting until parity). Out of scope
-  for the scout; owned by #662.
+The deploy path coexists with k3s until parity. `runDeployCommand`
+(`packages/core/commands/deploy.ts`) takes a `backend: "k3s" | "fastenv"`
+option (default `k3s`; CLI flag `superfield deploy --backend fastenv`). On the
+fastenv backend it: translates `deploy/base/*.yaml` into a `FastenvManifest`,
+runs `fastenv doctor` for provision, and `fastenv up --manifest … --health-gate`
+for deploy + readiness. The recorded command trace contains **only `fastenv`
+commands** — no kubectl/docker/k3d (issue #660 criterion 4), covered by
+`packages/core/tests/integration/deploy-fastenv-backend.integration.test.ts`.
 
-See `crates/fastenv/src/deployment.rs` for the typed contract and stub, and
+### Open questions / future work
+
+- **Persistent volumes.** `HostProcessLauncher` runs the workload's `command`
+  directly; durable Postgres data volumes and clean-shutdown durability across
+  restarts are owned by a container-runtime-backed launcher (follow-up).
+- **Service discovery.** Host-local addressing + an in-process registry replaces
+  cluster DNS; workloads that hard-code `*.svc.cluster.local` names still need a
+  resolution shim (follow-up).
+
+See `crates/fastenv/src/deployment.rs` for the supervisor + launcher and
 `docs/technical-requirements.md` for the broader deployment requirements.

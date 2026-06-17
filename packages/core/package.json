@@ -8,6 +8,7 @@
   },
   "dependencies": {
     "@scure/bip39": "1.4.0",
+    "@superfield/control-core": "workspace:*",
     "@superfield/db": "workspace:*",
     "isomorphic-git": "^1.37.5",
     "libsodium-wrappers": "^0.8.4"

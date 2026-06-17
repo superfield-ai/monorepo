@@ -1,8 +1,17 @@
 import { spawn } from "node:child_process";
-import { copyFileSync, existsSync, readFileSync, rmSync } from "node:fs";
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { homedir } from "node:os";
 import path from "node:path";
 import { createInterface } from "node:readline";
+import { translateKubernetesManifest } from "@superfield/control-core";
 import {
   makeDefaultAuthDeps,
   makeDefaultHttpDeps,
@@ -60,11 +69,24 @@ export interface DeployTargetModel {
   phases: DeployPhaseModel[];
 }
 
+/**
+ * Deployment backend. `k3s` is the existing k3d/kubectl/docker path. `fastenv`
+ * runs the deployment tier on the fastenv container engine — translating the
+ * k8s manifests into a FastenvManifest and driving `fastenv up` with no
+ * kubectl, Docker daemon, or k3d. Selecting `fastenv` is what unblocks #660
+ * criterion 4 (deploy Superfield with no kubectl/docker in the command trace).
+ */
+export type DeployBackend = "k3s" | "fastenv";
+
+export const DEFAULT_DEPLOY_BACKEND: DeployBackend = "k3s";
+
 export interface DeployCommandOpts {
   target?: string;
   provisionOnly?: boolean;
   demoRoot?: string;
   env?: NodeJS.ProcessEnv;
+  /** Which deployment backend to drive. Defaults to "k3s". */
+  backend?: DeployBackend;
 }
 
 export interface DeployProcessStep {
@@ -89,6 +111,10 @@ export interface DeployCommandDeps {
   sleep?: (ms: number) => Promise<void>;
   promptDeleteDataDir?: (dataPath: string) => Promise<boolean>;
   deleteDataDir?: (dataPath: string) => void;
+  /** List the files in a directory (used by the fastenv backend). */
+  readDir?: (dirPath: string) => string[];
+  /** Persist the translated FastenvManifest before `fastenv up` reads it. */
+  writeManifest?: (manifestPath: string, contents: string) => void;
 }
 
 export class DeployTargetNotImplementedError extends UserInputError {
@@ -176,6 +202,9 @@ interface DemoContext {
   readFile: (filePath: string) => string;
   promptDeleteDataDir: (dataPath: string) => Promise<boolean>;
   deleteDataDir: (dataPath: string) => void;
+  backend: DeployBackend;
+  readDir: (dirPath: string) => string[];
+  writeManifest: (manifestPath: string, contents: string) => void;
 }
 
 export function parseDeployPhase(
@@ -226,11 +255,19 @@ export async function runDeployCommand(
 
   for (const phase of selectDeployPhases(opts.provisionOnly)) {
     if (phase === "provision") {
-      await runDemoProvision(context);
+      if (context.backend === "fastenv") {
+        await runFastenvProvision(context);
+      } else {
+        await runDemoProvision(context);
+      }
       continue;
     }
     if (phase === "deploy") {
-      await runDemoDeploy(context);
+      if (context.backend === "fastenv") {
+        await runFastenvDeploy(context);
+      } else {
+        await runDemoDeploy(context);
+      }
       continue;
     }
     throw new DeployPhaseNotImplementedError(target.name, phase);
@@ -265,6 +302,14 @@ function buildDemoContext(
     deleteDataDir:
       deps.deleteDataDir ??
       ((p) => rmSync(p, { recursive: true, force: true })),
+    backend: opts.backend ?? DEFAULT_DEPLOY_BACKEND,
+    readDir: deps.readDir ?? ((d) => readdirSync(d)),
+    writeManifest:
+      deps.writeManifest ??
+      ((manifestPath, contents) => {
+        mkdirSync(path.dirname(manifestPath), { recursive: true });
+        writeFileSync(manifestPath, contents, "utf8");
+      }),
   };
 }
 
@@ -480,6 +525,108 @@ async function runPostgresWait(context: DemoContext): Promise<void> {
   } catch {
     await executeStep(context, fallbackStep);
   }
+}
+
+// ---------------------------------------------------------------------------
+// fastenv backend — runs the deployment tier on the fastenv container engine.
+//
+// Emits ONLY `fastenv` commands: no docker, k3d, or kubectl. This is the path
+// that unblocks #660 criterion 4 (deploy Superfield with no kubectl/docker in
+// the recorded command trace).
+// ---------------------------------------------------------------------------
+
+const FASTENV_HEALTH_TIMEOUT_SECS = 120;
+
+/** Absolute path to the FastenvManifest the fastenv backend writes + applies. */
+export function fastenvManifestPath(demoRoot: string): string {
+  return path.join(demoRoot, "deploy", "fastenv", "manifest.json");
+}
+
+/**
+ * Translate every k8s manifest under deploy/base into a single FastenvManifest.
+ * Reads YAML text directly (no kubectl) and concatenates the documents so the
+ * control-core translator sees all workloads.
+ */
+export function buildFastenvManifest(context: DemoContext): string {
+  const baseDir = path.join(context.demoRoot, "deploy", "base");
+  let files: string[] = [];
+  try {
+    files = context.readDir(baseDir).filter((f) => f.endsWith(".yaml"));
+  } catch {
+    files = [];
+  }
+  files.sort();
+
+  const documents = files
+    .map((f) => context.readFile(path.join(baseDir, f)))
+    .filter((doc) => doc.trim().length > 0);
+
+  const manifest = translateKubernetesManifest(documents.join("\n---\n"));
+  return JSON.stringify(manifest, null, 2);
+}
+
+async function runFastenvProvision(context: DemoContext): Promise<void> {
+  // The fastenv backend has no cluster to provision: it only needs the host
+  // container engine to be healthy. `fastenv doctor` is the readiness check
+  // and replaces docker/k3d/kubectl availability checks entirely.
+  await executeStep(context, {
+    phase: "provision",
+    label: "fastenv runtime availability",
+    command: "fastenv",
+    args: ["doctor"],
+    cwd: context.demoRoot,
+    env: context.env,
+    installHint:
+      "build the fastenv binary from crates/fastenv (cargo build -p fastenv)",
+  });
+}
+
+async function runFastenvDeploy(context: DemoContext): Promise<void> {
+  await ensureLocalSecrets(context);
+  await handlePostgresVolume(context);
+
+  // Translate k8s manifests → FastenvManifest and persist it for `fastenv up`.
+  const manifestPath = fastenvManifestPath(context.demoRoot);
+  await runPhaseAction(
+    context,
+    "deploy",
+    "fastenv manifest translation",
+    () => {
+      context.writeManifest(manifestPath, buildFastenvManifest(context));
+    },
+  );
+
+  // Build images on the host (no Docker daemon / registry push).
+  await executeStep(context, {
+    phase: "deploy",
+    label: "image build",
+    command: "fastenv",
+    args: ["build-base", "deploy/base", "--name", "superfield"],
+    cwd: context.demoRoot,
+    env: context.env,
+  });
+
+  // Bring up the workloads and block until the deployment-tier health gate
+  // reports every workload Healthy (init -> deploy-env -> health gate).
+  await executeStep(context, {
+    phase: "deploy",
+    label: "workload up + health gate",
+    command: "fastenv",
+    args: [
+      "up",
+      "--manifest",
+      manifestPath,
+      "--health-gate",
+      "--health-timeout-secs",
+      String(FASTENV_HEALTH_TIMEOUT_SECS),
+    ],
+    cwd: context.demoRoot,
+    env: context.env,
+  });
+
+  await runPhaseAction(context, "deploy", "ingress probe", () =>
+    context.probeIngress(getDemoUrl(context.env)),
+  );
 }
 
 async function executeStep(
