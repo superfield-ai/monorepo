@@ -162,20 +162,30 @@ enum Commands {
     },
     /// Deployment-tier entrypoint: bring up long-lived workloads from a manifest.
     ///
-    /// SCOUT STUB (issue #663): this subcommand parses its arguments and drives
-    /// the deployment-tier supervisor SEAM, but the supervisor is a NO-OP in the
-    /// scout build — it starts NO workloads and changes NO runtime behavior. The
-    /// real long-lived app + Postgres supervision is built in issue #662.
+    /// Consumes a `FastenvManifest` (the engine-agnostic spec emitted by
+    /// packages/control-core/fastenv-translate.ts) and supervises the described
+    /// workloads as long-lived host processes via the deployment-tier
+    /// `FastenvSupervisor` — no kubectl, Docker daemon, kube-proxy, or CoreDNS.
+    /// Stateful workloads (Postgres) start before, and stop after, the app.
     ///
-    /// Consumes a `FastenvManifest` (the engine-agnostic spec emitted by the
-    /// planned packages/control-core/fastenv-translate.ts translation layer).
+    /// With `--health-gate`, the command starts the workloads, waits until every
+    /// workload reports `Healthy` (or times out), then leaves them supervised —
+    /// this is the path the `init -> deploy-env -> health gate` flow drives on
+    /// the fastenv backend (issue #660 criterion 4). Without it, the command
+    /// applies the manifest and returns.
     ///
-    /// Canonical docs: crates/fastenv/docs/architecture.md,
+    /// Canonical docs: crates/fastenv/docs/architecture.md §11,
     /// docs/technical-requirements.md.
     Up {
         /// Path to the FastenvManifest JSON file describing the workloads.
         #[arg(long)]
         manifest: PathBuf,
+        /// After starting workloads, block until each one reports Healthy.
+        #[arg(long, default_value_t = false)]
+        health_gate: bool,
+        /// Maximum seconds to wait for the health gate before failing.
+        #[arg(long, default_value_t = 120)]
+        health_timeout_secs: u64,
     },
 }
 
@@ -302,11 +312,14 @@ fn main() -> Result<()> {
             };
             std::process::exit(exit_code);
         }
-        Commands::Up { manifest } => {
-            // SCOUT STUB (issue #663): drive the deployment-tier seam without
-            // changing runtime behavior. The NoopSupervisor starts nothing.
-            // Issue #662 replaces NoopSupervisor with a real supervisor and
-            // wires real manifest deserialization here.
+        Commands::Up {
+            manifest,
+            health_gate,
+            health_timeout_secs,
+        } => {
+            // Deployment-tier 'up' (issue #662): parse the FastenvManifest and
+            // drive the REAL supervisor, which starts/health-checks/stops
+            // long-lived workloads on the fastenv backend — no kubectl/docker.
             use deployment::ManifestSupervisor;
 
             let raw = std::fs::read_to_string(&manifest)
@@ -314,14 +327,29 @@ fn main() -> Result<()> {
             let parsed: deployment::FastenvManifest = serde_json::from_str(&raw)
                 .with_context(|| format!("parse FastenvManifest: {}", manifest.display()))?;
 
-            let supervisor = deployment::NoopSupervisor;
+            let supervisor =
+                deployment::FastenvSupervisor::new(deployment::HostProcessLauncher::new());
             supervisor.apply(&parsed)?;
-            tracing::warn!(
+            tracing::info!(
                 command = "up",
                 manifest = %manifest.display(),
-                "deployment-tier 'up' is a scout no-op stub (issue #662); \
-                 no workloads were started"
+                workloads = parsed.workloads.len(),
+                "deployment-tier 'up' started workloads"
             );
+
+            if health_gate {
+                deployment::wait_until_healthy(
+                    &supervisor,
+                    &parsed,
+                    std::time::Duration::from_secs(health_timeout_secs),
+                )
+                .context("health gate")?;
+                tracing::info!(
+                    command = "up",
+                    manifest = %manifest.display(),
+                    "deployment-tier health gate passed; all workloads Healthy"
+                );
+            }
         }
     }
 
@@ -377,13 +405,44 @@ mod tests {
 
     #[test]
     fn up_subcommand_parses_manifest_arg() {
-        // The deployment-tier entrypoint (scout stub, issue #663) must parse
-        // its --manifest argument into the Up variant.
+        // The deployment-tier entrypoint must parse its --manifest argument
+        // into the Up variant, with the health-gate flags defaulting off.
         let cli = Cli::try_parse_from(["fastenv", "up", "--manifest", "/tmp/m.json"])
             .expect("up should parse with --manifest");
         match cli.command {
-            Commands::Up { manifest } => {
+            Commands::Up {
+                manifest,
+                health_gate,
+                health_timeout_secs,
+            } => {
                 assert_eq!(manifest, PathBuf::from("/tmp/m.json"));
+                assert!(!health_gate);
+                assert_eq!(health_timeout_secs, 120);
+            }
+            _ => panic!("expected Commands::Up variant"),
+        }
+    }
+
+    #[test]
+    fn up_subcommand_parses_health_gate_flags() {
+        let cli = Cli::try_parse_from([
+            "fastenv",
+            "up",
+            "--manifest",
+            "/tmp/m.json",
+            "--health-gate",
+            "--health-timeout-secs",
+            "30",
+        ])
+        .expect("up should parse with health-gate flags");
+        match cli.command {
+            Commands::Up {
+                health_gate,
+                health_timeout_secs,
+                ..
+            } => {
+                assert!(health_gate);
+                assert_eq!(health_timeout_secs, 30);
             }
             _ => panic!("expected Commands::Up variant"),
         }
