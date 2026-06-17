@@ -378,12 +378,11 @@ When the CLI receives any subcommand **except** `status`, `logs`, and `page`, it
 
 After the daemon process starts, it runs the full health gate before signalling the CLI:
 
-1. Call `PostgresProvisioner::start` — start the Postgres container and wait for `pg_isready` (max 60 s).
-2. Run the migration runner against the now-live instance.
-3. Probe schemas (`CREATE SCHEMA IF NOT EXISTS …` idempotently).
-4. Write `daemon.json` atomically (write to `.json.tmp`, then `rename`).
-5. Bind `superfield.sock`.
-6. Send `StartupResult` over the startup-notify socket — a 4-byte little-endian length followed by a bincode-encoded payload:
+1. Call `PostgresProvisioner::start` — provision the appliance-local Postgres instance and wait for `pg_isready` (max 60 s). With no externally-supplied `DATABASE_URL` this is `LocalPostgresProvisioner` (`initdb` into `~/.superfield/daemon/postgres`, `pg_ctl start`, `pg_isready` poll); when `DATABASE_URL` is set the daemon honours it and uses the no-op `TestProvisioner` (no local provisioning).
+2. Run the migration runner (`sf_db::run_migrations`) against the now-live instance — applies every component schema in `sf-db → sf-auth → nexum → sharp` order, idempotently, tracked in `schema_migrations`.
+3. Write `daemon.json` atomically (write to `.json.tmp`, then `rename`).
+4. Bind `superfield.sock`.
+5. Send `StartupResult` over the startup-notify socket — a 4-byte little-endian length followed by a bincode-encoded payload:
 
 | Variant                    | Meaning                                                                         |
 | -------------------------- | ------------------------------------------------------------------------------- |
@@ -428,16 +427,17 @@ Setting `SF_NO_DAEMON=1` suppresses `daemonize()`. The CLI still re-executes the
 
 ### Seam: PostgresProvisioner
 
-`crates/sf-db/src/provisioner.rs` defines the [`PostgresProvisioner`] trait — the interface through which the daemon owns the Postgres container lifecycle without coupling the `sf-db` crate to Docker or any specific container runtime.
+`crates/sf-db/src/provisioner.rs` defines the [`PostgresProvisioner`] trait — the interface through which the daemon owns the local Postgres lifecycle without coupling the `sf-db` crate to any specific runtime.
 
-| Method  | Contract                                                                                                           |
-| ------- | ------------------------------------------------------------------------------------------------------------------ |
-| `start` | Ensure the Postgres container is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running |
-| `stop`  | Stop the container cleanly after the gardening loop has drained; idempotent — no-op if already stopped             |
+| Method         | Contract                                                                                                          |
+| -------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `start`        | Ensure Postgres is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running              |
+| `stop`         | Stop the instance cleanly after the gardening loop has drained; idempotent — no-op if already stopped             |
+| `database_url` | The `DATABASE_URL` the provisioner stood up, or `None` (then the daemon falls back to the environment)            |
 
-The real implementation checks for a running container via the Docker socket, starts the container with a durable local volume if absent, and polls `pg_isready` until the health gate passes. Tests and crates that do not own the container lifecycle use [`TestProvisioner`] — a no-op that returns `Ok(())` immediately.
+The real implementation, `LocalPostgresProvisioner`, stands up an appliance-local Postgres with no Docker, no root, and no network database (PRD Constraint §9 self-sufficiency): it runs `initdb` into a durable data directory (`~/.superfield/daemon/postgres`) if absent, starts the instance with `pg_ctl start` bound to `127.0.0.1` with the Unix socket directory pointed at the data dir, polls `pg_isready` until the health gate passes, and ensures the application database exists. It reports the loopback URL via `database_url`. Tests and crates that do not own provisioning — and the path where `DATABASE_URL` is supplied externally — use [`TestProvisioner`], a no-op that returns `Ok(())` and `database_url() == None`.
 
-The daemon calls `start` during the health gate (before sending `StartupResult::Ok`) and `stop` after `LoopHandle::drain()` completes on shutdown.
+The daemon calls `start` during the health gate (before sending `StartupResult::Ok`) and `stop` after `LoopHandle::drain()` completes on shutdown. The boot orchestration (`provision → wait healthy → migrate → serve`) lives in `crates/superfield/src/boot.rs::health_gate`, which surfaces provisioning and migration failures as distinct `BootError` variants so a failure at either gate aborts boot non-zero without binding the HTTP server.
 
 ### Seam: LoopHandle
 

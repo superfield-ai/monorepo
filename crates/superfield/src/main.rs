@@ -44,12 +44,6 @@ use std::process;
 
 use sf_cli::daemon as sf_daemon;
 
-/// Daemon boot-sequence seam map (dev-scout #676).
-///
-/// Stub-only, not on the running path. Documents and compile-checks the
-/// provision → migrate → serve → loop-start → supervisor ordering and the
-/// exact integration points #670 and #671 must graduate. See [`boot`] for the
-/// written-down contract and the boot/shutdown smoke tests.
 mod boot;
 
 const USAGE: &str = "\
@@ -377,19 +371,25 @@ fn run_deploy(args: &[String]) {
 
 /// Run the binary in daemon mode.
 ///
-/// Called when `SF_START_DAEMON=1` is set in the environment.  The sequence:
+/// Called when `SF_START_DAEMON=1` is set in the environment.  The sequence
+/// implements the issue #670 health-gated boot — `provision -> wait healthy ->
+/// migrate -> serve` — so the appliance stands up its own company brain on
+/// first run and never serves against an empty or unmigrated database:
 ///
 /// 1. Acquire the daemon state directory.
-/// 2. Start the Postgres provisioner (via [`sf_db::provisioner::TestProvisioner`]
-///    until the real Docker provisioner is implemented by #670).
-/// 3. Run migrations (stub: not yet wired — the
-///    [`sf_db::migration_runner::MigrationRunner`] seam call site, graduated by
-///    #670).
-/// 4. Start the HTTP serving layer.
-/// 5. Write `daemon.json`.
-/// 6. Send `StartupResult::Ok` over the startup-notify socket.
+/// 2. **Provision + health gate + migrate** ([`boot::health_gate`]):
+///    - When `DATABASE_URL` is set externally the appliance honours it and uses
+///      a no-op [`sf_db::TestProvisioner`] (no local provisioning).
+///    - Otherwise it provisions a local Postgres instance via
+///      [`sf_db::LocalPostgresProvisioner`], waits for `pg_isready`, and migrates.
+///    - A provisioning failure and a migration failure abort boot with
+///      *distinct*, actionable errors; the HTTP server never binds.
+/// 3. Write `daemon.json`.
+/// 4. Send `StartupResult::Ok` over the startup-notify socket.
+/// 5. Start the HTTP serving layer (only now is the brain ready for traffic).
 ///
-/// If any step fails, send `StartupResult::Err` and exit 1.
+/// If any health-gate step fails, send `StartupResult::Err` and exit non-zero
+/// without binding the server.
 ///
 /// `SF_NO_DAEMON=1` skips the daemonize() call (runs in-process / foreground).
 ///
@@ -406,7 +406,7 @@ async fn run_as_daemon() {
         daemon_log_path, daemon_state_dir, remove_daemon_json, send_startup_result, socket_path,
         write_daemon_json, DaemonJson, StartupResult,
     };
-    use sf_db::provisioner::{PostgresProvisioner, TestProvisioner};
+    use sf_db::{LocalPostgresProvisioner, PostgresProvisioner, TestProvisioner};
     use std::time::{SystemTime, UNIX_EPOCH};
 
     let state_dir = match daemon_state_dir() {
@@ -439,29 +439,42 @@ async fn run_as_daemon() {
         }};
     }
 
-    // Start Postgres provisioner.
-    //
-    // The real Docker-backed provisioner is implemented in this issue
-    // (sf_db::provisioner::DockerProvisioner — wired here once available).
-    // For now use the TestProvisioner no-op so the daemon can start without
-    // Docker in CI.
-    let provisioner = TestProvisioner;
-    if let Err(e) = provisioner.start().await {
-        fail!(format!("postgres provisioner error: {}", e));
-    }
+    // Decide provisioner from DATABASE_URL: an externally-supplied URL skips
+    // local provisioning (use the no-op TestProvisioner); otherwise stand up a
+    // local Postgres instance under the daemon state dir.
+    let external_url = std::env::var("DATABASE_URL").ok().filter(|u| !u.is_empty());
+    let data_dir = state_dir.join("postgres");
+    let local_provisioner;
+    let test_provisioner;
+    let provisioner: &dyn PostgresProvisioner = if external_url.is_some() {
+        test_provisioner = TestProvisioner;
+        &test_provisioner
+    } else {
+        local_provisioner = LocalPostgresProvisioner::new(&data_dir);
+        &local_provisioner
+    };
 
-    // ② Migration-runner seam call site (dev-scout #676 → graduated by #670).
-    //
-    // After the Postgres health gate passes and before the HTTP server binds,
-    // #670 runs `sf_db::migration_runner::MigrationRunner::run(&pool)` here so
-    // the schema is applied against the live instance. A migration failure must
-    // `fail!(...)` and exit without serving. The pre-#670 path uses
-    // `NoopMigrationRunner`, which is a no-op (no behaviour change today).
-    //   let runner = NoopMigrationRunner;
-    //   if let Err(e) = runner.run(&pool).await { fail!(...); }
-    // See `crate::boot` for the full ordering map.
+    // Run the health gate: provision -> wait healthy -> migrate. Provisioning
+    // and migration failures are surfaced as distinct, actionable errors and
+    // the server is NOT bound on any failure.
+    let repo_root = sf_db::repo_root();
+    let ready = match boot::health_gate(provisioner, external_url, &repo_root).await {
+        Ok(r) => r,
+        Err(e @ boot::BootError::Provision(_)) => {
+            // Best-effort cleanup of a partially-started instance.
+            let _ = provisioner.stop().await;
+            fail!(format!("postgres provisioner error: {e}"));
+        }
+        Err(e @ boot::BootError::Migrate(_)) => {
+            let _ = provisioner.stop().await;
+            fail!(format!("schema migration error: {e}"));
+        }
+        Err(e) => {
+            let _ = provisioner.stop().await;
+            fail!(format!("daemon boot error: {e}"));
+        }
+    };
 
-    // Build the database pool (requires DATABASE_URL).
     let bind_addr: std::net::SocketAddr = "0.0.0.0:7000".parse().expect("static addr");
     let sock = socket_path(&state_dir).to_string_lossy().into_owned();
 
@@ -477,10 +490,11 @@ async fn run_as_daemon() {
         socket_path: sock.clone(),
     };
     if let Err(e) = write_daemon_json(&state_dir, &info) {
+        let _ = provisioner.stop().await;
         fail!(format!("cannot write daemon.json: {}", e));
     }
 
-    // Send startup Ok — health gate passed.
+    // Send startup Ok — health gate passed (provisioned, healthy, migrated).
     if let Err(e) = send_startup_result(&StartupResult::Ok {
         version: info.version.clone(),
         addr: sock,
@@ -490,28 +504,25 @@ async fn run_as_daemon() {
         eprintln!("superfield daemon: startup notify skipped: {}", e);
     }
 
-    // Start the HTTP serving layer.
+    eprintln!(
+        "superfield daemon: brain ready on {} (serving)",
+        ready.database_url
+    );
+
+    // Start the HTTP serving layer against the migrated pool.
     //
     // In SF_NO_DAEMON=1 mode this runs in the foreground.  In normal daemon
     // mode the process has already been detached by the parent's spawn call.
-    if let Ok(cfg) = sf_db::DbConfig::from_env() {
-        if let Ok(pool) = sf_db::connect(&cfg).await {
-            let assets_dir = std::env::var("CONTROL_ASSETS_DIR")
-                .ok()
-                .map(std::path::PathBuf::from);
-            let serve_cfg = sf_serve::ServeConfig {
-                bind_addr,
-                session_ttl_secs: None,
-                assets_dir,
-            };
-            if let Err(e) = sf_serve::serve(pool, serve_cfg).await {
-                eprintln!("superfield daemon: serve error: {}", e);
-            }
-        } else {
-            eprintln!("superfield daemon: database not available; serving without pool");
-        }
-    } else {
-        eprintln!("superfield daemon: DATABASE_URL not set; serving without pool");
+    let assets_dir = std::env::var("CONTROL_ASSETS_DIR")
+        .ok()
+        .map(std::path::PathBuf::from);
+    let serve_cfg = sf_serve::ServeConfig {
+        bind_addr,
+        session_ttl_secs: None,
+        assets_dir,
+    };
+    if let Err(e) = sf_serve::serve(ready.pool, serve_cfg).await {
+        eprintln!("superfield daemon: serve error: {}", e);
     }
 
     // Clean up.

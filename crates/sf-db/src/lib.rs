@@ -19,11 +19,11 @@
 //! - [`provisioner::PostgresProvisioner`]: seam interface for starting and
 //!   stopping the local Postgres container (daemon lifecycle — issue #489).
 //!   No-op stub: [`provisioner::TestProvisioner`].
-//! - [`migration_runner::MigrationRunner`]: seam interface for applying all
-//!   component migrations at health-gated boot — called after the Postgres
-//!   health gate passes and before the HTTP server binds (issue #670). No-op
-//!   stub: [`migration_runner::NoopMigrationRunner`]. Mapped by the dev-scout
-//!   boot-seam pass (issue #676).
+//! - [`migrate::run_migrations`]: in-process migration runner that applies all
+//!   component schemas in dependency order against the live instance — called
+//!   after the Postgres health gate passes and before the HTTP server binds
+//!   (issue #670). Mirrors `packages/db/migrator.ts` so both runners are
+//!   interchangeable against the same database.
 //! - [`page_revision::insert_page_revision`]: write entrypoint for the
 //!   gardening loop page-revision path (issues #490, #491). Inserts a row
 //!   into `nexum.page_revisions` with the rendered content and provenance tag.
@@ -40,7 +40,7 @@
 
 pub mod backup;
 pub mod config;
-pub mod migration_runner;
+pub mod migrate;
 pub mod page_query;
 pub mod page_revision;
 pub mod pool;
@@ -52,7 +52,9 @@ pub use backup::{
     NoopSubstrateBackup, PgBackup, SubstrateBackup,
 };
 pub use config::DbConfig;
-pub use migration_runner::{MigrationError, MigrationRunner, NoopMigrationRunner};
+pub use migrate::{
+    apply_migrations, discover_migrations, repo_root, run_migrations, Migration, MigrationError,
+};
 pub use page_query::{fetch_page_content, PageQueryError, KNOWN_PAGES};
 pub use page_revision::{insert_page_revision, PageRevisionError};
 pub use pool::{acquire_with_workspace_id, acquire_workspace, connect};
@@ -61,4 +63,7 @@ pub use project_graph::{
     insert_required_test, link_pr_to_issue, traverse_project_graph, ProjectGraphError, ProjectNode,
     PROJECT_GRAPH_DOC_TITLE,
 };
-pub use provisioner::{PostgresProvisioner, ProvisionerError, TestProvisioner};
+pub use provisioner::{
+    FailingProvisioner, LocalPostgresProvisioner, PostgresProvisioner, ProvisionerError,
+    TestProvisioner,
+};
