@@ -41,6 +41,15 @@ export {
 export { deployLocalCluster, teardownLocalCluster } from "./local-deploy";
 export type { LocalDeployOpts } from "./local-deploy";
 export {
+  translateKubernetesManifest,
+  translateDockerCompose,
+} from "./fastenv-translate";
+export type {
+  FastenvManifest,
+  FastenvWorkload,
+  FastenvHealthCheck,
+} from "./fastenv-translate";
+export {
   buildStudioBranchName,
   parseStudioBranchName,
   isValidSessionId,

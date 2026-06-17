@@ -105,6 +105,7 @@ export type {
   DeployCommandOpts,
   DeployProcessStep,
   DeployProcessRunner,
+  DeployBackend,
   GcpDeployCommandOpts,
   Logger as GcpLogger,
 } from "./commands/deploy.ts";

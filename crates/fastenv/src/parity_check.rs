@@ -132,7 +132,7 @@ pub fn command_parity_table() -> Vec<CommandParityEntry> {
             command: "up",
             boundary: CommandBoundary::DeploymentTier,
             deprecated: false,
-            note: "Scout stub (issue #663): deployment-tier entrypoint that drives deployment::ManifestSupervisor from a FastenvManifest. NO-OP until issue #662 implements real long-lived app+Postgres supervision.",
+            note: "Deployment-tier entrypoint (issue #662): drives deployment::FastenvSupervisor from a FastenvManifest, starting/health-checking/stopping long-lived app+Postgres workloads without kubectl/docker.",
         },
     ]
 }

@@ -11,7 +11,7 @@ import {
   teardownLocalCluster,
 } from "@superfield/control-core";
 
-const USAGE = `Usage: superfield deploy [--path <dir>] [--provision] [target]
+const USAGE = `Usage: superfield deploy [--path <dir>] [--backend k3s|fastenv] [--provision] [target]
        superfield deploy gcp [--project <id>] [--region <r>] [--zone <z>] [--provision] [--image-tag <tag>]
        superfield deploy gcp --login [--client-id <id>]
        superfield deploy gcp --logout`;
@@ -20,6 +20,7 @@ export interface ParsedDeployArgs {
   provisionOnly: boolean;
   path?: string;
   target?: string;
+  backend?: "k3s" | "fastenv";
   // GCP flags
   login?: boolean;
   logout?: boolean;
@@ -35,6 +36,7 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
   let provisionOnly = false;
   let path: string | undefined;
   let target: string | undefined;
+  let backend: "k3s" | "fastenv" | undefined;
   let login: boolean | undefined;
   let logout: boolean | undefined;
   let gcpProject: string | undefined;
@@ -53,6 +55,14 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
     }
     if (arg === "--provision") {
       provisionOnly = true;
+    } else if (arg === "--backend") {
+      const value = args[++i];
+      if (value === "k3s" || value === "fastenv") backend = value;
+      else unknown.push(`--backend ${value ?? ""}`.trim());
+    } else if (arg.startsWith("--backend=")) {
+      const value = arg.slice("--backend=".length);
+      if (value === "k3s" || value === "fastenv") backend = value;
+      else unknown.push(arg);
     } else if (arg === "--path") {
       path = args[++i];
     } else if (arg.startsWith("--path=")) {
@@ -95,6 +105,7 @@ export function parseDeployArgs(args: string[]): ParsedDeployArgs {
     provisionOnly,
     path,
     target,
+    backend,
     login,
     logout,
     gcpProject,
@@ -156,6 +167,7 @@ export async function deployCommand(
     provisionOnly: parsed.provisionOnly,
     ...(parsed.path ? { demoRoot: parsed.path } : {}),
     ...(parsed.target ? { target: parsed.target } : {}),
+    ...(parsed.backend ? { backend: parsed.backend } : {}),
   });
 
   if (parsed.provisionOnly) return;
