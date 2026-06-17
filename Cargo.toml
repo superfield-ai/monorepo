@@ -30,6 +30,7 @@ sharp = { path = "crates/sharp" }
 nexum = { path = "crates/nexum" }
 sf-cli = { path = "crates/sf-cli" }
 sf-serve = { path = "crates/sf-serve" }
+sf-loop = { path = "crates/sf-loop" }
 sf-deploy = { path = "crates/sf-deploy" }
 fastenv = { path = "crates/fastenv" }
 

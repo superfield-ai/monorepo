@@ -44,6 +44,14 @@ use std::process;
 
 use sf_cli::daemon as sf_daemon;
 
+/// Daemon boot-sequence seam map (dev-scout #676).
+///
+/// Stub-only, not on the running path. Documents and compile-checks the
+/// provision → migrate → serve → loop-start → supervisor ordering and the
+/// exact integration points #670 and #671 must graduate. See [`boot`] for the
+/// written-down contract and the boot/shutdown smoke tests.
+mod boot;
+
 const USAGE: &str = "\
 superfield — unified CLI and HTTP serving backend
 
@@ -373,8 +381,10 @@ fn run_deploy(args: &[String]) {
 ///
 /// 1. Acquire the daemon state directory.
 /// 2. Start the Postgres provisioner (via [`sf_db::provisioner::TestProvisioner`]
-///    until the real Docker provisioner is implemented by this issue).
-/// 3. Run migrations (stub: not yet wired).
+///    until the real Docker provisioner is implemented by #670).
+/// 3. Run migrations (stub: not yet wired — the
+///    [`sf_db::migration_runner::MigrationRunner`] seam call site, graduated by
+///    #670).
 /// 4. Start the HTTP serving layer.
 /// 5. Write `daemon.json`.
 /// 6. Send `StartupResult::Ok` over the startup-notify socket.
@@ -382,6 +392,15 @@ fn run_deploy(args: &[String]) {
 /// If any step fails, send `StartupResult::Err` and exit 1.
 ///
 /// `SF_NO_DAEMON=1` skips the daemonize() call (runs in-process / foreground).
+///
+/// # Boot-sequence seam map (dev-scout #676)
+///
+/// The canonical provision → migrate → serve → loop-start → supervisor ordering
+/// and the exact integration points for #670 (provisioner + migration runner)
+/// and #671 (loop-start, handle install, supervisor selection) are written down
+/// and compile-checked in [`crate::boot`]. Graduating those features must
+/// preserve that ordering; the loop handle is installed in `AppState` via
+/// [`sf_serve::AppState::with_loop_handle`].
 async fn run_as_daemon() {
     use sf_cli::daemon::{
         daemon_log_path, daemon_state_dir, remove_daemon_json, send_startup_result, socket_path,
@@ -430,6 +449,17 @@ async fn run_as_daemon() {
     if let Err(e) = provisioner.start().await {
         fail!(format!("postgres provisioner error: {}", e));
     }
+
+    // ② Migration-runner seam call site (dev-scout #676 → graduated by #670).
+    //
+    // After the Postgres health gate passes and before the HTTP server binds,
+    // #670 runs `sf_db::migration_runner::MigrationRunner::run(&pool)` here so
+    // the schema is applied against the live instance. A migration failure must
+    // `fail!(...)` and exit without serving. The pre-#670 path uses
+    // `NoopMigrationRunner`, which is a no-op (no behaviour change today).
+    //   let runner = NoopMigrationRunner;
+    //   if let Err(e) = runner.run(&pool).await { fail!(...); }
+    // See `crate::boot` for the full ordering map.
 
     // Build the database pool (requires DATABASE_URL).
     let bind_addr: std::net::SocketAddr = "0.0.0.0:7000".parse().expect("static addr");

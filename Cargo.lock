@@ -3956,12 +3956,14 @@ checksum = "13c2bddecc57b384dee18652358fb23172facb8a2c51ccc10d74c157bdea3292"
 name = "superfield"
 version = "0.1.0"
 dependencies = [
+ "fastenv",
  "libc",
  "nexum",
  "serde_json",
  "sf-cli",
  "sf-db",
  "sf-deploy",
+ "sf-loop",
  "sf-serve",
  "sharp",
  "tokio",
