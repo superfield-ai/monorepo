@@ -102,7 +102,7 @@ describe("deployCommand", () => {
 
     expect(error).toHaveBeenCalledWith(
       expect.stringContaining(
-        "Usage: superfield deploy [--path <dir>] [--provision] [target]",
+        "Usage: superfield deploy [--path <dir>] [--backend k3s|fastenv] [--provision] [target]",
       ),
     );
     expect(mockExit).toHaveBeenCalledWith(1);
