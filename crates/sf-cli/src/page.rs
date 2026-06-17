@@ -1,13 +1,17 @@
 //! `superfield page <name>` — read a named knowledge-base page from Nexum.
 //!
-//! Pages are projections over the Nexum graph: each named page corresponds to
-//! a document in `nexum.documents` (identified by `title`), and the page
-//! content is the latest version's blocks concatenated as markdown.
+//! Most pages are projections over the Nexum document model: each named page
+//! corresponds to the latest `done` revision of a document in
+//! `nexum.page_revisions` (identified by `page`), fetched via
+//! [`sf_db::fetch_page_content`].  The `project` page is the exception: it is
+//! a recursive-CTE traversal of `nexum.project_nodes` rendered as markdown by
+//! [`sf_db::fetch_project_page`], mirroring the `GET /pages/project` HTTP
+//! route.
 //!
 //! # Registry
 //!
 //! The recognised page names are defined in [`sf_db::KNOWN_PAGES`]:
-//! `prd`, `architecture`, `plan`, `strategy`, `project`.
+//! `prd`, `architecture`, `plan`, `strategy`, `technical`, `project`.
 //!
 //! # Daemon guard
 //!
@@ -21,7 +25,9 @@
 //! - Issue #492 scope.
 //! - `docs/architecture.md` §Nexum — page-revision schema.
 
-use sf_db::{fetch_page_content, PageQueryError, KNOWN_PAGES};
+use sf_db::{
+    fetch_page_content, fetch_project_page, PageQueryError, ProjectGraphError, KNOWN_PAGES,
+};
 use sqlx::PgPool;
 use thiserror::Error;
 
@@ -55,6 +61,17 @@ impl From<PageQueryError> for PageError {
                 PageError::UnknownPage(name, known)
             }
             PageQueryError::Database(e) => PageError::Database(e),
+        }
+    }
+}
+
+impl From<ProjectGraphError> for PageError {
+    fn from(e: ProjectGraphError) -> Self {
+        match e {
+            ProjectGraphError::Database(e) => PageError::Database(e),
+            // Treat a missing project_nodes table the same as any other
+            // database error from the caller's perspective.
+            other => PageError::Database(sqlx::Error::Protocol(other.to_string())),
         }
     }
 }
@@ -142,10 +159,17 @@ async fn page_show_with_guard(
         return Err(PageError::UnknownPage(name.to_string(), known));
     }
 
-    // Fetch content from the database.
-    let content = fetch_page_content(pool, name)
-        .await
-        .map_err(PageError::from)?;
+    // Fetch content from the database.  The `project` page is a recursive-CTE
+    // traversal of `nexum.project_nodes` (via fetch_project_page), mirroring
+    // the `GET /pages/project` HTTP route; all other pages read the latest
+    // `done` revision from `nexum.page_revisions` (via fetch_page_content).
+    let content = if name == "project" {
+        fetch_project_page(pool).await.map_err(PageError::from)?
+    } else {
+        fetch_page_content(pool, name)
+            .await
+            .map_err(PageError::from)?
+    };
 
     match content {
         Some(markdown) => {
@@ -261,9 +285,11 @@ mod tests {
 
     /// Integration test: `page_show` returns markdown for a seeded page.
     ///
-    /// Inserts a fixture document_version for page name 'prd'; runs
-    /// `page_show` against a test DB; asserts stdout contains the fixture
-    /// block content and exit code is 0.
+    /// Inserts a fixture revision for page name 'prd' into
+    /// `nexum.page_revisions` (the current read path after #659); runs
+    /// `page_show_with_guard` for 'prd' against a test DB; asserts it returns
+    /// Ok (content printed to stdout). The five document pages route through
+    /// [`fetch_page_content`] (page_revisions), NOT fetch_project_page.
     ///
     /// Skipped unless `DATABASE_URL` is set with the nexum schema migrated.
     #[tokio::test]
@@ -275,50 +301,22 @@ mod tests {
             .await
             .expect("pool creation failed");
 
-        // Insert fixture data.
-        let corpus_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.corpora (name) VALUES ('test-page-cli') RETURNING id",
-        )
-        .fetch_one(&pool)
-        .await
-        .expect("corpus insert failed");
-
-        let doc_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.documents (corpus_id, title) VALUES ($1, 'prd') RETURNING id",
-        )
-        .bind(corpus_id)
-        .fetch_one(&pool)
-        .await
-        .expect("document insert failed");
-
-        let ver_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.document_versions (doc_id, version_num, status) \
-             VALUES ($1, 1, 'done') RETURNING id",
-        )
-        .bind(doc_id)
-        .fetch_one(&pool)
-        .await
-        .expect("version insert failed");
-
-        let block_id: uuid::Uuid = sqlx::query_scalar(
-            "INSERT INTO nexum.blocks (doc_id, content, content_hash, block_type) \
-             VALUES ($1, '# Fixture PRD content', 'hash_fixture_prd_cli', 'heading') RETURNING id",
-        )
-        .bind(doc_id)
-        .fetch_one(&pool)
-        .await
-        .expect("block insert failed");
+        // page_revisions has a NOT NULL workspace_id; the read path does not
+        // filter by it, so a fresh UUID placeholder is sufficient (mirrors the
+        // sf-db page_query integration test).
+        let workspace_id = uuid::Uuid::new_v4();
 
         sqlx::query(
-            "INSERT INTO nexum.version_blocks (version_id, block_id, seq) VALUES ($1, $2, 0)",
+            "INSERT INTO nexum.page_revisions \
+             (workspace_id, page_name, content, provenance, ingested_at) \
+             VALUES ($1, 'prd', '# Fixture PRD content', 'test-page-cli', now())",
         )
-        .bind(ver_id)
-        .bind(block_id)
+        .bind(workspace_id)
         .execute(&pool)
         .await
-        .expect("version_block insert failed");
+        .expect("page_revision insert failed");
 
-        // Verify via fetch_page_content (page_show prints to stdout).
+        // Verify via fetch_page_content (the same read path page_show uses).
         let content = sf_db::fetch_page_content(&pool, "prd")
             .await
             .expect("fetch failed")
@@ -330,29 +328,15 @@ mod tests {
             content
         );
 
+        // The CLI dispatch must return Ok for 'prd' (a document page) — it
+        // routes through fetch_page_content, not fetch_project_page.
+        page_show_with_guard(&pool, "prd", true)
+            .await
+            .expect("page_show_with_guard('prd') must return Ok for a seeded document page");
+
         // Cleanup.
-        sqlx::query("DELETE FROM nexum.version_blocks WHERE version_id = $1")
-            .bind(ver_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM nexum.document_versions WHERE id = $1")
-            .bind(ver_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM nexum.blocks WHERE id = $1")
-            .bind(block_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM nexum.documents WHERE id = $1")
-            .bind(doc_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM nexum.corpora WHERE id = $1")
-            .bind(corpus_id)
+        sqlx::query("DELETE FROM nexum.page_revisions WHERE workspace_id = $1")
+            .bind(workspace_id)
             .execute(&pool)
             .await
             .ok();
@@ -418,21 +402,17 @@ mod tests {
             content
         );
 
-        // Also verify page_show_with_guard returns Ok for the 'project' page.
+        // Also verify the CLI dispatch returns Ok for the 'project' page.
         // We supply is_running=true to bypass the daemon socket check.
-        // page_show_with_guard calls fetch_page_content which goes through
-        // the nexum.documents model — but 'project' is in KNOWN_PAGES, so
-        // it passes the guard. The function returns Ok(()) / NoContent for
-        // 'project' because the document model isn't used for this page;
-        // the project graph is queried differently by the read path.
-        //
-        // For the CLI, the page_show function delegates to fetch_page_content
-        // (document model). The acceptance criterion here is about the
-        // fetch_project_page read path producing the correct content —
-        // which we verified above.  The CLI's page_show for 'project' will
-        // return NoContent until wired to fetch_project_page, but the
-        // project graph read path (sf-db and sf-serve) is what this issue
-        // delivers.
+        // page_show_with_guard special-cases 'project' to call
+        // fetch_project_page (recursive-CTE traversal of nexum.project_nodes),
+        // mirroring the GET /pages/project HTTP route — NOT fetch_page_content
+        // (which reads nexum.page_revisions). Because an Issue node exists, the
+        // dispatch must return Ok(()) (content printed to stdout), not
+        // NoContent.
+        page_show_with_guard(&pool, "project", true)
+            .await
+            .expect("page_show_with_guard('project') must return Ok when an Issue node exists");
 
         // Cleanup.
         for node_id in [feature_id, issue_id] {
