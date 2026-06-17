@@ -7,6 +7,10 @@ export default defineConfig({
       "@superfield/db": path.resolve(__dirname, "../db/index.ts"),
       "@superfield/github": path.resolve(__dirname, "../github/index.ts"),
       "@superfield/git": path.resolve(__dirname, "../git/index.ts"),
+      "@superfield/control-core": path.resolve(
+        __dirname,
+        "../control-core/index.ts",
+      ),
     },
   },
   test: {
