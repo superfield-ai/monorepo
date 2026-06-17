@@ -105,6 +105,15 @@ function passingDeps(opts: DoctorOpts = makeOpts()): DoctorDeps {
       if (command === "echo ok") {
         return { stdout: "ok\n", stderr: "", exitCode: 0 };
       }
+      // fastenv runtime check (default backend).
+      if (command.includes("fastenv doctor")) {
+        return {
+          stdout: "fastenv: container runtime ready\n",
+          stderr: "",
+          exitCode: 0,
+        };
+      }
+      // legacy k3s runtime check.
       if (command.includes("kubectl get nodes")) {
         return {
           stdout: "node1   Ready    master   1d   v1.28.0\n",
@@ -112,6 +121,7 @@ function passingDeps(opts: DoctorOpts = makeOpts()): DoctorDeps {
           exitCode: 0,
         };
       }
+      // db-reachable: pg_isready via fastenv exec OR kubectl exec.
       if (command.includes("pg_isready")) {
         return {
           stdout: "/var/run/postgresql:5432 - accepting connections\n",
@@ -375,14 +385,116 @@ describe("doctor — ssh-reachable check", () => {
   });
 });
 
-describe("doctor — k3s-healthy check", () => {
+describe("doctor — fastenv-runtime-healthy check (default backend)", () => {
+  it("reports a fastenv-runtime-healthy check, not k3s-healthy, by default", async () => {
+    const mnemonic = Buffer.from(
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "utf8",
+    );
+    const e = ENV.toUpperCase();
+    const opts = makeOpts({ mnemonic });
+    const deps = passingDeps(opts);
+    deps.githubDeps = passingGithubDeps(makeRequiredSecrets(ENV), {
+      [`DEPLOY_HOST_${e}`]: "10.0.0.1",
+    });
+    const report = await doctor(opts, deps);
+    const names = report.checks.map((c) => c.name);
+    expect(names).toContain("fastenv-runtime-healthy");
+    expect(names).not.toContain("k3s-healthy");
+  });
+
   it("skips when no mnemonic is provided", async () => {
     const opts = makeOpts({ mnemonic: undefined });
     const deps = passingDeps(opts);
     const report = await doctor(opts, deps);
-    const check = report.checks.find((c) => c.name === "k3s-healthy")!;
+    const check = report.checks.find(
+      (c) => c.name === "fastenv-runtime-healthy",
+    )!;
     expect(check.ok).toBe(false);
     expect(check.detail).toContain("No mnemonic provided");
+  });
+
+  it("passes when `fastenv doctor` exits 0 over SSH (no kubectl)", async () => {
+    const mnemonic = Buffer.from(
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "utf8",
+    );
+    const e = ENV.toUpperCase();
+    const opts = makeOpts({ mnemonic });
+    const deps = passingDeps(opts);
+    deps.githubDeps = passingGithubDeps(makeRequiredSecrets(ENV), {
+      [`DEPLOY_HOST_${e}`]: "10.0.0.1",
+    });
+    const issued: string[] = [];
+    deps.sshExec = async ({ command }) => {
+      issued.push(command);
+      if (command.includes("fastenv doctor")) {
+        return {
+          stdout: "fastenv: container runtime ready\n",
+          stderr: "",
+          exitCode: 0,
+        };
+      }
+      return { stdout: "ok\n", stderr: "", exitCode: 0 };
+    };
+    const report = await doctor(opts, deps);
+    const check = report.checks.find(
+      (c) => c.name === "fastenv-runtime-healthy",
+    )!;
+    expect(check.ok).toBe(true);
+    // The runtime check must not invoke kubectl.
+    const runtimeCmds = issued.filter(
+      (c) => c.includes("fastenv doctor") || c.includes("kubectl get nodes"),
+    );
+    expect(runtimeCmds.some((c) => c.includes("kubectl"))).toBe(false);
+  });
+
+  it("fails when `fastenv doctor` exits non-zero", async () => {
+    const mnemonic = Buffer.from(
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "utf8",
+    );
+    const e = ENV.toUpperCase();
+    const opts = makeOpts({ mnemonic });
+    const deps = passingDeps(opts);
+    deps.githubDeps = passingGithubDeps(makeRequiredSecrets(ENV), {
+      [`DEPLOY_HOST_${e}`]: "10.0.0.1",
+    });
+    deps.sshExec = async ({ command }) => {
+      if (command.includes("fastenv doctor")) {
+        return {
+          stdout: "",
+          stderr: "fastenv: /dev/kvm unavailable",
+          exitCode: 1,
+        };
+      }
+      return { stdout: "ok\n", stderr: "", exitCode: 0 };
+    };
+    const report = await doctor(opts, deps);
+    const check = report.checks.find(
+      (c) => c.name === "fastenv-runtime-healthy",
+    )!;
+    expect(check.ok).toBe(false);
+    expect(check.detail).toContain("fastenv doctor failed");
+  });
+});
+
+describe("doctor — k3s-healthy check (legacy backend: k3s)", () => {
+  it("reports k3s-healthy (not fastenv) when backend is k3s", async () => {
+    const mnemonic = Buffer.from(
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "utf8",
+    );
+    const e = ENV.toUpperCase();
+    const opts = makeOpts({ mnemonic, backend: "k3s" });
+    const deps = passingDeps(opts);
+    deps.githubDeps = passingGithubDeps(makeRequiredSecrets(ENV), {
+      [`DEPLOY_HOST_${e}`]: "10.0.0.1",
+    });
+    const report = await doctor(opts, deps);
+    const names = report.checks.map((c) => c.name);
+    expect(names).toContain("k3s-healthy");
+    expect(names).not.toContain("fastenv-runtime-healthy");
   });
 
   it("fails when kubectl get nodes shows no Ready nodes", async () => {
@@ -391,7 +503,7 @@ describe("doctor — k3s-healthy check", () => {
       "utf8",
     );
     const e = ENV.toUpperCase();
-    const opts = makeOpts({ mnemonic });
+    const opts = makeOpts({ mnemonic, backend: "k3s" });
     const deps = passingDeps(opts);
     deps.githubDeps = passingGithubDeps(makeRequiredSecrets(ENV), {
       [`DEPLOY_HOST_${e}`]: "10.0.0.1",
@@ -448,6 +560,66 @@ describe("doctor — db-reachable check", () => {
     const check = report.checks.find((c) => c.name === "db-reachable")!;
     expect(check.ok).toBe(false);
     expect(check.detail).toContain("pg_isready output unexpected");
+  });
+
+  it("does NOT exec into a kubernetes pod on the fastenv backend (default)", async () => {
+    const mnemonic = Buffer.from(
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "utf8",
+    );
+    const e = ENV.toUpperCase();
+    const opts = makeOpts({ mnemonic });
+    const deps = passingDeps(opts);
+    deps.githubDeps = passingGithubDeps(makeRequiredSecrets(ENV), {
+      [`DEPLOY_HOST_${e}`]: "10.0.0.1",
+    });
+    const issued: string[] = [];
+    deps.sshExec = async ({ command }) => {
+      issued.push(command);
+      if (command.includes("pg_isready")) {
+        return {
+          stdout: "/var/run/postgresql:5432 - accepting connections\n",
+          stderr: "",
+          exitCode: 0,
+        };
+      }
+      return {
+        stdout: "fastenv: container runtime ready\n",
+        stderr: "",
+        exitCode: 0,
+      };
+    };
+    const report = await doctor(opts, deps);
+    const check = report.checks.find((c) => c.name === "db-reachable")!;
+    expect(check.ok).toBe(true);
+    // The db check must reach Postgres through fastenv, never kubectl exec/pod.
+    const dbCmd = issued.find((c) => c.includes("pg_isready"))!;
+    expect(dbCmd).toContain("fastenv exec");
+    expect(dbCmd).not.toContain("kubectl");
+    expect(dbCmd).not.toContain("get pod");
+  });
+
+  it("reports a clear message when the fastenv postgres workload is absent", async () => {
+    const mnemonic = Buffer.from(
+      "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about",
+      "utf8",
+    );
+    const e = ENV.toUpperCase();
+    const opts = makeOpts({ mnemonic });
+    const deps = passingDeps(opts);
+    deps.githubDeps = passingGithubDeps(makeRequiredSecrets(ENV), {
+      [`DEPLOY_HOST_${e}`]: "10.0.0.1",
+    });
+    deps.sshExec = async ({ command }) => {
+      if (command.includes("pg_isready")) {
+        return { stdout: "no-postgres-workload\n", stderr: "", exitCode: 0 };
+      }
+      return { stdout: "ok\n", stderr: "", exitCode: 0 };
+    };
+    const report = await doctor(opts, deps);
+    const check = report.checks.find((c) => c.name === "db-reachable")!;
+    expect(check.ok).toBe(false);
+    expect(check.detail).toContain("fastenv runtime");
   });
 });
 

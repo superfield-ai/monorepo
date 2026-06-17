@@ -1,15 +1,19 @@
 import { doctor, renderDoctorReport } from "@superfield/core";
 
-const USAGE = `Usage: superfield doctor --env <e> [--repo <owner/name>] [--json]
+const USAGE = `Usage: superfield doctor --env <e> [--repo <owner/name>] [--backend <b>] [--json]
 
 Options:
   --env <e>           Environment slug (e.g. staging, prod)  [required]
   --repo <owner/name> GitHub repository (default: inferred from git remote)
+  --backend <b>       Deployment runtime to verify: fastenv (default) | k3s
   --json              Output structured JSON instead of a table`;
+
+export type DeployBackend = "fastenv" | "k3s";
 
 export interface ParsedDoctorArgs {
   env?: string;
   repo?: string;
+  backend?: DeployBackend;
   json: boolean;
   unknown: string[];
 }
@@ -17,6 +21,10 @@ export interface ParsedDoctorArgs {
 export function parseDoctorArgs(args: string[]): ParsedDoctorArgs {
   const out: ParsedDoctorArgs = { json: false, unknown: [] };
   let i = 0;
+  const setBackend = (v: string | undefined) => {
+    if (v === "fastenv" || v === "k3s") out.backend = v;
+    else if (v !== undefined) out.unknown.push(`--backend ${v}`);
+  };
   while (i < args.length) {
     const a = args[i];
     if (a === undefined) {
@@ -32,6 +40,8 @@ export function parseDoctorArgs(args: string[]): ParsedDoctorArgs {
     else if ((v = eq("--env=")) !== undefined) out.env = v;
     else if (a === "--repo") out.repo = take();
     else if ((v = eq("--repo=")) !== undefined) out.repo = v;
+    else if (a === "--backend") setBackend(take());
+    else if ((v = eq("--backend=")) !== undefined) setBackend(v);
     else if (a === "--json") out.json = true;
     else out.unknown.push(a);
 
@@ -68,6 +78,7 @@ export async function doctorCommand(args: string[]): Promise<void> {
     repo: parsed.repo,
     env: parsed.env,
     json: parsed.json,
+    ...(parsed.backend ? { backend: parsed.backend } : {}),
   });
 
   if (parsed.json) {
