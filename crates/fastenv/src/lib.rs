@@ -11,6 +11,9 @@ pub mod bench;
 pub mod boundary;
 pub mod build_base;
 pub mod container_runtime;
+// deployment — deployment-tier runtime seam (dev-scout stub, issue #663).
+// Compile-safe, no-op supervisor for long-lived workloads; real impl is #662.
+pub mod deployment;
 pub mod diff;
 pub mod discard;
 pub mod doctor;

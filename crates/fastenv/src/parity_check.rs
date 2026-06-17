@@ -43,6 +43,10 @@ pub enum CommandBoundary {
     GuestRuntime,
     /// Routed through HostControlPlane / ProjectVmSupervisor.
     HostControlPlane,
+    /// Routed through the deployment-tier supervisor seam
+    /// (deployment::ManifestSupervisor). Scout stub for issue #663; the real
+    /// long-lived workload supervision is built in issue #662.
+    DeploymentTier,
 }
 
 /// Full parity table for the supported command set.
@@ -123,6 +127,12 @@ pub fn command_parity_table() -> Vec<CommandParityEntry> {
             boundary: CommandBoundary::GuestRuntime,
             deprecated: true,
             note: "Deprecated: direct unmount entrypoint. Replaced by the explicit guest boundary. Retained for migration compatibility only.",
+        },
+        CommandParityEntry {
+            command: "up",
+            boundary: CommandBoundary::DeploymentTier,
+            deprecated: false,
+            note: "Scout stub (issue #663): deployment-tier entrypoint that drives deployment::ManifestSupervisor from a FastenvManifest. NO-OP until issue #662 implements real long-lived app+Postgres supervision.",
         },
     ]
 }
@@ -207,8 +217,19 @@ mod tests {
         // Commands that intentionally route through HostControlPlane rather than GuestRuntime.
         let host_control_commands: HashSet<&str> = ["doctor"].iter().copied().collect();
 
+        // Commands that route through the deployment-tier supervisor seam rather
+        // than the workspace GuestRuntime. Scout stub for issue #663.
+        let deployment_tier_commands: HashSet<&str> = ["up"].iter().copied().collect();
+
         for entry in &non_deprecated {
-            if host_control_commands.contains(entry.command) {
+            if deployment_tier_commands.contains(entry.command) {
+                assert_eq!(
+                    entry.boundary,
+                    CommandBoundary::DeploymentTier,
+                    "command '{}' must route through the DeploymentTier boundary",
+                    entry.command
+                );
+            } else if host_control_commands.contains(entry.command) {
                 assert_eq!(
                     entry.boundary,
                     CommandBoundary::HostControlPlane,
@@ -383,7 +404,8 @@ mod tests {
     /// Confirm the supported command count matches the expected set.
     ///
     /// The supported set is: build-base, fork, discard, exec, diff, du,
-    /// export-patch, gc, bench, doctor.
+    /// export-patch, gc, bench, doctor, plus the deployment-tier `up` entrypoint
+    /// (scout stub, issue #663).
     /// Deprecated (mount-path, unmount) are excluded from the supported count.
     #[test]
     fn supported_command_count_matches_phase1_set() {
@@ -399,6 +421,10 @@ mod tests {
             "gc",
             "bench",
             "doctor",
+            // Deployment-tier entrypoint (scout stub, issue #663). Non-deprecated
+            // and routed through the DeploymentTier boundary; supervision is a
+            // no-op until issue #662.
+            "up",
         ]
         .iter()
         .copied()
