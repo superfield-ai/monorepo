@@ -200,3 +200,51 @@ async fn restart_reuses_existing_cluster_without_reinitialising() {
 
     let _ = Command::new("rm").arg("-rf").arg(&data_dir).status();
 }
+
+#[tokio::test(flavor = "multi_thread")]
+async fn injected_migration_failure_aborts_with_distinct_error_and_no_record() {
+    // Issue #670 AC3 / test plan: a migration failure must abort with an
+    // actionable error distinct from a provisioning failure, and must NOT be
+    // recorded — so a retry re-applies and the brain is never served unmigrated.
+    let Some(_bin) = pg_bin_dir_or_skip() else {
+        return;
+    };
+
+    let data_dir = std::env::temp_dir().join(format!("sf-prov-mig-{}", uuid::Uuid::new_v4()));
+    let port = ephemeral_port();
+    let provisioner = LocalPostgresProvisioner::new(&data_dir).with_port(port);
+    provisioner.start().await.expect("provision");
+
+    let url = provisioner.database_url().expect("url");
+    let cfg = sf_db::DbConfig::from_url(&url).expect("cfg");
+    let pool = sf_db::connect(&cfg).await.expect("connect");
+
+    // A deliberately invalid migration — distinct from any provisioning fault.
+    let bad = vec![sf_db::Migration {
+        id: "test/0001_intentionally_broken".to_string(),
+        sql: "THIS IS NOT VALID SQL;".to_string(),
+    }];
+
+    let err = sf_db::apply_migrations(&pool, &bad)
+        .await
+        .expect_err("invalid migration must fail");
+    match err {
+        sf_db::MigrationError::Apply { id, .. } => {
+            assert_eq!(id, "test/0001_intentionally_broken");
+        }
+        other => panic!("expected MigrationError::Apply, got {other:?}"),
+    }
+
+    // The failed migration was NOT recorded (left for retry after a fix).
+    let recorded: (i64,) = sqlx::query_as(
+        "SELECT count(*) FROM schema_migrations WHERE id = 'test/0001_intentionally_broken'",
+    )
+    .fetch_one(&pool)
+    .await
+    .expect("query schema_migrations");
+    assert_eq!(recorded.0, 0, "failed migration must not be recorded");
+
+    pool.close().await;
+    provisioner.stop().await.expect("stop");
+    let _ = Command::new("rm").arg("-rf").arg(&data_dir).status();
+}
