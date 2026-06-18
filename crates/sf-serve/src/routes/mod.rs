@@ -11,6 +11,7 @@
 //! | [`pages`]       | `/pages/*`         | None     | Knowledge-base page projections       |
 //! | [`project`]     | `/studio/*`        | Required | Project-graph API (dev-scout seam, #672) |
 //! | [`ingest`]      | `/studio/*`        | Required | Knowledge ingest/docs API (dev-scout seam, #673) |
+//! | [`ws`]          | `WS /studio/ws`    | Required | Agent-chat WebSocket seam (dev-scout stub, #695; feature #687) |
 //!
 //! # Additive registration seam (issue #677)
 //!
@@ -28,3 +29,4 @@ pub mod orchestrator;
 pub mod pages;
 pub mod project;
 pub mod studio;
+pub mod ws;

@@ -154,6 +154,11 @@ pub fn build_router_with_state(state: AppState, cfg: &ServeConfig) -> Router {
     // on this merge chain. To add a new feature route group, add a module
     // under `routes/` exposing `pub fn router(state: AppState) -> Router` and
     // `.merge(...)` it below; do not edit the existing feature modules.
+    //
+    // `routes::ws` (#695, agent-chat phase `studio-ws-agent-stream`) registers
+    // the `WS /studio/ws` upgrade handler + chunk/done/error frame seam as a
+    // no-op stub; feature #687 replaces its agent emitter without editing this
+    // chain.
     let protected = Router::new()
         .merge(routes::api::router(state.clone()))
         .merge(routes::studio::router(state.clone()))
@@ -162,6 +167,7 @@ pub fn build_router_with_state(state: AppState, cfg: &ServeConfig) -> Router {
         .merge(routes::cluster::router(state.clone()))
         .merge(routes::project::router(state.clone()))
         .merge(routes::ingest::router(state.clone()))
+        .merge(routes::ws::router(state.clone()))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,
