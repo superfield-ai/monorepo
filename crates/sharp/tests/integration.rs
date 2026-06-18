@@ -305,6 +305,10 @@ async fn episode_open_append_finish_query() {
 // ── Runtime signal integration tests ─────────────────────────────────────────
 
 /// Apply the runtime signal SQL migration on the test database.
+///
+/// Applies both 0004 (the table) and 0008 (the `workspace_id` column added by
+/// issue #708). 0008 uses `DO $$ ... $$` blocks, so it must NOT be split on
+/// `;` — it is executed as a single statement.
 async fn apply_runtime_signal_migration(pool: &sqlx::PgPool) {
     let sql = include_str!("../migrations/0004_sharp_runtime_signal.sql");
     for stmt in sql.split(';') {
@@ -317,6 +321,25 @@ async fn apply_runtime_signal_migration(pool: &sqlx::PgPool) {
             .await
             .expect("runtime signal migration stmt");
     }
+
+    let ws_sql = include_str!("../migrations/0008_sharp_runtime_signal_workspace.sql");
+    sqlx::query(ws_sql)
+        .execute(pool)
+        .await
+        .expect("runtime signal workspace migration");
+}
+
+/// Seed a `public.workspaces` row and return its id, so runtime signals can
+/// satisfy the `workspace_id` FK added by 0008.
+async fn seed_workspace(pool: &sqlx::PgPool) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO public.workspaces (slug, display_name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(unique_name("rts-ws"))
+    .bind("Runtime Signal Test Workspace")
+    .fetch_one(pool)
+    .await
+    .expect("workspace insert failed")
 }
 
 /// Integration test: a production error is recorded as episode signal linked
@@ -335,6 +358,7 @@ async fn apply_runtime_signal_migration(pool: &sqlx::PgPool) {
 async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
     let pool = connect_pool().await;
     apply_runtime_signal_migration(&pool).await;
+    let ws_id = seed_workspace(&pool).await;
 
     // Create a repo + open episode to attach the signal to.
     let repo_name = unique_name("signal-test-repo");
@@ -350,6 +374,7 @@ async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
     // Record a production crash.
     let sig = runtime_signal::record(
         &pool,
+        ws_id,
         ep.id,
         Some(&deployment_id),
         SignalKind::Crash,
@@ -361,6 +386,7 @@ async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
     .expect("record failed");
 
     assert_eq!(sig.episode_id, ep.id);
+    assert_eq!(sig.workspace_id, ws_id, "signal must carry its workspace");
     assert_eq!(sig.deployment_id.as_deref(), Some(deployment_id.as_str()));
     assert_eq!(sig.signal_kind, "crash");
     assert_eq!(sig.source, "pod/api-server");
@@ -410,6 +436,7 @@ async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
 async fn behavioral_signal_is_queryable_from_store() {
     let pool = connect_pool().await;
     apply_runtime_signal_migration(&pool).await;
+    let ws_id = seed_workspace(&pool).await;
 
     let repo_name = unique_name("behavior-test-repo");
     let r = repo::init(&pool, &repo_name)
@@ -425,6 +452,7 @@ async fn behavioral_signal_is_queryable_from_store() {
     // Record a behavior signal for deploy A.
     runtime_signal::record(
         &pool,
+        ws_id,
         ep.id,
         Some(&deploy_a),
         SignalKind::Behavior,
@@ -438,6 +466,7 @@ async fn behavioral_signal_is_queryable_from_store() {
     // Record an error signal for deploy B.
     runtime_signal::record(
         &pool,
+        ws_id,
         ep.id,
         Some(&deploy_b),
         SignalKind::Error,
@@ -451,6 +480,7 @@ async fn behavioral_signal_is_queryable_from_store() {
     // A signal with no deployment_id (unknown origin).
     runtime_signal::record(
         &pool,
+        ws_id,
         ep.id,
         None,
         SignalKind::HealthFailure,
@@ -499,8 +529,11 @@ async fn record_signal_against_missing_episode_returns_not_found() {
     apply_runtime_signal_migration(&pool).await;
 
     let missing_id = Uuid::new_v4();
+    // The episode is verified before the workspace FK is touched, so the
+    // workspace id here is arbitrary.
     let err = runtime_signal::record(
         &pool,
+        Uuid::new_v4(),
         missing_id,
         None,
         SignalKind::Error,

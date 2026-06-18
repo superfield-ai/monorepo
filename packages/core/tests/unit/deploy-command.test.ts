@@ -6,11 +6,21 @@ import {
   DeployTargetNotImplementedError,
   detectPostgresDataPath,
   getDeployTargetModel,
+  RUNTIME_SIGNAL_SOURCE,
   selectDeployPhases,
   runDeployCommand,
 } from "../../commands/deploy.ts";
 
 describe("deploy command", () => {
+  it("wires the runtime-signal source instead of leaving it a stub (#708)", () => {
+    // Acceptance criterion: RuntimeSignalSource is no longer implemented:false.
+    expect(RUNTIME_SIGNAL_SOURCE.implemented).toBe(true);
+    // The wired source must name a real producer + feeder so the descriptor
+    // cannot silently regress to a placeholder.
+    expect(RUNTIME_SIGNAL_SOURCE.producer).toContain("runtime_signal");
+    expect(RUNTIME_SIGNAL_SOURCE.feeder).toContain("runtime_signal_projection");
+  });
+
   it("selects both phases by default and only provisioning with --provision", () => {
     expect(selectDeployPhases()).toEqual(["provision", "deploy"]);
     expect(selectDeployPhases(true)).toEqual(["provision"]);

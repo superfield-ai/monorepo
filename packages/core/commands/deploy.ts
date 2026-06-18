@@ -35,26 +35,58 @@ import {
  * Known deploy phases: provision infrastructure, then deploy workloads.
  *
  * Scout finding (#388): current deployment targets are k3d local and GCP
- * Cloud Run. Runtime signal sources (pod logs, k8s events, CI deploy status,
- * health probes) have no episode-ingestion path yet. Issues #380-#382 will
- * build the deploy/rollback and signal-capture layer.
+ * Cloud Run. The runtime-signal source — pod crashes, health failures, and
+ * unhandled errors from a deployed app — is now wired end-to-end (issue #708):
+ * the producer writes `sharp.runtime_signals` (Rust `sharp::runtime_signal`)
+ * and the nexum feeder projects each signal into `nexum.entities`/`relations`
+ * joined to its deployment (`nexum::runtime_signal_projection`).
  *
  * @see docs/architecture.md §CLI — Command Surface
+ * @see docs/architecture.md §Daemon Lifecycle
  */
 export const DEPLOY_PHASES = ["provision", "deploy"] as const;
 
 export type DeployPhase = (typeof DEPLOY_PHASES)[number];
 
 /**
- * Stub: runtime-signal source descriptor — placeholder for issue #381.
+ * Runtime-signal source descriptor — production errors and health signals that
+ * a deployed app feeds back into the brain.
+ *
+ * No longer a stub (issue #708): the source is implemented by the Rust
+ * producer + nexum feeder, so `implemented` is `true` and the descriptor names
+ * the components that realize it. `producer` is the path that writes
+ * `sharp.runtime_signals`; `feeder` is the path that projects a signal into
+ * the property graph joined to its deployment.
  *
  * @see docs/architecture.md §CLI — Command Surface
  */
 export interface RuntimeSignalSource {
   name: string;
   description: string;
-  implemented: false;
+  implemented: true;
+  /** Component that records production signals to `sharp.runtime_signals`. */
+  producer: string;
+  /** Component that projects a signal into `nexum.entities`/`relations`. */
+  feeder: string;
 }
+
+/**
+ * The wired runtime-signal source (issue #708). Replaces the former
+ * `implemented: false` stub: a deployed app's errors and health signals are
+ * recorded by the producer and projected into the brain by the feeder, joined
+ * to the deployment that produced them.
+ */
+export const RUNTIME_SIGNAL_SOURCE: RuntimeSignalSource = {
+  name: "deployed-app-runtime-signals",
+  description:
+    "Production crashes, health failures, and unhandled errors from a " +
+    "deployed app, recorded as sharp.runtime_signals and projected into " +
+    "nexum.entities/relations joined to their deployment.",
+  implemented: true,
+  producer: "crates/sharp/src/runtime_signal.rs::record",
+  feeder:
+    "crates/nexum/src/runtime_signal_projection.rs::project_runtime_signal",
+};
 
 export interface DeployPhaseModel {
   name: DeployPhase;

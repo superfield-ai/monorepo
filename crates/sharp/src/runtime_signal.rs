@@ -17,6 +17,7 @@
 //! // Record a production crash linked to a deployment.
 //! let sig = record(
 //!     &pool,
+//!     workspace_id,
 //!     episode_id,
 //!     Some("deploy-abc123"),
 //!     SignalKind::Crash,
@@ -85,6 +86,12 @@ impl SignalKind {
 pub struct RuntimeSignal {
     /// Primary key.
     pub id: Uuid,
+    /// The workspace (tenant) that produced this signal.
+    ///
+    /// Carried on every signal so a cross-workspace read cannot surface
+    /// another tenant's signals, and so the nexum projection
+    /// (`nexum.entities`/`nexum.relations`) inherits the same scope (#708).
+    pub workspace_id: Uuid,
     /// The Sharp episode this signal is linked to.
     pub episode_id: Uuid,
     /// Opaque deployment identifier (e.g. GitHub Deployment ID or image digest).
@@ -109,6 +116,7 @@ pub struct RuntimeSignal {
 fn row_to_signal(r: &sqlx::postgres::PgRow) -> Result<RuntimeSignal, sqlx::Error> {
     Ok(RuntimeSignal {
         id: r.try_get("id")?,
+        workspace_id: r.try_get("workspace_id")?,
         episode_id: r.try_get("episode_id")?,
         deployment_id: r.try_get("deployment_id")?,
         signal_kind: r.try_get("signal_kind")?,
@@ -129,6 +137,8 @@ fn row_to_signal(r: &sqlx::postgres::PgRow) -> Result<RuntimeSignal, sqlx::Error
 /// # Arguments
 ///
 /// * `pool`          — database connection pool.
+/// * `workspace_id`  — the tenant that produced the signal (carried so a
+///   cross-workspace read does not surface it, #708).
 /// * `episode_id`    — the Sharp episode to attach the signal to.
 /// * `deployment_id` — opaque deployment identifier; `None` if unknown.
 /// * `kind`          — category of signal (error, crash, health failure, behavior).
@@ -140,8 +150,10 @@ fn row_to_signal(r: &sqlx::postgres::PgRow) -> Result<RuntimeSignal, sqlx::Error
 ///
 /// Returns [`SharpError::EpisodeNotFound`] when `episode_id` does not exist.
 /// Returns [`SharpError::Db`] on any other database error.
+#[allow(clippy::too_many_arguments)]
 pub async fn record(
     pool: &PgPool,
+    workspace_id: Uuid,
     episode_id: Uuid,
     deployment_id: Option<&str>,
     kind: SignalKind,
@@ -155,11 +167,12 @@ pub async fn record(
     let row = sqlx::query(
         r#"
         INSERT INTO sharp.runtime_signals
-            (episode_id, deployment_id, signal_kind, source, message, payload)
-        VALUES ($1, $2, $3, $4, $5, $6)
-        RETURNING id, episode_id, deployment_id, signal_kind, source, message, payload, recorded_at
+            (workspace_id, episode_id, deployment_id, signal_kind, source, message, payload)
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, workspace_id, episode_id, deployment_id, signal_kind, source, message, payload, recorded_at
         "#,
     )
+    .bind(workspace_id)
     .bind(episode_id)
     .bind(deployment_id)
     .bind(kind.as_str())
@@ -209,7 +222,7 @@ pub async fn query_by_deployment(
 ) -> Result<Vec<RuntimeSignal>, SharpError> {
     let rows = sqlx::query(
         r#"
-        SELECT id, episode_id, deployment_id, signal_kind, source, message, payload, recorded_at
+        SELECT id, workspace_id, episode_id, deployment_id, signal_kind, source, message, payload, recorded_at
         FROM   sharp.runtime_signals
         WHERE  deployment_id = $1
         ORDER  BY recorded_at ASC
@@ -236,7 +249,7 @@ pub async fn query_by_episode(
 ) -> Result<Vec<RuntimeSignal>, SharpError> {
     let rows = sqlx::query(
         r#"
-        SELECT id, episode_id, deployment_id, signal_kind, source, message, payload, recorded_at
+        SELECT id, workspace_id, episode_id, deployment_id, signal_kind, source, message, payload, recorded_at
         FROM   sharp.runtime_signals
         WHERE  episode_id = $1
         ORDER  BY recorded_at ASC
