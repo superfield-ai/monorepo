@@ -23,6 +23,7 @@
 //! | `holistic_reconcile_propagates_change`     | `HolisticReconcile`     |
 
 mod architecture_proposal;
+mod code_change_proposal;
 mod holistic_reconcile;
 mod plan_proposal;
 mod prd_reconcile;
@@ -50,9 +51,17 @@ pub enum StepError {
     /// Project-graph write error (Feature/Issue node derivation).
     #[error("project graph error: {0}")]
     ProjectGraph(#[from] sf_db::ProjectGraphError),
+    /// Sharp semantic-merge / episode error (code-change proposal gate).
+    ///
+    /// Note: [`sharp::SharpError::MergeRefused`] is intentionally NOT surfaced
+    /// here — the code-change step swallows a refused (non-compiling) proposal
+    /// so the loop cursor still advances. Only infrastructure-level Sharp
+    /// failures reach this variant.
+    #[error("sharp error: {0}")]
+    Sharp(#[from] sharp::SharpError),
 }
 
-/// The seven gardening steps, in execution order.
+/// The eight gardening steps, in execution order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GardeningStep {
     /// Research company strategy from seed documents.
@@ -69,6 +78,9 @@ pub enum GardeningStep {
     HolisticReconcile,
     /// Derive Feature/Issue project-graph nodes from brain knowledge (#672).
     ProjectGraphDerive,
+    /// Propose a validated source change for an open node through the Sharp
+    /// semantic-merge + cargo check gate (#706).
+    CodeChangeProposal,
 }
 
 impl GardeningStep {
@@ -82,6 +94,7 @@ impl GardeningStep {
             Self::PlanProposal => "plan_proposal",
             Self::HolisticReconcile => "holistic_reconcile",
             Self::ProjectGraphDerive => "project_graph_derive",
+            Self::CodeChangeProposal => "code_change_proposal",
         }
     }
 }
@@ -119,6 +132,9 @@ pub const STEP_ORDER: &[GardeningStep] = &[
     // <-- #672 knowledge-derivation step inserts here (before HolisticReconcile).
     GardeningStep::HolisticReconcile,
     GardeningStep::ProjectGraphDerive,
+    // #706 code-change step runs last: it proposes a validated source change
+    // for an open node in the now-gardened project graph.
+    GardeningStep::CodeChangeProposal,
 ];
 
 /// Dispatch a single gardening step.
@@ -150,6 +166,9 @@ pub async fn run_step(
         GardeningStep::ProjectGraphDerive => {
             project_graph_derive::run(pool, workspace_id, executor).await
         }
+        GardeningStep::CodeChangeProposal => {
+            code_change_proposal::run(pool, workspace_id, executor).await
+        }
     }
 }
 
@@ -169,8 +188,17 @@ mod tests {
     }
 
     #[test]
-    fn step_order_has_seven_entries() {
-        assert_eq!(STEP_ORDER.len(), 7);
+    fn step_order_has_eight_entries() {
+        assert_eq!(STEP_ORDER.len(), 8);
+    }
+
+    #[test]
+    fn code_change_proposal_runs_last() {
+        assert_eq!(
+            STEP_ORDER.last().copied(),
+            Some(GardeningStep::CodeChangeProposal),
+            "the code-change proposal step must run last, over the gardened graph",
+        );
     }
 
     #[test]
