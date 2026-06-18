@@ -456,7 +456,7 @@ Tests and phase crates use [`NoopLoopHandle`] — a no-op stub that returns `Ok(
 
 ## Gardening Loop Engine
 
-The gardening loop is the continuous background worker that keeps the workspace's knowledge base current. It cycles through six steps in a fixed order, calling the LLM for each step and writing the result as a `nexum.page_revisions` row. After a full pass it pauses 60 seconds before repeating. A daemon crash is safe: the loop resumes from the last committed cursor step rather than restarting from the beginning.
+The gardening loop is the continuous background worker that keeps the workspace's knowledge base current. It cycles through seven steps in a fixed order, calling the LLM for each step. The first six steps write the result as a `nexum.page_revisions` row; the final step (`ProjectGraphDerive`) instead writes project-graph Feature/Issue nodes. After a full pass it pauses 60 seconds before repeating. A daemon crash is safe: the loop resumes from the last committed cursor step rather than restarting from the beginning.
 
 Source: `crates/sf-loop/src/lib.rs`
 
@@ -486,14 +486,15 @@ Spawns the background Tokio task and returns a `GardeningLoopHandle`. On the run
 
 Defined in `crates/sf-loop/src/steps/mod.rs` as `STEP_ORDER`:
 
-| #   | Variant                | Cursor name             | Output page    | Description                                                           |
-| --- | ---------------------- | ----------------------- | -------------- | --------------------------------------------------------------------- |
-| 1   | `StrategyResearch`     | `strategy_research`     | `strategy`     | Web research on company strategy → "strategy" page revision           |
-| 2   | `PrdReconcile`         | `prd_reconcile`         | `prd`          | Reconcile PRD against strategy research → "prd" page revision         |
-| 3   | `TechnicalResearch`    | `technical_research`    | `technical`    | Research technical implementation options → "technical" page revision |
-| 4   | `ArchitectureProposal` | `architecture_proposal` | `architecture` | Derive architecture from PRD + technical + Blueprint rules            |
-| 5   | `PlanProposal`         | `plan_proposal`         | `plan`         | Derive implementation plan from architecture → "plan" page revision   |
-| 6   | `HolisticReconcile`    | `holistic_reconcile`    | (all five)     | Re-read all five pages and propagate consistency changes              |
+| #   | Variant                | Cursor name             | Output page     | Description                                                                                                                                                       |
+| --- | ---------------------- | ----------------------- | --------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1   | `StrategyResearch`     | `strategy_research`     | `strategy`      | Web research on company strategy → "strategy" page revision                                                                                                       |
+| 2   | `PrdReconcile`         | `prd_reconcile`         | `prd`           | Reconcile PRD against strategy research → "prd" page revision                                                                                                     |
+| 3   | `TechnicalResearch`    | `technical_research`    | `technical`     | Research technical implementation options → "technical" page revision                                                                                             |
+| 4   | `ArchitectureProposal` | `architecture_proposal` | `architecture`  | Derive architecture from PRD + technical + Blueprint rules                                                                                                        |
+| 5   | `PlanProposal`         | `plan_proposal`         | `plan`          | Derive implementation plan from architecture → "plan" page revision                                                                                               |
+| 6   | `HolisticReconcile`    | `holistic_reconcile`    | (all five)      | Re-read all five pages and propagate consistency changes                                                                                                          |
+| 7   | `ProjectGraphDerive`   | `project_graph_derive`  | (project graph) | Derive Feature/Issue project-graph nodes from `plan`/`prd`/`strategy` knowledge → `nexum.project_nodes` via `insert_issue`/`insert_feature` (not a page revision) |
 
 ### AgentExecutor trait
 
@@ -503,7 +504,7 @@ pub trait AgentExecutor: Send + Sync {
 }
 ```
 
-All six steps call `AgentExecutor::run` to produce page revision content. `AgentRequest` carries a `system` prompt and a `user` prompt. `AgentResponse` returns `content` (stored as the page revision body) and `provenance` (metadata tag).
+All seven steps call `AgentExecutor::run`. For the first six steps the response `content` is stored as page revision content; for `ProjectGraphDerive` the `content` is parsed into Feature/Issue nodes and written to the project graph instead. `AgentRequest` carries a `system` prompt and a `user` prompt. `AgentResponse` returns `content` and `provenance` (metadata tag).
 
 Two implementations are provided:
 
