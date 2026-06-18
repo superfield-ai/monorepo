@@ -45,6 +45,7 @@ use std::process;
 use sf_cli::daemon as sf_daemon;
 
 mod boot;
+mod daemon_runtime;
 
 const USAGE: &str = "\
 superfield — unified CLI and HTTP serving backend
@@ -509,10 +510,43 @@ async fn run_as_daemon() {
         ready.database_url
     );
 
-    // Start the HTTP serving layer against the migrated pool.
+    // Start the HTTP serving layer against the migrated pool, plus the
+    // autonomous gardening loop and the appliance workload supervisor.
     //
     // In SF_NO_DAEMON=1 mode this runs in the foreground.  In normal daemon
     // mode the process has already been detached by the parent's spawn call.
+    //
+    // On SIGTERM the server stops gracefully, then `daemon_runtime::shutdown`
+    // drains the loop, takes the appliance down, and stops the provisioner — in
+    // that strict order (loop drains against the still-live, migrated DB so its
+    // cursor commits before Postgres goes down).
+    let pool = ready.pool;
+
+    // Start the appliance workload supervisor (app + Postgres). A failure here
+    // must not abort the daemon — the HTTP layer and loop can still run — so
+    // log and fall through with the no-op supervisor.
+    let app_image = std::env::var("SF_APP_IMAGE").unwrap_or_default();
+    let pg_image = std::env::var("SF_POSTGRES_IMAGE").unwrap_or_default();
+    let manifest = daemon_runtime::appliance_manifest(&app_image, &pg_image);
+    let supervisor: Box<dyn fastenv::deployment::ManifestSupervisor> =
+        match daemon_runtime::boot_supervisor(&manifest) {
+            Ok(s) => Box::new(s),
+            Err(e) => {
+                eprintln!(
+                    "superfield daemon: appliance supervisor failed to start: {}",
+                    e
+                );
+                Box::new(fastenv::deployment::NoopSupervisor)
+            }
+        };
+
+    // Start the gardening loop and install the REAL loop handle, retiring
+    // NoopLoopHandle on the running path.  The loop resumes from its persisted
+    // cursor on its first pass.
+    let loop_config = sf_loop::LoopConfig::from_env();
+    let executor = daemon_runtime::build_executor(&loop_config);
+    let loop_handle = daemon_runtime::boot_loop(pool.clone(), loop_config, executor);
+
     let assets_dir = std::env::var("CONTROL_ASSETS_DIR")
         .ok()
         .map(std::path::PathBuf::from);
@@ -521,13 +555,54 @@ async fn run_as_daemon() {
         session_ttl_secs: None,
         assets_dir,
     };
-    if let Err(e) = sf_serve::serve(ready.pool, serve_cfg).await {
+
+    // Serve until SIGTERM (or SIGINT) requests a graceful shutdown.
+    if let Err(e) = sf_serve::serve_with_shutdown(pool, serve_cfg, shutdown_signal()).await {
         eprintln!("superfield daemon: serve error: {}", e);
     }
 
-    // Clean up.
+    // Ordered teardown: drain loop → appliance down → provisioner stop.
+    daemon_runtime::shutdown(loop_handle.as_ref(), supervisor.as_ref(), provisioner).await;
+
     remove_daemon_json(&state_dir);
-    let _ = provisioner.stop().await;
+}
+
+/// Future that resolves when the daemon receives `SIGTERM` or `SIGINT`.
+///
+/// `daemon stop` delivers `SIGTERM`; an interactive Ctrl-C in foreground mode
+/// (`SF_NO_DAEMON=1`) delivers `SIGINT`. Either triggers the graceful shutdown
+/// path so the server drains, then the loop/appliance/provisioner stop in order.
+async fn shutdown_signal() {
+    #[cfg(unix)]
+    {
+        use tokio::signal::unix::{signal, SignalKind};
+        let mut term = match signal(SignalKind::terminate()) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("superfield daemon: cannot install SIGTERM handler: {}", e);
+                // Fall back to never resolving so the server keeps running.
+                std::future::pending::<()>().await;
+                return;
+            }
+        };
+        let mut int = match signal(SignalKind::interrupt()) {
+            Ok(s) => s,
+            Err(e) => {
+                eprintln!("superfield daemon: cannot install SIGINT handler: {}", e);
+                std::future::pending::<()>().await;
+                return;
+            }
+        };
+        tokio::select! {
+            _ = term.recv() => {}
+            _ = int.recv() => {}
+        }
+    }
+
+    #[cfg(not(unix))]
+    {
+        let _ = tokio::signal::ctrl_c().await;
+    }
 }
 
 // ---------------------------------------------------------------------------

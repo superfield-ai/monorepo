@@ -213,3 +213,36 @@ pub async fn serve(pool: PgPool, cfg: ServeConfig) -> Result<(), ServeError> {
 
     Ok(())
 }
+
+/// Bind to `cfg.bind_addr` and serve until `shutdown` resolves.
+///
+/// Identical to [`serve`] except the server loop is stopped gracefully when the
+/// `shutdown` future completes — the daemon supplies a future that resolves on
+/// `SIGTERM`. Axum stops accepting new connections and drains in-flight requests
+/// before this function returns, after which the daemon can drain the gardening
+/// loop and stop the Postgres provisioner in order.
+///
+/// # Errors
+///
+/// Returns [`ServeError::Bind`] if the port cannot be bound, or
+/// [`ServeError::Serve`] if the server loop fails.
+pub async fn serve_with_shutdown<F>(
+    pool: PgPool,
+    cfg: ServeConfig,
+    shutdown: F,
+) -> Result<(), ServeError>
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    let router = build_router(pool, &cfg);
+    let listener = TcpListener::bind(cfg.bind_addr)
+        .await
+        .map_err(|e| ServeError::Bind(cfg.bind_addr, e))?;
+
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown)
+        .await
+        .map_err(ServeError::Serve)?;
+
+    Ok(())
+}
