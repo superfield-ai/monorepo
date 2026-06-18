@@ -24,6 +24,29 @@
 //! existing UUID is referenced by the new `version_blocks` row rather than
 //! inserting a duplicate block row.  This matches the TypeScript pipeline
 //! behaviour described in `src/routes/documents.ts`.
+//!
+//! # Server-route seam for web authoring (dev-scout, issue #677)
+//!
+//! [`ingest_document`] is the **stable entry point** that the web-authoring
+//! feature (#673) calls from a server route to ingest a document uploaded from
+//! the control panel — running the *same* pipeline as the `superfield garden`
+//! CLI, with no CLI involvement.
+//!
+//! The route module that wires this is `crates/sf-serve/src/routes/ingest.rs`
+//! (a dev-scout no-op stub today; #673 fills it in). The contract the route
+//! depends on:
+//!
+//! - Build [`IngestOptions`] from the request body, stamping `workspace_id`
+//!   from the request's `sf_auth::AuthContext` (never from the body) so RLS
+//!   and per-workspace filters hold.
+//! - Supply a shared [`sqlx::PgPool`] and an [`crate::embed::Embedder`].
+//! - On success, [`IngestResult`] reports doc/version IDs and block/link counts;
+//!   the ingested content is then searchable through the existing brain search
+//!   and visible in page projections with no extra wiring.
+//!
+//! This dev-scout pass introduces no new ingest behaviour — it documents the
+//! existing entry point as the server-route seam so #673 can proceed in
+//! parallel with #672.
 
 use crate::dedup::content_hash;
 use crate::embed::Embedder;

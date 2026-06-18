@@ -129,10 +129,21 @@ pub fn build_router(pool: PgPool, cfg: &ServeConfig) -> Router {
     let page_routes = routes::pages::router(state.clone());
 
     // Protected routes — all require a valid session.
+    //
+    // Additive route-module registration seam (dev-scout, issue #677):
+    // each downstream feature owns a dedicated route module and merges it
+    // here. `routes::project` (#672, project-graph API) and `routes::ingest`
+    // (#673, knowledge ingest/docs API) are no-op stubs today — they register
+    // no routes — so the two features can land in parallel without colliding
+    // on this merge chain. To add a new feature route group, add a module
+    // under `routes/` exposing `pub fn router(state: AppState) -> Router` and
+    // `.merge(...)` it below; do not edit the existing feature modules.
     let protected = Router::new()
         .merge(routes::api::router(state.clone()))
         .merge(routes::studio::router(state.clone()))
         .merge(routes::orchestrator::router(state.clone()))
+        .merge(routes::project::router(state.clone()))
+        .merge(routes::ingest::router(state.clone()))
         .layer(middleware::from_fn_with_state(
             state.clone(),
             auth::auth_middleware,

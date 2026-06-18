@@ -87,12 +87,36 @@ impl GardeningStep {
 }
 
 /// Canonical step execution order.
+///
+/// # Insertion point for the knowledge-derivation step (dev-scout, issue #677)
+///
+/// The knowledge-to-work feature (#672) adds a step that derives Feature/Issue
+/// project-graph nodes from brain knowledge and writes them through
+/// `sf_db::project_graph` (`insert_feature` / `insert_issue`) — not via the
+/// document-page write path the existing six steps use.
+///
+/// To add it without disturbing the existing loop:
+/// 1. Add a `GardeningStep` variant (e.g. `ProjectDerivation`) plus its
+///    [`GardeningStep::name`] arm.
+/// 2. Add a `mod project_derivation;` module whose `run(...)` reads page
+///    content and writes via `sf_db::project_graph` instead of
+///    `sf_db::insert_page_revision`.
+/// 3. Add a [`run_step`] match arm dispatching to it.
+/// 4. Append the variant to this `STEP_ORDER` slice — **after**
+///    `PlanProposal` and **before** `HolisticReconcile` so the holistic pass
+///    still runs last over the now-richer graph.
+///
+/// The cursor/resume machinery in `crate::run_loop` keys off
+/// [`GardeningStep::name`] and `STEP_ORDER` positions, so a new entry is
+/// resumable automatically with no loop-engine change. This dev-scout pass
+/// documents the insertion contract only; it adds no new step.
 pub const STEP_ORDER: &[GardeningStep] = &[
     GardeningStep::StrategyResearch,
     GardeningStep::PrdReconcile,
     GardeningStep::TechnicalResearch,
     GardeningStep::ArchitectureProposal,
     GardeningStep::PlanProposal,
+    // <-- #672 knowledge-derivation step inserts here (before HolisticReconcile).
     GardeningStep::HolisticReconcile,
     GardeningStep::ProjectGraphDerive,
 ];
