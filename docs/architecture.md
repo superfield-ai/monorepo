@@ -470,7 +470,7 @@ pub fn start(
 ) -> GardeningLoopHandle
 ```
 
-Spawns the background Tokio task and returns a `GardeningLoopHandle`. **Planned wiring (not yet implemented):** the daemon will store this handle (via `AppState`) and call `drain()` on graceful shutdown. Until then, `NoopLoopHandle` is used as a stub.
+Spawns the background Tokio task and returns a `GardeningLoopHandle`. On the running daemon path this handle is real: `crates/superfield/src/daemon_runtime.rs` (`boot_loop`) starts the loop via `GardeningLoop::start_observed`, stores the returned `Arc<dyn LoopHandle>`, and the shutdown sequence calls `drain()` (falling back to `abort()` if drain fails) before taking the appliance down — see §Seam: LoopHandle. `NoopLoopHandle` is retired on the running path and survives only as a test/phase double (#671).
 
 `LoopConfig` is built from environment variables via `LoopConfig::from_env()`:
 
@@ -558,19 +558,40 @@ The auth middleware validates the token against `auth.sessions` and injects an `
 
 ### Route table
 
-| Method   | Path                        | Auth     | Handler module | Description                                                                                    |
-| -------- | --------------------------- | -------- | -------------- | ---------------------------------------------------------------------------------------------- |
-| `GET`    | `/health`                   | None     | `lib`          | Unauthenticated liveness probe — returns `{"status":"ok"}` for load balancers and E2E setup    |
-| `GET`    | `/api/auth/health`          | None     | `auth`         | Liveness probe — always returns `{"status":"ok"}`                                              |
-| `POST`   | `/api/auth/session`         | None     | `auth`         | Issue a session token for a `(workspace_id, user_id, role)` triple                             |
-| `DELETE` | `/api/auth/session/{token}` | None     | `auth`         | Revoke an existing session token (idempotent, 204)                                             |
-| `POST`   | `/api/auth/register`        | None     | `auth`         | Dev/E2E bootstrap: mint a fresh workspace + user, issue a token                                |
-| `GET`    | `/api/status`               | Required | `api`          | Authenticated liveness probe — echoes workspace/user/role                                      |
-| `GET`    | `/api/me`                   | Required | `api`          | Current principal identity + RLS session-variable verification                                 |
-| `GET`    | `/studio/status`            | Required | `studio`       | Studio mode flag + auth context (browser UI health check)                                      |
-| `GET`    | `/orchestrator/status`      | Required | `orchestrator` | Daemon process status (PID, uptime — stub in milestone 1)                                      |
-| `GET`    | `/pages/project`            | None     | `pages`        | Project management graph rendered as markdown                                                  |
-| `GET`    | `/pages/{name}`             | None     | `pages`        | Named knowledge-base page as markdown (`prd`, `architecture`, `plan`, `strategy`, `technical`) |
+| Method       | Path                            | Auth     | Handler module | Description                                                                                    |
+| ------------ | ------------------------------- | -------- | -------------- | ---------------------------------------------------------------------------------------------- |
+| `GET`        | `/health`                       | None     | `lib`          | Unauthenticated liveness probe — returns `{"status":"ok"}` for load balancers and E2E setup    |
+| `GET`        | `/api/auth/health`              | None     | `auth`         | Liveness probe — always returns `{"status":"ok"}`                                              |
+| `POST`       | `/api/auth/session`             | None     | `auth`         | Issue a session token for a `(workspace_id, user_id, role)` triple                             |
+| `DELETE`     | `/api/auth/session/{token}`     | None     | `auth`         | Revoke an existing session token (idempotent, 204)                                             |
+| `POST`       | `/api/auth/register`            | None     | `auth`         | Dev/E2E bootstrap: mint a fresh workspace + user, issue a token                                |
+| `GET`        | `/api/status`                   | Required | `api`          | Authenticated liveness probe — echoes workspace/user/role                                      |
+| `GET`        | `/api/me`                       | Required | `api`          | Current principal identity + RLS session-variable verification                                 |
+| `GET`        | `/studio/status`                | Required | `studio`       | Studio mode flag + auth context (browser UI health check)                                      |
+| `GET`        | `/studio/issues`                | Required | `studio`       | List project-graph nodes (Issues and Features) (#672)                                          |
+| `POST`       | `/studio/issues`                | Required | `studio`       | Create an Issue node and optional child Features (#672)                                        |
+| `POST`       | `/studio/issues/update`         | Required | `studio`       | Update an Issue/Feature's state and/or title (#672)                                            |
+| `POST`       | `/studio/steer`                 | Required | `studio`       | Steer/redirect work on a Feature or Issue (#672)                                               |
+| `POST`       | `/studio/docs`                  | Required | `ingest`       | Author or upload a document and run the ingest pipeline (#673)                                 |
+| `GET`        | `/studio/docs`                  | Required | `ingest`       | List the ingested documents for the workspace (#673)                                           |
+| `GET`        | `/studio/docs/{file}`           | Required | `ingest`       | Return one document's reconstructed markdown (#673)                                            |
+| `GET`        | `/studio/cluster/events`        | Required | `cluster`      | SSE stream of cluster-status transitions driving the live-preview reload (#675)                |
+| `GET`        | `/studio/deploy/envs`           | Required | `deploy`       | Discovered deploy environments (#674)                                                          |
+| `GET`        | `/studio/deploy/doctor/{env}`   | Required | `deploy`       | Pre-deploy readiness checks for an env (#674)                                                  |
+| `GET`/`POST` | `/studio/deploy/secrets/{env}`  | Required | `deploy`       | Secret-presence checks per env (`POST` re-runs the checks) (#674)                              |
+| `GET`        | `/studio/deploy/ci`             | Required | `deploy`       | Recent CI deploy runs (#674)                                                                   |
+| `GET`        | `/studio/deploy/migration-log`  | Required | `deploy`       | SSE migration log tail (#674)                                                                  |
+| `GET`        | `/studio/deploy/rollback-log`   | Required | `deploy`       | SSE rollback log tail (#674)                                                                   |
+| `POST`       | `/studio/deploy/rollback/{env}` | Required | `deploy`       | Begin a rollback; returns a job id (#674)                                                      |
+| `GET`        | `/orchestrator/status`          | Required | `orchestrator` | Live daemon process status — process state, PID, uptime, and reachability (#674)               |
+| `GET`        | `/orchestrator/logs`            | Required | `orchestrator` | SSE stream of live daemon log lines (#674)                                                     |
+| `POST`       | `/orchestrator/start`           | Required | `orchestrator` | Start the loop; transitions process state to `running` (#674)                                  |
+| `POST`       | `/orchestrator/stop`            | Required | `orchestrator` | Stop the loop; clears slots and drains a real `LoopHandle` if installed (#674)                 |
+| `GET`        | `/analytics/loops`              | Required | `orchestrator` | Per-loop health for the plan/dev/doc lanes (#674)                                              |
+| `GET`        | `/analytics/slots`              | Required | `orchestrator` | Active work slots driving the Orchestrator cards (#674)                                        |
+| `GET`        | `/analytics/check-runs/stream`  | Required | `orchestrator` | SSE stream of CI/check-run events (#674)                                                       |
+| `GET`        | `/pages/project`                | None     | `pages`        | Project management graph rendered as markdown                                                  |
+| `GET`        | `/pages/{name}`                 | None     | `pages`        | Named knowledge-base page as markdown (`prd`, `architecture`, `plan`, `strategy`, `technical`) |
 
 ### Route module layout
 
@@ -579,8 +600,12 @@ crates/sf-serve/src/routes/
 ├── mod.rs          — module declarations and route-table doc comment
 ├── auth.rs         — /api/auth/* (public — session lifecycle, register)
 ├── api.rs          — /api/* (auth required — app API)
-├── studio.rs       — /studio/* (auth required — control-panel API)
-├── orchestrator.rs — /orchestrator/* (auth required — orchestrator control)
+├── studio.rs       — /studio/* (auth required — control-panel API: status, issues, steer) (#672)
+├── orchestrator.rs — /orchestrator/*, /analytics/* (auth required — control + loop/slot analytics + SSE) (#674)
+├── deploy.rs       — /studio/deploy/* (auth required — env/doctor/CI + rollback/migration logs) (#674)
+├── cluster.rs      — /studio/cluster/* (auth required — cluster-status SSE for live preview) (#675)
+├── ingest.rs       — /studio/docs* (auth required — knowledge ingest/docs API) (#673)
+├── project.rs      — /studio/* (auth required — project-graph dev-scout seam) (#672)
 └── pages.rs        — /pages/* (unauthenticated for milestone 1)
 ```
 
@@ -588,7 +613,7 @@ crates/sf-serve/src/routes/
 
 - `/pages/project` uses `sf_db::fetch_project_page` — a recursive CTE traversal over `nexum.project_nodes` and `nexum.links`. All other `/pages/{name}` routes use `sf_db::fetch_page_content` against `nexum.page_revisions`.
 - Authentication on `/pages/*` is explicitly deferred for milestone 1; the route is expected to be reachable only from localhost during this phase.
-- The `/orchestrator/status` route returns a minimal stub (PID = null, apiReachable = false) until the gardening-loop process manager is ported.
+- The `/orchestrator/status` route returns live process state read from `crates/sf-serve/src/orchestrator_state.rs` (`OrchestratorState`) rather than hardcoded nulls; `apiReachable` is `true` whenever the handler runs (the request reached the server), so the control panel's connection indicator reflects real reachability (#674).
 - Static browser assets are served from a configurable directory (`CONTROL_ASSETS_DIR`) mounted at the root; the asset-serving layer is composed on top of the API router in `crates/sf-serve/src/lib.rs`.
 
 ---
