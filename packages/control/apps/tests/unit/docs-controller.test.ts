@@ -179,4 +179,70 @@ describe("DocsController", () => {
     // (we use getState to confirm unsubscribe doesn't error, no new calls expected)
     expect(calls).toHaveLength(1);
   });
+
+  it("9: createDoc() POSTs to /studio/docs, reloads the list, and selects the new file", async () => {
+    const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input.toString();
+      if (init?.method === "POST" && url === "/studio/docs") {
+        return Promise.resolve(makeJsonResponse({ filename: "release.md" }));
+      }
+      if (url === "/studio/docs") {
+        return Promise.resolve(makeJsonResponse({ files: ["release.md"] }));
+      }
+      if (url === "/studio/docs/release.md") {
+        return Promise.resolve(makeTextResponse("# Release"));
+      }
+      throw new Error(`Unexpected fetch: ${url}`);
+    });
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ctrl = new DocsController();
+    const filename = await ctrl.createDoc({
+      title: "Release",
+      content: "# Release",
+    });
+
+    expect(filename).toBe("release.md");
+    // POST body carries the title + content (workspace is stamped server-side).
+    const postCall = fetchMock.mock.calls.find(
+      (c) => (c[1] as RequestInit | undefined)?.method === "POST",
+    );
+    expect(postCall).toBeDefined();
+    const body = JSON.parse((postCall?.[1] as RequestInit).body as string);
+    expect(body).toMatchObject({ title: "Release", content: "# Release" });
+
+    const state = ctrl.getState();
+    expect(state.saving).toBe(false);
+    expect(state.error).toBeNull();
+    expect(state.files).toContain("release.md");
+    expect(state.selectedFile).toBe("release.md");
+    expect(state.content).toBe("# Release");
+  });
+
+  it("10: createDoc() sets error on a non-OK response and clears saving", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(makeJsonResponse({}, 500))),
+    );
+
+    const ctrl = new DocsController();
+    const filename = await ctrl.createDoc({ title: "X", content: "body" });
+
+    expect(filename).toBeNull();
+    const state = ctrl.getState();
+    expect(state.saving).toBe(false);
+    expect(state.error).toMatch(/500/);
+  });
+
+  it("11: createDoc() rejects empty title/content without fetching", async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+
+    const ctrl = new DocsController();
+    const filename = await ctrl.createDoc({ title: "   ", content: "" });
+
+    expect(filename).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(ctrl.getState().error).toMatch(/required/);
+  });
 });

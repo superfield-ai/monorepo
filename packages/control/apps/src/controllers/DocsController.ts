@@ -12,7 +12,19 @@ export interface DocsState {
   selectedFile: string | null;
   content: string | null;
   loading: boolean;
+  /** True while a `createDoc` upload/write is in flight. */
+  saving: boolean;
   error: string | null;
+}
+
+/** Input for authoring or uploading a document via {@link DocsController.createDoc}. */
+export interface CreateDocInput {
+  /** Human-readable document title. */
+  title: string;
+  /** Raw markdown content. */
+  content: string;
+  /** Optional filename key; derived from the title server-side when omitted. */
+  filename?: string;
 }
 
 export type DocsListener = (state: DocsState) => void;
@@ -28,6 +40,7 @@ export class DocsController {
     selectedFile: null,
     content: null,
     loading: false,
+    saving: false,
     error: null,
   };
   private listeners: Set<DocsListener> = new Set();
@@ -133,6 +146,71 @@ export class DocsController {
       };
     }
     this.notify();
+  }
+
+  /**
+   * Author or upload a markdown document by POSTing it to the server ingest
+   * route (`POST /studio/docs`). The server runs the same ingest-and-embed
+   * pipeline as the CLI, so the new document becomes searchable in the brain.
+   *
+   * On success the docs list is reloaded and the freshly created document is
+   * selected so its rendered content shows immediately. Returns the filename
+   * the document reads back under, or `null` on failure (with `state.error`
+   * populated).
+   */
+  async createDoc(input: CreateDocInput): Promise<string | null> {
+    const title = input.title.trim();
+    if (!title || !input.content.trim()) {
+      this.state = {
+        ...this.state,
+        error: "title and content are required",
+      };
+      this.notify();
+      return null;
+    }
+
+    this.state = { ...this.state, saving: true, error: null };
+    this.notify();
+
+    try {
+      const res = await fetch(this.docsListUrl, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          content: input.content,
+          ...(input.filename ? { filename: input.filename } : {}),
+        }),
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const body = (await res.json()) as { filename?: string };
+      const filename = body.filename ?? null;
+
+      this.state = { ...this.state, saving: false, error: null };
+      this.notify();
+
+      // Reload the list so the new file appears, then drop any stale cache and
+      // select the freshly written document so its content renders.
+      if (filename) {
+        this.contentCache.delete(filename);
+        this.state = { ...this.state, selectedFile: filename };
+      }
+      await this.loadFileList();
+      if (filename) {
+        this.contentCache.delete(filename);
+        await this.selectFile(filename);
+      }
+
+      return filename;
+    } catch (err) {
+      this.state = {
+        ...this.state,
+        saving: false,
+        error: err instanceof Error ? err.message : String(err),
+      };
+      this.notify();
+      return null;
+    }
   }
 
   private notify(): void {
