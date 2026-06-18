@@ -17,7 +17,9 @@ nexum = { workspace = true }
 sf-db = { workspace = true }
 sf-cli = { workspace = true }
 sf-serve = { workspace = true }
+sf-loop = { workspace = true }
 sf-deploy = { workspace = true }
+fastenv = { workspace = true }
 serde_json.workspace = true
 tokio.workspace = true
 libc.workspace = true
