@@ -161,6 +161,7 @@ pub fn build_router_with_state(state: AppState, cfg: &ServeConfig) -> Router {
     let protected = Router::new()
         .merge(routes::api::router(state.clone()))
         .merge(routes::studio::router(state.clone()))
+        .merge(routes::change::router(state.clone()))
         .merge(routes::orchestrator::router(state.clone()))
         .merge(routes::deploy::router(state.clone()))
         .merge(routes::cluster::router(state.clone()))
