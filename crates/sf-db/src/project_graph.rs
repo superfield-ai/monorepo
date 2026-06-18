@@ -39,11 +39,46 @@
 //! project tree, and renders it as markdown.  This is the backing query for
 //! `GET /pages/project`.
 //!
+//! # Write contract for the knowledge-to-work seam (dev-scout, issue #677)
+//!
+//! This module's `pub async fn` write path is the **stable contract** that the
+//! knowledge-to-work feature (#672) builds on from three call sites:
+//!
+//! 1. A gardening-loop derivation step that turns brain knowledge into linked
+//!    Feature/Issue nodes (see `crates/sf-loop/src/steps/mod.rs` §"Insertion
+//!    point for the knowledge-derivation step").
+//! 2. The `/studio/issues` + `/studio/features` + `/studio/steer` HTTP routes
+//!    (see `crates/sf-serve/src/routes/project.rs`).
+//! 3. A CLI verb in `sf-cli`.
+//!
+//! The contract these callers depend on (all already implemented here — #672
+//! adds **callers**, not new graph primitives):
+//!
+//! | Function                      | Inserts                  | Links                          |
+//! |-------------------------------|--------------------------|--------------------------------|
+//! | [`insert_issue`]              | `Issue` node             | (root)                         |
+//! | [`insert_feature`]            | `Feature` node           | `project:issue_has_feature`    |
+//! | [`insert_required_test`]      | `RequiredTest` node      | `project:feature_has_required_test` |
+//! | [`insert_acceptance_criterion`] | `AcceptanceCriterion`  | `project:feature_has_acceptance_criterion` |
+//! | [`link_pr_to_issue`]          | `PullRequest` node       | `project:pr_resolves_issue` (1-per-issue) |
+//!
+//! Stability guarantees for #672/#673 to rely on:
+//! - All writes anchor to the single sentinel document ([`PROJECT_GRAPH_DOC_TITLE`]).
+//! - Created nodes read back consistently through [`fetch_project_page`], which
+//!   backs `GET /pages/project` — so any new node is visible in the projection
+//!   without further wiring.
+//! - A node's lifecycle `state` column (`nexum.project_nodes.state`) is the
+//!   mutation target for the `/studio/steer` redirect path; the read path
+//!   already surfaces it (see [`ProjectNode::state`] and [`render_node`]).
+//!
+//! No new write primitive is introduced by the dev-scout pass — this section
+//! documents the existing surface so #672 and #673 can proceed in parallel.
+//!
 //! # Canonical docs
 //!
 //! - `docs/architecture.md` §Nexum — project management graph.
 //! - `docs/milestone-1.md` §4.6.
-//! - Issue #493 scope.
+//! - Issue #493 scope; issue #677 (seam), #672 (downstream feature).
 
 use sqlx::PgPool;
 use thiserror::Error;

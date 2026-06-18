@@ -250,3 +250,65 @@ mod integration {
         );
     }
 }
+
+/// Offline unit tests for the additive route-module registration seam
+/// (dev-scout, issue #677).
+///
+/// These tests build the router without a live database. axum panics at
+/// router **build** time if two merged modules register colliding routes, so a
+/// successful `build_router` call is itself the assertion that the additive
+/// `routes::project` (#672) and `routes::ingest` (#673) seams register without
+/// conflict. No DB connection is opened — the pool is created lazily.
+#[cfg(test)]
+mod additive_route_seam {
+    use std::net::SocketAddr;
+
+    use sqlx::postgres::PgPoolOptions;
+
+    use crate::{build_router, ServeConfig};
+
+    /// A lazily-connected pool that never actually dials Postgres — enough to
+    /// construct the router (route registration touches no connection).
+    fn lazy_pool() -> sqlx::PgPool {
+        PgPoolOptions::new()
+            .max_connections(1)
+            .connect_lazy("postgres://localhost/placeholder")
+            .expect("lazy pool construction must succeed")
+    }
+
+    fn test_cfg() -> ServeConfig {
+        ServeConfig {
+            bind_addr: "127.0.0.1:0".parse::<SocketAddr>().unwrap(),
+            session_ttl_secs: Some(3600),
+            assets_dir: None,
+        }
+    }
+
+    /// The additive `project` and `ingest` route modules merge into the
+    /// protected route group without colliding — `build_router` does not panic.
+    #[tokio::test]
+    async fn additive_modules_register_without_colliding() {
+        let pool = lazy_pool();
+        let cfg = test_cfg();
+        // If `routes::project` and `routes::ingest` (or any other merged
+        // module) registered an overlapping route, axum's `Router::merge`
+        // would panic here at build time.
+        let _router = build_router(pool, &cfg);
+    }
+
+    /// Each dev-scout seam module exposes a `router(state)` constructor that
+    /// builds in isolation. Today they register no routes (no-op stubs), so the
+    /// real assertion is that the public seam signature compiles and builds.
+    #[tokio::test]
+    async fn seam_module_routers_build_in_isolation() {
+        use crate::routes;
+        use crate::state::AppState;
+
+        let pool = lazy_pool();
+        let session_store = sf_auth::SessionStore::new(pool.clone(), Some(3600));
+        let state = AppState::new(pool, session_store);
+
+        let _project = routes::project::router(state.clone());
+        let _ingest = routes::ingest::router(state);
+    }
+}
