@@ -40,3 +40,4 @@ committed step). Requires Postgres with `public.workspaces`,
 DATABASE_URL=postgres://… cargo test -p superfield --test daemon_loop_integration \
   -- --ignored --test-threads=1
 ```
+
