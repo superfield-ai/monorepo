@@ -549,6 +549,13 @@ async fn run_as_daemon() {
     orchestrator.set_pid(std::process::id() as i64);
     orchestrator.publish_log("orchestrator: gardening loop started on daemon boot".to_string());
 
+    // Seed the control-panel live-preview cluster status from the appliance's
+    // real workload health (issue #675), so `/studio/cluster/events` reports a
+    // supervisor-derived status rather than a constant. The route's snapshot
+    // delivers it to every subscriber, and `IframePanel` keys its reload off
+    // subsequent restart-to-healthy transitions on this stream.
+    daemon_runtime::seed_cluster_status(supervisor.as_ref(), &orchestrator);
+
     // Start the gardening loop and install the REAL loop handle, retiring
     // NoopLoopHandle on the running path.  The loop resumes from its persisted
     // cursor on its first pass and feeds the shared orchestrator state above.
