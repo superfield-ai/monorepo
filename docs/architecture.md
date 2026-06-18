@@ -429,11 +429,11 @@ Setting `SF_NO_DAEMON=1` suppresses `daemonize()`. The CLI still re-executes the
 
 `crates/sf-db/src/provisioner.rs` defines the [`PostgresProvisioner`] trait — the interface through which the daemon owns the local Postgres lifecycle without coupling the `sf-db` crate to any specific runtime.
 
-| Method         | Contract                                                                                                          |
-| -------------- | ----------------------------------------------------------------------------------------------------------------- |
-| `start`        | Ensure Postgres is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running              |
-| `stop`         | Stop the instance cleanly after the gardening loop has drained; idempotent — no-op if already stopped             |
-| `database_url` | The `DATABASE_URL` the provisioner stood up, or `None` (then the daemon falls back to the environment)            |
+| Method         | Contract                                                                                               |
+| -------------- | ------------------------------------------------------------------------------------------------------ |
+| `start`        | Ensure Postgres is running and `pg_isready` passes (max 60 s); idempotent — no-op if already running   |
+| `stop`         | Stop the instance cleanly after the gardening loop has drained; idempotent — no-op if already stopped  |
+| `database_url` | The `DATABASE_URL` the provisioner stood up, or `None` (then the daemon falls back to the environment) |
 
 The real implementation, `LocalPostgresProvisioner`, stands up an appliance-local Postgres with no Docker, no root, and no network database (PRD Constraint §9 self-sufficiency): it runs `initdb` into a durable data directory (`~/.superfield/daemon/postgres`) if absent, starts the instance with `pg_ctl start` bound to `127.0.0.1` with the Unix socket directory pointed at the data dir, polls `pg_isready` until the health gate passes, and ensures the application database exists. It reports the loopback URL via `database_url`. Tests and crates that do not own provisioning — and the path where `DATABASE_URL` is supplied externally — use [`TestProvisioner`], a no-op that returns `Ok(())` and `database_url() == None`.
 
