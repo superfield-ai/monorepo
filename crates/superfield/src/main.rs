@@ -540,9 +540,6 @@ async fn run_as_daemon() {
             }
         };
 
-    // Start the gardening loop and install the REAL loop handle, retiring
-    // NoopLoopHandle on the running path.  The loop resumes from its persisted
-    // cursor on its first pass.
     // One shared orchestrator state: the gardening loop records ticks and
     // publishes logs into it, and the HTTP serving layer reports it under
     // `/orchestrator/*` and `/analytics/*` (issue #674). Mark it running with
@@ -552,6 +549,9 @@ async fn run_as_daemon() {
     orchestrator.set_pid(std::process::id() as i64);
     orchestrator.publish_log("orchestrator: gardening loop started on daemon boot".to_string());
 
+    // Start the gardening loop and install the REAL loop handle, retiring
+    // NoopLoopHandle on the running path.  The loop resumes from its persisted
+    // cursor on its first pass and feeds the shared orchestrator state above.
     let loop_config = sf_loop::LoopConfig::from_env();
     let executor = daemon_runtime::build_executor(&loop_config);
     let loop_handle = daemon_runtime::boot_loop(
