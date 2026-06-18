@@ -131,7 +131,7 @@ async fn boot_installs_real_loop_handle_and_records_a_tick() {
     seed_workspace(&pool, workspace_id).await;
 
     let executor: Arc<dyn sf_loop::AgentExecutor> = Arc::new(FixtureAgentExecutor::default());
-    let handle = daemon_runtime::boot_loop(pool.clone(), loop_config(workspace_id), executor);
+    let handle = daemon_runtime::boot_loop(pool.clone(), loop_config(workspace_id), executor, None);
 
     // The loop ticks against the brain: the first step commits a cursor.
     let committed = wait_for_cursor(&pool, workspace_id, Duration::from_secs(10)).await;
@@ -171,7 +171,7 @@ async fn shutdown_drains_loop_before_stopping_provisioner() {
     seed_workspace(&pool, workspace_id).await;
 
     let executor: Arc<dyn sf_loop::AgentExecutor> = Arc::new(FixtureAgentExecutor::default());
-    let handle = daemon_runtime::boot_loop(pool.clone(), loop_config(workspace_id), executor);
+    let handle = daemon_runtime::boot_loop(pool.clone(), loop_config(workspace_id), executor, None);
 
     // Let the loop tick at least once so a step is committed.
     wait_for_cursor(&pool, workspace_id, Duration::from_secs(10)).await;
@@ -245,7 +245,7 @@ async fn loop_resumes_from_persisted_cursor_after_restart() {
     // Now boot the real loop and let it advance. The next committed step must be
     // a later step than the seed, proving it did not restart the sequence.
     let executor: Arc<dyn sf_loop::AgentExecutor> = Arc::new(FixtureAgentExecutor::default());
-    let handle = daemon_runtime::boot_loop(pool.clone(), loop_config(workspace_id), executor);
+    let handle = daemon_runtime::boot_loop(pool.clone(), loop_config(workspace_id), executor, None);
 
     // Wait until the cursor advances past prd_reconcile.
     let deadline = std::time::Instant::now() + Duration::from_secs(15);

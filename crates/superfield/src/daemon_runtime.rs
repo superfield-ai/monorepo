@@ -143,8 +143,11 @@ pub fn boot_loop(
     pool: sqlx::PgPool,
     config: LoopConfig,
     executor: Arc<dyn AgentExecutor>,
-) -> Box<dyn LoopHandle> {
-    Box::new(GardeningLoop::start(pool, config, executor))
+    observer: Option<sf_serve::OrchestratorState>,
+) -> Arc<dyn LoopHandle> {
+    Arc::new(GardeningLoop::start_observed(
+        pool, config, executor, observer,
+    ))
 }
 
 /// Drain the gardening loop, take the appliance down, and stop the Postgres

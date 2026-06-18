@@ -39,6 +39,7 @@
 pub mod auth;
 pub mod error;
 pub mod loop_handle;
+pub mod orchestrator_state;
 pub mod routes;
 pub mod state;
 
@@ -60,6 +61,7 @@ use tower_http::services::{ServeDir, ServeFile};
 pub use auth::auth_middleware;
 pub use error::ServeError;
 pub use loop_handle::{LoopHandle, LoopHandleError, NoopLoopHandle};
+pub use orchestrator_state::{LoopHealth, OrchestratorState, ProcessState, WorkSlot};
 pub use state::AppState;
 
 // Re-export AuthContext so callers don't need to depend on sf-auth directly.
@@ -116,10 +118,22 @@ impl Default for ServeConfig {
 /// All authenticated routes use [`auth_middleware`], which validates the
 /// session token and injects an [`AuthContext`] extension.
 pub fn build_router(pool: PgPool, cfg: &ServeConfig) -> Router {
-    use axum::middleware;
-
     let session_store = sf_auth::SessionStore::new(pool.clone(), cfg.session_ttl_secs);
     let state = AppState::new(pool, session_store);
+    build_router_with_state(state, cfg)
+}
+
+/// Build the axum [`Router`] around a caller-supplied [`AppState`].
+///
+/// Identical to [`build_router`] but lets the daemon construct the [`AppState`]
+/// itself — and therefore share the same
+/// [`OrchestratorState`](crate::orchestrator_state::OrchestratorState) instance
+/// that it drives over the process lifetime. The orchestrator/analytics routes
+/// read live process/loop/slot state and the log/CI SSE streams from that
+/// shared state, so the daemon must build state once and serve from it (issue
+/// #674).
+pub fn build_router_with_state(state: AppState, cfg: &ServeConfig) -> Router {
+    use axum::middleware;
 
     // Public auth routes — no session required.
     let auth_routes = routes::auth::router(state.clone());
@@ -142,6 +156,7 @@ pub fn build_router(pool: PgPool, cfg: &ServeConfig) -> Router {
         .merge(routes::api::router(state.clone()))
         .merge(routes::studio::router(state.clone()))
         .merge(routes::orchestrator::router(state.clone()))
+        .merge(routes::deploy::router(state.clone()))
         .merge(routes::project::router(state.clone()))
         .merge(routes::ingest::router(state.clone()))
         .layer(middleware::from_fn_with_state(
@@ -246,6 +261,38 @@ where
     F: std::future::Future<Output = ()> + Send + 'static,
 {
     let router = build_router(pool, &cfg);
+    let listener = TcpListener::bind(cfg.bind_addr)
+        .await
+        .map_err(|e| ServeError::Bind(cfg.bind_addr, e))?;
+
+    axum::serve(listener, router)
+        .with_graceful_shutdown(shutdown)
+        .await
+        .map_err(ServeError::Serve)?;
+
+    Ok(())
+}
+
+/// Like [`serve_with_shutdown`] but serves from a caller-supplied [`AppState`].
+///
+/// The daemon builds its own [`AppState`] (so it can hold and drive the shared
+/// [`OrchestratorState`](crate::orchestrator_state::OrchestratorState) the
+/// `/orchestrator/*` and `/analytics/*` routes report on) and serves from it.
+/// See [`build_router_with_state`] (issue #674).
+///
+/// # Errors
+///
+/// Returns [`ServeError::Bind`] if the port cannot be bound, or
+/// [`ServeError::Serve`] if the server loop fails.
+pub async fn serve_with_shutdown_state<F>(
+    state: AppState,
+    cfg: ServeConfig,
+    shutdown: F,
+) -> Result<(), ServeError>
+where
+    F: std::future::Future<Output = ()> + Send + 'static,
+{
+    let router = build_router_with_state(state, &cfg);
     let listener = TcpListener::bind(cfg.bind_addr)
         .await
         .map_err(|e| ServeError::Bind(cfg.bind_addr, e))?;

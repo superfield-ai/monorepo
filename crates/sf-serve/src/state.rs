@@ -18,6 +18,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::loop_handle::LoopHandle;
+use crate::orchestrator_state::OrchestratorState;
 
 /// Inner fields of the shared state.
 ///
@@ -42,6 +43,15 @@ pub struct Inner {
     /// [`AppState::with_loop_handle`]; the shutdown path drains it before
     /// stopping the Postgres provisioner. Wired by issue #671.
     pub loop_handle: Option<Arc<dyn LoopHandle>>,
+
+    /// Live orchestrator runtime state (issue #674).
+    ///
+    /// The observable projection of the gardening-loop lifecycle that the
+    /// `/orchestrator/*` and `/analytics/*` routes serve: process state, pid,
+    /// uptime, per-loop health, active work slots, and the log/CI SSE streams.
+    /// Always present — a fresh [`OrchestratorState`] in `stopped` is installed
+    /// by [`AppState::new`]; the daemon boot path drives its lifecycle.
+    pub orchestrator: OrchestratorState,
 }
 
 impl std::fmt::Debug for Inner {
@@ -53,6 +63,7 @@ impl std::fmt::Debug for Inner {
                 "loop_handle",
                 &self.loop_handle.as_ref().map(|_| "installed"),
             )
+            .field("orchestrator", &self.orchestrator)
             .finish()
     }
 }
@@ -74,6 +85,7 @@ impl AppState {
             pool,
             session_store,
             loop_handle: None,
+            orchestrator: OrchestratorState::new(),
         }))
     }
 
@@ -91,6 +103,30 @@ impl AppState {
             pool,
             session_store,
             loop_handle: Some(loop_handle),
+            orchestrator: OrchestratorState::new(),
+        }))
+    }
+
+    /// Build an [`AppState`] with a loop handle **and** a caller-supplied
+    /// [`OrchestratorState`] installed.
+    ///
+    /// The daemon creates one [`OrchestratorState`], hands a clone to the
+    /// gardening loop (which records ticks and publishes logs into it), and
+    /// installs the same instance here so the `/orchestrator/*` and
+    /// `/analytics/*` routes report the loop's genuinely-live state (issue
+    /// #674). The session store is built from the pool and TTL.
+    pub fn with_loop_handle_and_orchestrator(
+        pool: PgPool,
+        session_ttl_secs: Option<i64>,
+        loop_handle: Arc<dyn LoopHandle>,
+        orchestrator: OrchestratorState,
+    ) -> Self {
+        let session_store = SessionStore::new(pool.clone(), session_ttl_secs);
+        Self(Arc::new(Inner {
+            pool,
+            session_store,
+            loop_handle: Some(loop_handle),
+            orchestrator,
         }))
     }
 
@@ -111,5 +147,14 @@ impl AppState {
     /// stopping the Postgres provisioner.
     pub fn loop_handle(&self) -> Option<&Arc<dyn LoopHandle>> {
         self.0.loop_handle.as_ref()
+    }
+
+    /// Access the live orchestrator runtime state (issue #674).
+    ///
+    /// The `/orchestrator/*` and `/analytics/*` routes read process/loop/slot
+    /// state and the log/CI SSE streams from here; the daemon boot path drives
+    /// its lifecycle.
+    pub fn orchestrator(&self) -> &OrchestratorState {
+        &self.0.orchestrator
     }
 }

@@ -113,12 +113,28 @@ impl GardeningLoop {
         config: LoopConfig,
         executor: Arc<dyn AgentExecutor>,
     ) -> GardeningLoopHandle {
+        Self::start_observed(pool, config, executor, None)
+    }
+
+    /// Spawn the gardening loop with an optional observable-state sink.
+    ///
+    /// When `observer` is `Some`, each gardening step records a tick — duration
+    /// and `lastTickAt` — on the `dev` lane of the orchestrator state and
+    /// publishes a log line to the `/orchestrator/logs` stream, so the
+    /// control-panel Orchestrator tab shows real loop health and live logs
+    /// (issue #674).
+    pub fn start_observed(
+        pool: sqlx::PgPool,
+        config: LoopConfig,
+        executor: Arc<dyn AgentExecutor>,
+        observer: Option<sf_serve::OrchestratorState>,
+    ) -> GardeningLoopHandle {
         // Channels for drain signalling.
         let (drain_tx, drain_rx) = tokio::sync::oneshot::channel::<()>();
         let (done_tx, done_rx) = tokio::sync::oneshot::channel::<()>();
 
         let join: JoinHandle<()> = tokio::spawn(async move {
-            run_loop(pool, config, executor, drain_rx, done_tx).await;
+            run_loop(pool, config, executor, observer, drain_rx, done_tx).await;
         });
 
         GardeningLoopHandle::new(drain_tx, done_rx, join)
@@ -130,6 +146,7 @@ async fn run_loop(
     pool: sqlx::PgPool,
     config: LoopConfig,
     executor: Arc<dyn AgentExecutor>,
+    observer: Option<sf_serve::OrchestratorState>,
     mut drain_rx: tokio::sync::oneshot::Receiver<()>,
     done_tx: tokio::sync::oneshot::Sender<()>,
 ) {
@@ -180,7 +197,11 @@ async fn run_loop(
             }
 
             tracing::info!("gardening: running step {:?}", step.name());
+            if let Some(obs) = observer.as_ref() {
+                obs.publish_log(format!("gardening: running step {}", step.name()));
+            }
 
+            let tick_start = std::time::Instant::now();
             let result = steps::run_step(
                 step,
                 &pool,
@@ -189,15 +210,28 @@ async fn run_loop(
                 blueprint.as_ref(),
             )
             .await;
+            let tick_ms = tick_start.elapsed().as_millis() as i64;
 
             match result {
                 Ok(()) => {
+                    if let Some(obs) = observer.as_ref() {
+                        obs.record_dev_tick(tick_ms);
+                        obs.publish_log(format!(
+                            "gardening: step {} ok ({} ms)",
+                            step.name(),
+                            tick_ms
+                        ));
+                    }
                     if let Err(e) = commit_cursor(&pool, config.workspace_id, step.name()).await {
                         tracing::error!("commit_cursor failed for {}: {}", step.name(), e);
                     }
                 }
                 Err(e) => {
                     tracing::error!("step {} failed: {}", step.name(), e);
+                    if let Some(obs) = observer.as_ref() {
+                        obs.record_dev_failure();
+                        obs.publish_log(format!("gardening: step {} failed: {}", step.name(), e));
+                    }
                     // On failure, pause briefly and retry the pass from the cursor.
                     tokio::time::sleep(std::time::Duration::from_secs(10)).await;
                     continue 'outer;
