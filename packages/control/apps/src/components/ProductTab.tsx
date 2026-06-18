@@ -30,6 +30,11 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
     controllerRef.current.getState(),
   );
 
+  // Authoring composer (local UI state only).
+  const [authoring, setAuthoring] = useState(false);
+  const [draftTitle, setDraftTitle] = useState("");
+  const [draftContent, setDraftContent] = useState("");
+
   useEffect(() => {
     const ctrl = controllerRef.current;
     const unsub = ctrl.subscribe(setState);
@@ -37,7 +42,28 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
     return unsub;
   }, []);
 
-  const { files, selectedFile, content, loading, error } = state;
+  const { files, selectedFile, content, loading, saving, error } = state;
+
+  // Load an uploaded markdown/text file into the composer.
+  async function handleUpload(file: File) {
+    const text = await file.text();
+    setDraftTitle((t) => t || file.name.replace(/\.(md|markdown|txt)$/i, ""));
+    setDraftContent(text);
+    setAuthoring(true);
+  }
+
+  // Submit the composed/uploaded document to the server ingest route.
+  async function handleSave() {
+    const created = await controllerRef.current.createDoc({
+      title: draftTitle,
+      content: draftContent,
+    });
+    if (created) {
+      setAuthoring(false);
+      setDraftTitle("");
+      setDraftContent("");
+    }
+  }
 
   return (
     <div
@@ -64,6 +90,9 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
         {/* Sidebar header */}
         <div
           style={{
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "space-between",
             padding: "var(--sp-3) var(--sp-4)",
             borderBottom: "1px solid var(--border-subtle)",
           }}
@@ -71,6 +100,24 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
           <span className="label" style={{ color: "var(--fg-1)" }}>
             DOCS
           </span>
+          <button
+            type="button"
+            data-testid="docs-new"
+            onClick={() => setAuthoring(true)}
+            style={{
+              background: "transparent",
+              border: "1px solid var(--border-subtle)",
+              borderRadius: 2,
+              padding: "0 var(--sp-2)",
+              cursor: "pointer",
+              fontFamily: "var(--font-mono)",
+              fontSize: "var(--text-xs)",
+              letterSpacing: "var(--ls-wider)",
+              color: "var(--accent-cyan)",
+            }}
+          >
+            + NEW
+          </button>
         </div>
 
         {/* File list */}
@@ -131,59 +178,200 @@ function DocsViewer({ controller: controllerProp }: DocsViewerProps) {
           }}
         >
           <span className="label" style={{ color: "var(--fg-2)" }}>
-            {selectedFile
-              ? selectedFile.replace(/\.md$/i, "").toUpperCase()
-              : "SELECT A FILE"}
+            {authoring
+              ? "NEW DOCUMENT"
+              : selectedFile
+                ? selectedFile.replace(/\.md$/i, "").toUpperCase()
+                : "SELECT A FILE"}
           </span>
         </div>
 
+        {/* Authoring composer — write or upload knowledge */}
+        {authoring && (
+          <div
+            data-testid="docs-composer"
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "var(--sp-4)",
+              display: "flex",
+              flexDirection: "column",
+              gap: "var(--sp-3)",
+            }}
+          >
+            <input
+              data-testid="docs-composer-title"
+              type="text"
+              placeholder="Document title"
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              style={{
+                background: "var(--bg-raised)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 2,
+                padding: "var(--sp-2) var(--sp-3)",
+                color: "var(--fg-1)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-sm)",
+              }}
+            />
+            <textarea
+              data-testid="docs-composer-content"
+              placeholder="Write markdown knowledge here…"
+              value={draftContent}
+              onChange={(e) => setDraftContent(e.target.value)}
+              style={{
+                flex: 1,
+                minHeight: 180,
+                resize: "vertical",
+                background: "var(--bg-raised)",
+                border: "1px solid var(--border-subtle)",
+                borderRadius: 2,
+                padding: "var(--sp-2) var(--sp-3)",
+                color: "var(--fg-1)",
+                fontFamily: "var(--font-mono)",
+                fontSize: "var(--text-sm)",
+              }}
+            />
+            {error && (
+              <p
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--accent-red)",
+                  margin: 0,
+                }}
+              >
+                {error}
+              </p>
+            )}
+            <div style={{ display: "flex", gap: "var(--sp-2)" }}>
+              <button
+                type="button"
+                data-testid="docs-composer-save"
+                disabled={saving || !draftTitle.trim() || !draftContent.trim()}
+                onClick={() => void handleSave()}
+                style={{
+                  background: "var(--accent-cyan)",
+                  border: "none",
+                  borderRadius: 2,
+                  padding: "var(--sp-2) var(--sp-4)",
+                  cursor: saving ? "default" : "pointer",
+                  opacity:
+                    saving || !draftTitle.trim() || !draftContent.trim()
+                      ? 0.5
+                      : 1,
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  letterSpacing: "var(--ls-wider)",
+                  color: "var(--bg-base)",
+                }}
+              >
+                {saving ? "SAVING…" : "SAVE"}
+              </button>
+              <label
+                data-testid="docs-composer-upload-label"
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 2,
+                  padding: "var(--sp-2) var(--sp-4)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  letterSpacing: "var(--ls-wider)",
+                  color: "var(--fg-2)",
+                }}
+              >
+                UPLOAD
+                <input
+                  data-testid="docs-composer-upload"
+                  type="file"
+                  accept=".md,.markdown,.txt,text/markdown,text/plain"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0];
+                    if (file) void handleUpload(file);
+                    e.target.value = "";
+                  }}
+                  style={{ display: "none" }}
+                />
+              </label>
+              <button
+                type="button"
+                data-testid="docs-composer-cancel"
+                onClick={() => {
+                  setAuthoring(false);
+                  setDraftTitle("");
+                  setDraftContent("");
+                }}
+                style={{
+                  background: "transparent",
+                  border: "1px solid var(--border-subtle)",
+                  borderRadius: 2,
+                  padding: "var(--sp-2) var(--sp-4)",
+                  cursor: "pointer",
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  letterSpacing: "var(--ls-wider)",
+                  color: "var(--fg-2)",
+                }}
+              >
+                CANCEL
+              </button>
+            </div>
+          </div>
+        )}
+
         {/* Content body */}
-        <div
-          data-testid="docs-content"
-          style={{
-            flex: 1,
-            overflowY: "auto",
-            padding: "var(--sp-4)",
-            color: "var(--fg-1)",
-          }}
-        >
-          {loading && (
-            <p
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-xs)",
-                color: "var(--fg-3)",
-              }}
-            >
-              Loading…
-            </p>
-          )}
-          {error && (
-            <p
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-xs)",
-                color: "var(--accent-red)",
-              }}
-            >
-              {error}
-            </p>
-          )}
-          {!loading && !error && content && <WikiRender content={content} />}
-          {!loading && !error && !content && !selectedFile && (
-            <p
-              style={{
-                fontFamily: "var(--font-mono)",
-                fontSize: "var(--text-xs)",
-                color: "var(--fg-3)",
-                textAlign: "center",
-                marginTop: "var(--sp-8)",
-              }}
-            >
-              SELECT A FILE FROM THE SIDEBAR.
-            </p>
-          )}
-        </div>
+        {!authoring && (
+          <div
+            data-testid="docs-content"
+            style={{
+              flex: 1,
+              overflowY: "auto",
+              padding: "var(--sp-4)",
+              color: "var(--fg-1)",
+            }}
+          >
+            {loading && (
+              <p
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--fg-3)",
+                }}
+              >
+                Loading…
+              </p>
+            )}
+            {error && (
+              <p
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--accent-red)",
+                }}
+              >
+                {error}
+              </p>
+            )}
+            {!loading && !error && content && <WikiRender content={content} />}
+            {!loading && !error && !content && !selectedFile && (
+              <p
+                style={{
+                  fontFamily: "var(--font-mono)",
+                  fontSize: "var(--text-xs)",
+                  color: "var(--fg-3)",
+                  textAlign: "center",
+                  marginTop: "var(--sp-8)",
+                }}
+              >
+                SELECT A FILE FROM THE SIDEBAR.
+              </p>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );

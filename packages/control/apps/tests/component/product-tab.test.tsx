@@ -86,6 +86,7 @@ function makeDocsControllerMock(initialState: Partial<DocsState> = {}): {
     selectedFile: "README.md",
     content: "# Demo docs",
     loading: false,
+    saving: false,
     error: null,
     ...initialState,
   };
@@ -121,6 +122,7 @@ function makeDocsControllerMock(initialState: Partial<DocsState> = {}): {
     })),
     loadFileList: vi.fn(async () => {}),
     selectFile: vi.fn(async (_filename: string) => {}),
+    createDoc: vi.fn(async (_input: unknown) => "untitled.md"),
   } as unknown as DocsController;
 
   return { controller, setState };
@@ -216,6 +218,31 @@ test("renders docs and seeded assistant output from a Claude fixture", async () 
       ),
     )
     .toBeVisible();
+});
+
+test("docs authoring flow posts a new document via the injected controller", async () => {
+  const { controller: docsController } = makeDocsControllerMock();
+  const { controller: chatController } = makeChatControllerMock();
+
+  const screen = render(
+    <ProductTab
+      docsController={docsController}
+      chatController={chatController}
+    />,
+  );
+
+  // Open the authoring composer and write a document.
+  await screen.getByTestId("docs-new").click();
+  await screen.getByTestId("docs-composer-title").fill("Onboarding");
+  await screen
+    .getByTestId("docs-composer-content")
+    .fill("# Onboarding\n\nWelcome to Superfield.");
+  await screen.getByTestId("docs-composer-save").click();
+
+  expect(docsController.createDoc).toHaveBeenCalledWith({
+    title: "Onboarding",
+    content: "# Onboarding\n\nWelcome to Superfield.",
+  });
 });
 
 test("product chat submit calls sendMessage on the injected controller", async () => {
