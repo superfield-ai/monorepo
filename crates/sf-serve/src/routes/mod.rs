@@ -5,7 +5,8 @@
 //! | [`auth`]        | `/api/auth/*`      | None     | Session issue and revoke              |
 //! | [`api`]         | `/api/*`           | Required | App API (workspace-scoped)            |
 //! | [`studio`]      | `/studio/*`        | Required | Control-panel API                     |
-//! | [`orchestrator`]| `/orchestrator/*`  | Required | Orchestrator control endpoints        |
+//! | [`orchestrator`]| `/orchestrator/*`, `/analytics/*` | Required | Orchestrator control + loop/slot analytics + SSE streams (#674) |
+//! | [`deploy`]      | `/studio/deploy/*` | Required | Deploy-tab env/doctor/CI + rollback/migration logs (#674) |
 //! | [`pages`]       | `/pages/*`         | None     | Knowledge-base page projections       |
 //! | [`project`]     | `/studio/*`        | Required | Project-graph API (dev-scout seam, #672) |
 //! | [`ingest`]      | `/studio/*`        | Required | Knowledge ingest/docs API (dev-scout seam, #673) |
@@ -19,6 +20,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod deploy;
 pub mod ingest;
 pub mod orchestrator;
 pub mod pages;

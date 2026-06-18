@@ -543,9 +543,23 @@ async fn run_as_daemon() {
     // Start the gardening loop and install the REAL loop handle, retiring
     // NoopLoopHandle on the running path.  The loop resumes from its persisted
     // cursor on its first pass.
+    // One shared orchestrator state: the gardening loop records ticks and
+    // publishes logs into it, and the HTTP serving layer reports it under
+    // `/orchestrator/*` and `/analytics/*` (issue #674). Mark it running with
+    // this daemon's pid before the loop starts ticking.
+    let orchestrator = sf_serve::OrchestratorState::new();
+    orchestrator.set_process_state(sf_serve::ProcessState::Running);
+    orchestrator.set_pid(std::process::id() as i64);
+    orchestrator.publish_log("orchestrator: gardening loop started on daemon boot".to_string());
+
     let loop_config = sf_loop::LoopConfig::from_env();
     let executor = daemon_runtime::build_executor(&loop_config);
-    let loop_handle = daemon_runtime::boot_loop(pool.clone(), loop_config, executor);
+    let loop_handle = daemon_runtime::boot_loop(
+        pool.clone(),
+        loop_config,
+        executor,
+        Some(orchestrator.clone()),
+    );
 
     let assets_dir = std::env::var("CONTROL_ASSETS_DIR")
         .ok()
@@ -556,8 +570,19 @@ async fn run_as_daemon() {
         assets_dir,
     };
 
+    // Build the serving state with the running loop handle and the shared
+    // orchestrator state installed so the Orchestrator tab reads live state.
+    let app_state = sf_serve::AppState::with_loop_handle_and_orchestrator(
+        pool,
+        serve_cfg.session_ttl_secs,
+        loop_handle.clone(),
+        orchestrator,
+    );
+
     // Serve until SIGTERM (or SIGINT) requests a graceful shutdown.
-    if let Err(e) = sf_serve::serve_with_shutdown(pool, serve_cfg, shutdown_signal()).await {
+    if let Err(e) =
+        sf_serve::serve_with_shutdown_state(app_state, serve_cfg, shutdown_signal()).await
+    {
         eprintln!("superfield daemon: serve error: {}", e);
     }
 
