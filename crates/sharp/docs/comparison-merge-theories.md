@@ -137,7 +137,38 @@ it is not.
 
 The last row is the quiet headline: **all three lineages are syntactic.** They reason
 about sets, lines, graphs, and trees — never about symbols, types, or whether the merged
-program compiles. Whatever Sharp borrows, the semantic tiers are additive on top.
+program compiles. The tempting reading of this row — _"whatever Sharp borrows, the
+semantic tier is additive on top"_ — is exactly the framing the whitepaper's root axiom
+(§1.1) rejects. The semantic layer is not an addition to a VCS; it is the property a
+syntactic VCS was relying on a human to supply. The row does not name a feature these
+systems happen to lack — it names the altitude at which they decline to decide
+independence, and which an agent-first VCS, having no human to decide it instead, must
+occupy. Read that way, the row is not a footnote to the table; it is the axis the table
+was missing.
+
+## 4.5 The two axes are orthogonal
+
+The table's first row (unit of history) and its last row (semantic awareness) are two
+_independent_ design axes, routinely collapsed into one. The unit of history can be a
+snapshot or a first-class patch; the merge altitude can be lexical or semantic. Nothing
+ties the choices together. Crossed, they give four cells:
+
+|                   | **Snapshot / derived diff** | **Patch / first-class change** |
+| ----------------- | --------------------------- | ------------------------------ |
+| **Lexical atom**  | Git, Jujutsu                | Darcs, Pijul                   |
+| **Semantic atom** | **Sharp v1**                | **— unoccupied —**             |
+
+Sharp v1 is the lower-left cell: a snapshot substrate with a semantic merge altitude — a
+combination no prior system ships, and the whole of the
+[`snapshots-vs-patches.md`](./snapshots-vs-patches.md) decision. The lower-right cell —
+history as first-class _semantic_ operations, whose commutation the language _decides_
+rather than a line theory _approximates_ — is occupied by no shipping system. It is the
+only cell that differentiates against Git, Jujutsu, and Pijul at once, and it is where
+Pijul's hardest unsolved problem (sound commutation of line-patches) is dissolved rather
+than inherited, because a semantic operation carries its dependency relation with it where
+a line carries none. That cell is Sharp's named post-v1 fork, analyzed in
+[`semantic-patches.md`](./semantic-patches.md). The rest of this document analyzes the row
+Sharp lives in today; that document analyzes the column it could move along next.
 
 ## 5. What Sharp takes from each
 
