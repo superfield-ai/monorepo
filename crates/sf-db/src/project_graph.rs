@@ -69,6 +69,13 @@ pub enum ProjectGraphError {
     /// violated.
     #[error("pull request {0} is already linked to an issue (one-PR-per-issue constraint)")]
     PrAlreadyLinked(Uuid),
+
+    /// An invalid lifecycle state was supplied to [`update_node`].
+    ///
+    /// Valid states are `open`, `in_progress`, `validated`, `closed` (see
+    /// [`NODE_STATES`]).
+    #[error("invalid node state '{0}'; expected one of: open, in_progress, validated, closed")]
+    InvalidState(String),
 }
 
 // ---------------------------------------------------------------------------
@@ -392,6 +399,132 @@ pub async fn link_pr_to_issue(
         }
         Err(other) => Err(other),
     }
+}
+
+// ---------------------------------------------------------------------------
+// Update path
+// ---------------------------------------------------------------------------
+
+/// The set of valid lifecycle states for a project node.
+///
+/// Matches the `CHECK` constraint on `nexum.project_nodes.state` (migration
+/// `0002_project_graph.sql`): `open → in_progress → validated → closed`.
+pub const NODE_STATES: &[&str] = &["open", "in_progress", "validated", "closed"];
+
+/// Update the lifecycle `state` and/or `title` (block content) of a project
+/// node, returning `true` if a row was updated.
+///
+/// This backs both the HTTP `POST /studio/issues/update` route (human edits)
+/// and `POST /studio/steer` (redirecting work on a feature/issue). At least
+/// one of `state` or `title` must be `Some`; if both are `None` the call is a
+/// no-op that returns `false`.
+///
+/// # Arguments
+///
+/// * `pool`    — shared [`sqlx::PgPool`].
+/// * `node_id` — `project_nodes.id` of the node to update.
+/// * `state`   — optional new lifecycle state (must be one of [`NODE_STATES`]).
+/// * `title`   — optional new title / content for the backing block.
+///
+/// # Errors
+///
+/// - [`ProjectGraphError::InvalidState`] — `state` is not a valid lifecycle
+///   value.
+/// - [`ProjectGraphError::Database`] — a Postgres error.
+pub async fn update_node(
+    pool: &PgPool,
+    node_id: Uuid,
+    state: Option<&str>,
+    title: Option<&str>,
+) -> Result<bool, ProjectGraphError> {
+    if let Some(s) = state {
+        if !NODE_STATES.contains(&s) {
+            return Err(ProjectGraphError::InvalidState(s.to_string()));
+        }
+    }
+
+    // Resolve the backing block once; also serves as an existence check.
+    let block_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT block_id FROM nexum.project_nodes WHERE id = $1")
+            .bind(node_id)
+            .fetch_optional(pool)
+            .await?;
+
+    let block_id = match block_id {
+        Some(b) => b,
+        None => return Ok(false),
+    };
+
+    let mut updated = false;
+
+    if let Some(s) = state {
+        sqlx::query("UPDATE nexum.project_nodes SET state = $1, updated_at = now() WHERE id = $2")
+            .bind(s)
+            .bind(node_id)
+            .execute(pool)
+            .await?;
+        updated = true;
+    }
+
+    if let Some(t) = title {
+        sqlx::query("UPDATE nexum.blocks SET content = $1 WHERE id = $2")
+            .bind(t)
+            .bind(block_id)
+            .execute(pool)
+            .await?;
+        updated = true;
+    }
+
+    Ok(updated)
+}
+
+/// List project nodes of a given `node_type` (e.g. `"Issue"` or `"Feature"`),
+/// newest first.
+///
+/// Backs the HTTP `GET /studio/issues` route and the `superfield issue list`
+/// / `superfield feature list` CLI verbs. Pass `None` to list every node type.
+///
+/// # Errors
+///
+/// Returns [`ProjectGraphError::Database`] on Postgres errors.
+pub async fn list_nodes(
+    pool: &PgPool,
+    node_type: Option<&str>,
+) -> Result<Vec<ProjectNode>, ProjectGraphError> {
+    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, Option<String>)>(
+        r#"
+        SELECT
+            pn.id           AS node_id,
+            pn.block_id     AS block_id,
+            b.content       AS content,
+            pn.node_type    AS node_type,
+            pn.state        AS state,
+            pn.external_ref AS external_ref
+        FROM nexum.project_nodes pn
+        JOIN nexum.blocks b ON b.id = pn.block_id
+        WHERE ($1::TEXT IS NULL OR pn.node_type = $1)
+        ORDER BY pn.created_at DESC
+        "#,
+    )
+    .bind(node_type)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(
+            |(id, block_id, content, node_type, state, external_ref)| ProjectNode {
+                id,
+                block_id,
+                content,
+                node_type,
+                state,
+                external_ref,
+                via_rel_type: None,
+                parent_block_id: None,
+            },
+        )
+        .collect())
 }
 
 // ---------------------------------------------------------------------------

@@ -41,3 +41,43 @@ committed step). Requires Postgres with `public.workspaces`,
 DATABASE_URL=postgres://… cargo test -p superfield --test daemon_loop_integration \
   -- --ignored --test-threads=1
 ```
+
+---
+
+## Brain knowledge → Feature/Issue project-graph nodes, with create/list API + CLI (issue #672)
+
+Step ④: knowledge becomes actionable work. A 7th gardening step
+(`GardeningStep::ProjectGraphDerive`, last in `STEP_ORDER`) reads the brain's
+`plan`/`prd`/`strategy` pages, asks the executor for a line-oriented
+`ISSUE:`/`FEATURE:` derivation, and writes the parsed nodes via
+`sf_db::insert_issue`/`insert_feature` (project graph — NOT page revisions).
+Humans reach the same surface via HTTP (`POST/GET /studio/issues`,
+`POST /studio/issues/update`, `POST /studio/steer`) and CLI
+(`issue create|list`, `feature create|list`). Created nodes read back through
+`GET /pages/project` (`sf_db::fetch_project_page`) and `superfield page project`.
+
+Key files:
+
+- `crates/sf-db/src/project_graph.rs` — `update_node` (state/title; backs
+  update + steer), `list_nodes`, `NODE_STATES`, `ProjectGraphError::InvalidState`.
+- `crates/sf-loop/src/steps/project_graph_derive.rs` — the derive step +
+  `parse_derivation`.
+- `crates/sf-serve/src/routes/studio.rs` — `create_issue`, `list_issues`,
+  `update_issue`, `steer` (all use `acquire_workspace` for RLS).
+- `crates/sf-cli/src/project.rs` + `lib.rs` — `issue`/`feature` verbs.
+
+Verify (no DB — pure parse + router-wiring + CLI-parse unit tests):
+
+```bash
+cargo test -p sf-db -p sf-loop -p sf-cli -p sf-serve
+cargo clippy --workspace --all-targets -- -D warnings
+```
+
+Verify with a database (DB-gated `#[ignore]` tests — derive writes nodes that
+appear in the project page; CLI create→list round-trip). Requires Postgres with
+the nexum project-graph migration (`0002_project_graph.sql`) applied:
+
+```bash
+DATABASE_URL=postgres://… cargo test -p sf-loop -p sf-db -p sf-cli \
+  -- --ignored --test-threads=1
+```
