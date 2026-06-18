@@ -3966,7 +3966,10 @@ dependencies = [
  "sf-loop",
  "sf-serve",
  "sharp",
+ "sqlx",
+ "thiserror 1.0.69",
  "tokio",
+ "uuid",
 ]
 
 [[package]]
