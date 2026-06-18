@@ -1,0 +1,29 @@
+name: Doc Conformance
+
+# Asserts docs/architecture.md and key in-code comments describe the running
+# appliance accurately (issue #705). Runs on every PR — including doc-only
+# PRs, which the build/test workflows deliberately skip — so a reverted
+# correction is caught regardless of what else the PR touches.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: doc-conformance-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  doc-conformance:
+    name: Doc conformance
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - run: scripts/check-doc-conformance.sh
