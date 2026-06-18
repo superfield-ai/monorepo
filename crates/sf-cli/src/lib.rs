@@ -38,6 +38,7 @@ pub mod error;
 pub mod garden;
 pub mod operator;
 pub mod page;
+pub mod project;
 
 use sf_db::DbConfig;
 use sqlx::PgPool;
@@ -74,6 +75,10 @@ pub enum CliError {
     /// A garden-command error (file read, ingestion, embedding, etc.).
     #[error("garden error: {0}")]
     Garden(#[from] garden::GardenError),
+
+    /// A project-graph command error (issue/feature create/list).
+    #[error("project error: {0}")]
+    Project(#[from] project::ProjectError),
 
     /// A UUID parse error.
     #[error("invalid UUID: {0}")]
@@ -156,6 +161,19 @@ pub enum Cmd {
         files: Vec<String>,
         workspace_id: Uuid,
     },
+
+    // --- Project-graph commands (issue #672) ---
+    /// Create an Issue node in the project graph.
+    IssueCreate {
+        title: String,
+        external_ref: Option<String>,
+    },
+    /// List Issue nodes in the project graph.
+    IssueList,
+    /// Create a Feature node linked to a parent Issue.
+    FeatureCreate { issue_id: Uuid, title: String },
+    /// List Feature nodes in the project graph.
+    FeatureList,
 }
 
 /// Parse `args` (the slice after the binary name) into a [`Cmd`].
@@ -235,6 +253,28 @@ pub fn parse(args: &[String]) -> Result<Cmd, CliError> {
 
         // page <name>
         [a, name] if a == "page" => Ok(Cmd::Page { name: name.clone() }),
+
+        // issue create <title> [external-ref]
+        [a, b, title] if a == "issue" && b == "create" => Ok(Cmd::IssueCreate {
+            title: title.clone(),
+            external_ref: None,
+        }),
+        [a, b, title, ext] if a == "issue" && b == "create" => Ok(Cmd::IssueCreate {
+            title: title.clone(),
+            external_ref: Some(ext.clone()),
+        }),
+
+        // issue list
+        [a, b] if a == "issue" && b == "list" => Ok(Cmd::IssueList),
+
+        // feature create <issue-id> <title>
+        [a, b, issue_id, title] if a == "feature" && b == "create" => Ok(Cmd::FeatureCreate {
+            issue_id: issue_id.parse::<Uuid>()?,
+            title: title.clone(),
+        }),
+
+        // feature list
+        [a, b] if a == "feature" && b == "list" => Ok(Cmd::FeatureList),
 
         // garden <file...> [--workspace-id <uuid>]
         // garden requires at least one file argument.
@@ -338,6 +378,17 @@ pub async fn run(pool: &PgPool, cmd: Cmd) -> Result<(), CliError> {
             files,
             workspace_id,
         } => garden::garden_ingest(pool, &files, workspace_id).await?,
+
+        // Project-graph commands (issue #672).
+        Cmd::IssueCreate {
+            title,
+            external_ref,
+        } => project::issue_create(pool, &title, external_ref.as_deref()).await?,
+        Cmd::IssueList => project::list(pool, "Issue").await?,
+        Cmd::FeatureCreate { issue_id, title } => {
+            project::feature_create(pool, issue_id, &title).await?
+        }
+        Cmd::FeatureList => project::list(pool, "Feature").await?,
     }
     Ok(())
 }
@@ -403,6 +454,12 @@ Garden commands (seed document ingestion):
   garden <file1> [file2...] [--workspace-id <uuid>]
                                       Ingest markdown files into the knowledge graph
                                       workspace-id defaults to WORKSPACE_ID env var
+
+Project-graph commands (Feature/Issue nodes):
+  issue create <title> [external-ref] Create an Issue node; prints its id
+  issue list                          List Issue nodes (id<TAB>state<TAB>title)
+  feature create <issue-id> <title>   Create a Feature linked to an Issue
+  feature list                        List Feature nodes (id<TAB>state<TAB>title)
 ";
 
 #[cfg(test)]
@@ -500,6 +557,58 @@ mod tests {
         let repo = "00000000-0000-0000-0000-000000000006";
         let cmd = parse(&args(&["episode", "list", repo])).unwrap();
         assert!(matches!(cmd, Cmd::EpisodeList { repo_id } if repo_id.to_string() == repo));
+    }
+
+    // --- parse: project-graph commands (issue #672) ---
+
+    #[test]
+    fn parse_issue_create() {
+        let cmd = parse(&args(&["issue", "create", "My issue"])).unwrap();
+        assert!(matches!(
+            cmd,
+            Cmd::IssueCreate { title, external_ref }
+                if title == "My issue" && external_ref.is_none()
+        ));
+    }
+
+    #[test]
+    fn parse_issue_create_with_external_ref() {
+        let cmd = parse(&args(&["issue", "create", "My issue", "493"])).unwrap();
+        assert!(matches!(
+            cmd,
+            Cmd::IssueCreate { external_ref, .. } if external_ref.as_deref() == Some("493")
+        ));
+    }
+
+    #[test]
+    fn parse_issue_list() {
+        let cmd = parse(&args(&["issue", "list"])).unwrap();
+        assert!(matches!(cmd, Cmd::IssueList));
+    }
+
+    #[test]
+    fn parse_feature_create() {
+        let issue = "00000000-0000-0000-0000-000000000007";
+        let cmd = parse(&args(&["feature", "create", issue, "My feature"])).unwrap();
+        match cmd {
+            Cmd::FeatureCreate { issue_id, title } => {
+                assert_eq!(issue_id.to_string(), issue);
+                assert_eq!(title, "My feature");
+            }
+            other => panic!("unexpected: {:?}", other),
+        }
+    }
+
+    #[test]
+    fn parse_feature_create_bad_uuid() {
+        let err = parse(&args(&["feature", "create", "not-a-uuid", "t"])).unwrap_err();
+        assert!(matches!(err, CliError::Uuid(_)));
+    }
+
+    #[test]
+    fn parse_feature_list() {
+        let cmd = parse(&args(&["feature", "list"])).unwrap();
+        assert!(matches!(cmd, Cmd::FeatureList));
     }
 
     #[test]

@@ -1,6 +1,6 @@
 //! Gardening step definitions and dispatcher.
 //!
-//! [`GardeningStep`] enumerates the six knowledge-base improvement steps.
+//! [`GardeningStep`] enumerates the seven knowledge-base improvement steps.
 //! [`STEP_ORDER`] defines the canonical execution order.
 //! [`run_step`] dispatches to the appropriate implementation module.
 //!
@@ -26,6 +26,7 @@ mod architecture_proposal;
 mod holistic_reconcile;
 mod plan_proposal;
 mod prd_reconcile;
+mod project_graph_derive;
 mod strategy_research;
 mod technical_research;
 
@@ -46,9 +47,12 @@ pub enum StepError {
     /// Page read error.
     #[error("page query error: {0}")]
     PageQuery(#[from] sf_db::PageQueryError),
+    /// Project-graph write error (Feature/Issue node derivation).
+    #[error("project graph error: {0}")]
+    ProjectGraph(#[from] sf_db::ProjectGraphError),
 }
 
-/// The six gardening steps, in execution order.
+/// The seven gardening steps, in execution order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GardeningStep {
     /// Research company strategy from seed documents.
@@ -63,6 +67,8 @@ pub enum GardeningStep {
     PlanProposal,
     /// Holistically reconcile all five pages for consistency.
     HolisticReconcile,
+    /// Derive Feature/Issue project-graph nodes from brain knowledge (#672).
+    ProjectGraphDerive,
 }
 
 impl GardeningStep {
@@ -75,6 +81,7 @@ impl GardeningStep {
             Self::ArchitectureProposal => "architecture_proposal",
             Self::PlanProposal => "plan_proposal",
             Self::HolisticReconcile => "holistic_reconcile",
+            Self::ProjectGraphDerive => "project_graph_derive",
         }
     }
 }
@@ -87,6 +94,7 @@ pub const STEP_ORDER: &[GardeningStep] = &[
     GardeningStep::ArchitectureProposal,
     GardeningStep::PlanProposal,
     GardeningStep::HolisticReconcile,
+    GardeningStep::ProjectGraphDerive,
 ];
 
 /// Dispatch a single gardening step.
@@ -115,6 +123,9 @@ pub async fn run_step(
         GardeningStep::HolisticReconcile => {
             holistic_reconcile::run(pool, workspace_id, executor).await
         }
+        GardeningStep::ProjectGraphDerive => {
+            project_graph_derive::run(pool, workspace_id, executor).await
+        }
     }
 }
 
@@ -134,8 +145,8 @@ mod tests {
     }
 
     #[test]
-    fn step_order_has_six_entries() {
-        assert_eq!(STEP_ORDER.len(), 6);
+    fn step_order_has_seven_entries() {
+        assert_eq!(STEP_ORDER.len(), 7);
     }
 
     #[test]

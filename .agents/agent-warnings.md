@@ -37,3 +37,21 @@ integration tests) or clippy `-D warnings` fails on dead_code in the test binary
 -D warnings`, and `cargo fmt --all --check`. There is no `cargo test` step and no
 DB provisioning, so DB-gated integration tests must be `#[ignore]`d (matching the
 `sf-loop` cursor tests) and the suite must pass clippy + fmt.
+
+## `STEP_ORDER` has SEVEN gardening steps, not six (issue #672)
+
+`crates/sf-loop/src/steps/mod.rs`: issue #672 added
+`GardeningStep::ProjectGraphDerive` as the 7th step (last in `STEP_ORDER`). Any
+new test/doc that hard-codes the count must say 7 (see
+`step_order_has_seven_entries`). The derive step writes the **project graph**
+(`insert_issue`/`insert_feature`), not page revisions — so it does NOT touch
+`nexum.page_revisions` and a DB integration test for it needs the
+`0002_project_graph.sql` nexum migration applied, not the page-revision schema.
+
+## Project-graph create/update lives in `sf_db::project_graph`, not the studio crate
+
+`update_node(pool, id, state, title)` (state ∈ `NODE_STATES` =
+open/in_progress/validated/closed) backs BOTH `POST /studio/issues/update` and
+`POST /studio/steer`. `list_nodes(pool, Some("Issue"|"Feature"))` backs the
+list API + CLI. Don't re-implement node mutation in `sf-serve`/`sf-cli` — call
+these. An invalid state returns `ProjectGraphError::InvalidState` → HTTP 400.

@@ -6,7 +6,7 @@
 //!
 //! # Architecture
 //!
-//! The loop runs six [`GardeningStep`] variants in order, then repeats:
+//! The loop runs seven [`GardeningStep`] variants in order, then repeats:
 //!
 //! 1. `StrategyResearch` — web research on company strategy → "strategy" page revision
 //! 2. `PrdReconcile`     — reconcile PRD against research → "prd" page revision
