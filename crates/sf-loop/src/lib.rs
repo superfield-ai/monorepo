@@ -14,11 +14,17 @@
 //! 4. `ArchitectureProposal` — derive architecture from PRD + technical → "architecture" page revision
 //! 5. `PlanProposal`     — derive implementation plan from architecture → "plan" page revision
 //! 6. `HolisticReconcile`— re-read all five topics, propagate changes
+//! 7. `ProjectGraphDerive` — parse the gardened plan into project-graph
+//!    Feature/Issue nodes (`insert_issue`/`insert_feature`); does NOT write a
+//!    `page_revisions` row
 //!
-//! Each step:
+//! Each of steps 1–6 (the page-authoring steps):
 //! - Calls [`AgentExecutor::run`] to produce content + provenance.
 //! - Writes a `nexum.page_revisions` row via [`sf_db::insert_page_revision`].
 //! - Commits the cursor to `orchestrator.gardening_cursor`.
+//!
+//! The seventh step (`ProjectGraphDerive`) instead derives Feature/Issue nodes
+//! from the latest plan revision and commits the cursor as usual.
 //!
 //! Restarting the daemon after a crash resumes from the last committed cursor.
 //!

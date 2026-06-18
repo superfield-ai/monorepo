@@ -149,17 +149,15 @@ pub fn build_router_with_state(state: AppState, cfg: &ServeConfig) -> Router {
     //
     // Additive route-module registration seam (dev-scout, issue #677):
     // each downstream feature owns a dedicated route module and merges it
-    // here. `routes::project` (#672, project-graph API) and `routes::ingest`
-    // (#673, knowledge ingest/docs API) are no-op stubs today — they register
-    // no routes — so the two features can land in parallel without colliding
-    // on this merge chain. To add a new feature route group, add a module
-    // under `routes/` exposing `pub fn router(state: AppState) -> Router` and
-    // `.merge(...)` it below; do not edit the existing feature modules.
+    // here. To add a new feature route group, add a module under `routes/`
+    // exposing `pub fn router(state: AppState) -> Router` and `.merge(...)` it
+    // below; do not edit the existing feature modules.
     //
-    // `routes::ws` (#695, agent-chat phase `studio-ws-agent-stream`) registers
-    // the `WS /studio/ws` upgrade handler + chunk/done/error frame seam as a
-    // no-op stub; feature #687 replaces its agent emitter without editing this
-    // chain.
+    // `routes::ingest` (#673, knowledge ingest/docs API) and `routes::ws`
+    // (#687, agent-chat WebSocket) are live. `routes::project` is now an empty
+    // no-op router: the project-graph API it once seamed for (#672) landed in
+    // `routes::studio` instead, so this merge is a harmless no-op kept only to
+    // preserve the seam.
     let protected = Router::new()
         .merge(routes::api::router(state.clone()))
         .merge(routes::studio::router(state.clone()))

@@ -123,7 +123,9 @@ The migration runner (tracked separately) applies all pending migrations from al
 
 **Joins are cheap because all schemas live in the same instance.** A query can join `sharp.objects` to `nexum.blocks` to `orchestrator.gardening_cursor` in a single statement with no network round-trip. This is the primary motivation for the single-instance architecture.
 
-**RLS policies are scoped per schema.** When row-level security is introduced (not yet implemented — see Current Gaps), each component's `ENABLE ROW LEVEL SECURITY` and policies apply to its own schema tables only. The `auth.sessions` table provides the identity context that all schemas' policies will reference via `current_setting('app.current_principal_id')`.
+**RLS policies are scoped per schema, and enforcement is currently split across two deployment tracks.** The workspace-isolation policies are real: `packages/db/migrations/0001_rls_workspace_isolation.sql` runs `ENABLE` + `FORCE ROW LEVEL SECURITY` with full CRUD policies across the sharp/nexum/auth tables, with passing acceptance tests (`packages/db/tests/integration/rls-workspace-isolation.test.ts`). Each component's policies apply to its own schema tables only, and `acquire_workspace()` sets `app.current_principal_id` (via `SET LOCAL`) from the real handlers so the policies can fire. The `auth.sessions` table provides the identity context that all schemas' policies reference via `current_setting('app.current_principal_id')`.
+
+**The split:** that RLS migration is applied only on the **k3s / TS-migrator** track — `packages/db/migrator.ts` (the standalone k8s-Job migrator, never imported by the app server) applies `packages/db/migrations`. The **appliance daemon does not yet apply it**: the Rust migration runner walks only `COMPONENT_DIRS` (`crates/sf-db/src/migrate.rs`), which covers `crates/{sf-db,sf-auth,nexum,sharp}/…/migrations` and contains no `ROW LEVEL SECURITY` statement. So on the running self-provisioning appliance, handlers set the principal session variable but no policy reads it — isolation is enforced on the k3s/TS-migrator path, not yet on the appliance runner. Wiring `packages/db/migrations` (or a Rust mirror) into `COMPONENT_DIRS` is the launch-critical fix.
 
 #### Sample cross-component query
 
@@ -348,7 +350,7 @@ A real implementation will:
 
 ## Daemon Lifecycle
 
-The Superfield daemon is a long-running background process that owns the Postgres container, runs the gardening loop engine, and serves the HTTP API. The CLI auto-spawns it on first use and communicates with it over a Unix socket. All implementation lives in `crates/sf-cli/src/daemon.rs` and `crates/sf-serve/src/loop_handle.rs`.
+The Superfield daemon is a long-running background process that owns the local Postgres instance, runs the gardening loop engine, and serves the HTTP API. The CLI auto-spawns it on first use and communicates with it over a Unix socket. All implementation lives in `crates/sf-cli/src/daemon.rs` and `crates/sf-serve/src/loop_handle.rs`.
 
 ### State directory
 
@@ -407,7 +409,7 @@ This ensures the client and daemon always run the same binary version with no ma
 `superfield daemon stop` sends SIGTERM to the daemon PID recorded in `daemon.json`. The daemon's SIGTERM handler:
 
 1. Calls `LoopHandle::drain()` — signals the gardening loop to finish its current step and stop accepting new ones. The daemon imposes a bounded drain timeout (default 30 s) and falls back to `LoopHandle::abort()` if the loop does not drain in time.
-2. Calls `PostgresProvisioner::stop()` — flushes WAL, closes connections, and stops the container.
+2. Calls `PostgresProvisioner::stop()` — flushes WAL, closes connections, and stops the local Postgres instance via `pg_ctl stop`.
 3. Removes `daemon.json`.
 4. Exits with code 0.
 
@@ -436,6 +438,8 @@ Setting `SF_NO_DAEMON=1` suppresses `daemonize()`. The CLI still re-executes the
 | `database_url` | The `DATABASE_URL` the provisioner stood up, or `None` (then the daemon falls back to the environment) |
 
 The real implementation, `LocalPostgresProvisioner`, stands up an appliance-local Postgres with no Docker, no root, and no network database (PRD Constraint §9 self-sufficiency): it runs `initdb` into a durable data directory (`~/.superfield/daemon/postgres`) if absent, starts the instance with `pg_ctl start` bound to `127.0.0.1` with the Unix socket directory pointed at the data dir, polls `pg_isready` until the health gate passes, and ensures the application database exists. It reports the loopback URL via `database_url`. Tests and crates that do not own provisioning — and the path where `DATABASE_URL` is supplied externally — use [`TestProvisioner`], a no-op that returns `Ok(())` and `database_url() == None`.
+
+`LocalPostgresProvisioner` carries several robustness details worth noting: it starts the server detached with `pg_ctl -l <logfile>` and nulled stdio to avoid the pipe deadlock a foreground detached child would otherwise hit; it guards database creation with a `pg_database` lookup via `psql` (rather than `createdb`) so a fresh-cluster race does not error; and it auto-discovers the Postgres binaries via `detect_pg_bin_dir`, which finds Debian/Ubuntu versioned bin directories (`/usr/lib/postgresql/<ver>/bin`) when `initdb`/`pg_ctl` are not on `PATH`.
 
 The daemon calls `start` during the health gate (before sending `StartupResult::Ok`) and `stop` after `LoopHandle::drain()` completes on shutdown. The boot orchestration (`provision → wait healthy → migrate → serve`) lives in `crates/superfield/src/boot.rs::health_gate`, which surfaces provisioning and migration failures as distinct `BootError` variants so a failure at either gate aborts boot non-zero without binding the HTTP server.
 
@@ -576,7 +580,7 @@ The auth middleware validates the token against `auth.sessions` and injects an `
 | `POST`       | `/studio/docs`                  | Required | `ingest`       | Author or upload a document and run the ingest pipeline (#673)                                                                                                                                                                                                      |
 | `GET`        | `/studio/docs`                  | Required | `ingest`       | List the ingested documents for the workspace (#673)                                                                                                                                                                                                                |
 | `GET`        | `/studio/docs/{file}`           | Required | `ingest`       | Return one document's reconstructed markdown (#673)                                                                                                                                                                                                                 |
-| `GET`        | `/studio/cluster/events`        | Required | `cluster`      | SSE stream of cluster-status transitions driving the live-preview reload (#675)                                                                                                                                                                                     |
+| `GET`        | `/studio/cluster/events`        | Required | `cluster`      | SSE stream of cluster-status transitions driving the live-preview reload. **v0 seeds status once at boot with no periodic poller**, so a mid-session `restarting→healthy` flip is not pushed in production; continuous transition push awaits a health poller (#675)                                                                                                                          |
 | `WS`         | `/studio/ws`                    | Required | `ws`           | Agent-chat WebSocket; per `turn`/`steer` frame streams the product agent's reply as one or more `chunk` frames terminated by a `done` frame, emitting an `error` frame on failure. Real in-process agent runtime via `StudioAgent` (#687, PR #699; scout seam #695) |
 | `GET`        | `/studio/deploy/envs`           | Required | `deploy`       | Discovered deploy environments (#674)                                                                                                                                                                                                                               |
 | `GET`        | `/studio/deploy/doctor/{env}`   | Required | `deploy`       | Pre-deploy readiness checks for an env (#674)                                                                                                                                                                                                                       |
@@ -589,9 +593,9 @@ The auth middleware validates the token against `auth.sessions` and injects an `
 | `GET`        | `/orchestrator/logs`            | Required | `orchestrator` | SSE stream of live daemon log lines (#674)                                                                                                                                                                                                                          |
 | `POST`       | `/orchestrator/start`           | Required | `orchestrator` | Start the loop; transitions process state to `running` (#674)                                                                                                                                                                                                       |
 | `POST`       | `/orchestrator/stop`            | Required | `orchestrator` | Stop the loop; clears slots and drains a real `LoopHandle` if installed (#674)                                                                                                                                                                                      |
-| `GET`        | `/analytics/loops`              | Required | `orchestrator` | Per-loop health for the plan/dev/doc lanes (#674)                                                                                                                                                                                                                   |
-| `GET`        | `/analytics/slots`              | Required | `orchestrator` | Active work slots driving the Orchestrator cards (#674)                                                                                                                                                                                                             |
-| `GET`        | `/analytics/check-runs/stream`  | Required | `orchestrator` | SSE stream of CI/check-run events (#674)                                                                                                                                                                                                                            |
+| `GET`        | `/analytics/loops`              | Required | `orchestrator` | Per-loop health for the plan/dev/doc lanes. **v0 is dev-lane-only**: only the `dev` loop lane is populated; the `plan`/`doc` lanes are default-empty (#674)                                                                                                          |
+| `GET`        | `/analytics/slots`              | Required | `orchestrator` | Active work slots driving the Orchestrator cards. **Producerless in v0**: the socket is plumbed but no producer publishes slots, so it is always empty (#674)                                                                                                        |
+| `GET`        | `/analytics/check-runs/stream`  | Required | `orchestrator` | SSE stream of CI/check-run events. **Producerless in v0**: the stream is plumbed but has no producer, so it is always empty. Note the UI also calls a non-stream `GET /analytics/check-runs?sha=` (`TurnTimeline.tsx`, `VisualDiffPanel.tsx`) that has no backend route at all (#674)                                                                                                          |
 | `GET`        | `/pages/project`                | None     | `pages`        | Project management graph rendered as markdown                                                                                                                                                                                                                       |
 | `GET`        | `/pages/{name}`                 | None     | `pages`        | Named knowledge-base page as markdown (`prd`, `architecture`, `plan`, `strategy`, `technical`)                                                                                                                                                                      |
 
@@ -607,7 +611,7 @@ crates/sf-serve/src/routes/
 ├── deploy.rs       — /studio/deploy/* (auth required — env/doctor/CI + rollback/migration logs) (#674)
 ├── cluster.rs      — /studio/cluster/* (auth required — cluster-status SSE for live preview) (#675)
 ├── ingest.rs       — /studio/docs* (auth required — knowledge ingest/docs API) (#673)
-├── project.rs      — /studio/* (auth required — project-graph dev-scout seam) (#672)
+├── project.rs      — empty no-op router; the project-graph handlers it once seamed for landed in studio.rs (#672)
 ├── ws.rs           — WS /studio/ws (auth required — agent-chat WebSocket: chunk/done/error frames) (#687)
 └── pages.rs        — /pages/* (unauthenticated for milestone 1)
 ```
@@ -617,6 +621,9 @@ crates/sf-serve/src/routes/
 - `/pages/project` uses `sf_db::fetch_project_page` — a recursive CTE traversal over `nexum.project_nodes` and `nexum.links`. All other `/pages/{name}` routes use `sf_db::fetch_page_content` against `nexum.page_revisions`.
 - Authentication on `/pages/*` is explicitly deferred for milestone 1; the route is expected to be reachable only from localhost during this phase.
 - The `/orchestrator/status` route returns live process state read from `crates/sf-serve/src/orchestrator_state.rs` (`OrchestratorState`) rather than hardcoded nulls; `apiReachable` is `true` whenever the handler runs (the request reached the server), so the control panel's connection indicator reflects real reachability (#674).
+- **Analytics producers are not wired in v0.** `/analytics/slots` and `/analytics/check-runs/stream` are plumbed sockets/streams with **no producer** — they are always empty. `/analytics/loops` carries only the `dev` lane; `plan`/`doc` are default-empty. Only `/orchestrator/status` is backed by live state today. Real producers (loop-published `WorkSlot`s with a cost field, CI/check-run events, populated `plan`/`doc` lanes) are a separate feature in this phase.
+- **`/studio/cluster/events` has no health poller in v0.** The only production producer seeds cluster status **once at boot** (`crates/superfield/src/daemon_runtime.rs`); there is no periodic poller, so a mid-session status transition is not pushed in production.
+- The `/studio/docs` ingest pipeline routes control-panel authoring into a dedicated **`web` corpus** — the canonical control-panel authoring corpus — kept separate from the CLI's `seed` corpus. The BERT embedder is loaded once per process via an `OnceCell` (`crates/sf-serve/src/routes/ingest.rs`) and shared across requests rather than reloaded per call.
 - Static browser assets are served from a configurable directory (`CONTROL_ASSETS_DIR`) mounted at the root; the asset-serving layer is composed on top of the API router in `crates/sf-serve/src/lib.rs`.
 
 ---
@@ -727,6 +734,6 @@ The deploy path coexists with k3s until parity. `runDeployCommand` (`packages/co
 
 ## Milestone 1 — Headless Gardening Appliance (completed)
 
-Milestone 1 delivered the headless binary: daemon auto-spawn, Postgres container lifecycle, seed document ingestion, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
+Milestone 1 delivered the headless binary: daemon auto-spawn, local Postgres lifecycle, seed document ingestion, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
 
 **Note:** The `crates/sf-loop` gardening loop crate is fully implemented and tested, and the daemon-loop wiring is complete (#682). On the running daemon path, `run_as_daemon` (`crates/superfield/src/main.rs`) calls `daemon_runtime::boot_loop`, which starts the loop via `GardeningLoop::start_observed` and installs the real `Arc<dyn LoopHandle>`, retiring `NoopLoopHandle`. On `SIGTERM`, `daemon_runtime::shutdown` drains the loop (then aborts as a fallback) before taking the appliance down and stopping Postgres. See §Daemon Lifecycle and §Seam: LoopHandle for the lifecycle and ordering details.
