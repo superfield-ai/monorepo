@@ -183,6 +183,20 @@ of trees to a unique operation sequence. That function is unsolved in general an
 per-language. It is the crux. If it cannot be made canonical and cheap, the snapshot
 substrate is not a compromise — it is the correct answer, and this fork should not be taken.
 
+There is a second, temporal face of the same requirement, and it is a latent soundness bug
+if ignored. The canonical operation — and therefore the conflict term — is computed from the
+_semantic representation_, which is produced by versioned tooling: tree-sitter grammars,
+rust-analyzer, `ts.LanguageService`. A grammar or analyzer upgrade can change the AST or the
+resolved symbol set for _identical source bytes_ (`research.md` flags exactly this for the
+representation cache). So "the same merge" computed at two times under two toolchain versions
+can yield two different canonical terms — silently breaking memoized-resolution reuse and the
+self-cancellation of projections ([`jj-adoption.md`](./jj-adoption.md) §4), both of which
+assume term identity is stable over the repository's lifetime. Canonicality must therefore be
+defined _relative to a pinned analyzer/grammar version_: the term carries its toolchain
+version, memoized resolutions are keyed by it, and a version bump has defined semantics
+(invalidate or migrate), never a silent re-key. Until that exists, "resolve once, apply
+everywhere" is sound within a toolchain version and unproven across one.
+
 ---
 
 ## 6. The agent-first unlock: operations are observed, not reconstructed
@@ -203,6 +217,16 @@ brokers and already records as an episode artifact (whitepaper §5). In the agen
 setting the operation log can be _captured_ rather than _recovered_, which sidesteps the
 canonical-diff problem precisely where it is hardest: structural operations are declared, so
 no detection heuristic runs on them at all.
+
+This is where Sharp meets its real prior art, and the meeting is favorable. Operation-based
+merge (Lippe & van Oosterom, 1992) and refactoring-aware merge (Dig et al., _MolhadoRef_,
+2007) both established that recording operations beats diffing states — but both assumed a
+_human_ author, from whom the operation had to be coaxed by a refactoring IDE or inferred
+after the fact. The agent-first setting removes that assumption: the operation is already a
+brokered tool call. Sharp's claim over this lineage is therefore narrow and specific —
+capture instead of reconstruction, independence decided by serializability over the symbol
+graph (§3), and the canonical-term determinism the memoized machinery needs (§5) — not the
+operation-based idea itself (`comparison-merge-theories.md` §4.6).
 
 This does not make §5 vanish; it bounds it. The realistic model is hybrid:
 
@@ -236,7 +260,13 @@ these costs correctly (`snapshots-vs-patches.md` §2):
   for free because the store is already snapshots (whitepaper §7, `snapshots-vs-patches.md`
   §5). An operation store must _materialize_ to snapshots at the export boundary and prove
   the materialization is byte-canonical. Recoverable, but it forfeits the "compatibility
-  falls out for free" property and must re-earn it.
+  falls out for free" property and must re-earn it. This is also a strategic-coherence
+  question the whitepaper must answer head-on: byte-isomorphism is sold as a v1 _adoption
+  pillar_ (whitepaper §2.1, §4.0), so the end-state must say plainly whether it stays a
+  permanent _property_ or becomes a boundary _courtesy_ re-earned at export. The honest
+  answer is the latter — on the operation substrate byte-isomorphism is a property of the
+  export projection, not of the store — and v1's pillar is not retracted by this, only
+  relocated to the boundary.
 - **The operation algebra is per-language.** The structural vocabulary (§2) and the
   read/write-set extraction (§3) are defined per language family. v1's snapshot core is
   language-agnostic — blob/tree/commit hold any bytes — and this fork trades that

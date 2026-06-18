@@ -170,6 +170,45 @@ a line carries none. That cell is Sharp's named post-v1 fork, analyzed in
 [`semantic-patches.md`](./semantic-patches.md). The rest of this document analyzes the row
 Sharp lives in today; that document analyzes the column it could move along next.
 
+## 4.6 The other neighbor: the software-merge literature
+
+The three lineages above are merge _algebras_ — they reason about how changes combine in the
+abstract. Sharp's _other_ prior art is the software-merge research line, which has studied
+merging at exactly Sharp's altitude (syntactic and semantic structure) since the early
+1990s. It is the neighbor the root axiom (whitepaper §1.1) actually argues within, and it
+must be acknowledged honestly, because it both bounds Sharp's novelty and tempers its
+thesis. (Mens, _A State-of-the-Art Survey on Software Merging_, IEEE TSE 2002, gives the
+canonical taxonomy: textual / syntactic / semantic / operation-based merge.)
+
+- **Operation-based merge** (Lippe & van Oosterom, 1992) records edit _operations_ rather
+  than diffing states, and merges by replaying them. This is the direct ancestor of
+  [`semantic-patches.md`](./semantic-patches.md)'s "history as declared operations." Sharp's
+  contribution is not the operation-based model; it is capturing those operations from an
+  agent harness — which a human-facing VCS cannot — and deciding their independence by
+  serializability over the symbol graph.
+- **Refactoring-aware merge** (Dig et al., _MolhadoRef_, 2007) treats renames and moves as
+  first-class refactoring operations with language-computed effects — precisely Sharp's
+  "declared structural operation with a reference set." Sharp owes, and gives, its delta:
+  agent capture, the verification gate, and episodes.
+- **Structured / semistructured merge** (Apel et al., _Structured Merge with Auto-Tuning_,
+  JDime, ASE 2012; Cavalcanti, Borba & Accioly, OOPSLA 2017; Spork, 2021) merges over ASTs.
+  Its _empirical_ findings are the cautionary part: structured merge reduces conflicts
+  **meaningfully but partially**, is **expensive** (JDime auto-tunes specifically to fall
+  back to cheap textual merge where it can), and the conflict-mining studies find a
+  substantial fraction of real conflicts are **genuine** semantic disagreements that no
+  structure dissolves.
+- **Commercial language-aware merge** (SemanticMerge / Plastic SCM `gmaster`, c. 2013)
+  shipped working language-aware merge for mainstream languages and saw **limited adoption** —
+  a precedent a design betting on semantic merge must answer, not ignore.
+
+The consequence for this document and for whitepaper §1.1: the table's lineages reason
+_below_ symbols, and the software-merge literature has already shown that moving _up_ to
+symbols dissolves the spurious conflict class at real-but-bounded benefit and non-trivial
+cost. Sharp's wager is that the agent-first setting shifts the cost/benefit — operations are
+captured, not reconstructed ([`semantic-patches.md`](./semantic-patches.md) §6), and there is
+no human to absorb the spurious class for free — **not** that semantic merge is itself novel.
+That distinction belongs wherever the thesis is stated.
+
 ## 5. What Sharp takes from each
 
 Sharp's three-tier contract — dissolve deterministically, verify intrinsically, escalate

@@ -13,6 +13,16 @@ single-query-engine arguments the rest of the design rests on: **loose coupling 
 portability**, and the boundary has **two planes with very different substrate
 requirements**.
 
+"Repository state in a queryable database" is not unprecedented, and the neighbors are worth
+naming: **Dolt** (a Git-for-data VCS built directly on a MySQL-compatible engine),
+**TerminusDB** (git-like versioning over a datalog/graph store), **Irmin** (an OCaml git-like
+distributed store), **Noms** (content-addressed and decentralized), and **Datomic**
+(immutable facts with time-travel queries). They establish that the database-native posture
+is sound. Sharp's difference is not _that_ it puts a VCS in a database but _what_ it puts
+there — semantic representations and agent episodes as first-class rows, queried alongside
+objects and refs — and its insistence that this is one fully-exploited implementation, not a
+portability layer.
+
 ---
 
 ## 1. Loose coupling is not portability

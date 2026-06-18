@@ -34,7 +34,13 @@ their access sets conflict and authoring causality places `oⱼ` after `oᵢ` �
 or overwrites something `oᵢ` wrote (`W(oᵢ) ∩ (R(oⱼ) ∪ W(oⱼ)) ≠ ∅`). This is the conflict
 relation of serializability theory (`semantic-patches.md` §3); the branch's poset is its
 precedence graph. Operations whose access sets are disjoint are **incomparable** — the
-order between them is not recorded because it carries no meaning.
+order between them is not recorded because it carries no meaning. Conversely, `≺` is
+_defined_ to order **every** access-set-conflicting pair within a branch by its authoring
+order; since a branch is authored as one causal stream, every such pair is so ordered by
+construction. Internal consistency (the precondition of §1.1's proposition) is therefore
+automatic _within_ a branch — only the **union** of two independently-authored branches can
+present a conflicting pair with no order between them, which is not a cyclic poset but the
+merge dilemma (§5).
 
 A branch is therefore a **poset, not a sequence**. The linear commit history git and jj
 present is one **topological sort** of that poset — an arbitrary choice among many.
@@ -44,9 +50,10 @@ present is one **topological sort** of that poset — an arbitrary choice among 
 The claim "the sequence doesn't matter" is precise and provable, not loose.
 
 > **Proposition.** Let `B` be internally consistent — every non-commuting pair of operations
-> in it is ordered by `≺`. Then every topological sort of `B`, applied in order to the base
-> tree, materializes the **same** tree. The branch has a single net effect, independent of
-> which sequence is chosen to display it.
+> in it is ordered by `≺` (guaranteed by construction for a single branch, per above; a
+> precondition to _check_ when `B` is a union of branches). Then every topological sort of
+> `B`, applied in order to the base tree, materializes the **same** tree. The branch has a
+> single net effect, independent of which sequence is chosen to display it.
 
 _Why._ Any two topological sorts of a poset differ only by a series of adjacent
 transpositions of **incomparable** elements. Incomparable means access-set-disjoint, which
