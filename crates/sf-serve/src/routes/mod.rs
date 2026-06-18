@@ -7,6 +7,7 @@
 //! | [`studio`]      | `/studio/*`        | Required | Control-panel API                     |
 //! | [`orchestrator`]| `/orchestrator/*`, `/analytics/*` | Required | Orchestrator control + loop/slot analytics + SSE streams (#674) |
 //! | [`deploy`]      | `/studio/deploy/*` | Required | Deploy-tab env/doctor/CI + rollback/migration logs (#674) |
+//! | [`cluster`]     | `/studio/cluster/*`| Required | Cluster-status SSE driving the live preview reload (#675) |
 //! | [`pages`]       | `/pages/*`         | None     | Knowledge-base page projections       |
 //! | [`project`]     | `/studio/*`        | Required | Project-graph API (dev-scout seam, #672) |
 //! | [`ingest`]      | `/studio/*`        | Required | Knowledge ingest/docs API (dev-scout seam, #673) |
@@ -20,6 +21,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod cluster;
 pub mod deploy;
 pub mod ingest;
 pub mod orchestrator;
