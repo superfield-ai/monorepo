@@ -16,6 +16,7 @@ provisioner in that strict order. The loop resumes from its persisted
 `orchestrator.gardening_cursor` on restart.
 
 Key files:
+
 - `crates/superfield/src/daemon_runtime.rs` — boot + ordered shutdown
   (`boot_loop`, `boot_supervisor`, `appliance_manifest`, `build_executor`,
   `shutdown`).
@@ -40,4 +41,3 @@ committed step). Requires Postgres with `public.workspaces`,
 DATABASE_URL=postgres://… cargo test -p superfield --test daemon_loop_integration \
   -- --ignored --test-threads=1
 ```
-
