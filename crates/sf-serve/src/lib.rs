@@ -61,7 +61,9 @@ use tower_http::services::{ServeDir, ServeFile};
 pub use auth::auth_middleware;
 pub use error::ServeError;
 pub use loop_handle::{LoopHandle, LoopHandleError, NoopLoopHandle};
-pub use orchestrator_state::{LoopHealth, OrchestratorState, ProcessState, WorkSlot};
+pub use orchestrator_state::{
+    ClusterStatus, LoopHealth, OrchestratorState, ProcessState, WorkSlot,
+};
 pub use state::AppState;
 
 // Re-export AuthContext so callers don't need to depend on sf-auth directly.
@@ -157,6 +159,7 @@ pub fn build_router_with_state(state: AppState, cfg: &ServeConfig) -> Router {
         .merge(routes::studio::router(state.clone()))
         .merge(routes::orchestrator::router(state.clone()))
         .merge(routes::deploy::router(state.clone()))
+        .merge(routes::cluster::router(state.clone()))
         .merge(routes::project::router(state.clone()))
         .merge(routes::ingest::router(state.clone()))
         .layer(middleware::from_fn_with_state(

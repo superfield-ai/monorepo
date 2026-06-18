@@ -81,3 +81,38 @@ the nexum project-graph migration (`0002_project_graph.sql`) applied:
 DATABASE_URL=postgres://… cargo test -p sf-loop -p sf-db -p sf-cli \
   -- --ignored --test-threads=1
 ```
+
+---
+
+## Live cluster-status SSE preview stream + v0-init acceptance gate (issue #675)
+
+`GET /studio/cluster/events` (auth-protected, `crates/sf-serve/src/routes/cluster.rs`)
+streams cluster-status transitions as named `cluster-status` SSE events
+(`{status, workspace_id}`); the first event is the current-state snapshot so late
+subscribers are not stuck at `unknown`. The control-panel `IframePanel` keys its
+preview reload off the `restarting → healthy` transition. The stream is driven by
+`OrchestratorState::set_cluster_status` (de-dupes; broadcasts only on a real
+transition) in `crates/sf-serve/src/orchestrator_state.rs`. The daemon seeds it
+at boot from the real appliance `app` workload health via
+`daemon_runtime::seed_cluster_status` / `cluster_status_from_health`. The e2e
+acceptance gate (`crates/sf-serve/tests/e2e_journey.rs`) fills the five
+JourneySteps with offline-verifiable assertions (deploy/health, preview stream
+restart-to-healthy, ingest route, project projection, queue endpoints).
+
+Key files:
+
+- `crates/sf-serve/src/routes/cluster.rs` — `events` SSE handler + `router`.
+- `crates/sf-serve/src/orchestrator_state.rs` — `ClusterStatus`,
+  `set_cluster_status`/`subscribe_cluster`/`cluster_status`.
+- `crates/superfield/src/daemon_runtime.rs` — `seed_cluster_status`,
+  `cluster_status_from_health`, `PREVIEW_WORKLOAD`.
+- `crates/sf-serve/tests/e2e_journey.rs` — the v0 acceptance gate.
+- `packages/control/apps/src/controllers/ClusterStatusController.ts` +
+  `components/IframePanel.tsx` — the UI consumer (already wired).
+
+Verify (no DB — SSE/router-wiring + mapping + e2e-gate unit tests):
+
+```bash
+cargo test -p sf-serve -p superfield
+cargo clippy -p sf-serve -p superfield --all-targets -- -D warnings
+```

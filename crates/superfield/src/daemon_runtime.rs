@@ -133,6 +133,56 @@ pub fn boot_supervisor(
     Ok(supervisor)
 }
 
+/// The appliance workload whose health drives the control-panel live preview.
+///
+/// The control panel's `IframePanel` previews the `app` workload (the deployed
+/// Superfield app the user is building), so its health is the cluster status the
+/// preview reload keys off — not Postgres.
+pub const PREVIEW_WORKLOAD: &str = "app";
+
+/// Map a supervisor [`HealthStatus`] to the control-panel
+/// [`ClusterStatus`](sf_serve::ClusterStatus) the live-preview stream emits.
+///
+/// - `Healthy`   → `Healthy`    (probe passed; preview is serving)
+/// - `Starting`  → `Restarting` (workload up, probe pending — the hot-swap
+///   reload state the `IframePanel` overlays)
+/// - `Unhealthy` → `Degraded`   (probe failed / process exited)
+/// - `Stopped`   → `Unknown`    (not supervised / no observation)
+pub fn cluster_status_from_health(
+    health: fastenv::deployment::HealthStatus,
+) -> sf_serve::ClusterStatus {
+    use fastenv::deployment::HealthStatus;
+    use sf_serve::ClusterStatus;
+    match health {
+        HealthStatus::Healthy => ClusterStatus::Healthy,
+        HealthStatus::Starting => ClusterStatus::Restarting,
+        HealthStatus::Unhealthy => ClusterStatus::Degraded,
+        HealthStatus::Stopped => ClusterStatus::Unknown,
+    }
+}
+
+/// Seed the orchestrator's cluster status from the live appliance-preview
+/// workload health, publishing the mapped [`ClusterStatus`](sf_serve::ClusterStatus)
+/// so `/studio/cluster/events` reports a real, supervisor-derived status to
+/// every subscriber (including late ones via the stream's snapshot) rather than
+/// a hardcoded constant.
+///
+/// `set_cluster_status` de-dupes, so repeated identical observations broadcast
+/// nothing — the stream only ever carries real transitions. A periodic poller
+/// that keeps publishing across the daemon's lifetime (so a restart-to-healthy
+/// flip mid-session drives the preview reload) is the natural follow-up; this
+/// seed wires the producer at boot without restructuring supervisor ownership /
+/// the strict shutdown sequence.
+pub fn seed_cluster_status(
+    supervisor: &dyn ManifestSupervisor,
+    orchestrator: &sf_serve::OrchestratorState,
+) {
+    let health = supervisor
+        .health(PREVIEW_WORKLOAD)
+        .unwrap_or(fastenv::deployment::HealthStatus::Stopped);
+    orchestrator.set_cluster_status(cluster_status_from_health(health));
+}
+
 /// Start the gardening loop and return its **real** drain/abort handle.
 ///
 /// This retires [`sf_serve::NoopLoopHandle`] on the running path: the daemon
@@ -427,6 +477,61 @@ mod tests {
                 w.name
             );
         }
+
+        supervisor.down().expect("teardown");
+    }
+
+    /// The supervisor-health → cluster-status mapping the live preview keys off.
+    #[test]
+    fn cluster_status_maps_each_health_state() {
+        use fastenv::deployment::HealthStatus;
+        use sf_serve::ClusterStatus;
+        assert_eq!(
+            cluster_status_from_health(HealthStatus::Healthy),
+            ClusterStatus::Healthy
+        );
+        assert_eq!(
+            cluster_status_from_health(HealthStatus::Starting),
+            ClusterStatus::Restarting
+        );
+        assert_eq!(
+            cluster_status_from_health(HealthStatus::Unhealthy),
+            ClusterStatus::Degraded
+        );
+        assert_eq!(
+            cluster_status_from_health(HealthStatus::Stopped),
+            ClusterStatus::Unknown
+        );
+    }
+
+    /// Seeding from a live appliance workload publishes the real, mapped status
+    /// onto the orchestrator's cluster stream.
+    #[test]
+    fn seed_cluster_status_publishes_live_health() {
+        let manifest = FastenvManifest {
+            name: "superfield".to_string(),
+            workloads: vec![Workload {
+                name: "app".to_string(),
+                image: "scratch".to_string(),
+                command: vec!["sleep".to_string(), "30".to_string()],
+                env: Default::default(),
+                stateful: false,
+                health: None,
+            }],
+        };
+        let supervisor = boot_supervisor(&manifest).expect("supervisor must boot");
+        let orchestrator = sf_serve::OrchestratorState::new();
+        assert_eq!(
+            orchestrator.cluster_status(),
+            sf_serve::ClusterStatus::Unknown
+        );
+
+        seed_cluster_status(&supervisor, &orchestrator);
+        // A live, probe-less `app` workload is Healthy → cluster Healthy.
+        assert_eq!(
+            orchestrator.cluster_status(),
+            sf_serve::ClusterStatus::Healthy
+        );
 
         supervisor.down().expect("teardown");
     }

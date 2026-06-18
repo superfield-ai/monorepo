@@ -76,6 +76,57 @@ impl ProcessState {
     }
 }
 
+/// The aggregate cluster (appliance preview) health, mirroring the
+/// control-panel `ClusterStatus` union (`ClusterStatusController.ts`).
+///
+/// The control panel's `IframePanel` keys its live-preview reload off these
+/// transitions: when the cluster goes `Restarting` it shows a reloading
+/// overlay, and on the `Restarting → Healthy` transition it clears the overlay
+/// and reloads the embedded app so the developer sees the rebuilt preview.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "lowercase")]
+pub enum ClusterStatus {
+    /// The appliance preview is up and serving.
+    Healthy,
+    /// The appliance is restarting (hot-swap in progress).
+    Restarting,
+    /// The appliance is up but unhealthy (e.g. crash-looping).
+    Degraded,
+    /// Status is not yet known (no observation / stream just opened).
+    Unknown,
+}
+
+impl ClusterStatus {
+    fn as_u8(self) -> u8 {
+        match self {
+            ClusterStatus::Unknown => 0,
+            ClusterStatus::Healthy => 1,
+            ClusterStatus::Restarting => 2,
+            ClusterStatus::Degraded => 3,
+        }
+    }
+
+    fn from_u8(v: u8) -> Self {
+        match v {
+            1 => ClusterStatus::Healthy,
+            2 => ClusterStatus::Restarting,
+            3 => ClusterStatus::Degraded,
+            _ => ClusterStatus::Unknown,
+        }
+    }
+
+    /// The lowercase wire token the control-panel `ClusterStatusController`
+    /// parses out of the `status` field of each `cluster-status` event.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            ClusterStatus::Healthy => "healthy",
+            ClusterStatus::Restarting => "restarting",
+            ClusterStatus::Degraded => "degraded",
+            ClusterStatus::Unknown => "unknown",
+        }
+    }
+}
+
 /// Per-loop health, mirroring the control-panel `LoopHealth` interface.
 #[derive(Debug, Clone, Default, Serialize)]
 pub struct LoopHealth {
@@ -144,6 +195,11 @@ struct Inner {
     log_tx: broadcast::Sender<String>,
     /// Live CI/check-run event stream (already-serialised JSON strings).
     ci_tx: broadcast::Sender<String>,
+    /// Current aggregate cluster (preview) status (atomic for lock-free reads).
+    cluster: AtomicU8,
+    /// Live cluster-status transition stream (the `status` token, e.g.
+    /// `healthy`/`restarting`), feeding `GET /studio/cluster/events`.
+    cluster_tx: broadcast::Sender<ClusterStatus>,
     /// Process start `Instant`, used to compute monotonic millis.
     base: Instant,
 }
@@ -167,6 +223,7 @@ impl OrchestratorState {
     pub fn new() -> Self {
         let (log_tx, _) = broadcast::channel(STREAM_CAPACITY);
         let (ci_tx, _) = broadcast::channel(STREAM_CAPACITY);
+        let (cluster_tx, _) = broadcast::channel(STREAM_CAPACITY);
         Self(Arc::new(Inner {
             process: AtomicU8::new(ProcessState::Stopped.as_u8()),
             running_since_ms: AtomicI64::new(i64::MIN),
@@ -175,6 +232,8 @@ impl OrchestratorState {
             slots: RwLock::new(Vec::new()),
             log_tx,
             ci_tx,
+            cluster: AtomicU8::new(ClusterStatus::Unknown.as_u8()),
+            cluster_tx,
             base: Instant::now(),
         }))
     }
@@ -293,6 +352,32 @@ impl OrchestratorState {
         self.0.ci_tx.subscribe()
     }
 
+    /// The current aggregate cluster (preview) status.
+    pub fn cluster_status(&self) -> ClusterStatus {
+        ClusterStatus::from_u8(self.0.cluster.load(Ordering::Acquire))
+    }
+
+    /// Set the aggregate cluster status, broadcasting the new value to all
+    /// `/studio/cluster/events` subscribers **only when it changes**.
+    ///
+    /// De-duping on the stored value means the control-panel `IframePanel`
+    /// reload (which fires on a `restarting → healthy` transition) is driven by
+    /// real transitions, not by repeated identical observations. Returns the
+    /// number of live subscribers that received the transition (0 when no one
+    /// is listening, or when the status was unchanged).
+    pub fn set_cluster_status(&self, status: ClusterStatus) -> usize {
+        let prev = self.0.cluster.swap(status.as_u8(), Ordering::AcqRel);
+        if prev == status.as_u8() {
+            return 0;
+        }
+        self.0.cluster_tx.send(status).unwrap_or(0)
+    }
+
+    /// Subscribe to the cluster-status transition stream.
+    pub fn subscribe_cluster(&self) -> broadcast::Receiver<ClusterStatus> {
+        self.0.cluster_tx.subscribe()
+    }
+
     /// Current wall-clock time as unix milliseconds.
     fn unix_ms(&self) -> i64 {
         chrono::Utc::now().timestamp_millis()
@@ -402,5 +487,54 @@ mod tests {
         st.publish_ci_event(r#"{"key":"k"}"#);
         let got = rx.recv().await.expect("recv");
         assert_eq!(got, r#"{"key":"k"}"#);
+    }
+
+    #[test]
+    fn cluster_status_round_trips_through_u8() {
+        for s in [
+            ClusterStatus::Unknown,
+            ClusterStatus::Healthy,
+            ClusterStatus::Restarting,
+            ClusterStatus::Degraded,
+        ] {
+            assert_eq!(ClusterStatus::from_u8(s.as_u8()), s);
+        }
+    }
+
+    #[test]
+    fn cluster_starts_unknown_and_records_changes() {
+        let st = OrchestratorState::new();
+        assert_eq!(st.cluster_status(), ClusterStatus::Unknown);
+        st.set_cluster_status(ClusterStatus::Healthy);
+        assert_eq!(st.cluster_status(), ClusterStatus::Healthy);
+    }
+
+    #[tokio::test]
+    async fn cluster_stream_emits_only_on_transition() {
+        let st = OrchestratorState::new();
+        let mut rx = st.subscribe_cluster();
+
+        // A change broadcasts; an identical repeat does not.
+        assert_eq!(st.set_cluster_status(ClusterStatus::Restarting), 1);
+        assert_eq!(st.set_cluster_status(ClusterStatus::Restarting), 0);
+        assert_eq!(st.set_cluster_status(ClusterStatus::Healthy), 1);
+
+        assert_eq!(rx.recv().await.expect("recv"), ClusterStatus::Restarting);
+        assert_eq!(rx.recv().await.expect("recv"), ClusterStatus::Healthy);
+    }
+
+    /// The restart-to-healthy transition the IframePanel reload keys off is a
+    /// real, ordered pair of distinct events on the stream.
+    #[tokio::test]
+    async fn restart_to_healthy_transition_is_observable() {
+        let st = OrchestratorState::new();
+        let mut rx = st.subscribe_cluster();
+        st.set_cluster_status(ClusterStatus::Healthy);
+        st.set_cluster_status(ClusterStatus::Restarting);
+        st.set_cluster_status(ClusterStatus::Healthy);
+
+        assert_eq!(rx.recv().await.unwrap(), ClusterStatus::Healthy);
+        assert_eq!(rx.recv().await.unwrap(), ClusterStatus::Restarting);
+        assert_eq!(rx.recv().await.unwrap(), ClusterStatus::Healthy);
     }
 }
