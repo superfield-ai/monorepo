@@ -19,8 +19,49 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  changes:
+    name: Detect docs-only changes
+    runs-on: [self-hosted, Linux, X64]
+    outputs:
+      docs_only: ${{ steps.detect.outputs.docs_only }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - id: detect
+        name: Classify diff
+        run: |
+          set -euo pipefail
+
+          if [ "${GITHUB_EVENT_NAME}" = "pull_request" ]; then
+            base="${{ github.event.pull_request.base.sha }}"
+            head="${{ github.event.pull_request.head.sha }}"
+          else
+            base="${{ github.event.before }}"
+            head="${{ github.sha }}"
+          fi
+
+          docs_only=true
+          while IFS= read -r path; do
+            [ -n "$path" ] || continue
+            case "$path" in
+              *.md|docs/**|blueprint|blueprint/**|.github/workflows/**)
+                continue
+                ;;
+              *)
+                docs_only=false
+                break
+                ;;
+            esac
+          done < <(git diff --name-only --diff-filter=ACMRT "$base" "$head")
+
+          echo "docs_only=$docs_only" >> "$GITHUB_OUTPUT"
+
   typecheck:
     name: Typecheck
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: [self-hosted, Linux, X64]
     container:
       image: ghcr.io/superfield-ai/ci-runner:latest
@@ -34,6 +75,8 @@ jobs:
 
   lint:
     name: Lint
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: [self-hosted, Linux, X64]
     container:
       image: ghcr.io/superfield-ai/ci-runner:latest
@@ -47,6 +90,8 @@ jobs:
 
   format:
     name: Format
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: [self-hosted, Linux, X64]
     container:
       image: ghcr.io/superfield-ai/ci-runner:latest
