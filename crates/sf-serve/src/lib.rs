@@ -36,6 +36,7 @@
 //! works correctly.  When `CONTROL_ASSETS_DIR` is unset, a minimal placeholder
 //! HTML is returned so health checks always succeed.
 
+pub mod agent;
 pub mod auth;
 pub mod error;
 pub mod loop_handle;

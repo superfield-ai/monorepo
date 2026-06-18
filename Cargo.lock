@@ -3543,6 +3543,7 @@ dependencies = [
  "futures",
  "http 1.4.1",
  "nexum",
+ "reqwest 0.12.28",
  "serde",
  "serde_json",
  "sf-auth",

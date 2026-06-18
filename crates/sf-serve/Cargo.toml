@@ -30,6 +30,11 @@ http = { workspace = true }
 # axum's Server-Sent Events response type.
 tokio-stream = { version = "0.1", features = ["sync"] }
 futures = "0.3"
+# In-process studio agent (issue #687): the `WS /studio/ws` chat handler POSTs
+# to the Anthropic Messages API when an LLM key is configured. `sf-loop` owns
+# the gardening-loop executor but depends on `sf-serve`, so the studio agent
+# lives here instead (no cycle). Spec mirrors sf-loop's reqwest dependency.
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }
