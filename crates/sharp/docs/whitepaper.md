@@ -1,5 +1,17 @@
 # Sharp: A Database-Native, Semantically-Aware Version Control System for Agentic Software Development
 
+> **Document status — design + protocol specification.** This is a design and
+> protocol specification describing the _target_ Sharp system, not a report on
+> the current state of `crates/sharp`. Present-tense prose ("Sharp stores…",
+> "Sharp calls…") describes intended design and is not a guarantee that every
+> component is implemented today. The SQL schema blocks (§4, §5) and APIs are the
+> _target_ shape of the protocol; the shipped migrations may differ and will
+> converge on these. The post-v1 forks — the semantic-patch substrate
+> ([`semantic-patches.md`](./semantic-patches.md)) and branch-as-set
+> ([`branch-semantics.md`](./branch-semantics.md), [`storage-substrate.md`](./storage-substrate.md)) —
+> are explicitly forward-looking and are not claimed to exist in v1. The bar this
+> document holds itself to is internal consistency, not implementation parity.
+
 ## **Abstract**
 
 **Sharp** is a version control system. It preserves a Git-isomorphic core for linear history (blob, tree, commit, ref), stores all repository state in PostgreSQL, augments source code with semantic representations, and treats agent episodes as a first-class metadata layer attached to commits.
@@ -150,7 +162,7 @@ The core VCS objects are commits, trees, blobs, and refs. Episodes and other met
 
 Sharp uses **Git's content-addressing hash**: SHA-1 by default, SHA-256 when the repository is initialized with `objectformat=sha256` (Git's own transition format). This is a deliberate choice for the transition-era thesis (§1): Sharp's object IDs _are_ Git's object IDs. A Sharp blob, tree, or commit hashes to the same value Git would compute over the same canonical bytes, byte-for-byte. This is what makes the §2.1 isomorphism claim load-bearing rather than a translation layer — round-trip with a Git remote does not depend on a side-table mapping, and downstream amendments on the Git side return to Sharp with stable identities.
 
-The trade-off is accepted: SHA-1 is slower than BLAKE3 and weaker cryptographically. Sharp inherits Git's mitigations (SHA-1DC collision detection on object intake) and Git's migration path (per-repo `objectformat=sha256`). Hash algorithm is recorded per object via the `algo` column in §4.1 so that mixed-algorithm repositories are supported during the SHA-1 → SHA-256 transition that Git itself is undergoing.
+The trade-off is accepted: SHA-1 is slower than BLAKE3 and weaker cryptographically. Sharp inherits Git's mitigations (SHA-1DC collision detection on object intake) and Git's migration path (per-repo `objectformat=sha256`). Sharp records the hash algorithm per object via an `algo` column (§4.1) so that mixed-algorithm repositories are supported during the SHA-1 → SHA-256 transition that Git itself is undergoing.
 
 Choosing a Sharp-native hash (BLAKE3 or otherwise) was rejected: any non-Git hash forces an export-time recomputation, a Sharp-id ↔ Git-id mapping table, and an asymmetry on round-trip — none of which is acceptable for a system whose adoption story is "your existing GitHub remote keeps working."
 
@@ -341,7 +353,7 @@ Sharp's merge contract is the central reason an autonomous agent harness can ado
 
 ### **6.1 Tier 1 — Deterministic Semantic Merge**
 
-In v1, semantic representations (§2.3) are queryable artifacts _and_ the inputs to merge. Sharp calls `ts.LanguageService.findRenameLocations()` for TypeScript and rust-analyzer's `textDocument/rename` for Rust to enumerate every reference that needs updating when a symbol is renamed. These are the same APIs editors use for F2-rename; Sharp gets correct-by-construction reference lists rather than approximating them. The vast majority of cases that text-merge classifies as conflicts (or, worse, silently mis-resolves) collapse to a single deterministic answer. This is the common path. The corpus expectation is that most scenarios land here.
+In v1, semantic representations (§2.3) are queryable artifacts _and_ the inputs to merge. Sharp calls `ts.LanguageService.findRenameLocations()` for TypeScript and rust-analyzer's `textDocument/references` for Rust to enumerate every reference that needs updating when a symbol is renamed (`textDocument/rename` is the apply/preparatory call, not the enumeration one). These are the same reference-finding APIs editors drive for F2-rename; Sharp gets correct-by-construction reference lists rather than approximating them. The vast majority of cases that text-merge classifies as conflicts (or, worse, silently mis-resolves) collapse to a single deterministic answer. This is the common path. The corpus expectation is that most scenarios land here.
 
 **Semantic diff** — differences computed and surfaced at the symbol level, in addition to textual diffs — is the user-facing projection of the same machinery.
 
@@ -392,7 +404,7 @@ Cross-language algorithmic semantic merge — a single normalized engine spannin
 
 A common Git workflow pain — and one Sharp's autonomous-agent target audience cannot afford — is the **rebase on main**. As `main` advances, a feature branch falls behind; eventually the developer must stop, rebase the feature on `main`'s tip, resolve any conflicts that surface, and force-push. The cost is high: history is rewritten (every commit gets a new SHA), signatures break, in-flight reviews are invalidated, parallel work blocks, and — worst for an agent harness — there is no human in the loop to drive the resolution.
 
-Sharp eliminates the workflow entirely. **A feature branch never needs to be rebased on its target.** The mechanism is a primitive Sharp calls **continuous speculative merge**: for any `(feature, target)` pair, Sharp continuously maintains a derived ref `refs/sharp-merged/<feature>--<target>` whose value is the always-up-to-date result of running the full merge model — Tier 1, intrinsic verification, hooks, Tier 2, Tier 3 — between the feature's tip and the target's tip. Whenever either side advances, the projection becomes stale and the next read recomputes it.
+Sharp eliminates the workflow entirely. **A feature branch never needs to be rebased on its target.** The mechanism is a primitive Sharp calls **continuous speculative merge**: for any `(feature, target)` pair, Sharp continuously maintains a derived ref `refs/sharp-merged/<feature>--<target>` whose value is the always-up-to-date result of asking the same question the merge engine asks — _are the feature's changes and the target's changes independent?_ — between the feature's tip and the target's tip. Answering it runs the full merge model — Tier 1, intrinsic verification, hooks, Tier 2, Tier 3 — over the two tips (`branch-semantics.md` §5, `semantic-patches.md` §4 frame this as "the independence question, recomputed"). Whenever either side advances, the projection becomes stale and the next read recomputes it as a whole-tree operation over both tips (`scale-limits.md`).
 
 Properties:
 
