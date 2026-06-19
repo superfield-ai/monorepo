@@ -9,7 +9,10 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Run on PRs into main and into the sharp-docs phase branch, so the
+    # Sharp doc-framing invariants (issue #726) are enforced on the doc
+    # consolidation PRs that target the phase branch, not only on main.
+    branches: [main, "phase/sharp-docs-consolidation"]
 
 concurrency:
   group: doc-conformance-${{ github.ref }}
