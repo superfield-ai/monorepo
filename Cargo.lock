@@ -3526,6 +3526,7 @@ dependencies = [
  "serde_yaml",
  "sf-db",
  "sf-serve",
+ "sharp",
  "sqlx",
  "tempfile",
  "thiserror 1.0.69",
