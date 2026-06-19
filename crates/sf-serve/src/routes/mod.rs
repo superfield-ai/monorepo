@@ -10,6 +10,7 @@
 //! | [`cluster`]     | `/studio/cluster/*`| Required | Cluster-status SSE driving the live preview reload (#675) |
 //! | [`pages`]       | `/pages/*`         | None     | Knowledge-base page projections       |
 //! | [`change`]      | `/studio/changes/*`| Required | Change lifecycle read API (#707)      |
+//! | [`auditor`]     | `/studio/audit/*`  | Required | Read-only auditor decision-trace API (#719) |
 //! | [`project`]     | `/studio/*`        | Required | Project-graph API (dev-scout seam, #672) |
 //! | [`ingest`]      | `/studio/*`        | Required | Knowledge ingest/docs API (dev-scout seam, #673) |
 //! | [`ws`]          | `WS /studio/ws`    | Required | Agent-chat WebSocket seam (dev-scout stub, #695; feature #687) |
@@ -22,6 +23,7 @@
 //! [`crate::build_router`]. See [`crate::build_router`] for the merge point.
 
 pub mod api;
+pub mod auditor;
 pub mod auth;
 pub mod change;
 pub mod cluster;

@@ -35,6 +35,8 @@
 //! - [`query::graph_search`] — recursive CTE graph traversal (not AGE).
 //! - [`query::hybrid_search`] — semantic seed + one-hop graph expansion.
 //! - [`causal_chain::error_to_cause_chain`] — error-to-cause chain for agent diagnosis.
+//! - [`decision_chain::decision_to_requirement_chain`] — decision/change → requirement
+//!   traceability for the read-only auditor query surface (issue #719).
 //!
 //! # Integration seam
 //!
@@ -45,6 +47,7 @@
 
 pub mod ai_link;
 pub mod causal_chain;
+pub mod decision_chain;
 pub mod dedup;
 pub mod embed;
 pub mod ingest;
@@ -55,6 +58,7 @@ pub mod runtime_signal_projection;
 
 pub use ai_link::{classify_pair, process_ai_links, AiLinkError};
 pub use causal_chain::{error_to_cause_chain, CausalChain, CausalChainError, ChainNode};
+pub use decision_chain::{decision_to_requirement_chain, DecisionChain, DecisionChainError};
 pub use ingest::{ingest_document, IngestError, IngestOptions, IngestResult};
 pub use parse::{parse_document, Block, BlockType, Format};
 pub use query::{
