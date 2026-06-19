@@ -65,6 +65,32 @@ pub enum StepError {
     RuntimeSignal(#[from] sf_db::RuntimeSignalError),
 }
 
+/// The observable result of running a single gardening step.
+///
+/// Carries the cost the step's agent call(s) reported so the loop can publish
+/// it onto the active [`WorkSlot`](sf_serve::WorkSlot) and accumulate it across
+/// a pass — the cost producer the Orchestrator slot cards read (issue #712).
+#[derive(Debug, Clone, Copy, Default)]
+pub struct StepOutcome {
+    /// US-dollar cost the step's executor call(s) reported.
+    pub cost_usd: f64,
+}
+
+/// The lane the control-panel Orchestrator tab buckets a step under.
+///
+/// The loop reports per-lane health so the tab shows live `plan` and `doc`
+/// health, not only `dev` (issue #712 — the plan/doc lanes were previously
+/// inert and always reported default health).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LoopLane {
+    /// Planning lane (PRD / architecture / plan authoring + graph derivation).
+    Plan,
+    /// Development lane (the gardening pass as a whole / project-graph nodes).
+    Dev,
+    /// Documentation lane (strategy / technical / holistic reconciliation).
+    Doc,
+}
+
 /// The nine gardening steps, in execution order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GardeningStep {
@@ -102,6 +128,27 @@ impl GardeningStep {
             Self::HolisticReconcile => "holistic_reconcile",
             Self::ProjectGraphDerive => "project_graph_derive",
             Self::CodeChangeProposal => "code_change_proposal",
+        }
+    }
+
+    /// The control-panel loop lane this step's health is reported under.
+    ///
+    /// Mapping (issue #712 — populate the previously-inert `plan` and `doc`
+    /// lanes from real step activity):
+    /// - **Doc**: `strategy_research`, `technical_research`, `holistic_reconcile`
+    ///   — the knowledge-page authoring/reconciliation steps.
+    /// - **Plan**: `prd_reconcile`, `architecture_proposal`, `plan_proposal`
+    ///   — the steps that shape the PRD/architecture/plan documents.
+    /// - **Dev**: `project_graph_derive` — derives the Feature/Issue work graph;
+    ///   `code_change_proposal` — proposes a validated source change for an open
+    ///   node through the Sharp semantic-merge gate (#706).
+    pub fn lane(&self) -> LoopLane {
+        match self {
+            Self::StrategyResearch | Self::TechnicalResearch | Self::HolisticReconcile => {
+                LoopLane::Doc
+            }
+            Self::PrdReconcile | Self::ArchitectureProposal | Self::PlanProposal => LoopLane::Plan,
+            Self::ProjectGraphDerive | Self::CodeChangeProposal => LoopLane::Dev,
         }
     }
 }
@@ -157,7 +204,7 @@ pub async fn run_step(
     workspace_id: Uuid,
     executor: &dyn AgentExecutor,
     blueprint: &BlueprintRules,
-) -> Result<(), StepError> {
+) -> Result<StepOutcome, StepError> {
     match step {
         GardeningStep::StrategyResearch => {
             strategy_research::run(pool, workspace_id, executor).await

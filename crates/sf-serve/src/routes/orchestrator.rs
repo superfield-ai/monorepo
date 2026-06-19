@@ -402,6 +402,7 @@ mod tests {
                 started_at: "2026-06-18T00:00:00Z".into(),
                 elapsed_ms: 5_000,
                 heartbeat_at: Some(1_700_000_000_000),
+                cost_usd: 0.5,
             }]);
 
         let resp = router_with(state.clone())
@@ -429,6 +430,97 @@ mod tests {
         let j = body_json(resp).await;
         assert_eq!(j["slots"][0]["issueNumber"], 674);
         assert_eq!(j["slots"][0]["role"], "primary");
+    }
+
+    /// `/analytics/slots` surfaces a populated `costUsd` field on each slot, and
+    /// `/analytics/loops` reports non-default health on the `plan` and `doc`
+    /// lanes — the real producers wired in issue #712 (the gardening loop records
+    /// per-lane ticks and publishes cost-bearing slots; here we drive the same
+    /// `OrchestratorState` API the loop uses and assert the route shape).
+    #[tokio::test]
+    async fn slots_expose_cost_and_plan_doc_lanes_report_health() {
+        use crate::orchestrator_state::Lane;
+
+        let state = lazy_state();
+        // The loop records ticks on the plan and doc lanes (not only dev).
+        state.orchestrator().record_tick(Lane::Plan, 11);
+        state.orchestrator().record_tick(Lane::Doc, 22);
+        state
+            .orchestrator()
+            .set_slots(vec![crate::orchestrator_state::WorkSlot {
+                slot: 0,
+                issue_number: 712,
+                role: "doc".into(),
+                session_id: "gardening-strategy_research".into(),
+                backend: "gardening-loop".into(),
+                model: "fixture".into(),
+                started_at: "2026-06-19T00:00:00Z".into(),
+                elapsed_ms: 5,
+                heartbeat_at: Some(1_700_000_000_000),
+                cost_usd: 0.0125,
+            }]);
+
+        // Slots carry the cost field.
+        let resp = router_with(state.clone())
+            .oneshot(
+                Request::builder()
+                    .uri("/analytics/slots")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let j = body_json(resp).await;
+        assert_eq!(j["slots"][0]["costUsd"], 0.0125);
+
+        // Plan and doc lanes report real, non-default health.
+        let resp = router_with(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/analytics/loops")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        let j = body_json(resp).await;
+        assert_eq!(j["loops"]["plan"]["lastTickDurationMs"], 11);
+        assert!(j["loops"]["plan"]["lastTickAt"].is_i64());
+        assert_eq!(j["loops"]["doc"]["lastTickDurationMs"], 22);
+        assert!(j["loops"]["doc"]["lastTickAt"].is_i64());
+    }
+
+    /// `GET /analytics/check-runs/stream` delivers a produced check-run event to
+    /// a subscriber — the CI stream now has a real producer (issue #712).
+    #[tokio::test]
+    async fn check_runs_stream_delivers_produced_event() {
+        let state = lazy_state();
+        // Subscribe before publishing so the broadcast event is delivered.
+        let mut rx = state.orchestrator().subscribe_ci();
+
+        let resp = router_with(state.clone())
+            .oneshot(
+                Request::builder()
+                    .uri("/analytics/check-runs/stream")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+
+        let event = serde_json::json!({
+            "step": "strategy_research",
+            "lane": "doc",
+            "status": "completed",
+            "conclusion": "success",
+        })
+        .to_string();
+        state.orchestrator().publish_ci_event(event.clone());
+        let got = rx.recv().await.expect("recv");
+        let parsed: serde_json::Value = serde_json::from_str(&got).expect("json");
+        assert_eq!(parsed["step"], "strategy_research");
+        assert_eq!(parsed["status"], "completed");
     }
 
     /// `GET /orchestrator/logs` is an SSE stream that emits a published line to

@@ -8,6 +8,7 @@ export interface SlotInfo {
   startedAt: string; // ISO timestamp
   elapsedMs: number;
   heartbeatAt?: number; // Date.now() of last heartbeat
+  costUsd?: number; // accumulated US-dollar cost reported for this slot (issue #712)
 }
 
 export interface LoopHealth {

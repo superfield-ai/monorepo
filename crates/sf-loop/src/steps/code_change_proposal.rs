@@ -50,7 +50,7 @@
 //! pure-parse unit tests below run everywhere.
 
 use crate::agent::{AgentExecutor, AgentRequest};
-use crate::steps::StepError;
+use crate::steps::{StepError, StepOutcome};
 use sharp::merge_flow::{run_merge_flow, MergeRequest};
 use sharp::semantic_merge::{FileVersion, MergeOptions};
 use sharp::SharpError;
@@ -155,22 +155,27 @@ fn build_request(node_title: &str) -> AgentRequest {
 /// change, and gates it through Sharp's semantic merge + `cargo check`. On a
 /// compiling proposal the candidate is stored as a Sharp episode `merge_result`
 /// event. A non-compiling proposal is refused and discarded (the step still
-/// returns `Ok(())` so the cursor advances). Returns `Ok(())` with no work when
-/// there is no open node or the agent proposes nothing parseable.
+/// returns `Ok` so the cursor advances). Returns an empty [`StepOutcome`] with
+/// no work when there is no open node; otherwise the returned outcome carries
+/// the cost the executor reported (issue #712).
 pub(super) async fn run(
     pool: &sqlx::PgPool,
     _workspace_id: Uuid,
     executor: &dyn AgentExecutor,
-) -> Result<(), StepError> {
+) -> Result<StepOutcome, StepError> {
     // Step 1: select an open Issue/Feature node.
     let Some(node) = select_open_node(pool).await? else {
-        return Ok(()); // nothing to propose against — advance cursor.
+        // Nothing to propose against — advance cursor, no executor call, no cost.
+        return Ok(StepOutcome::default());
     };
 
     // Step 2: ask the agent for a proposed source diff.
     let resp = executor.run(build_request(&node.content)).await?;
+    let outcome = StepOutcome {
+        cost_usd: resp.cost_usd,
+    };
     let Some(proposal) = parse_proposal(&resp.content) else {
-        return Ok(()); // no parseable proposal — advance cursor.
+        return Ok(outcome); // no parseable proposal — advance cursor (cost already incurred).
     };
 
     // Step 3: read the current on-disk content (base) for the target file.
@@ -206,7 +211,7 @@ pub(super) async fn run(
     };
 
     match run_merge_flow(pool, req).await {
-        Ok(_outcome) => Ok(()),
+        Ok(_merge_outcome) => Ok(outcome),
         // A non-compiling proposal is refused, not stored — advance the cursor.
         Err(SharpError::MergeRefused { diagnostics }) => {
             tracing::info!(
@@ -214,7 +219,7 @@ pub(super) async fn run(
                 node.content,
                 diagnostics
             );
-            Ok(())
+            Ok(outcome)
         }
         Err(e) => Err(StepError::Sharp(e)),
     }

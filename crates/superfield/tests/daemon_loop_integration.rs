@@ -270,3 +270,80 @@ async fn loop_resumes_from_persisted_cursor_after_restart() {
 
     cleanup(&pool, workspace_id).await;
 }
+
+/// Acceptance (issue #712): driving the loop with an observer publishes a real
+/// work slot carrying a populated `costUsd`, reports non-default health on the
+/// `plan` and `doc` lanes (not only `dev`), and emits at least one real
+/// check-run event on the CI stream.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL with nexum + orchestrator migrations applied"]
+async fn loop_publishes_cost_slots_lanes_and_ci_events() {
+    let Some(pool) = pool_or_skip().await else {
+        return;
+    };
+    let workspace_id = Uuid::new_v4();
+    cleanup(&pool, workspace_id).await;
+    seed_workspace(&pool, workspace_id).await;
+
+    let observer = sf_serve::OrchestratorState::new();
+    // Subscribe to the CI stream BEFORE the loop starts so a produced event is
+    // delivered to this receiver.
+    let mut ci_rx = observer.subscribe_ci();
+
+    let executor: Arc<dyn sf_loop::AgentExecutor> = Arc::new(FixtureAgentExecutor::default());
+    let handle = daemon_runtime::boot_loop(
+        pool.clone(),
+        loop_config(workspace_id),
+        executor,
+        Some(observer.clone()),
+    );
+
+    // Let the loop run several steps so it touches multiple lanes.
+    let committed = wait_for_cursor(&pool, workspace_id, Duration::from_secs(15)).await;
+    assert!(committed.is_some(), "loop must commit at least one step");
+
+    // The CI stream must carry a real producer event.
+    let ci_event = tokio::time::timeout(Duration::from_secs(10), ci_rx.recv())
+        .await
+        .expect("a CI/check-run event must be produced within the timeout")
+        .expect("CI event recv");
+    let ci_json: serde_json::Value = serde_json::from_str(&ci_event).expect("CI event is JSON");
+    assert!(ci_json.get("step").is_some(), "CI event carries a step");
+    assert_eq!(ci_json["status"], "completed");
+
+    // Wait until the loop has advanced far enough to have ticked the plan lane
+    // (prd_reconcile, index 1) and the doc lane (strategy_research, index 0).
+    let deadline = std::time::Instant::now() + Duration::from_secs(20);
+    loop {
+        let loops = observer.loops_json();
+        let plan_ticked = loops["plan"]["lastTickAt"].is_i64();
+        let doc_ticked = loops["doc"]["lastTickAt"].is_i64();
+        if plan_ticked && doc_ticked {
+            break;
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "plan and doc lanes must report non-default health (got {loops})"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    // A real work slot must be published with a populated cost field.
+    let deadline = std::time::Instant::now() + Duration::from_secs(10);
+    loop {
+        let slots = observer.slots();
+        if let Some(slot) = slots.first() {
+            if slot.cost_usd > 0.0 {
+                break;
+            }
+        }
+        assert!(
+            std::time::Instant::now() < deadline,
+            "a work slot with a populated costUsd must be published"
+        );
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+
+    handle.drain().await.ok();
+    cleanup(&pool, workspace_id).await;
+}

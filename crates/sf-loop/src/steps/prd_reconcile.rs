@@ -4,7 +4,7 @@
 //! PRD that is consistent with the latest strategy findings.
 
 use crate::agent::{AgentExecutor, AgentRequest};
-use crate::steps::StepError;
+use crate::steps::{StepError, StepOutcome};
 use sf_db::insert_page_revision;
 use uuid::Uuid;
 
@@ -12,7 +12,7 @@ pub(super) async fn run(
     pool: &sqlx::PgPool,
     workspace_id: Uuid,
     executor: &dyn AgentExecutor,
-) -> Result<(), StepError> {
+) -> Result<StepOutcome, StepError> {
     let strategy = sf_db::fetch_page_content(pool, "strategy")
         .await
         .unwrap_or(None)
@@ -48,7 +48,9 @@ pub(super) async fn run(
 
     insert_page_revision(pool, workspace_id, "prd", &resp.content, &provenance).await?;
 
-    Ok(())
+    Ok(StepOutcome {
+        cost_usd: resp.cost_usd,
+    })
 }
 
 #[cfg(test)]
