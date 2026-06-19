@@ -162,3 +162,28 @@ DATABASE_URL=postgres://… cargo test -p sharp -p nexum -- --ignored --test-thr
   signal_projects_to_entity_joinable_to_deployment \
   runtime_error_is_recorded_as_episode_signal_linked_to_deployment
 ```
+
+---
+
+## RLS workspace-isolation applied on the appliance boot path (issue #710)
+
+The appliance daemon's in-process migration runner (`crates/sf-db/src/migrate.rs`,
+COMPONENT_DIRS order `sf-db → sf-auth → nexum → sharp`) now applies the
+workspace-isolation RLS policies via `crates/sharp/migrations/0008_rls_workspace_isolation.sql`
+(mirrored into the LAST component dir so it runs after every schema exists). It
+creates a BYPASSRLS `superfield_admin` role, self-ensures the `workspace_id`
+column, and ENABLE+FORCE RLS with four CRUD policies keyed on `app.workspace_id`
+(fail-closed when unset). `sf_db::acquire_with_workspace_id` sets both
+`app.workspace_id` and the legacy `app.current_principal_id`.
+
+Proof: `crates/sf-db/tests/rls_workspace_isolation_integration.rs` — cross-workspace
+SELECT/INSERT denial, idempotent `schema_migrations` recording, and a no-RLS
+negative control. DB-gated: skips when Postgres server binaries are absent.
+
+Verify (needs `/usr/lib/postgresql/<major>/bin/initdb` present):
+
+```bash
+cargo test -p sf-db --test rls_workspace_isolation_integration -- --test-threads=1
+cargo fmt -p sf-db -- --check
+cargo clippy -p sf-db --tests
+```
