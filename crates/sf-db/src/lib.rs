@@ -24,6 +24,13 @@
 //!   after the Postgres health gate passes and before the HTTP server binds
 //!   (issue #670). Mirrors `packages/db/migrator.ts` so both runners are
 //!   interchangeable against the same database.
+//! - [`change`]: the Change lifecycle and validation-gate state machine (issue
+//!   #707). [`change::ChangeState`] models the PRD §6 lifecycle
+//!   (`draft → validating → awaiting-approval → merged | rejected | abandoned`)
+//!   with a pure legal-transition table, and [`change::transition_change`]
+//!   enforces the validation gate (a change cannot reach `merged` without a
+//!   recorded passing `forge.validation_runs` row). Backed by
+//!   `crates/sf-db/migrations/0004_change_lifecycle.sql` (`forge` schema).
 //! - [`page_revision::insert_page_revision`]: write entrypoint for the
 //!   gardening loop page-revision path (issues #490, #491). Inserts a row
 //!   into `nexum.page_revisions` with the rendered content and provenance tag.
@@ -39,6 +46,7 @@
 //! See `docs/architecture.md` §Single-Instance Database Schema Layout.
 
 pub mod backup;
+pub mod change;
 pub mod config;
 pub mod migrate;
 pub mod page_query;
@@ -50,6 +58,10 @@ pub mod provisioner;
 pub use backup::{
     pg_basebackup_args, wal_archive_command_template, BackupError, BackupEvent, BackupOutcome,
     NoopSubstrateBackup, PgBackup, SubstrateBackup,
+};
+pub use change::{
+    fetch_change, has_passing_validation, insert_change, record_validation_run, transition_change,
+    Change, ChangeError, ChangeState, ValidationRunState,
 };
 pub use config::DbConfig;
 pub use migrate::{
