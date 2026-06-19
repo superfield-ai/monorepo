@@ -55,6 +55,11 @@ assert_absent() {
 assert_match "analytics slots/check-runs flagged producerless" \
   "no producer|always empty|producerless" "$ARCH"
 
+# 1b. The non-stream CI route GET /analytics/check-runs?sha= is documented in
+#     the route table (issue #713) — assert the sha-keyed route marker is present.
+assert_match "non-stream /analytics/check-runs?sha= route documented" \
+  "check-runs\?sha=" "$ARCH"
+
 # 2. Cluster events: v0 seeds status once at boot, no periodic poller.
 assert_match "cluster events seed-once-at-boot caveat present" \
   "seed.*boot|once at boot|no .*poller" "$ARCH"
