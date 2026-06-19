@@ -248,3 +248,26 @@ cargo test -p sf-notify
 cargo clippy -p sf-notify --all-targets -- -D warnings
 cargo fmt -p sf-notify -- --check
 ```
+
+---
+
+## Read-only systems-of-record connector seam (issue #718)
+
+The `sf-connector` crate is the read-only seam through which a Superfield app
+reads data from an external system of record (PRD US18/§7) without modifying or
+replacing it. `Connector` exposes only read verbs (`source_name`, `resources`,
+`query`, `fetch` — all `&self`); there is no `insert`/`update`/`delete`/`write`/
+`sync` method, and the `assert_read_only` marker plus the
+`connector_trait_exposes_only_read_methods` test fail compilation/`cargo test`
+if a write-shaped method is ever added. `ConnectorCredentials` are scoped to one
+`workspaces.id`; a credential for workspace A cannot bind to a connector for
+workspace B. The reference `InMemoryConnector` reads from an immutable
+`FakeSource` and never mutates it.
+
+Verify (no DB — pure-Rust unit/integration tests + CI gates):
+
+```bash
+cargo test -p sf-connector
+cargo clippy -p sf-connector --all-targets -- -D warnings
+cargo fmt -p sf-connector -- --check
+```
