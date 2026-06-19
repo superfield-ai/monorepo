@@ -83,11 +83,26 @@ pub enum SessionError {
 }
 
 /// Validates and parses a `role` column value from the database.
-fn parse_role(s: &str) -> Result<Role, SessionError> {
+///
+/// Accepts the seven canonical PRD §3 role names plus the two legacy names
+/// (`admin`, `member`) that predate the full role model, mapping them to their
+/// closest current role so already-issued sessions keep validating:
+///
+/// - `admin`  → [`Role::Owner`]
+/// - `member` → [`Role::Collaborator`]
+pub(crate) fn parse_role(s: &str) -> Result<Role, SessionError> {
     match s {
-        "admin" => Ok(Role::Admin),
-        "member" => Ok(Role::Member),
+        // Canonical PRD §3 roles.
+        "owner" => Ok(Role::Owner),
+        "requestor" => Ok(Role::Requestor),
+        "steerer" => Ok(Role::Steerer),
+        "collaborator" => Ok(Role::Collaborator),
+        "agent" => Ok(Role::Agent),
+        "auditor" => Ok(Role::Auditor),
         "viewer" => Ok(Role::Viewer),
+        // Legacy names kept for sessions issued before the full role model.
+        "admin" => Ok(Role::Owner),
+        "member" => Ok(Role::Collaborator),
         other => Err(SessionError::UnknownRole(other.to_string())),
     }
 }
@@ -224,25 +239,37 @@ mod tests {
             token: Uuid::new_v4(),
             workspace_id: ws,
             user_id: user,
-            role: Role::Admin,
+            role: Role::Owner,
             expires_at: Utc::now() + Duration::hours(1),
         };
 
         let ctx = session.into_auth_context();
         assert_eq!(ctx.workspace_id, ws);
         assert_eq!(ctx.user_id, user);
-        assert_eq!(ctx.role, Role::Admin);
+        assert_eq!(ctx.role, Role::Owner);
         // principal_id encodes both ws and user.
         assert!(ctx.principal_id().contains(&ws.to_string()));
         assert!(ctx.principal_id().contains(&user.to_string()));
     }
 
-    /// parse_role accepts all known roles.
+    /// parse_role accepts all seven canonical roles.
     #[test]
     fn parse_role_accepts_known_values() {
-        assert!(matches!(parse_role("admin"), Ok(Role::Admin)));
-        assert!(matches!(parse_role("member"), Ok(Role::Member)));
+        assert!(matches!(parse_role("owner"), Ok(Role::Owner)));
+        assert!(matches!(parse_role("requestor"), Ok(Role::Requestor)));
+        assert!(matches!(parse_role("steerer"), Ok(Role::Steerer)));
+        assert!(matches!(parse_role("collaborator"), Ok(Role::Collaborator)));
+        assert!(matches!(parse_role("agent"), Ok(Role::Agent)));
+        assert!(matches!(parse_role("auditor"), Ok(Role::Auditor)));
         assert!(matches!(parse_role("viewer"), Ok(Role::Viewer)));
+    }
+
+    /// parse_role maps the legacy `admin`/`member` names onto current roles so
+    /// sessions issued before the full role model keep validating.
+    #[test]
+    fn parse_role_maps_legacy_names() {
+        assert!(matches!(parse_role("admin"), Ok(Role::Owner)));
+        assert!(matches!(parse_role("member"), Ok(Role::Collaborator)));
     }
 
     /// parse_role rejects unknown strings.
@@ -270,13 +297,13 @@ mod tests {
         let user = Uuid::new_v4();
 
         let session = store
-            .issue(ws, user, Role::Member)
+            .issue(ws, user, Role::Collaborator)
             .await
             .expect("issue failed");
 
         assert_eq!(session.workspace_id, ws);
         assert_eq!(session.user_id, user);
-        assert_eq!(session.role, Role::Member);
+        assert_eq!(session.role, Role::Collaborator);
 
         let ctx = store
             .validate(session.token)
@@ -285,7 +312,7 @@ mod tests {
 
         assert_eq!(ctx.workspace_id, ws);
         assert_eq!(ctx.user_id, user);
-        assert_eq!(ctx.role, Role::Member);
+        assert_eq!(ctx.role, Role::Collaborator);
     }
 
     /// Integration test: revoked session is rejected by validate.
@@ -328,7 +355,7 @@ mod tests {
         let ws = Uuid::new_v4();
         let user = Uuid::new_v4();
         let session = store
-            .issue(ws, user, Role::Admin)
+            .issue(ws, user, Role::Owner)
             .await
             .expect("issue failed");
 

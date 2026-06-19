@@ -194,7 +194,7 @@ mod tests {
     async fn mint_session(pool: &sqlx::PgPool, workspace_id: uuid::Uuid) -> String {
         let store = sf_auth::SessionStore::new(pool.clone(), Some(3600));
         store
-            .issue(workspace_id, workspace_id, sf_auth::Role::Admin)
+            .issue(workspace_id, workspace_id, sf_auth::Role::Owner)
             .await
             .expect("issue session failed")
             .token

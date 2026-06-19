@@ -26,6 +26,6 @@ pub mod context;
 pub mod federation;
 pub mod session;
 
-pub use context::{AuthContext, Role};
+pub use context::{AuthContext, Role, ALL_ROLES};
 pub use federation::{FederatedIdentity, IdentityProvider};
 pub use session::{Session, SessionError, SessionStore};

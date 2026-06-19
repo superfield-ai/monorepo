@@ -27,6 +27,7 @@
 use axum::{
     extract::{Query, State},
     http::StatusCode,
+    middleware,
     response::IntoResponse,
     routing::{get, post},
     Extension, Json, Router,
@@ -34,6 +35,8 @@ use axum::{
 use serde::Deserialize;
 use serde_json::json;
 use sf_auth::AuthContext;
+
+use crate::authz::require_write;
 use sf_db::{ProjectGraphError, ProjectNode};
 use uuid::Uuid;
 
@@ -281,11 +284,21 @@ pub async fn steer(
 /// All routes here will be wrapped in the auth middleware by the caller
 /// ([`crate::build_router`]).
 pub fn router(state: AppState) -> Router {
+    // Write routes are gated by `require_write` (issue #711): Auditor and
+    // Viewer are read-only and receive 403; all other roles pass. The gate
+    // runs after `auth_middleware` (applied by the caller), which injects the
+    // `AuthContext` it inspects.
     Router::new()
         .route("/studio/status", get(status))
         .route("/studio/issues", post(create_issue).get(list_issues))
-        .route("/studio/issues/update", post(update_issue))
-        .route("/studio/steer", post(steer))
+        .route(
+            "/studio/issues/update",
+            post(update_issue).layer(middleware::from_fn(require_write)),
+        )
+        .route(
+            "/studio/steer",
+            post(steer).layer(middleware::from_fn(require_write)),
+        )
         .with_state(state)
 }
 

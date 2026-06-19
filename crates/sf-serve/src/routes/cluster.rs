@@ -153,7 +153,7 @@ mod tests {
         let ext = Extension(AuthContext::new(
             Uuid::new_v4(),
             Uuid::new_v4(),
-            Role::Admin,
+            Role::Owner,
         ));
         super::router(state).layer(axum::middleware::from_fn(
             move |mut req: Request<Body>, next: axum::middleware::Next| {

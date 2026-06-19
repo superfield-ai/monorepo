@@ -187,3 +187,42 @@ cargo test -p sf-db --test rls_workspace_isolation_integration -- --test-threads
 cargo fmt -p sf-db -- --check
 cargo clippy -p sf-db --tests
 ```
+
+---
+
+## Seven-role model + route-level authorization (#711)
+
+`sf_auth::Role` is the full seven-role PRD §3 model: `Owner`, `Requestor`,
+`Steerer`, `Collaborator`, `Agent`, `Auditor`, `Viewer` (snake_case wire form).
+`sf_auth::ALL_ROLES` is the canonical array; `Role::can_write()` is `false` only
+for `Auditor`/`Viewer`; `Role::is_owner()` is `true` only for `Owner`.
+`session::parse_role` accepts all seven plus the legacy `admin`→`Owner` and
+`member`→`Collaborator` aliases (the `auth.sessions.role` CHECK constraint —
+widened by `0002_role_model.sql` — accepts all nine).
+
+Route-level authorization lives in `crates/sf-serve/src/authz.rs`: the
+`require_write` axum middleware returns `403` when `!role.can_write()`; the
+`require_owner` middleware returns `403` when `!role.is_owner()`. Both inspect
+the `AuthContext` injected by `auth_middleware` and MUST be layered after it.
+Gated routes today: `POST /studio/issues/update` and `POST /studio/steer`
+(`require_write`); `POST /orchestrator/start` and `POST /orchestrator/stop`
+(`require_owner`). To gate a new route, add
+`.layer(middleware::from_fn(require_write|require_owner))` to its MethodRouter
+inside the owning route module.
+
+Key files:
+
+- `crates/sf-auth/src/context.rs` — `Role` enum, `ALL_ROLES`, `can_write`,
+  `is_owner`.
+- `crates/sf-auth/src/session.rs` — `parse_role` (canonical + legacy).
+- `crates/sf-auth/src/migrations/0002_role_model.sql` — widened CHECK.
+- `crates/sf-serve/src/authz.rs` — `require_write` / `require_owner` gates.
+- `crates/sf-serve/src/routes/studio.rs`, `routes/orchestrator.rs` — gated
+  routes.
+
+Verify (no DB — gate logic + role-model unit tests; DB e2e tests are `#[ignore]`):
+
+```bash
+cargo test -p sf-auth -p sf-serve
+cargo clippy -p sf-auth -p sf-serve --all-targets -- -D warnings
+```

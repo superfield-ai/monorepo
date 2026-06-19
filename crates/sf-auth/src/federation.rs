@@ -152,13 +152,13 @@ mod tests {
                 email: "alice@example.com".to_string(),
                 display_name: "Alice".to_string(),
                 workspace_id: None,
-                role: Some(Role::Member),
+                role: Some(Role::Collaborator),
             },
         };
 
         let result = idp.verify("dummy-token").await.unwrap();
         assert_eq!(result.email, "alice@example.com");
-        assert_eq!(result.role, Some(Role::Member));
+        assert_eq!(result.role, Some(Role::Collaborator));
     }
 
     #[tokio::test]

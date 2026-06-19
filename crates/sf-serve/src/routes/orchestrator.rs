@@ -36,6 +36,7 @@ use std::convert::Infallible;
 
 use axum::{
     extract::State,
+    middleware,
     response::{
         sse::{Event, KeepAlive, Sse},
         IntoResponse,
@@ -47,6 +48,8 @@ use futures::stream::Stream;
 use serde::Deserialize;
 use serde_json::json;
 use sf_auth::AuthContext;
+
+use crate::authz::require_owner;
 use tokio_stream::wrappers::BroadcastStream;
 use tokio_stream::StreamExt as _;
 
@@ -178,11 +181,22 @@ pub async fn stop(State(state): State<AppState>) -> impl IntoResponse {
 /// All routes here are wrapped in the auth middleware by the caller
 /// ([`crate::build_router`]).
 pub fn router(state: AppState) -> Router {
+    // Starting and stopping the autonomous loop governs autonomy, which only
+    // the Owner may do (PRD §3, issue #711). These two routes are gated by
+    // `require_owner`; every non-Owner role receives 403. The gate runs after
+    // `auth_middleware` (applied by the caller), which injects the
+    // `AuthContext` it inspects.
     Router::new()
         .route("/orchestrator/status", get(status))
         .route("/orchestrator/logs", get(logs_stream))
-        .route("/orchestrator/start", post(start))
-        .route("/orchestrator/stop", post(stop))
+        .route(
+            "/orchestrator/start",
+            post(start).layer(middleware::from_fn(require_owner)),
+        )
+        .route(
+            "/orchestrator/stop",
+            post(stop).layer(middleware::from_fn(require_owner)),
+        )
         .route("/analytics/loops", get(loops))
         .route("/analytics/slots", get(slots))
         .route("/analytics/check-runs/stream", get(check_runs_stream))
@@ -237,7 +251,7 @@ mod tests {
         Extension(AuthContext::new(
             Uuid::new_v4(),
             Uuid::new_v4(),
-            Role::Admin,
+            Role::Owner,
         ))
     }
 

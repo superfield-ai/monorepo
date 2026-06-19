@@ -80,7 +80,7 @@ mod integration {
 
         // Issue a real session via the store.
         let session = session_store
-            .issue(ws, user, Role::Member)
+            .issue(ws, user, Role::Collaborator)
             .await
             .expect("session issue failed");
 
@@ -106,7 +106,7 @@ mod integration {
 
         assert_eq!(json["workspace_id"].as_str().unwrap(), ws.to_string());
         assert_eq!(json["user_id"].as_str().unwrap(), user.to_string());
-        assert_eq!(json["role"].as_str().unwrap(), "member");
+        assert_eq!(json["role"].as_str().unwrap(), "collaborator");
         assert_eq!(json["status"].as_str().unwrap(), "ok");
     }
 
@@ -139,7 +139,7 @@ mod integration {
 
         // Issue a session for workspace A.
         let session_a = session_store
-            .issue(ws_a, user, Role::Admin)
+            .issue(ws_a, user, Role::Owner)
             .await
             .expect("session issue failed");
 
@@ -247,6 +247,152 @@ mod integration {
             resp.status(),
             StatusCode::UNAUTHORIZED,
             "revoked token must yield 401"
+        );
+    }
+
+    /// Issue a session for `role`, then send `method path` with the token and
+    /// return the HTTP status. Used by the route-authorization tests below.
+    async fn status_with_role(
+        router: axum::Router,
+        session_store: &SessionStore,
+        role: Role,
+        method: Method,
+        path: &str,
+    ) -> StatusCode {
+        let ws = Uuid::new_v4();
+        let user = Uuid::new_v4();
+        let session = session_store
+            .issue(ws, user, role)
+            .await
+            .expect("session issue failed");
+        let req = Request::builder()
+            .method(method)
+            .uri(path)
+            .header("x-session-token", session.token.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from("{}"))
+            .unwrap();
+        router.oneshot(req).await.unwrap().status()
+    }
+
+    /// Acceptance (issue #711): a Viewer token is rejected with 403 on a write
+    /// route and accepted with 200 on a read route. The write route here is
+    /// `POST /studio/steer` (gated by `require_write`); the read route is
+    /// `GET /studio/status`.
+    ///
+    /// Skipped unless `DATABASE_URL` is set.
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with auth schema migrated"]
+    async fn viewer_forbidden_on_write_allowed_on_read() {
+        let (router, store) = match make_test_router().await {
+            Some(t) => t,
+            None => {
+                eprintln!("skip: DATABASE_URL not set");
+                return;
+            }
+        };
+
+        // Read route → 200.
+        let read = status_with_role(
+            router.clone(),
+            &store,
+            Role::Viewer,
+            Method::GET,
+            "/studio/status",
+        )
+        .await;
+        assert_eq!(read, StatusCode::OK, "Viewer must read /studio/status");
+
+        // Write route → 403.
+        let write =
+            status_with_role(router, &store, Role::Viewer, Method::POST, "/studio/steer").await;
+        assert_eq!(
+            write,
+            StatusCode::FORBIDDEN,
+            "Viewer must be forbidden on a write route"
+        );
+    }
+
+    /// Acceptance (issue #711): an Auditor token (read-only) is rejected with
+    /// 403 on a write route and accepted with 200 on a read route.
+    ///
+    /// Skipped unless `DATABASE_URL` is set.
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with auth schema migrated"]
+    async fn auditor_forbidden_on_write_allowed_on_read() {
+        let (router, store) = match make_test_router().await {
+            Some(t) => t,
+            None => {
+                eprintln!("skip: DATABASE_URL not set");
+                return;
+            }
+        };
+
+        let read = status_with_role(
+            router.clone(),
+            &store,
+            Role::Auditor,
+            Method::GET,
+            "/studio/status",
+        )
+        .await;
+        assert_eq!(read, StatusCode::OK, "Auditor must read /studio/status");
+
+        let write =
+            status_with_role(router, &store, Role::Auditor, Method::POST, "/studio/steer").await;
+        assert_eq!(
+            write,
+            StatusCode::FORBIDDEN,
+            "Auditor must be forbidden on a write route"
+        );
+    }
+
+    /// Acceptance (issue #711): an Owner-only route (`POST /orchestrator/start`,
+    /// gated by `require_owner`) returns 403 for a non-Owner role and is not
+    /// blocked by the authorization gate for the Owner.
+    ///
+    /// Skipped unless `DATABASE_URL` is set.
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with auth schema migrated"]
+    async fn owner_only_route_forbidden_for_non_owner() {
+        let (router, store) = match make_test_router().await {
+            Some(t) => t,
+            None => {
+                eprintln!("skip: DATABASE_URL not set");
+                return;
+            }
+        };
+
+        // Collaborator may write in general but is NOT the Owner → 403 on the
+        // Owner-gated route.
+        let non_owner = status_with_role(
+            router.clone(),
+            &store,
+            Role::Collaborator,
+            Method::POST,
+            "/orchestrator/start",
+        )
+        .await;
+        assert_eq!(
+            non_owner,
+            StatusCode::FORBIDDEN,
+            "non-Owner must be forbidden on the Owner-only route"
+        );
+
+        // Owner passes the authorization gate (the request reaches the handler;
+        // it does not return 403).
+        let owner = status_with_role(
+            router,
+            &store,
+            Role::Owner,
+            Method::POST,
+            "/orchestrator/start",
+        )
+        .await;
+        assert_ne!(
+            owner,
+            StatusCode::FORBIDDEN,
+            "Owner must pass the Owner-only authorization gate"
         );
     }
 }
