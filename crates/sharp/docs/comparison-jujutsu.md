@@ -12,13 +12,13 @@ Of the post-Git version control systems, [Jujutsu (`jj`)](https://github.com/jj-
 
 `jj`'s defining pragmatic bet is that the blob/tree/commit/ref content-addressed core is _right_, and that the things worth replacing are the working-copy model, the conflict model, and the operation model layered on top. `jj` runs on a Git backend by default and interoperates with Git remotes precisely because it does not relitigate the object graph.
 
-Sharp makes the identical bet, and pushes it one notch harder: Sharp's object IDs _are_ Git's object IDs, byte-for-byte (whitepaper §2.1, §4.0). We keep blob/tree/commit/ref and Git's content-addressing hash so that import and export round-trip against real GitHub remotes without a mapping table. Both systems treat "Git's data model good, Git's _workflow_ bad" as the starting axiom.
+Sharp makes the identical bet, and pushes it one notch harder: Sharp's object IDs _are_ Git's object IDs, byte-for-byte (whitepaper §2.2, §4.0). We keep blob/tree/commit/ref and Git's content-addressing hash so that import and export round-trip against real GitHub remotes without a mapping table. Both systems treat "Git's data model good, Git's _workflow_ bad" as the starting axiom.
 
 ### 1.2 The backend is not sacred — and it does not have to be a filesystem
 
 `jj` abstracts the storage backend behind an interface. The open-source default is the Git backend on local disk, but the same abstraction is what lets Google run `jj` against a cloud backend internally. The lesson `jj` teaches is that "the repository is a `.git` directory on a filesystem" is an assumption, not a requirement.
 
-Sharp takes that lesson to its conclusion: **all repository state lives in PostgreSQL** (whitepaper §2.2) — objects, refs, semantic representations, episodes, and mutable metadata in one store. `jj`'s pluggable-backend design and Google's cloud backend are, to us, direct validation that a database-native VCS is not heresy. We just made the database the _only_ backend rather than one of several, because our workload (agent harnesses issuing concurrent queries over history and provenance) wants a query engine, not a file tree.
+Sharp takes that lesson to its conclusion: **all repository state lives in a single queryable storage substrate** (whitepaper §2.3) — objects, refs, semantic representations, episodes, and mutable metadata in one store, realized on PostgreSQL in v1 ([`postgres-storage-plugin.md`](./postgres-storage-plugin.md)). `jj`'s pluggable-backend design and Google's cloud backend are, to us, direct validation that putting a VCS behind a query engine is not heresy. We made one substrate the only one Sharp ships rather than one of several, because our workload (agent harnesses issuing concurrent queries over history and provenance) wants a query engine, not a file tree. This is a substrate choice downstream of the semantic-independence thesis (whitepaper §1.1), not the headline of the design.
 
 ### 1.3 Conflicts are data, not a stop-the-world text edit
 
@@ -83,7 +83,7 @@ And critically, the _losers_ are data. Sharp keeps **failed siblings** as first-
 
 ### 2.5 The primary interface is an API, not a CLI
 
-`jj` is, correctly, CLI-first, with a revset query language for a human to slice history at the terminal. Sharp's primary consumer is a harness, so the primary surface is a **library + HTTP API + SQL** (whitepaper §3.1), with the Git-shaped CLI retained for the humans still in the loop during the transition. "`SELECT * FROM projections WHERE status = 'dilemma'`" (§6.7) is the agent-native equivalent of a revset — a queryable signal a pipeline can poll, not a command a person types.
+`jj` is, correctly, CLI-first, with a revset query language for a human to slice history at the terminal. Sharp's primary consumer is a harness, so the primary surface is a **library + HTTP API plus an operator-scoped read-only query passthrough** (whitepaper §3.1), with the Git-shaped CLI retained for the humans still in the loop during the transition. Querying the store for every projection whose status is `dilemma` (§6.7) is the agent-native equivalent of a revset — a queryable signal a pipeline can poll, not a command a person types.
 
 ### 2.6 Replay-as-evaluation has no VCS precedent
 
@@ -96,7 +96,7 @@ Because Sharp records an episode's full input boundary, it can **replay** it aga
 | Dimension                   | Jujutsu (`jj`)                                                                              | Sharp                                                                                   |
 | --------------------------- | ------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
 | Git object model            | Kept (Git backend)                                                                          | Kept, byte-isomorphic (Git hash)                                                        |
-| Storage backend             | Pluggable; Git-on-filesystem default, cloud backend at Google                               | PostgreSQL, exclusively (database-native)                                               |
+| Storage backend             | Pluggable; Git-on-filesystem default, cloud backend at Google                               | Single queryable substrate (PostgreSQL plugin in v1)                                    |
 | Conflicts                   | First-class, recorded in commits, deferred to a human                                       | Dissolved deterministically; else machine-readable structured dilemma                   |
 | "Record everything"         | Operation log + universal undo                                                              | Immutable commits + append-only episodes + mutable metadata                             |
 | Stable vs. moving identity  | Change ID (stable) vs. commit ID (moves)                                                    | Feature branch SHAs (stable) vs. speculative-merge projection (moves)                   |

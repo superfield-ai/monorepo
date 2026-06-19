@@ -219,8 +219,7 @@ canonical-diff problem precisely where it is hardest: structural operations are 
 no detection heuristic runs on them at all.
 
 This is where Sharp meets its real prior art, and the meeting is favorable. Operation-based
-merge (Lippe & van Oosterom, 1992) and refactoring-aware merge (Dig et al., _MolhadoRef_,
-2007) both established that recording operations beats diffing states — but both assumed a
+merge (Lippe & van Oosterom, 1992) and refactoring-aware merge (Dig et al., _MolhadoRef_, 2007) both established that recording operations beats diffing states — but both assumed a
 _human_ author, from whom the operation had to be coaxed by a refactoring IDE or inferred
 after the fact. The agent-first setting removes that assumption: the operation is already a
 brokered tool call. Sharp's claim over this lineage is therefore narrow and specific —
@@ -262,7 +261,7 @@ these costs correctly (`snapshots-vs-patches.md` §2):
   the materialization is byte-canonical. Recoverable, but it forfeits the "compatibility
   falls out for free" property and must re-earn it. This is also a strategic-coherence
   question the whitepaper must answer head-on: byte-isomorphism is sold as a v1 _adoption
-  pillar_ (whitepaper §2.1, §4.0), so the end-state must say plainly whether it stays a
+  pillar_ (whitepaper §2.2, §4.0), so the end-state must say plainly whether it stays a
   permanent _property_ or becomes a boundary _courtesy_ re-earned at export. The honest
   answer is the latter — on the operation substrate byte-isomorphism is a property of the
   export projection, not of the store — and v1's pillar is not retracted by this, only

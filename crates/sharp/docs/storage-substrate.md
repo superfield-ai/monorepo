@@ -1,6 +1,6 @@
 # Storage Substrate: Postgres Is One Loosely-Coupled Implementation, Not the Architecture
 
-Sharp stores all repository state in PostgreSQL (whitepaper §2.2). That is a statement about
+Sharp stores all repository state in a single queryable storage substrate (whitepaper §2.3), realized on PostgreSQL in v1 ([`postgres-storage-plugin.md`](./postgres-storage-plugin.md)). That is a statement about
 the **one implementation Sharp ships and optimizes**, not about the architecture being
 welded to Postgres. The storage substrate sits behind a loosely-coupled module boundary;
 Postgres is the single maintained implementation of that boundary. Other substrates — other
@@ -17,7 +17,7 @@ requirements**.
 naming: **Dolt** (a Git-for-data VCS built directly on a MySQL-compatible engine),
 **TerminusDB** (git-like versioning over a datalog/graph store), **Irmin** (an OCaml git-like
 distributed store), **Noms** (content-addressed and decentralized), and **Datomic**
-(immutable facts with time-travel queries). They establish that the database-native posture
+(immutable facts with time-travel queries). They establish that putting a VCS behind a query engine
 is sound. Sharp's difference is not _that_ it puts a VCS in a database but _what_ it puts
 there — semantic representations and agent episodes as first-class rows, queried alongside
 objects and refs — and its insistence that this is one fully-exploited implementation, not a

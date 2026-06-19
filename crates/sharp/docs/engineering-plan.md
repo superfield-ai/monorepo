@@ -68,30 +68,14 @@ The storage layer is the single hard dependency; everything else hangs off it. E
 
 ### 3.1 Schema and Migrations
 
-Plain SQL migration files under `apps/server/migrations/<seq>__<name>.sql`, applied in order by a small Bun script at server startup. Migrations are recorded in a `schema_migrations(version, applied_at)` table; never re-run, never edited after release. Convention matches `superfield/template`'s raw-SQL approach (no ORM; types come from hand-written interfaces alongside `postgres` package query calls).
+Plain SQL migration files under `apps/server/migrations/<seq>__<name>.sql`, applied in order by a small Bun script at server startup. Migrations are recorded in a `schema_migrations(version, applied_at)` relation; never re-run, never edited after release. Convention matches `superfield/template`'s raw-SQL approach (no ORM; types come from hand-written interfaces alongside `postgres` package query calls). The concrete schema for every relation named here is specified in [`postgres-storage-plugin.md`](./postgres-storage-plugin.md); this section covers only the engineering notes that sit on top of it.
 
-The whitepaper schema (§4, §5.1) adds two pieces v1 needs that aren't in the whitepaper:
+Beyond the data-model relations (whitepaper §4, §5.1), the v1 plugin adds two relations the product spec does not name (both defined in [`postgres-storage-plugin.md`](./postgres-storage-plugin.md) §4):
 
-```sql
--- Required for multi-repo servers; everything else FKs to repo_id.
-repos (
-  id uuid primary key,
-  name text not null unique,
-  default_branch text not null default 'main',
-  created_at timestamptz not null default now()
-);
+- **`repos`** — required for multi-repo servers; everything else keys to `repo_id`.
+- **`commit_paths`** — tracks "what file paths a commit touched", populated on commit creation by walking the diff against the parent.
 
--- Tracks "what file paths a commit touched" for analytics queries.
--- Populated on commit creation by walking the diff against the parent.
-commit_paths (
-  repo_id uuid not null,
-  commit_id bytea not null,
-  path text not null,
-  primary key (repo_id, commit_id, path)
-);
-```
-
-The `commit_paths` table is the analytics primitive that makes `"all episodes that touched file X"` cheap. Episode-side joins are `episode → promoted_commit → commit_paths`.
+The `commit_paths` relation is the analytics primitive that makes `"all episodes that touched file X"` cheap. Episode-side joins are `episode → promoted_commit → commit_paths`.
 
 Indexes that ship with v1:
 
@@ -116,18 +100,11 @@ The CAS API is intentionally narrow:
 
 ### 3.3 Refs (Atomic CAS)
 
-Refs use a compare-and-swap update model:
-
-```sql
-update refs
-   set target = $new_target
- where repo_id = $repo and name = $name and target = $expected_old_target
- returning target;
-```
+Refs use a compare-and-swap update model: a conditional update sets `target` to the new value only for the row matching `(repo_id, name)` whose stored `target` still equals the expected old value, returning the updated `target`.
 
 Zero-row return → CAS failure. The client retries with the latest value or surfaces a "your push lost a race" error. This is the same model `git update-ref --create-reflog --no-deref OLDOID NEWOID` provides, mapped onto Postgres' transactional update.
 
-Ref creation: insert with `expected_old_target = NULL` semantics handled by `ON CONFLICT DO NOTHING`.
+Ref creation: insert with `expected_old_target = NULL` semantics, handled by an insert-if-absent (`ON CONFLICT DO NOTHING`) write.
 
 Symbolic refs (HEAD pointing at `refs/heads/<branch>`): refs schema gets a `target_kind text not null check (target_kind in ('hash', 'symbolic'))` column and a nullable `symbolic_target text`. Already noted in `whitepaper.md` Git interop section as required for HEAD round-trip.
 
@@ -424,22 +401,19 @@ Implements the "no rebase ever" feature from whitepaper §6.7. A thin server-sid
 
 #### Storage
 
-```sql
-projections (
-  repo_id uuid not null,
-  branch_ref text not null,             -- e.g. 'refs/heads/feature/x'
-  target_ref text not null,             -- e.g. 'refs/heads/main'
-  branch_tip bytea,                     -- commit ID at last computation
-  target_tip bytea,                     -- commit ID at last computation
-  projection_commit bytea,              -- the resulting Sharp commit ID, or null on dilemma
-  status text not null check (status in ('clean','dilemma','stale','error')),
-  dilemma jsonb,                        -- the §7.4 dilemma payload, when status='dilemma'
-  computed_at timestamptz not null,
-  primary key (repo_id, branch_ref, target_ref)
-);
-```
+A `projections` relation, keyed by `(repo_id, branch_ref, target_ref)`, caches each speculative merge:
 
-A trigger on `refs` updates marks any matching projection rows as `status='stale'`. The next read recomputes lazily.
+| Field                      | Meaning                                                    |
+| -------------------------- | ---------------------------------------------------------- |
+| `branch_ref`               | The feature ref, e.g. `refs/heads/feature/x`.              |
+| `target_ref`               | The integration target, e.g. `refs/heads/main`.            |
+| `branch_tip`, `target_tip` | The two commit IDs at the last computation.                |
+| `projection_commit`        | The resulting Sharp commit ID, or absent on dilemma.       |
+| `status`                   | One of `clean`, `dilemma`, `stale`, `error`.               |
+| `dilemma`                  | The §7.4 dilemma payload, present when `status = dilemma`. |
+| `computed_at`              | When the projection was last computed.                     |
+
+A trigger on `refs` updates marks any matching projection rows as `status = stale`. The next read recomputes lazily. The concrete column types are in [`postgres-storage-plugin.md`](./postgres-storage-plugin.md).
 
 #### Compute path
 
@@ -606,40 +580,13 @@ Harnesses running fan-out attempts call `episode.linkSibling(otherEpisodeId)` fo
 
 ### 10.1 Hot Indexes
 
-The three queries v1 must answer cheaply (v1-plan §6):
+The three queries v1 must answer cheaply (v1-plan §6), each backed by a dedicated index:
 
-- **"all episodes that touched file X"** —
+- **"all episodes that touched file X"** — join episodes to `commit_paths` through each episode's `promoted_commit`, filtered by `(repo_id, path)`. Backed by the `commit_paths(repo_id, path)` index. Fast.
+- **"all failed siblings of commit Y"** — from the episode that produced commit Y, walk its `sibling` links and keep the peers whose status is `failed` or `abandoned`. Backed by `episodes(promoted_commit)` and the `episode_links` primary key.
+- **"all episodes using model Z, with success rate by harness version"** — group episodes for the given `(repo_id, model_id)` by `harness_version`, counting completed-with-promoted-commit runs as wins over total. Backed by `episodes(repo_id, model_id, status)`.
 
-  ```sql
-  select e.* from episodes e
-  join commit_paths cp on cp.commit_id = e.promoted_commit and cp.repo_id = e.repo_id
-  where cp.repo_id = $1 and cp.path = $2;
-  ```
-
-  Backed by `commit_paths(repo_id, path)`. Fast.
-
-- **"all failed siblings of commit Y"** —
-
-  ```sql
-  select sib.* from episodes winner
-  join episode_links el on el.to_episode = winner.id and el.relation = 'sibling'
-  join episodes sib on sib.id = el.from_episode
-  where winner.repo_id = $1 and winner.promoted_commit = $2 and sib.status in ('failed','abandoned');
-  ```
-
-  Backed by `episodes(promoted_commit)` and the `episode_links` PK.
-
-- **"all episodes using model Z, with success rate by harness version"** —
-  ```sql
-  select harness_version,
-         count(*) filter (where status = 'completed' and promoted_commit is not null) as wins,
-         count(*) as total
-  from episodes
-  where repo_id = $1 and model_id = $2
-  group by harness_version
-  order by wins::float / total desc;
-  ```
-  Backed by `episodes(repo_id, model_id, status)`.
+The literal queries are reachable through the read-only passthrough (§10.2); they are intentionally not reproduced here so the product/engineering docs stay free of in-narrative SQL.
 
 ### 10.2 SQL Passthrough
 

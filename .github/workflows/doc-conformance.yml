@@ -27,3 +27,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: scripts/check-doc-conformance.sh
+      # Sharp doc set: semantic-first framing + no SQL in docs + link integrity (issue #726).
+      - run: scripts/check-sharp-doc-framing.sh
+      - name: Prettier check (Sharp docs)
+        run: bunx prettier --check 'crates/sharp/docs/**/*.md'

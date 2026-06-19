@@ -82,16 +82,16 @@ On this substrate the distinction git draws between "a commit" and "a branch" �
 kinds of things, one a snapshot, the other a pointer to one — dissolves. There is **one
 kind of object: a labeled set of operations**, and it is scale-free:
 
-| git/jj concept | here                          |
-| -------------- | ----------------------------- |
-| a commit       | a singleton (one operation)   |
-| a feature      | a small set of operations     |
-| a phase        | a union of feature sets       |
-| main           | the largest set               |
-| a tree/snapshot| the **materialization** of any set, computed on demand |
+| git/jj concept  | here                                                   |
+| --------------- | ------------------------------------------------------ |
+| a commit        | a singleton (one operation)                            |
+| a feature       | a small set of operations                              |
+| a phase         | a union of feature sets                                |
+| main            | the largest set                                        |
+| a tree/snapshot | the **materialization** of any set, computed on demand |
 
 "Commit," "branch," "phase," and "main" are **roles and sizes**, not types. A snapshot is
-not a peer of these; it is the *projection* of a set into a concrete tree (whitepaper §7),
+not a peer of these; it is the _projection_ of a set into a concrete tree (whitepaper §7),
 available at any scale. This is jj's "the working copy is a commit" uniformity carried one
 step further: not only is the working copy an ordinary commit, a _branch_ is an ordinary
 set of the same atoms a single change is made of.
@@ -262,14 +262,14 @@ arrives for free if that substrate is built.
 
 ## Summary
 
-| Question                          | Answer                                                                                          |
-| --------------------------------- | ----------------------------------------------------------------------------------------------- |
-| What is a branch?                 | A dependency-ordered **set** of semantic operations — a poset, not a sequence.                   |
-| Why is the set well-defined?      | Every topological sort materializes the same tree (serializability, §1.1). Net effect is unique. |
+| Question                           | Answer                                                                                           |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------ |
+| What is a branch?                  | A dependency-ordered **set** of semantic operations — a poset, not a sequence.                   |
+| Why is the set well-defined?       | Every topological sort materializes the same tree (serializability, §1.1). Net effect is unique. |
 | Commit vs branch vs phase vs main? | One scale-free object — a labeled set of operations — in different roles and sizes (§2).         |
-| What is collapse?                 | Set union; a non-destructive **relabeling** (immutable ops, mutable grouping), not a rewrite.    |
-| What is merge / landing?          | Set union under the serializability gate; landing is `main.ops ∪= feature.ops` (§5).             |
-| Where does ordering live?         | Semantic order in the poset; policy order layered above, required to extend it (§6).             |
-| What about rebase / squash?       | Read-only projections — pick a topo-sort, or take the net effect — never substrate mutations.    |
-| How is this past jj?              | jj keeps the sequence as substrate and fixes its naming; here the **set** is the substrate (§7). |
-| v1 or the fork?                   | Native on the operation substrate; v1 approximates it over refs at coarser fidelity (§9).        |
+| What is collapse?                  | Set union; a non-destructive **relabeling** (immutable ops, mutable grouping), not a rewrite.    |
+| What is merge / landing?           | Set union under the serializability gate; landing is `main.ops ∪= feature.ops` (§5).             |
+| Where does ordering live?          | Semantic order in the poset; policy order layered above, required to extend it (§6).             |
+| What about rebase / squash?        | Read-only projections — pick a topo-sort, or take the net effect — never substrate mutations.    |
+| How is this past jj?               | jj keeps the sequence as substrate and fixes its naming; here the **set** is the substrate (§7). |
+| v1 or the fork?                    | Native on the operation substrate; v1 approximates it over refs at coarser fidelity (§9).        |
