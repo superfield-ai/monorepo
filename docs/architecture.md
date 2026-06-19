@@ -545,6 +545,31 @@ Two implementations are provided:
 
 Source: `crates/sf-loop/src/agent.rs`
 
+### First-run LLM credential
+
+A fresh appliance ships **no** LLM credential — `SF_LLM_API_KEY` defaults to the empty string (see the `LoopConfig` table above). Without a credential the gardening loop and the studio agent (`WS /studio/ws`) silently degrade to the deterministic `FixtureAgentExecutor`: the loop gardens placeholder content and the agent answers canned echoes. Fixtures are the intended path for CI/tests **only** — never the intended first-run production state (#714).
+
+**First-run step.** To make the appliance do real work, the operator supplies a credential before (or while) the daemon runs:
+
+```bash
+export SF_LLM_API_KEY="sk-ant-…"   # operator-supplied; never shipped with the appliance
+# optional overrides:
+export SF_LLM_ENDPOINT="https://api.anthropic.com/v1/messages"
+export SF_LLM_MODEL="claude-haiku-4-5-20251001"
+superfield daemon start
+```
+
+The appliance does **not** ship a default key and has no secrets-management backend — supplying the credential is an explicit operator action.
+
+**Credential state.** `sf_loop::LlmCredentialState` (`Configured` / `Unconfigured`) is derived from the key via `LoopConfig::credential_state()`:
+
+- `Configured` (non-empty key) → `superfield::daemon_runtime::build_executor` selects the real `LlmAgentExecutor` (`select_executor_kind` → `ExecutorKind::Llm`); `sf_serve::StudioAgent::is_llm_configured()` is `true`, so the studio agent POSTs to the LLM.
+- `Unconfigured` (empty/whitespace key) → the deterministic `FixtureAgentExecutor` / studio fixture reply.
+
+**Explicit boot surfacing.** On boot the daemon calls `daemon_runtime::report_credential_state`, which publishes `LlmCredentialState::boot_message()` to the orchestrator log stream (so the control panel shows the state) and, when unconfigured, prints it to stderr. The banner carries **only** the configured/unconfigured _state_ — the key value is never logged, printed, or persisted.
+
+Source: `crates/sf-loop/src/lib.rs` (`LlmCredentialState`), `crates/superfield/src/daemon_runtime.rs` (`build_executor`, `select_executor_kind`, `report_credential_state`), `crates/sf-serve/src/agent.rs` (`StudioAgent::is_llm_configured`).
+
 ### BlueprintRules
 
 ```rust

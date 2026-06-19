@@ -36,7 +36,10 @@ use fastenv::deployment::{
     FastenvManifest, HealthProbe, HostProcessLauncher, ManifestSupervisor, Workload,
 };
 use sf_db::provisioner::PostgresProvisioner;
-use sf_loop::{AgentExecutor, FixtureAgentExecutor, GardeningLoop, LlmAgentExecutor, LoopConfig};
+use sf_loop::{
+    AgentExecutor, FixtureAgentExecutor, GardeningLoop, LlmAgentExecutor, LlmCredentialState,
+    LoopConfig,
+};
 use sf_serve::LoopHandle;
 
 /// Default bind port for the appliance app workload health probe.
@@ -92,26 +95,80 @@ pub fn appliance_manifest(app_image: &str, postgres_image: &str) -> FastenvManif
     }
 }
 
-/// Construct the [`AgentExecutor`] the gardening loop drives.
+/// Construct the [`AgentExecutor`] the gardening loop drives, selecting it from
+/// the appliance's first-run LLM credential state (issue #714).
 ///
-/// When `SF_OTEL_DISABLED=1` is set (CI / offline) the real [`LlmAgentExecutor`]
-/// already short-circuits outbound HTTP and returns a canned response, so it is
-/// safe on the first-run path. When no LLM API key is configured we fall back to
-/// the deterministic [`FixtureAgentExecutor`] so the loop still ticks against the
-/// brain (writes page revisions + commits the cursor) without any network call.
+/// - [`LlmCredentialState::Configured`] (a non-empty `SF_LLM_API_KEY`) selects
+///   the real [`LlmAgentExecutor`] so the loop and studio agent do real work.
+/// - [`LlmCredentialState::Unconfigured`] (no key) selects the deterministic
+///   [`FixtureAgentExecutor`] so the loop still ticks against the brain without
+///   any network call — but this is a *degraded* first-run state the daemon
+///   surfaces explicitly via [`report_credential_state`], not silently.
+///
+/// `SF_OTEL_DISABLED=1` (CI / offline) is handled inside the executors
+/// themselves: the real [`LlmAgentExecutor`] short-circuits outbound HTTP and
+/// returns a canned response, so selecting it is safe even when offline.
+///
+/// The selection is keyed purely on the credential *state*, never on the key
+/// value, and this function logs nothing — the key is never printed (issue #714
+/// acceptance: no key is logged or persisted). Use [`report_credential_state`]
+/// to surface the (key-free) banner at boot.
 pub fn build_executor(config: &LoopConfig) -> Arc<dyn AgentExecutor> {
-    if config.llm_api_key.is_empty() {
-        eprintln!(
-            "superfield daemon: gardening loop has no SF_LLM_API_KEY; using fixture executor (no LLM calls)"
-        );
-        Arc::new(FixtureAgentExecutor::default())
-    } else {
-        Arc::new(LlmAgentExecutor::new(
+    match select_executor_kind(config.credential_state()) {
+        ExecutorKind::Fixture => Arc::new(FixtureAgentExecutor::default()),
+        ExecutorKind::Llm => Arc::new(LlmAgentExecutor::new(
             config.llm_api_key.clone(),
             config.llm_endpoint.clone(),
             config.llm_model.clone(),
-        ))
+        )),
     }
+}
+
+/// Which concrete [`AgentExecutor`] the gardening loop drives.
+///
+/// Trait objects erase their concrete type, so this enum is the testable view
+/// of [`build_executor`]'s selection (issue #714 acceptance: assert the loop
+/// selects the real `LlmAgentExecutor`, not the fixture).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ExecutorKind {
+    /// The real [`LlmAgentExecutor`] — selected when a credential is configured.
+    Llm,
+    /// The deterministic [`FixtureAgentExecutor`] — the unconfigured fallback.
+    Fixture,
+}
+
+/// Map the first-run credential state to the executor the loop will build.
+///
+/// [`LlmCredentialState::Configured`] → [`ExecutorKind::Llm`] (real work);
+/// [`LlmCredentialState::Unconfigured`] → [`ExecutorKind::Fixture`].
+pub fn select_executor_kind(state: LlmCredentialState) -> ExecutorKind {
+    match state {
+        LlmCredentialState::Configured => ExecutorKind::Llm,
+        LlmCredentialState::Unconfigured => ExecutorKind::Fixture,
+    }
+}
+
+/// Surface the first-run LLM credential state explicitly at boot.
+///
+/// On an [`LlmCredentialState::Unconfigured`] appliance this publishes a clear
+/// banner to the orchestrator log stream (so the control panel shows the
+/// unconfigured state) and prints it to stderr; on a configured appliance it
+/// confirms the real LLM is in use. The published/printed text is the
+/// credential state's [`boot_message`](LlmCredentialState::boot_message), which
+/// contains only the configured/unconfigured *state* and never the key value
+/// (issue #714 acceptance: no key is logged or persisted).
+///
+/// Returns the resolved [`LlmCredentialState`] so the caller can record it.
+pub fn report_credential_state(
+    config: &LoopConfig,
+    orchestrator: &sf_serve::OrchestratorState,
+) -> LlmCredentialState {
+    let state = config.credential_state();
+    orchestrator.publish_log(format!("orchestrator: {}", state.boot_message()));
+    if state.is_unconfigured() {
+        eprintln!("superfield daemon: {}", state.boot_message());
+    }
+    state
 }
 
 /// Start the appliance workload supervisor and bring its workloads up.
@@ -534,5 +591,134 @@ mod tests {
         );
 
         supervisor.down().expect("teardown");
+    }
+
+    // -----------------------------------------------------------------------
+    // First-run LLM credential configuration (issue #714)
+    // -----------------------------------------------------------------------
+
+    /// A secret-looking key value used by the no-leak assertion. If this exact
+    /// string ever appears in an emitted log or status payload the test fails.
+    const SECRET_KEY: &str = "sk-ant-SECRET-do-not-log-9f3a2b";
+
+    fn config_with_key(api_key: &str) -> LoopConfig {
+        LoopConfig {
+            workspace_id: uuid::Uuid::nil(),
+            blueprint_path: std::path::PathBuf::from("blueprint/rules/graph.yaml"),
+            llm_api_key: api_key.to_string(),
+            llm_endpoint: "https://api.anthropic.com/v1/messages".to_string(),
+            llm_model: "claude-haiku-4-5-20251001".to_string(),
+        }
+    }
+
+    /// With SF_LLM_API_KEY set, the loop selects the REAL `LlmAgentExecutor`
+    /// (not the fixture) — issue #714 acceptance criterion 1.
+    #[test]
+    fn configured_key_selects_real_llm_executor() {
+        let cfg = config_with_key(SECRET_KEY);
+        assert_eq!(cfg.credential_state(), LlmCredentialState::Configured);
+        assert_eq!(
+            select_executor_kind(cfg.credential_state()),
+            ExecutorKind::Llm,
+            "a configured key must select the real LlmAgentExecutor, not the fixture"
+        );
+        // build_executor must produce a usable trait object for the same config.
+        let _exec: Arc<dyn AgentExecutor> = build_executor(&cfg);
+    }
+
+    /// With no key, the loop falls back to the deterministic fixture executor
+    /// and the credential state is Unconfigured.
+    #[test]
+    fn unconfigured_key_selects_fixture_executor() {
+        let cfg = config_with_key("");
+        assert_eq!(cfg.credential_state(), LlmCredentialState::Unconfigured);
+        assert_eq!(
+            select_executor_kind(cfg.credential_state()),
+            ExecutorKind::Fixture,
+            "an empty key must select the fixture executor"
+        );
+        let _exec: Arc<dyn AgentExecutor> = build_executor(&cfg);
+
+        // A whitespace-only key is also treated as unconfigured.
+        assert_eq!(
+            select_executor_kind(config_with_key("   ").credential_state()),
+            ExecutorKind::Fixture,
+        );
+    }
+
+    /// The daemon reports an explicit unconfigured-LLM state at boot when the
+    /// key is empty — issue #714 acceptance criterion 2. The banner is published
+    /// to the orchestrator log stream a subscriber can observe.
+    #[test]
+    fn boot_reports_explicit_unconfigured_state_when_key_empty() {
+        let orchestrator = sf_serve::OrchestratorState::new();
+        let mut logs = orchestrator.subscribe_logs();
+
+        let state = report_credential_state(&config_with_key(""), &orchestrator);
+        assert_eq!(state, LlmCredentialState::Unconfigured);
+
+        let line = logs
+            .try_recv()
+            .expect("an unconfigured banner must be published");
+        assert!(
+            line.contains("unconfigured"),
+            "boot banner must name the unconfigured state, got: {line}"
+        );
+        assert!(
+            line.contains("SF_LLM_API_KEY"),
+            "boot banner must point at the credential to set, got: {line}"
+        );
+    }
+
+    /// A configured appliance reports the configured state at boot (no degraded
+    /// banner), confirming the two states are distinguishable.
+    #[test]
+    fn boot_reports_configured_state_when_key_present() {
+        let orchestrator = sf_serve::OrchestratorState::new();
+        let mut logs = orchestrator.subscribe_logs();
+
+        let state = report_credential_state(&config_with_key(SECRET_KEY), &orchestrator);
+        assert_eq!(state, LlmCredentialState::Configured);
+
+        let line = logs
+            .try_recv()
+            .expect("a configured banner must be published");
+        assert!(
+            line.contains("configured"),
+            "boot banner must name the configured state, got: {line}"
+        );
+    }
+
+    /// The API key value is NEVER logged or embedded in any status payload —
+    /// issue #714 acceptance criterion 3. Scans every banner string the daemon
+    /// emits for either credential state for the secret value.
+    #[test]
+    fn key_value_is_never_logged_or_reported() {
+        let orchestrator = sf_serve::OrchestratorState::new();
+        let mut logs = orchestrator.subscribe_logs();
+
+        // Report with a secret key present.
+        let configured = config_with_key(SECRET_KEY);
+        report_credential_state(&configured, &orchestrator);
+
+        // Drain every published log line and assert none contains the key.
+        let mut emitted = Vec::new();
+        while let Ok(line) = logs.try_recv() {
+            emitted.push(line);
+        }
+        assert!(!emitted.is_empty(), "at least one banner must be emitted");
+        for line in &emitted {
+            assert!(
+                !line.contains(SECRET_KEY),
+                "the key value must never appear in an emitted log line: {line}"
+            );
+        }
+
+        // The state's own surfaces are key-free by construction.
+        assert!(!configured.credential_state().as_str().contains(SECRET_KEY));
+        assert!(!configured
+            .credential_state()
+            .boot_message()
+            .contains(SECRET_KEY));
     }
 }

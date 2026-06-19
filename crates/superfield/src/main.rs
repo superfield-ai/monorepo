@@ -560,6 +560,11 @@ async fn run_as_daemon() {
     // NoopLoopHandle on the running path.  The loop resumes from its persisted
     // cursor on its first pass and feeds the shared orchestrator state above.
     let loop_config = sf_loop::LoopConfig::from_env();
+    // Surface the first-run LLM credential state explicitly (issue #714): on a
+    // fresh appliance with no SF_LLM_API_KEY this publishes a clear unconfigured
+    // banner to the orchestrator log stream rather than silently running
+    // fixtures. The banner carries only the state, never the key value.
+    daemon_runtime::report_credential_state(&loop_config, &orchestrator);
     let executor = daemon_runtime::build_executor(&loop_config);
     let loop_handle = daemon_runtime::boot_loop(
         pool.clone(),
