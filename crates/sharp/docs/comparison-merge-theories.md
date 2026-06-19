@@ -83,7 +83,7 @@ graphs), not language semantics.
 **Verdict for code:** the _laws_ — order-independence, associativity, conflicts-as-values
 — are exactly what a fleet of concurrent mergers wants. The patch-based storage model is
 a poor fit for a system whose interop contract is byte-isomorphism with Git's object
-model (whitepaper §2.1).
+model (whitepaper §2.2).
 
 ## 3. Jujutsu's algebraic conflict representation
 

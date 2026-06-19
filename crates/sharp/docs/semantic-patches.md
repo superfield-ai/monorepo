@@ -261,7 +261,7 @@ these costs correctly (`snapshots-vs-patches.md` §2):
   the materialization is byte-canonical. Recoverable, but it forfeits the "compatibility
   falls out for free" property and must re-earn it. This is also a strategic-coherence
   question the whitepaper must answer head-on: byte-isomorphism is sold as a v1 _adoption
-  pillar_ (whitepaper §2.1, §4.0), so the end-state must say plainly whether it stays a
+  pillar_ (whitepaper §2.2, §4.0), so the end-state must say plainly whether it stays a
   permanent _property_ or becomes a boundary _courtesy_ re-earned at export. The honest
   answer is the latter — on the operation substrate byte-isomorphism is a property of the
   export projection, not of the store — and v1's pillar is not retracted by this, only

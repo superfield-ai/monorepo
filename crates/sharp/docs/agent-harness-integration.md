@@ -88,9 +88,10 @@ provenance, `list_artifacts(E)` for the inputs, open a new episode via
 but overriding `model_id`/`harness_version`/`decoding_params`, re-append the
 `prompt` and `context` artifacts in `seq` order, run the harness, and call
 `link_episodes(new, E, ReplayOf)`. **The Rust crate ships the primitives but not
-a `replay()` driver** — see §4 and §7. The TS prototype's `EpisodeHandle.replay`
-([`packages/episodes/src/index.ts`](../../../deprecated/sharp-ts/packages/episodes/src/index.ts))
-implements exactly this orchestration and is the reference for a future Rust helper.
+a `replay()` driver** — see §4 and §7. The now-retired TS prototype's
+`EpisodeHandle.replay` (`packages/episodes/src/index.ts` in the deprecated
+`sharp-ts` tree) implemented exactly this orchestration and is the reference for
+a future Rust helper.
 
 ## 4. API / Interface
 

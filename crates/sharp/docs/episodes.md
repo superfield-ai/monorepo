@@ -176,60 +176,19 @@ The server enforces a hard cap: inline payloads larger than 64 KB are rejected w
 
 ## Analytics Queries
 
-The three queries from engineering-plan §10.1 that the server must answer cheaply. Run them via `sharp query '<sql>'` (operator scope required) or through the `POST /repos/:repo/query` endpoint.
+The three queries from engineering-plan §10.1 that the server must answer cheaply. Run them through the operator-scoped read-only passthrough (`POST /repos/:repo/query`, or the `sharp query` operator command). They are described here at the level of what they return; the literal query text and the relation schema live in [`postgres-storage-plugin.md`](./postgres-storage-plugin.md) and engineering-plan §10, kept out of these docs so the doc set stays free of in-narrative SQL.
 
 ### All episodes that touched file X
 
-```sql
-select e.*
-from episodes e
-join commit_paths cp
-  on cp.commit_id = e.promoted_commit
- and cp.repo_id   = e.repo_id
-where cp.repo_id = $1
-  and cp.path    = $2;
-```
-
-`commit_paths` is populated on every commit creation by walking the diff against the parent. The index on `(repo_id, path)` makes this fast even on large repositories.
+Join episodes to the `commit_paths` relation through each episode's `promoted_commit`, filtered by `(repo, path)`. `commit_paths` is populated on every commit creation by walking the diff against the parent; the index on `(repo_id, path)` makes this fast even on large repositories.
 
 ### All failed siblings of commit Y
 
-```sql
-select sib.*
-from episodes winner
-join episode_links el
-  on el.to_episode = winner.id
- and el.relation   = 'sibling'
-join episodes sib
-  on sib.id = el.from_episode
-where winner.repo_id        = $1
-  and winner.promoted_commit = $2
-  and sib.status in ('failed', 'abandoned');
-```
-
-Returns every episode that ran from the same fan-out group as the episode that produced commit Y but did not produce a promoted commit. This is the negative-example corpus for training and evaluation.
+From the episode that produced commit Y, walk its `sibling` links and keep the peers whose status is `failed` or `abandoned`. Returns every episode that ran from the same fan-out group as the episode that produced commit Y but did not produce a promoted commit. This is the negative-example corpus for training and evaluation.
 
 ### All episodes using model Z, with success rate by harness version
 
-```sql
-select harness_version,
-       count(*) filter (where status = 'completed'
-                          and promoted_commit is not null) as wins,
-       count(*)                                             as total,
-       round(
-         count(*) filter (where status = 'completed'
-                            and promoted_commit is not null)::numeric
-         / count(*),
-         4
-       ) as success_rate
-from episodes
-where repo_id  = $1
-  and model_id = $2
-group by harness_version
-order by success_rate desc;
-```
-
-Returns per-harness-version win rates for a given model. Use this to evaluate whether a harness upgrade improved or regressed success rates against the same model.
+Group episodes for the given `(repo, model)` by `harness_version`, counting completed-with-promoted-commit runs as wins over total to get a per-harness-version success rate. Use this to evaluate whether a harness upgrade improved or regressed success rates against the same model.
 
 ---
 

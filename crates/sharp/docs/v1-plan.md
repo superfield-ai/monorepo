@@ -17,7 +17,7 @@ v1 explicitly defers cross-language semantic merge, control-flow graphs, multi-l
 
 ### Server
 
-Postgres schema covering `objects` (with the `algo` column from whitepaper §4.0), `refs`, `commits`, `representations`, `commit_metadata`, `episodes`, `episode_artifacts`, and `episode_links`. Postgres provisioning follows the superfield-wide `postgres:16-alpine` + docker-compose pattern (see `superfield/template`).
+The v1 storage substrate is the PostgreSQL plugin ([`postgres-storage-plugin.md`](./postgres-storage-plugin.md)), covering `objects` (with the `algo` column from whitepaper §4.0), `refs`, `commits`, `representations`, `commit_metadata`, `episodes`, `episode_artifacts`, and `episode_links`. Provisioning follows the superfield-wide `postgres:16-alpine` + docker-compose pattern (see `superfield/template`).
 
 ### HTTP / library API
 

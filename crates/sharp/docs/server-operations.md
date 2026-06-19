@@ -193,13 +193,13 @@ pg_dump --format=custom --schema=sharp "$SHARP_DSN" > sharp_$(date +%F).dump
 
 # Restore into a fresh database.
 pg_restore --clean --if-exists --dbname "$SHARP_DSN" sharp_2026-06-11.dump
-
-# Integrity spot-check: every object's stored hash must match its bytes.
-psql "$SHARP_DSN" -c "
-  SELECT sha256 FROM sharp.objects
-  WHERE sha256 <> encode(sha256(data), 'hex')
-  LIMIT 20;"   -- expect zero rows
 ```
+
+**Integrity spot-check.** After a restore, verify that every object's stored
+hash still matches a hash recomputed over its bytes — scan the `objects`
+relation for any row whose stored hash differs from the hash of its `data`, and
+expect zero rows. (Run this as a one-off read against the store; it is also a
+good candidate for the operator-scoped read-only passthrough.)
 
 For point-in-time recovery, run continuous WAL archiving
 (`archive_mode=on`, `archive_command=…`) plus periodic base backups

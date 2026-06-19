@@ -9,7 +9,10 @@ on:
   push:
     branches: [main]
   pull_request:
-    branches: [main]
+    # Run on PRs into main and into any phase branch, so doc-conformance and
+    # the Sharp doc-framing invariants (issue #726) are enforced on feature PRs
+    # that target a phase branch, not only on PRs into main.
+    branches: [main, "phase/**"]
 
 concurrency:
   group: doc-conformance-${{ github.ref }}
@@ -27,3 +30,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: scripts/check-doc-conformance.sh
+      # Sharp doc set: semantic-first framing + no SQL in docs + link integrity (issue #726).
+      - run: scripts/check-sharp-doc-framing.sh
+      - name: Prettier check (Sharp docs)
+        run: bunx prettier --check 'crates/sharp/docs/**/*.md'
