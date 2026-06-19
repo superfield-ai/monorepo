@@ -4,7 +4,7 @@
 member working at the intersection of programming languages, software engineering, and
 database systems. The goal is not to bless the documents but to find what is wrong, what is
 unsupported, and what is missing — and to be precise about which of the design's claims are
-*theorems*, which are *engineering bets*, and which are *over-statements*. Strengths are
+_theorems_, which are _engineering bets_, and which are _over-statements_. Strengths are
 recorded so the criticism is calibrated, not so it is softened.
 
 **Scope.** Reviews the design as expressed in `whitepaper.md` (esp. the new §1.1 root
@@ -15,8 +15,8 @@ axiom), `semantic-patches.md`, `branch-semantics.md`, `storage-substrate.md`,
 **Overall assessment.** Strong systems vision, unusually self-critical engineering docs, and
 one genuinely good formal lens (conflict-serializability over the symbol graph). But the
 work is, in its current form, **under-situated and over-claimed**: it argues against VCS
-*substrates* (git, jj, Pijul, Darcs, CRDTs) while ignoring the 30-year research literature
-on *semantic/structured/operation-based software merging* — which is both its closest prior
+_substrates_ (git, jj, Pijul, Darcs, CRDTs) while ignoring the 30-year research literature
+on _semantic/structured/operation-based software merging_ — which is both its closest prior
 art and the source of empirical results that temper its central thesis. Several headline
 claims need to be narrowed to what is actually guaranteed. In committee terms: **promising,
 revise-and-resubmit**, with the required revisions below.
@@ -31,7 +31,7 @@ These are real contributions and should not be lost in the revisions.
    Casting "are these two changes independent?" as read/write-set disjointness over the
    symbol graph (the Bernstein conditions) is correct, clean, and connects merge to a
    mature theory (Bernstein, Hadzilacos & Goodman 1987; Weihl's commutativity-based
-   concurrency control, 1988). It also correctly explains *why* a line substrate cannot
+   concurrency control, 1988). It also correctly explains _why_ a line substrate cannot
    reach this: a line carries no read/write set. This is the strongest single idea in the
    set of documents.
 
@@ -46,9 +46,9 @@ These are real contributions and should not be lost in the revisions.
    VCS precedent and is well-motivated.
 
 4. **Intellectual honesty.** `scale-limits.md`, the "test obligations not axioms" framing in
-   `snapshots-vs-patches.md` §4, and the explicit *deferral* (not hand-wave) of the
+   `snapshots-vs-patches.md` §4, and the explicit _deferral_ (not hand-wave) of the
    semantic-patch fork are exactly the posture a reviewer wants. The branch-as-poset
-   well-definedness *proposition* (`branch-semantics.md` §1.1) is stated as something to be
+   well-definedness _proposition_ (`branch-semantics.md` §1.1) is stated as something to be
    proved, not assumed.
 
 5. **The agent-first reframing of jj is insightful.** Inverting jj's "divergence is an
@@ -59,43 +59,43 @@ These are real contributions and should not be lost in the revisions.
 
 ## 2. Required revision (major): engage the software-merge literature
 
-This is the most serious scholarly gap. The documents position Sharp against *storage
-substrates* and *merge algebras* but never against the field that has studied exactly
+This is the most serious scholarly gap. The documents position Sharp against _storage
+substrates_ and _merge algebras_ but never against the field that has studied exactly
 Sharp's core idea — merging at a semantic/syntactic-structural altitude — since the early
 1990s. The omission has two costs: it overstates novelty, and it ignores empirical results
 that directly bear on whether the central thesis holds.
 
 The literature that must be cited and confronted:
 
-- **Surveys.** Mens, *A State-of-the-Art Survey on Software Merging*, IEEE TSE 2002 — the
+- **Surveys.** Mens, _A State-of-the-Art Survey on Software Merging_, IEEE TSE 2002 — the
   canonical taxonomy (textual / syntactic / semantic / operation-based merge). Sharp's
-  whole §1.1 argument is a position *within* this taxonomy, not outside it.
-- **Operation-based merge.** Lippe & van Oosterom, *Operation-Based Merging*, 1992. This is
+  whole §1.1 argument is a position _within_ this taxonomy, not outside it.
+- **Operation-based merge.** Lippe & van Oosterom, _Operation-Based Merging_, 1992. This is
   **direct prior art** for `semantic-patches.md`'s "history as declared operations." The
-  idea that recording edit *operations* (rather than diffing states) yields better merges is
+  idea that recording edit _operations_ (rather than diffing states) yields better merges is
   three decades old; Sharp's contribution is the agent-harness capture of those operations
   (§6), not the operation-based model itself. Say so.
-- **Refactoring-aware merge.** Dig et al., *MolhadoRef* / refactoring-aware SCM (OOPSLA
-  2007). This is *precisely* Sharp's "rename is a declared structural operation with a
+- **Refactoring-aware merge.** Dig et al., _MolhadoRef_ / refactoring-aware SCM (OOPSLA
+  2007). This is _precisely_ Sharp's "rename is a declared structural operation with a
   language-computed reference set." Sharp must explain what it adds over MolhadoRef.
 - **Structured / semistructured merge and its empirical evaluation.** Apel et al.,
-  *Structured Merge with Auto-Tuning* (JDime, ASE 2012); Cavalcanti, Borba & Accioly,
-  *Evaluating and Improving Semistructured Merge* (OOPSLA 2017); the Spork structured-merge
+  _Structured Merge with Auto-Tuning_ (JDime, ASE 2012); Cavalcanti, Borba & Accioly,
+  _Evaluating and Improving Semistructured Merge_ (OOPSLA 2017); the Spork structured-merge
   work for Java (2021). These matter most, because they **measured** what structure buys.
   The findings are a caution, not a tailwind: structured merge reduces conflicts
-  *meaningfully but partially*, is *expensive* (JDime auto-tunes precisely because full
-  structured merge is too slow, falling back to unstructured), and can *introduce* new false
+  _meaningfully but partially_, is _expensive_ (JDime auto-tunes precisely because full
+  structured merge is too slow, falling back to unstructured), and can _introduce_ new false
   behaviors. The empirical conflict-mining studies (Borba's group; Ghiotto et al. on the
-  nature of merge conflicts) find a large fraction of real conflicts are *genuine semantic
-  disagreements* that no structural representation dissolves.
+  nature of merge conflicts) find a large fraction of real conflicts are _genuine semantic
+  disagreements_ that no structural representation dissolves.
 - **Commercial language-aware merge.** SemanticMerge / Plastic SCM `gmaster` (Códice
-  Software, ~2013) shipped language-aware merge for C#/Java and is a *cautionary* adoption
+  Software, ~2013) shipped language-aware merge for C#/Java and is a _cautionary_ adoption
   precedent — limited uptake despite working technology. A design betting the farm on
   semantic merge owes the reader an account of why it succeeds where SemanticMerge stalled.
 
 **Why this is required, not cosmetic.** The §1.1 thesis — "a conflict is an artifact of a
 representation too weak to decide independence" — reads, against this literature, as
-*partly* true and *empirically bounded*. Structure dissolves the spurious class; it does not
+_partly_ true and _empirically bounded_. Structure dissolves the spurious class; it does not
 dissolve genuine semantic disagreement, and the measured size of the spurious class is
 finite. The current framing ("conflict is a representation artifact," full stop) is exactly
 the over-claim the structured-merge community already disciplined itself out of. Revise §1.1
@@ -109,9 +109,9 @@ not, and the empirical split is an open quantity Sharp should measure on its own
 The documents slide between three different guarantees without distinguishing them:
 
 1. **Consistency / well-definedness** — the merge result is deterministic and
-   order-independent for disjoint access sets. *Proved* by §3 / `branch-semantics.md` §1.1.
+   order-independent for disjoint access sets. _Proved_ by §3 / `branch-semantics.md` §1.1.
 2. **Reference/type-level correctness** — the merged program parses, resolves references,
-   and passes the language's diagnostics. *Enforced* by the verification gate (whitepaper
+   and passes the language's diagnostics. _Enforced_ by the verification gate (whitepaper
    §6.2).
 3. **Behavioral correctness** — the merged program does what was intended.
 
@@ -119,15 +119,15 @@ The design delivers (1) and (2). It does **not** deliver (3), and nothing in the
 model or the compile gate can. Two changes with disjoint symbol-level read/write sets
 "commute" and compile, yet can jointly violate a behavioral invariant the type system does
 not encode (a protocol/ordering/idempotency assumption, a global-state interaction). The
-symbol graph captures *reference* dependencies, not *semantic invariants*; serializability
-gives *consistency*, not *intended behavior*.
+symbol graph captures _reference_ dependencies, not _semantic invariants_; serializability
+gives _consistency_, not _intended behavior_.
 
 This is not a flaw to fix — it is a boundary to state. As written, the abstract's thesis
 sentence and §1.1 invite the easy rebuttal "semantic merge still ships behavioral bugs."
 Pre-empt it: make explicit that Sharp's automated ceiling is reference/type-level
 correctness, that behavioral correctness remains the province of tests/review/the Tier-2
 oracle, and that the §1.1 "missed conflict" example (return-type narrowing) is caught
-*because it is a type-level dependency* — a behavioral-only dependency would not be. The
+_because it is a type-level dependency_ — a behavioral-only dependency would not be. The
 honest claim is strong enough; the inflated one is fragile.
 
 ---
@@ -135,21 +135,21 @@ honest claim is strong enough; the inflated one is fragile.
 ## 4. Required revision (major): determinism of the canonical term under toolchain evolution
 
 The entire memoize-and-propagate machinery (`jj-adoption.md` §4, adopted into the live
-dilemma term) rests on one property: *every node computing the same merge derives the
-byte-identical term.* `semantic-patches.md` §5 correctly identifies canonical semantic diff
+dilemma term) rests on one property: _every node computing the same merge derives the
+byte-identical term._ `semantic-patches.md` §5 correctly identifies canonical semantic diff
 as the load-bearing risk — but understates a second, temporal failure mode the documents
 elsewhere already know about.
 
-The canonical term is computed from the *semantic representation*, which is produced by
+The canonical term is computed from the _semantic representation_, which is produced by
 tree-sitter grammars and rust-analyzer / `ts.LanguageService`. `research.md` itself flags
 that a grammar update changes the AST for identical source bytes. Therefore the "same merge"
-computed at time T₁ and at T₂ under a different analyzer version can yield a *different*
+computed at time T₁ and at T₂ under a different analyzer version can yield a _different_
 canonical term — which silently breaks (a) memoized-resolution reuse and (b) the
 self-cancellation of projections, both of which assume term identity is stable. This is a
 soundness issue, not a performance one: a propagated resolution could attach to the wrong
 divergence after a toolchain bump.
 
-The design needs a *term-versioning* story: the canonical term must be defined relative to a
+The design needs a _term-versioning_ story: the canonical term must be defined relative to a
 pinned analyzer/grammar version, memoized resolutions keyed by that version, and a defined
 behavior on version change (invalidate vs. migrate). Until that exists, "resolve once, apply
 everywhere" is unsound across the lifetime of a long-lived repository.
@@ -160,20 +160,20 @@ everywhere" is unsound across the lifetime of a long-lived repository.
 
 `whitepaper.md` §6.7 maintains a derived projection `refs/sharp-merged/<feature>--<target>`,
 recomputed whenever either side advances. The design sells this as "no rebase ever," and as
-a *correctness* story it is elegant. As a *systems* story it is unanalyzed and potentially
+a _correctness_ story it is elegant. As a _systems_ story it is unanalyzed and potentially
 fatal:
 
 - With F live features against T integration targets, the projection set is O(F·T), and the
   fan-out workload the design celebrates makes F large by construction.
 - `scale-limits.md` already concedes that `recompute_projection` is **whole-tree** and that
   tree materialization is N+1 over `object::load` — ~20k point reads for a 10k-file repo, on
-  *every* recompute. Each recompute also runs language-server analysis (Tier 1/2), the
+  _every_ recompute. Each recompute also runs language-server analysis (Tier 1/2), the
   expensive step JDime's auto-tuning exists to avoid.
 - Therefore every tip advance on a busy target can trigger O(F) whole-tree, language-server-
   bearing recomputes. This is plausibly the dominant cost of the entire system and could be
   super-linear in fleet size.
 
-A continuous-projection design without an *incremental* recompute (diff-scoped re-analysis,
+A continuous-projection design without an _incremental_ recompute (diff-scoped re-analysis,
 memoized subtrees, dirty-symbol tracking) and without a throughput model is not yet
 demonstrated to be viable at the scale that motivates it. This needs a complexity analysis
 and an incrementalization plan before the "no rebase" claim can be called a win rather than
@@ -184,17 +184,17 @@ a relocated cost.
 ## 6. Secondary concerns
 
 **6.1 Two concurrency-control layers (`jj-adoption.md` §1).** Re-implementing jj's lock-free
-operation/view DAG *on top of* Postgres MVCC risks two concurrency controls fighting:
+operation/view DAG _on top of_ Postgres MVCC risks two concurrency controls fighting:
 Postgres aborts-on-conflict under serializable isolation, while the jj model promises
 "record divergence, never abort." Delivering the jj semantics means doing application-level
-CAS-with-merge and *not* leaning on Postgres isolation — at which point Postgres is a dumb
+CAS-with-merge and _not_ leaning on Postgres isolation — at which point Postgres is a dumb
 store for this path and the "never block, never retry" claim must be validated empirically,
 not asserted. (Cross-reference the `storage-substrate.md` §2.3 position that the algebra is
-Rust-side; that is consistent, but the *operation-commit* path still needs a concrete
+Rust-side; that is consistent, but the _operation-commit_ path still needs a concrete
 non-aborting protocol.)
 
 **6.2 Strategic coherence: byte-isomorphism vs. the semantic-patch end-state.** The
-whitepaper sells byte-identical Git objects (§2.1, §4.0) as a load-bearing *adoption*
+whitepaper sells byte-identical Git objects (§2.1, §4.0) as a load-bearing _adoption_
 pillar. The strategic direction (`semantic-patches.md`) demotes export to "a projection that
 must re-earn byte-canonicality." These can be reconciled, but the documents should say
 plainly whether the end-state keeps byte-isomorphism as a property or as a boundary
@@ -202,10 +202,10 @@ courtesy — otherwise v1's central compatibility promise looks like something t
 intends to grow out of.
 
 **6.3 "Agents are semantically native" is rhetorically overloaded (§1.1).** Agents emit
-*text*; the semantic structure is re-derived by the same language servers regardless of
-substrate, so the "lossy down-projection" is largely *recoverable* loss. The defensible
-claim — which §1.1 partly makes but the abstract oversells — is about *where the comparison
-is made* and the *re-derivation tax*, not about unrecoverable intent. De-hype to avoid an
+_text_; the semantic structure is re-derived by the same language servers regardless of
+substrate, so the "lossy down-projection" is largely _recoverable_ loss. The defensible
+claim — which §1.1 partly makes but the abstract oversells — is about _where the comparison
+is made_ and the _re-derivation tax_, not about unrecoverable intent. De-hype to avoid an
 easy rebuttal.
 
 **6.4 Database-native VCS prior art is uncited.** "All state in one queryable store" has
@@ -229,8 +229,8 @@ which replay is a valid A/B.
 
 **6.7 Minor rigor — make "internally consistent" automatic (`branch-semantics.md` §1.1).**
 The well-definedness proposition's hypothesis ("every non-commuting pair is ordered by ≺")
-should be guaranteed by *defining* ≺ to include every access-set conflict with its authored
-order, so that intra-branch consistency holds by construction and only *inter-branch* union
+should be guaranteed by _defining_ ≺ to include every access-set conflict with its authored
+order, so that intra-branch consistency holds by construction and only _inter-branch_ union
 can produce the unordered-conflict (= dilemma) case. As written the hypothesis is left as a
 property to be hoped for rather than enforced.
 
@@ -238,8 +238,8 @@ property to be hoped for rather than enforced.
 
 ## 7. Questions for the authors
 
-1. On a corpus of real agent merges, what fraction of conflicts are *spurious* (dissolved by
-   moving line→symbol) versus *genuine*? The §1.1 thesis lives or dies on this number, and
+1. On a corpus of real agent merges, what fraction of conflicts are _spurious_ (dissolved by
+   moving line→symbol) versus _genuine_? The §1.1 thesis lives or dies on this number, and
    the structured-merge literature predicts it is bounded.
 2. What is the measured cost of one whole-tree projection recompute at 10k and 100k files,
    and what is the projected aggregate at F=100 live features? (See §5.)
@@ -256,7 +256,7 @@ property to be hoped for rather than enforced.
 
 **Verdict: promising, revise-and-resubmit.** The design is not unsound, but it is presented
 as more settled and more novel than the evidence currently supports. None of the required
-revisions is fatal; all are about *honesty of claims* and *missing analysis*, which is
+revisions is fatal; all are about _honesty of claims_ and _missing analysis_, which is
 fixable in the documents and the near-term roadmap.
 
 Priority order:
