@@ -1,6 +1,6 @@
 //! Agent executor abstraction — LLM call seam for the gardening loop.
 //!
-//! [`AgentExecutor`] is the trait through which the seven gardening steps
+//! [`AgentExecutor`] is the trait through which the eight gardening steps
 //! interact with the language model.  Two implementations are provided:
 //!
 //! - [`LlmAgentExecutor`] — real implementation that calls the LLM API via
@@ -56,7 +56,7 @@ pub enum AgentError {
 
 /// Seam interface for running a single LLM prompt.
 ///
-/// All seven gardening steps call [`AgentExecutor::run`] to produce their page
+/// All eight gardening steps call [`AgentExecutor::run`] to produce their page
 /// revision content.  Tests inject a [`FixtureAgentExecutor`]; the daemon
 /// injects a [`LlmAgentExecutor`].
 pub trait AgentExecutor: Send + Sync {

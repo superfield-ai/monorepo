@@ -42,6 +42,11 @@
 //!   PullRequest) stored in `nexum.project_nodes`; edges in `nexum.links`
 //!   with `project:` prefixed `rel_type` values; recursive CTE traversal for
 //!   the `GET /pages/project` read path.
+//! - [`runtime_signal::fetch_recent_runtime_signals`]: read projection over
+//!   `sharp.runtime_signals` (issue #709). Lets the gardening loop's
+//!   intent-to-spec inference step consume behavioral traces without depending
+//!   on the `sharp` crate. Returns an empty vector when the signals table is
+//!   absent so the step cleanly no-ops on a pre-signals substrate.
 //!
 //! See `docs/architecture.md` §Single-Instance Database Schema Layout.
 
@@ -54,6 +59,7 @@ pub mod page_revision;
 pub mod pool;
 pub mod project_graph;
 pub mod provisioner;
+pub mod runtime_signal;
 
 pub use backup::{
     pg_basebackup_args, wal_archive_command_template, BackupError, BackupEvent, BackupOutcome,
@@ -79,3 +85,4 @@ pub use provisioner::{
     FailingProvisioner, LocalPostgresProvisioner, PostgresProvisioner, ProvisionerError,
     TestProvisioner,
 };
+pub use runtime_signal::{fetch_recent_runtime_signals, RuntimeSignalError, RuntimeSignalSummary};

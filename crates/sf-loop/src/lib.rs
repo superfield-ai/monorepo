@@ -6,31 +6,36 @@
 //!
 //! # Architecture
 //!
-//! The loop runs eight [`GardeningStep`] variants in order, then repeats:
+//! The loop runs nine [`GardeningStep`] variants in order, then repeats:
 //!
 //! 1. `StrategyResearch` — web research on company strategy → "strategy" page revision
 //! 2. `PrdReconcile`     — reconcile PRD against research → "prd" page revision
 //! 3. `TechnicalResearch`— research technical implementations → "technical" page revision
 //! 4. `ArchitectureProposal` — derive architecture from PRD + technical → "architecture" page revision
 //! 5. `PlanProposal`     — derive implementation plan from architecture → "plan" page revision
-//! 6. `HolisticReconcile`— re-read all five topics, propagate changes
-//! 7. `ProjectGraphDerive` — parse the gardened plan into project-graph
+//! 6. `IntentSpecInference` — read `sharp.runtime_signals`, compare actual usage
+//!    to stated intent, and propose a spec delta → "spec-delta-proposal" page
+//!    revision. No-ops (writes nothing) when there are no signals. The proposal
+//!    is never auto-applied; a human confirms or corrects it (#709, PRD US6).
+//! 7. `HolisticReconcile`— re-read all five topics, propagate changes
+//! 8. `ProjectGraphDerive` — parse the gardened plan into project-graph
 //!    Feature/Issue nodes (`insert_issue`/`insert_feature`); does NOT write a
 //!    `page_revisions` row
-//! 8. `CodeChangeProposal` — select an open node, ask the agent for a source
+//! 9. `CodeChangeProposal` — select an open node, ask the agent for a source
 //!    diff, and gate it through the Sharp semantic-merge + `cargo check` gate
 //!    (`sharp::merge_flow::run_merge_flow`); a non-compiling proposal is refused
 //!    (`SharpError::MergeRefused`) and discarded, never stored (#706)
 //!
-//! Each of steps 1–6 (the page-authoring steps):
+//! Each of the page-authoring steps:
 //! - Calls [`AgentExecutor::run`] to produce content + provenance.
 //! - Writes a `nexum.page_revisions` row via [`sf_db::insert_page_revision`].
 //! - Commits the cursor to `orchestrator.gardening_cursor`.
 //!
-//! The seventh step (`ProjectGraphDerive`) instead derives Feature/Issue nodes
-//! from the latest plan revision; the eighth (`CodeChangeProposal`) emits a
-//! validated code-change candidate through Sharp. Both commit the cursor as
-//! usual.
+//! `IntentSpecInference` writes a `spec-delta-proposal` page revision only when
+//! runtime signals are present; otherwise it no-ops and the cursor still
+//! advances. `ProjectGraphDerive` instead derives Feature/Issue nodes from the
+//! latest plan revision; `CodeChangeProposal` emits a validated code-change
+//! candidate through Sharp. All commit the cursor as usual.
 //!
 //! Restarting the daemon after a crash resumes from the last committed cursor.
 //!
