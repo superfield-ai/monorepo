@@ -219,8 +219,7 @@ canonical-diff problem precisely where it is hardest: structural operations are 
 no detection heuristic runs on them at all.
 
 This is where Sharp meets its real prior art, and the meeting is favorable. Operation-based
-merge (Lippe & van Oosterom, 1992) and refactoring-aware merge (Dig et al., _MolhadoRef_,
-2007) both established that recording operations beats diffing states — but both assumed a
+merge (Lippe & van Oosterom, 1992) and refactoring-aware merge (Dig et al., _MolhadoRef_, 2007) both established that recording operations beats diffing states — but both assumed a
 _human_ author, from whom the operation had to be coaxed by a refactoring IDE or inferred
 after the fact. The agent-first setting removes that assumption: the operation is already a
 brokered tool call. Sharp's claim over this lineage is therefore narrow and specific —
