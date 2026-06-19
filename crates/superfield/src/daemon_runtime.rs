@@ -30,10 +30,12 @@
 //! - `crates/sf-serve/src/loop_handle.rs` — the drain/abort seam contract.
 //! - `crates/fastenv/src/deployment.rs` — the appliance workload supervisor.
 
+use std::future::Future;
 use std::sync::Arc;
+use std::time::Duration;
 
 use fastenv::deployment::{
-    FastenvManifest, HealthProbe, HostProcessLauncher, ManifestSupervisor, Workload,
+    FastenvManifest, HealthProbe, HealthStatus, HostProcessLauncher, ManifestSupervisor, Workload,
 };
 use sf_db::provisioner::PostgresProvisioner;
 use sf_loop::{
@@ -238,6 +240,104 @@ pub fn seed_cluster_status(
         .health(PREVIEW_WORKLOAD)
         .unwrap_or(fastenv::deployment::HealthStatus::Stopped);
     orchestrator.set_cluster_status(cluster_status_from_health(health));
+}
+
+/// Default interval between live-preview health observations.
+///
+/// The poller observes the preview workload's health on this cadence and only
+/// publishes a `cluster-status` transition when the mapped status actually
+/// changes (see [`OrchestratorState::set_cluster_status`](sf_serve::OrchestratorState::set_cluster_status)).
+/// It is deliberately bounded (never a busy loop): two seconds is brisk enough
+/// that a `restarting → healthy` flip after a rebuild reaches the control panel
+/// promptly without hammering the supervisor's probes.
+pub const DEFAULT_CLUSTER_POLL_INTERVAL: Duration = Duration::from_secs(2);
+
+/// A source of the live preview workload's current [`HealthStatus`].
+///
+/// This is the one observation the cluster-status poller makes per tick. In
+/// production it wraps the appliance [`ManifestSupervisor`] and reads
+/// [`PREVIEW_WORKLOAD`]; tests substitute a fake that walks a scripted
+/// `healthy → restarting → healthy` sequence so the poller's transition and
+/// de-duplication behaviour can be asserted without a real supervisor.
+pub trait HealthSource: Send + Sync {
+    /// Observe the preview workload's current health.
+    fn current_health(&self) -> HealthStatus;
+}
+
+/// Production [`HealthSource`]: read the preview workload's health off the live
+/// appliance supervisor, defaulting to `Stopped` when the supervisor cannot
+/// report (so a transient probe error maps to `Unknown` rather than panicking
+/// the poller).
+pub struct SupervisorHealthSource {
+    supervisor: Arc<dyn ManifestSupervisor + Send + Sync>,
+}
+
+impl SupervisorHealthSource {
+    /// Wrap a shared supervisor as a preview-workload health source.
+    pub fn new(supervisor: Arc<dyn ManifestSupervisor + Send + Sync>) -> Self {
+        Self { supervisor }
+    }
+}
+
+impl HealthSource for SupervisorHealthSource {
+    fn current_health(&self) -> HealthStatus {
+        self.supervisor
+            .health(PREVIEW_WORKLOAD)
+            .unwrap_or(HealthStatus::Stopped)
+    }
+}
+
+/// Take one health observation and publish the mapped cluster status.
+///
+/// Returns the number of `/studio/cluster/events` subscribers the transition
+/// reached: `0` when the status was unchanged since the last observation (the
+/// de-dup in `set_cluster_status`) or when no one is listening, and a positive
+/// count when a real transition was broadcast. Splitting a single poll out of
+/// the loop lets tests assert transition vs. de-duplication behaviour without
+/// driving the timer.
+pub fn poll_cluster_status_once(
+    source: &dyn HealthSource,
+    orchestrator: &sf_serve::OrchestratorState,
+) -> usize {
+    orchestrator.set_cluster_status(cluster_status_from_health(source.current_health()))
+}
+
+/// Run the bounded periodic cluster-status health poller until `shutdown`
+/// resolves.
+///
+/// On each `interval` tick it takes one observation via [`poll_cluster_status_once`],
+/// so `/studio/cluster/events` carries every real `restarting → healthy`
+/// transition across the daemon's lifetime — the control panel's `IframePanel`
+/// reloads the preview on that transition without a manual refresh. The loop is
+/// bounded by `interval` (a `tokio::time::interval`, never a busy spin) and
+/// exits promptly when the `shutdown` future resolves so daemon teardown is not
+/// blocked.
+///
+/// The first `interval` tick fires immediately, so the poller publishes the
+/// current status once at start (idempotent with [`seed_cluster_status`] via the
+/// stream's de-dup) before settling into its cadence.
+pub async fn run_cluster_status_poller<F>(
+    source: Arc<dyn HealthSource>,
+    orchestrator: sf_serve::OrchestratorState,
+    interval: Duration,
+    shutdown: F,
+) where
+    F: Future<Output = ()>,
+{
+    let mut ticker = tokio::time::interval(interval);
+    // If a poll ever outlasts the interval, skip missed ticks rather than
+    // bursting — keeps the observation cadence bounded under back-pressure.
+    ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Skip);
+
+    tokio::pin!(shutdown);
+    loop {
+        tokio::select! {
+            _ = ticker.tick() => {
+                poll_cluster_status_once(source.as_ref(), &orchestrator);
+            }
+            _ = &mut shutdown => break,
+        }
+    }
 }
 
 /// Start the gardening loop and return its **real** drain/abort handle.
@@ -720,5 +820,153 @@ mod tests {
             .credential_state()
             .boot_message()
             .contains(SECRET_KEY));
+    }
+
+    // -----------------------------------------------------------------------
+    // Continuous cluster-status health poller (issue #715)
+    // -----------------------------------------------------------------------
+
+    /// A scripted [`HealthSource`] that returns successive observations from a
+    /// queue (repeating the last value once the queue is drained), so a test can
+    /// drive the poller through a `healthy → restarting → healthy` sequence.
+    struct ScriptedHealth(Mutex<std::collections::VecDeque<fastenv::deployment::HealthStatus>>);
+
+    impl ScriptedHealth {
+        fn new(seq: impl IntoIterator<Item = fastenv::deployment::HealthStatus>) -> Arc<Self> {
+            Arc::new(Self(Mutex::new(seq.into_iter().collect())))
+        }
+    }
+
+    impl HealthSource for ScriptedHealth {
+        fn current_health(&self) -> fastenv::deployment::HealthStatus {
+            let mut q = self.0.lock().unwrap();
+            if q.len() > 1 {
+                q.pop_front().unwrap()
+            } else {
+                // Hold (and keep returning) the final scripted value.
+                *q.front()
+                    .expect("scripted health sequence must be non-empty")
+            }
+        }
+    }
+
+    /// Driving the poll-once seam through healthy → restarting → healthy
+    /// publishes exactly two transitions on the cluster stream (the steady-state
+    /// healthy seed is the starting point, then restarting, then healthy again).
+    #[tokio::test]
+    async fn poller_emits_transitions_on_health_change() {
+        use fastenv::deployment::HealthStatus;
+        let source = ScriptedHealth::new([
+            HealthStatus::Healthy,
+            HealthStatus::Starting, // → Restarting
+            HealthStatus::Healthy,  // → Healthy
+        ]);
+        let orchestrator = sf_serve::OrchestratorState::new();
+        let mut rx = orchestrator.subscribe_cluster();
+
+        // First poll: Unknown → Healthy (a transition off the initial Unknown).
+        assert_eq!(poll_cluster_status_once(source.as_ref(), &orchestrator), 1);
+        // Second poll: Healthy → Restarting.
+        assert_eq!(poll_cluster_status_once(source.as_ref(), &orchestrator), 1);
+        // Third poll: Restarting → Healthy (the reload-driving transition).
+        assert_eq!(poll_cluster_status_once(source.as_ref(), &orchestrator), 1);
+
+        assert_eq!(rx.recv().await.unwrap(), sf_serve::ClusterStatus::Healthy);
+        assert_eq!(
+            rx.recv().await.unwrap(),
+            sf_serve::ClusterStatus::Restarting
+        );
+        assert_eq!(rx.recv().await.unwrap(), sf_serve::ClusterStatus::Healthy);
+    }
+
+    /// Unchanged health across two consecutive polls broadcasts nothing — the
+    /// stream only ever carries real transitions, never repeated observations.
+    #[tokio::test]
+    async fn poller_dedupes_unchanged_health() {
+        use fastenv::deployment::HealthStatus;
+        let source = ScriptedHealth::new([HealthStatus::Healthy]);
+        let orchestrator = sf_serve::OrchestratorState::new();
+        // Hold a live subscriber so the broadcast count reflects whether a
+        // transition was published (1) vs. de-duped away (0), not merely whether
+        // anyone is listening.
+        let _rx = orchestrator.subscribe_cluster();
+
+        // First poll transitions Unknown → Healthy and broadcasts.
+        assert_eq!(poll_cluster_status_once(source.as_ref(), &orchestrator), 1);
+        // Second identical observation broadcasts nothing.
+        assert_eq!(poll_cluster_status_once(source.as_ref(), &orchestrator), 0);
+        assert_eq!(
+            orchestrator.cluster_status(),
+            sf_serve::ClusterStatus::Healthy
+        );
+    }
+
+    /// The production [`SupervisorHealthSource`] reads the preview workload's
+    /// health off the shared supervisor (and the default interval is bounded).
+    #[test]
+    fn supervisor_health_source_reads_preview_workload() {
+        let log = OrderLog::default();
+        let supervisor: Arc<dyn ManifestSupervisor + Send + Sync> =
+            Arc::new(RecordingSupervisor(log));
+        let source = SupervisorHealthSource::new(supervisor);
+        // RecordingSupervisor reports every workload Healthy.
+        assert_eq!(source.current_health(), HealthStatus::Healthy);
+        // The default cadence is bounded (never zero → never a busy loop).
+        assert!(DEFAULT_CLUSTER_POLL_INTERVAL > Duration::ZERO);
+    }
+
+    /// The running poller is bounded by its interval (no busy loop): with paused
+    /// time, ticks only fire as the clock is advanced past each interval, and the
+    /// poller exits promptly when its shutdown future resolves.
+    #[tokio::test(start_paused = true)]
+    async fn poller_is_bounded_by_interval_and_stops_on_shutdown() {
+        use fastenv::deployment::HealthStatus;
+        // Healthy, then Starting forever: the first tick seeds Healthy, a later
+        // tick flips to Restarting — proving ticks are paced, not spun.
+        let source = ScriptedHealth::new([HealthStatus::Healthy, HealthStatus::Starting]);
+        let orchestrator = sf_serve::OrchestratorState::new();
+        let interval = Duration::from_secs(2);
+
+        let (stop_tx, stop_rx) = tokio::sync::oneshot::channel::<()>();
+        let poller = tokio::spawn(run_cluster_status_poller(
+            source.clone(),
+            orchestrator.clone(),
+            interval,
+            async {
+                let _ = stop_rx.await;
+            },
+        ));
+
+        // The immediate first tick seeds Healthy.
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert_eq!(
+            orchestrator.cluster_status(),
+            sf_serve::ClusterStatus::Healthy,
+            "first tick must publish the initial observation"
+        );
+
+        // Before a full interval elapses, no further tick has fired (bounded).
+        tokio::time::advance(Duration::from_secs(1)).await;
+        assert_eq!(
+            orchestrator.cluster_status(),
+            sf_serve::ClusterStatus::Healthy,
+            "no tick may fire before the interval elapses (not a busy loop)"
+        );
+
+        // Crossing the interval fires the next tick → Restarting.
+        tokio::time::advance(Duration::from_secs(2)).await;
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        assert_eq!(
+            orchestrator.cluster_status(),
+            sf_serve::ClusterStatus::Restarting,
+            "the next tick fires once the interval elapses"
+        );
+
+        // Shutdown resolves → the poller exits promptly.
+        stop_tx.send(()).unwrap();
+        tokio::time::timeout(Duration::from_secs(5), poller)
+            .await
+            .expect("poller must stop promptly on shutdown")
+            .expect("poller task must not panic");
     }
 }

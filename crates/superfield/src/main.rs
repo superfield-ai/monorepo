@@ -528,15 +528,15 @@ async fn run_as_daemon() {
     let app_image = std::env::var("SF_APP_IMAGE").unwrap_or_default();
     let pg_image = std::env::var("SF_POSTGRES_IMAGE").unwrap_or_default();
     let manifest = daemon_runtime::appliance_manifest(&app_image, &pg_image);
-    let supervisor: Box<dyn fastenv::deployment::ManifestSupervisor> =
+    let supervisor: std::sync::Arc<dyn fastenv::deployment::ManifestSupervisor + Send + Sync> =
         match daemon_runtime::boot_supervisor(&manifest) {
-            Ok(s) => Box::new(s),
+            Ok(s) => std::sync::Arc::new(s),
             Err(e) => {
                 eprintln!(
                     "superfield daemon: appliance supervisor failed to start: {}",
                     e
                 );
-                Box::new(fastenv::deployment::NoopSupervisor)
+                std::sync::Arc::new(fastenv::deployment::NoopSupervisor)
             }
         };
 
@@ -555,6 +555,25 @@ async fn run_as_daemon() {
     // delivers it to every subscriber, and `IframePanel` keys its reload off
     // subsequent restart-to-healthy transitions on this stream.
     daemon_runtime::seed_cluster_status(supervisor.as_ref(), &orchestrator);
+
+    // Start the continuous cluster-status health poller (issue #715). It reads
+    // the preview workload's health off the same supervisor on a bounded
+    // interval and publishes a `cluster-status` transition only when the mapped
+    // status changes, so a mid-session `restarting → healthy` flip after a
+    // rebuild drives the control-panel `IframePanel` reload without a manual
+    // refresh. The poller stops when `poller_stop_rx` resolves, which we fire
+    // after the server drains so teardown is not blocked.
+    let (poller_stop_tx, poller_stop_rx) = tokio::sync::oneshot::channel::<()>();
+    let poller_handle = tokio::spawn(daemon_runtime::run_cluster_status_poller(
+        std::sync::Arc::new(daemon_runtime::SupervisorHealthSource::new(
+            supervisor.clone(),
+        )),
+        orchestrator.clone(),
+        daemon_runtime::DEFAULT_CLUSTER_POLL_INTERVAL,
+        async move {
+            let _ = poller_stop_rx.await;
+        },
+    ));
 
     // Start the gardening loop and install the REAL loop handle, retiring
     // NoopLoopHandle on the running path.  The loop resumes from its persisted
@@ -596,6 +615,14 @@ async fn run_as_daemon() {
         sf_serve::serve_with_shutdown_state(app_state, serve_cfg, shutdown_signal()).await
     {
         eprintln!("superfield daemon: serve error: {}", e);
+    }
+
+    // Stop the cluster-status poller before teardown so it is not observing a
+    // supervisor that is about to go down. Firing the signal is best-effort (the
+    // task may already be gone); awaiting it bounds teardown.
+    let _ = poller_stop_tx.send(());
+    if let Err(e) = poller_handle.await {
+        eprintln!("superfield daemon shutdown: cluster-status poller join failed: {e}");
     }
 
     // Ordered teardown: drain loop → appliance down → provisioner stop.
