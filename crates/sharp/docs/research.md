@@ -88,7 +88,7 @@ These are not blockers for v1 — v1 ships and we measure — but they are the f
 
 ## 10. Language Server Integration — Known Gaps
 
-Sharp's language-server-first architecture (§2.3 of the whitepaper, §6 of the engineering plan) delegates semantic analysis to production-grade toolchains rather than reimplementing it. The following gaps are known and must be closed as the implementation matures:
+Sharp's language-server-first architecture (§2.1 of the whitepaper, §6 of the engineering plan) delegates semantic analysis to production-grade toolchains rather than reimplementing it. The following gaps are known and must be closed as the implementation matures:
 
 **Multi-file LanguageServiceHost.** The current TypeScript implementation in `apps/client/src/semantic/symbols.ts` uses a single-file host — it provides the TypeScript compiler with only the file being analyzed, not the full project. Correct cross-file rename propagation requires upgrading the host to pass the full materialized candidate tree as a virtual project, so that `findRenameLocations()` returns references in files other than the one being renamed. Without this, cross-file renames return incomplete edit sets.
 

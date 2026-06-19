@@ -164,16 +164,16 @@ was.
 ## Considered and not adopted
 
 - **Pluggable storage backends.** `jj`'s backend abstraction validates that
-  database-native storage is not heresy, and we take the lesson of keeping storage behind
+  putting a VCS behind a query engine is not heresy, and we take the lesson of keeping storage behind
   a clean boundary — but Sharp ships and optimizes exactly one substrate, Postgres
-  (whitepaper §2.2). The distinction is that Sharp's boundary is _loose coupling_, not
+  (whitepaper §2.3). The distinction is that Sharp's boundary is _loose coupling_, not
   `jj`'s _portability layer_: one first-class implementation that exploits Postgres fully,
   not a maintained abstraction held to the intersection of several backends. Alternative
   substrates are an admissible, unsupported extension direction — the object/ref plane
   ports, the query/provenance plane is the reason Postgres is the floor. Our workload wants
   one query engine, not a portability layer. See [`storage-substrate.md`](./storage-substrate.md).
 - **CLI-first interaction and revsets as a user interface.** Sharp's primary surface is
-  library + HTTP + SQL (§2.5 of the comparison doc). We adopt the revset _vocabulary_
+  library + HTTP API plus an operator-scoped read-only query passthrough (§2.5 of the comparison doc). We adopt the revset _vocabulary_
   (§8 above), not the terminal-first posture.
 - **Conflict deferral to a human.** `jj` records a conflict and waits for a person; in a
   lights-out harness there is no person and no "later." Sharp dissolves conflicts

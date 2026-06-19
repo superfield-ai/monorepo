@@ -4,7 +4,7 @@
 
 Git submodules and gittrees are notoriously difficult to work with. They introduce hidden state, silent failures, and a steep cognitive load on developers. Rather than accept this pain as inevitable, most teams migrate to monorepos — consolidating all code into a single repository — trading isolation for simplicity. Monorepos come with their own problems: coarse-grained locks, cascading CI failures, and difficulty in enforcing boundaries between loosely-coupled services.
 
-Sharp's database-native architecture and semantic merge substrate offer a new approach: **logical isolation without filesystem fragmentation**. By treating workspace, visibility, and merge boundaries as database-level concerns rather than filesystem-level ones, Sharp can provide the isolation properties teams seek from submodules while retaining the operational simplicity of a monorepo. This document motivates the problem, explores why current solutions fall short, and proposes a framework Sharp can build.
+Sharp's semantic merge substrate and single queryable storage substrate offer a new approach: **logical isolation without filesystem fragmentation**. By treating workspace, visibility, and merge boundaries as database-level concerns rather than filesystem-level ones, Sharp can provide the isolation properties teams seek from submodules while retaining the operational simplicity of a monorepo. This document motivates the problem, explores why current solutions fall short, and proposes a framework Sharp can build.
 
 ---
 
@@ -96,7 +96,7 @@ Neither is satisfying. The real problem is that Git's filesystem-based model mak
 
 ### **2.1 Logical Isolation Without Filesystem Fragmentation**
 
-Sharp stores all repository state in PostgreSQL, not on a filesystem. This architectural choice unlocks a new approach:
+Sharp stores all repository state in a single queryable storage substrate (whitepaper §2.3; PostgreSQL in v1), not on a filesystem. This substrate choice unlocks a new approach:
 
 **Treat workspaces, visibility, and merge boundaries as database-level concerns, independent of filesystem layout.**
 
@@ -370,6 +370,6 @@ If an agent harness is making changes that touch multiple services, it must unde
 
 Git submodules and gittrees are painful because they introduce hidden state and require developers to manage multiple repositories manually. Monorepos are simple but lack the isolation and scalability properties teams need.
 
-Sharp's database-native architecture offers a third way: **logical workspaces within a single repository.** By treating isolation as a database-level concern, Sharp can provide the operational simplicity of a monorepo with the service boundaries of a multi-repo system. No hidden state, no manual initialization, no merge conflicts between version declarations and actual code — just a manifest that describes the structure and merge logic that enforces the constraints.
+Sharp's single queryable storage substrate offers a third way: **logical workspaces within a single repository.** By treating isolation as a database-level concern, Sharp can provide the operational simplicity of a monorepo with the service boundaries of a multi-repo system. No hidden state, no manual initialization, no merge conflicts between version declarations and actual code — just a manifest that describes the structure and merge logic that enforces the constraints.
 
 This is not a replacement for polyrepo systems like Bazel or Nx, but it is a compelling alternative for teams that want to stay within the Git ecosystem while scaling beyond a traditional monorepo.

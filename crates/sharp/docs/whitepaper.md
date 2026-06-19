@@ -1,12 +1,14 @@
-# Sharp: A Database-Native, Semantically-Aware Version Control System for Agentic Software Development
+# Sharp: A Semantically-Aware, Agent-First Version Control System
 
 > **Document status — design + protocol specification.** This is a design and
 > protocol specification describing the _target_ Sharp system, not a report on
 > the current state of `crates/sharp`. Present-tense prose ("Sharp stores…",
 > "Sharp calls…") describes intended design and is not a guarantee that every
-> component is implemented today. The SQL schema blocks (§4, §5) and APIs are the
-> _target_ shape of the protocol; the shipped migrations may differ and will
-> converge on these. The post-v1 forks — the semantic-patch substrate
+> component is implemented today. The data-model field tables (§4, §5) and APIs
+> describe the _target_ shape of the protocol at the semantic level; the concrete
+> realization on the PostgreSQL storage plugin
+> ([`postgres-storage-plugin.md`](./postgres-storage-plugin.md)) may differ and
+> will converge on these. The post-v1 forks — the semantic-patch substrate
 > ([`semantic-patches.md`](./semantic-patches.md)) and branch-as-set
 > ([`branch-semantics.md`](./branch-semantics.md), [`storage-substrate.md`](./storage-substrate.md)) —
 > are explicitly forward-looking and are not claimed to exist in v1. The bar this
@@ -14,11 +16,9 @@
 
 ## **Abstract**
 
-**Sharp** is a version control system. It preserves a Git-isomorphic core for linear history (blob, tree, commit, ref), stores all repository state in PostgreSQL, augments source code with semantic representations, and treats agent episodes as a first-class metadata layer attached to commits.
+**Sharp** is a semantically-aware, agent-first version control system. Its foundational claim is narrow and load-bearing: a merge conflict is relative to the representation in which a VCS compares changes, and many conflicts — the spurious ones a line substrate manufactures — are an artifact of comparing changes in a representation too weak to decide whether they are semantically independent. An agent-first VCS must therefore decide merges at the altitude of symbols and types rather than lines (§1.1). Every other choice in this document — the snapshot store, the PostgreSQL storage substrate, the borrowings from Jujutsu, the Git interop — is downstream of that one, in the order of commitments §1.1 fixes.
 
-Its foundational claim is narrow and load-bearing: many merge conflicts — the spurious ones a line substrate manufactures — are an artifact of comparing changes in a representation too weak to decide whether they are semantically independent, so an agent-first VCS must decide merges at the altitude of symbols and types rather than lines (§1.1). Every other choice in this document — the snapshot store, the borrowings from Jujutsu, the Git interop — is downstream of that one.
-
-The substrate is recognizable — commits, branches, refs, and a single minimalist merge model — and linear history exports losslessly to standard Git remotes, with import and sync through a dedicated interop surface. On top of that substrate, Sharp captures the full lifecycle of automated change attempts — prompts, retrieved context, tool traces, intermediate patches, validation results, judge outcomes, and the promoted snapshot — as queryable, structured episodes.
+The substrate that carries the semantic decision layer is deliberately recognizable: commits, branches, refs, and a single minimalist merge model, with all repository state held in a swappable storage plugin (PostgreSQL in v1; see [`postgres-storage-plugin.md`](./postgres-storage-plugin.md)) so that history, semantic structure, and agent provenance are queryable in one place. Linear history exports losslessly to standard Git remotes, with import through a dedicated interop surface. On top of that substrate, Sharp captures the full lifecycle of automated change attempts — prompts, retrieved context, tool traces, intermediate patches, validation results, judge outcomes, and the promoted snapshot — as queryable, structured episodes.
 
 Sharp is designed for the **transition** from human-authored software to lights-out, agent-authored software. Git, GitHub, and the broader VCS ecosystem are not going away on the timescale of that transition: humans will keep reviewing, auditing, and maintaining code alongside agents for years, and entire industries are wired to Git remotes, pull requests, CI hooks, and forge tooling. A system that demands those be abandoned to adopt it will not be adopted. Sharp's bet is that the right substrate for dark-factory development is _still a VCS, still Git-compatible at the linear-history layer_, but with the database, semantic, and agent-episode capabilities current VCS designs lack. Linear history exports cleanly to GitHub today; the agent-episode and semantic layers are ready when the harnesses are.
 
@@ -42,9 +42,9 @@ Anything in this list is out of scope and will not be added under v1.
 
 ## **1. Introduction**
 
-Sharp is a version control system designed for an era of agentic software development. Most existing VCS designs assume a human author at a working tree, negotiating branches and merges with other humans. Agent harnesses operate differently: they fan out many candidate changes, score them, and select outputs at machine speed, generating structured trace data that current systems either discard or shove into ad-hoc side stores. This shift will not happen overnight — human developers will continue to author, review, and audit code alongside agents for years — so Sharp is built for the long transition. It works as a real VCS for human teams _today_, ingests existing Git repositories so work can continue inside Sharp, and exports completed linear branches back to Git remotes for backup and sharing — while giving agent harnesses the database-native, semantically-aware, episode-rich substrate ad-hoc tools cannot. The Git-compatible core is not a compatibility shim; it is a load-bearing design choice for the transition era.
+Sharp is a version control system designed for an era of agentic software development. Most existing VCS designs assume a human author at a working tree, negotiating branches and merges with other humans. Agent harnesses operate differently: they fan out many candidate changes, score them, and select outputs at machine speed, generating structured trace data that current systems either discard or shove into ad-hoc side stores. This shift will not happen overnight — human developers will continue to author, review, and audit code alongside agents for years — so Sharp is built for the long transition. It works as a real VCS for human teams _today_, ingests existing Git repositories so work can continue inside Sharp, and exports completed linear branches back to Git remotes for backup and sharing — while giving agent harnesses the semantically-aware, episode-rich substrate ad-hoc tools cannot. The Git-compatible core is not a compatibility shim; it is a load-bearing design choice for the transition era.
 
-Sharp keeps the parts of Git that work — content-addressed objects, commits, refs, linear history, and remote interop — and changes the substrate. Repository state lives in PostgreSQL rather than on a filesystem; semantic representations of code are first-class queryable artifacts; and agent episodes are recorded as rich, structured metadata attached to the commits they produced. Humans and operators retain a Git-shaped CLI; agent harnesses get a library and HTTP API tuned to their workload.
+Sharp keeps the parts of Git that work — content-addressed objects, commits, refs, linear history, and remote interop — and changes where merges are decided. Semantic representations of code are first-class queryable artifacts; agent episodes are recorded as rich, structured metadata attached to the commits they produced; and all of that state lives in a single queryable storage substrate (PostgreSQL in v1) rather than on a filesystem. Humans and operators retain a Git-shaped CLI; agent harnesses get a library and HTTP API tuned to their workload.
 
 ### **1.1 The Root Axiom: Conflict Is Relative to Representation**
 
@@ -65,14 +65,14 @@ Sharp's two core mechanisms map onto the two failure modes directly: Tier 1 sema
 
 **What the merge actually guarantees — and what it does not.** Three guarantees must be kept distinct. (1) _Consistency_: the result is deterministic and order-independent when access sets are disjoint — proved, not asserted (`semantic-patches.md` §3, `branch-semantics.md` §1.1). (2) _Reference- and type-level correctness_: the merged program parses, resolves its references, and passes the language's diagnostics — enforced by the verification gate (§6.2). (3) _Behavioral correctness_: the program does what was intended. Sharp delivers (1) and (2); it does **not**, and cannot from the access-set model alone, deliver (3). Two changes with disjoint symbol-level read/write sets commute and compile yet can jointly violate a behavioral invariant the type system does not encode. The symbol graph captures _reference_ dependencies, not _semantic invariants_; serializability gives _consistency_, not _intent_. The "missed conflict" example above is caught precisely because a return-type narrowing is a _type-level_ dependency — a purely behavioral dependency would pass both the access-set check and the compile gate. Behavioral correctness remains the province of tests, review, and the Tier-2 oracle (§6.4); the automated ceiling is type-level, and the design should claim no more.
 
-**What "semantically aware" commits to — and what it does not.** The axiom fixes the _altitude at which independence and merge are decided_: symbols, references, types, and the language's notion of a well-formed program — not lines. It is deliberately not, on its own, a claim about the _storage_ substrate. Sharp v1 realizes the semantic decision layer over a content-addressed _snapshot_ store, computing independence by handing materialized trees to each language's own toolchain (`ts.LanguageService`, rust-analyzer) and reading back renames, reference sets, and diagnostics (§2.3, §6.1). Whether the canonical stored unit should itself become a semantic code graph — with snapshots demoted to an export projection, and history recorded as semantic operations whose commutation the language _decides_ rather than a merge engine _approximates_ — is a larger decision held out of v1 and analyzed in [`semantic-patches.md`](./semantic-patches.md). The root axiom settles the altitude of the _decision_; it leaves the representation of the _store_ open.
+**What "semantically aware" commits to — and what it does not.** The axiom fixes the _altitude at which independence and merge are decided_: symbols, references, types, and the language's notion of a well-formed program — not lines. It is deliberately not, on its own, a claim about the _storage_ substrate. Sharp v1 realizes the semantic decision layer over a content-addressed _snapshot_ store, computing independence by handing materialized trees to each language's own toolchain (`ts.LanguageService`, rust-analyzer) and reading back renames, reference sets, and diagnostics (§2.1, §6.1). Whether the canonical stored unit should itself become a semantic code graph — with snapshots demoted to an export projection, and history recorded as semantic operations whose commutation the language _decides_ rather than a merge engine _approximates_ — is a larger decision held out of v1 and analyzed in [`semantic-patches.md`](./semantic-patches.md). The root axiom settles the altitude of the _decision_; it leaves the representation of the _store_ open.
 
 **The order of commitments.** Because a VCS's correctness is the correctness of its conflict resolution, that correctness is governed by the independence relation, and the relation is semantic, Sharp's commitments are ordered by their distance from this axiom:
 
 1. **Semantic independence is computed, not approximated** — the merge engine decides at symbol and type altitude (§6).
-2. **A snapshot store realizes it for v1** (§2.2, [`snapshots-vs-patches.md`](./snapshots-vs-patches.md)) — chosen rather than assumed; the code-graph alternative is the open fork ([`semantic-patches.md`](./semantic-patches.md)).
+2. **A snapshot store realizes it for v1** (§2.3, [`snapshots-vs-patches.md`](./snapshots-vs-patches.md)) — chosen rather than assumed; the code-graph alternative is the open fork ([`semantic-patches.md`](./semantic-patches.md)).
 3. **Jujutsu's mechanisms are adopted on top** — operation/view log, conflict algebra, change-IDs — each re-expressed over semantic atoms ([`jj-adoption.md`](./jj-adoption.md)).
-4. **Git interop is preserved as a consequence** of the snapshot realization (§2.1, §7), not as a driver.
+4. **Git interop is preserved as a consequence** of the snapshot realization (§2.2, §7), not as a driver.
 
 Read top to bottom, that list is the architecture. Everything past §1.1 is the realization of step 1 and the consequences of step 2.
 
@@ -80,39 +80,39 @@ Read top to bottom, that list is the architecture. Everything past §1.1 is the 
 
 ## **2. Design Principles**
 
-These principles are consequences of the root axiom (§1.1); they are numbered for reference, not in order of primacy. The semantic layer (§2.3) is the axiom's direct realization; the Git-compatible core (§2.1) and database-native store (§2.2) are the substrate chosen to carry it; the remainder follow from those two choices.
+These principles are consequences of the root axiom (§1.1); they are numbered for reference, not in order of primacy. They are ordered to match the order of commitments §1.1 fixes: the semantic layer (§2.1) is the axiom's direct realization, the Git-compatible core (§2.2) and the storage substrate (§2.3) are the substrate chosen to carry it, and the remainder follow from those choices.
 
-### **2.1 Git-Compatible Core**
+### **2.1 Semantic Representations as a First-Class Substrate**
 
-Sharp's object model uses the same primitives as Git: blob, tree, commit, and ref, hashed with Git's content-addressing hash (§4.0). This compatibility is asymmetric and bounded by the two real interop operations:
-
-- **Import** preserves the full Git object graph as ingested, including multi-parent merge commits, annotated tags, and signed-commit byte sequences. Sharp does not flatten history on the way in — that would discard information needed for blame, bisect, and audit.
-- **Export** is linear-only. A completed linear Sharp branch projects to byte-identical Git objects (correct tree sort, modes, and commit headers) so that exported commits land on a Git remote with stable, recomputable SHAs. Branches with internal merges are not exported — they either flatten on the way out or are refused.
-
-This compatibility protects adoption (existing repos come in; finished work goes out for backup or sharing) and ensures Sharp repositories are never trapped in a proprietary format. It is not a substrate for ongoing bidirectional sync, and it is not a Git server.
-
-### **2.2 Database-Native Architecture**
-
-All repository data is stored in PostgreSQL:
-
-- Content-addressed objects (blobs, trees, commits)
-- Refs and tags
-- Semantic representations as queryable artifacts
-- Commit metadata and agent episode records
-
-This eliminates the split between filesystem repositories and application databases, and makes development history, semantic structure, and agent provenance queryable in the same store.
-
-PostgreSQL is the single substrate Sharp ships and optimizes, but it is reached through a loosely-coupled storage boundary rather than welded throughout the system — it is one implementation, not the architecture. The object/ref plane behind that boundary is substrate-agnostic; corpus-scale retrieval over the provenance and DAG tables is why Postgres is a *scale floor* rather than a swappable detail. The merge algebra itself — conflict terms, serializability, the merge tiers — runs in Rust above the substrate, not in SQL. Alternative substrates (other databases, flat files, Git metadata) are an admissible but deliberately unsupported extension direction, not a portability guarantee Sharp maintains. See [`storage-substrate.md`](./storage-substrate.md).
-
-### **2.3 Semantic Representations as a First-Class Substrate**
-
-This principle is the direct realization of the root axiom (§1.1): the semantic layer is not an enrichment hung on the substrate but the reason the substrate decides merges where it does. Sharp augments source code with semantic representations, but does not reimplement semantic analysis itself. Instead, Sharp delegates to each language's own production toolchain: `ts.LanguageService` (TypeScript Compiler API) for TypeScript, and rust-analyzer (via LSP subprocess) for Rust. Sharp calls these tools; it does not reimplement them.
+This principle is the direct realization of the root axiom (§1.1): the semantic layer is not an enrichment hung on the substrate but the reason the substrate decides merges where it does. It leads the design because every other commitment in this section is in service of computing the semantic-independence relation. Sharp augments source code with semantic representations, but does not reimplement semantic analysis itself. Instead, Sharp delegates to each language's own production toolchain: `ts.LanguageService` (TypeScript Compiler API) for TypeScript, and rust-analyzer (via LSP subprocess) for Rust. Sharp calls these tools; it does not reimplement them.
 
 These representations are both queryable artifacts in their own right (for retrieval, evaluation, audit) and the inputs to Sharp's merge model. See §6 for how they participate in deterministic semantic merge and the verification gate.
 
 Call hierarchy analysis (TypeScript's `textDocument/callHierarchy`, rust-analyzer's equivalent) gives Sharp a cross-file understanding of what a change impacts — the blast radius of a rename or signature change — before the merge engine attempts resolution.
 
 This delegation carries a recurring cost that should be stated plainly: the semantic layer is **per-language**. Every supported language needs its own toolchain integration, reference-set extraction, and language-specific merge resolution (§6) — which is why v1 scopes to TypeScript and Rust (§0) and cross-language refactors are research (`research.md`). Language-specificity is the known Achilles heel of structured-merge systems (Mens 2002): each new language is a substantial, recurring investment, not a plugin.
+
+### **2.2 Git-Compatible Core**
+
+The semantic decision layer (§2.1) is realized over a recognizable, Git-shaped substrate. Sharp's object model uses the same primitives as Git: blob, tree, commit, and ref, hashed with Git's content-addressing hash (§4.0). This compatibility is asymmetric and bounded by the two real interop operations:
+
+- **Import** preserves the full Git object graph as ingested, including multi-parent merge commits, annotated tags, and signed-commit byte sequences. Sharp does not flatten history on the way in — that would discard information needed for blame, bisect, and audit.
+- **Export** is linear-only. A completed linear Sharp branch projects to byte-identical Git objects (correct tree sort, modes, and commit headers) so that exported commits land on a Git remote with stable, recomputable SHAs. Branches with internal merges are not exported — they either flatten on the way out or are refused.
+
+This compatibility protects adoption (existing repos come in; finished work goes out for backup or sharing) and ensures Sharp repositories are never trapped in a proprietary format. It is not a substrate for ongoing bidirectional sync, and it is not a Git server. Git interop is preserved as a _consequence_ of the snapshot realization (§1.1, step 4), not as a driver of the design.
+
+### **2.3 A Single Queryable Storage Substrate**
+
+The Git-shaped object plane (§2.2) and the semantic, episode, and metadata layers all live in a single queryable storage substrate rather than split between filesystem repositories and application databases. The substrate holds:
+
+- Content-addressed objects (blobs, trees, commits)
+- Refs and tags
+- Semantic representations as queryable artifacts
+- Commit metadata and agent episode records
+
+Keeping them together makes development history, semantic structure, and agent provenance queryable in the same store.
+
+This substrate is reached through a loosely-coupled storage boundary rather than welded throughout the system. **PostgreSQL is the one substrate Sharp ships and optimizes for v1** — its concrete schema is specified, as one swappable plugin's implementation, in [`postgres-storage-plugin.md`](./postgres-storage-plugin.md). The object/ref plane behind the storage boundary is substrate-agnostic; corpus-scale retrieval over the provenance and DAG records is why a query engine is a _scale floor_ rather than a swappable detail. The merge algebra itself — conflict terms, serializability, the merge tiers — runs in Rust above the substrate, not in the database. Alternative substrates (other databases, flat files, Git metadata) are an admissible but deliberately unsupported extension direction, not a portability guarantee Sharp maintains. See [`storage-substrate.md`](./storage-substrate.md).
 
 ### **2.4 Agent Episodes as First-Class Metadata**
 
@@ -160,7 +160,7 @@ The core VCS objects are commits, trees, blobs, and refs. Episodes and other met
 
 ### **4.0 Content-Addressing Hash**
 
-Sharp uses **Git's content-addressing hash**: SHA-1 by default, SHA-256 when the repository is initialized with `objectformat=sha256` (Git's own transition format). This is a deliberate choice for the transition-era thesis (§1): Sharp's object IDs _are_ Git's object IDs. A Sharp blob, tree, or commit hashes to the same value Git would compute over the same canonical bytes, byte-for-byte. This is what makes the §2.1 isomorphism claim load-bearing rather than a translation layer — round-trip with a Git remote does not depend on a side-table mapping, and downstream amendments on the Git side return to Sharp with stable identities.
+Sharp uses **Git's content-addressing hash**: SHA-1 by default, SHA-256 when the repository is initialized with `objectformat=sha256` (Git's own transition format). This is a deliberate choice for the transition-era thesis (§1): Sharp's object IDs _are_ Git's object IDs. A Sharp blob, tree, or commit hashes to the same value Git would compute over the same canonical bytes, byte-for-byte. This is what makes the §2.2 isomorphism claim load-bearing rather than a translation layer — round-trip with a Git remote does not depend on a side-table mapping, and downstream amendments on the Git side return to Sharp with stable identities.
 
 The trade-off is accepted: SHA-1 is slower than BLAKE3 and weaker cryptographically. Sharp inherits Git's mitigations (SHA-1DC collision detection on object intake) and Git's migration path (per-repo `objectformat=sha256`). Sharp records the hash algorithm per object via an `algo` column (§4.1) so that mixed-algorithm repositories are supported during the SHA-1 → SHA-256 transition that Git itself is undergoing.
 
@@ -178,66 +178,62 @@ Sharp therefore defaults to SHA-1 (matching what new GitHub repos are using) and
 
 This bullet is calibrated to the Git/GitHub state as of early 2026 and should be re-checked against `git --version` defaults and GitHub repository-creation docs as the SHA-256 transition progresses.
 
+The data model is described here at the semantic level — the entities, their identifying keys, and what each field means. The concrete realization on the v1 PostgreSQL storage plugin (column types, constraints, indexes) is one swappable substrate's implementation and lives in [`postgres-storage-plugin.md`](./postgres-storage-plugin.md), not in this product specification.
+
 ### **4.1 Core Objects**
 
-```sql
-objects (
-  id bytea primary key,
-  algo text not null default 'sha1' check (algo in ('sha1','sha256')),
-  kind text,
-  size bigint,
-  data bytea,
-  created_at timestamptz
-);
-```
+A content-addressed object is the immutable unit of stored content — a blob, tree, or commit. Each object is identified by its content-addressing hash and carries:
+
+| Field        | Meaning                                                          |
+| ------------ | ---------------------------------------------------------------- |
+| `id`         | The object's content-addressing hash (primary identity).         |
+| `algo`       | Which hash produced the id: `sha1` (default) or `sha256` (§4.0). |
+| `kind`       | `blob`, `tree`, or `commit`.                                     |
+| `size`       | Byte length of the inflated payload.                             |
+| `data`       | The inflated object payload.                                     |
+| `created_at` | When the object first entered the store.                         |
+
+Objects are immutable and deduplicated by `id`: storing the same content twice is a no-op.
 
 ### **4.2 References**
 
-```sql
-refs (
-  repo_id uuid,
-  name text,
-  target bytea,
-  primary key (repo_id, name)
-);
-```
+A reference (branch or tag) names a position in history. A ref is identified by `(repo, name)` and points at a target object:
+
+| Field    | Meaning                                                                           |
+| -------- | --------------------------------------------------------------------------------- |
+| `repo`   | The repository the ref belongs to.                                                |
+| `name`   | The full ref name, e.g. `refs/heads/main`.                                        |
+| `target` | The object the ref currently points at (a commit, or a symbolic target for HEAD). |
+
+Refs are mutable; they advance via compare-and-swap so concurrent writers cannot silently clobber one another.
 
 ### **4.3 Semantic Representations**
 
-```sql
-representations (
-  object_id bytea,
-  layer text,
-  version text,
-  data jsonb,
-  primary key (object_id, layer, version)
-);
-```
+A semantic representation is a queryable, per-layer derivation attached to an object — the symbol table, reference sets, call hierarchy, and diagnostics that §2.1 delegates to each language's toolchain. A representation is identified by `(object, layer, version)`:
+
+| Field       | Meaning                                                                                   |
+| ----------- | ----------------------------------------------------------------------------------------- |
+| `object_id` | The object the representation is derived from.                                            |
+| `layer`     | Which semantic layer this is (e.g. `symbols`, `references`, `diagnostics`).               |
+| `version`   | The pinned analyzer/grammar version that produced it (term-versioning, design review §4). |
+| `data`      | The structured representation payload.                                                    |
+
+Keying on `version` is what lets a canonical term be defined relative to a pinned toolchain version, so a grammar bump invalidates rather than silently rewrites a derived representation.
 
 ### **4.4 Commit Metadata**
 
-```sql
-commit_metadata (
-  repo_id uuid,
-  commit_id bytea,
-  namespace text,
-  key text,
-  value jsonb,
-  updated_at timestamptz,
-  primary key (repo_id, commit_id, namespace, key)
-);
-```
+Commit metadata is the mutable annotation layer _about a commit as an artifact_ — review status, analysis tags, eval labels, deployment outcomes — which evolve independently of the run that produced the commit. An annotation is identified by `(repo, commit, namespace, key)`:
 
-This enables structured, evolving annotations such as:
+| Field        | Meaning                                             |
+| ------------ | --------------------------------------------------- |
+| `repo`       | The repository.                                     |
+| `commit_id`  | The commit being annotated.                         |
+| `namespace`  | The annotation family, e.g. `review` or `analysis`. |
+| `key`        | The annotation key within the namespace.            |
+| `value`      | The structured annotation payload.                  |
+| `updated_at` | When the annotation was last revised.               |
 
-```json
-{
-  "review": { "status": "approved" },
-  "analysis": { "type": "refactor" }
-}
-```
-
-See §5.1 for the agent episode schema.
+This enables structured, evolving annotations such as a `review` namespace recording `status = approved` and an `analysis` namespace recording `type = refactor`, revisable after the fact without rewriting the underlying VCS facts. Provenance about _how_ a commit was produced lives on episodes (§5), not here. See §5 for the agent-episode data model.
 
 ---
 
@@ -256,58 +252,41 @@ Agent episodes are a first-class feature of Sharp, attached to the commits they 
 
 Episodes are append-only as facts. The spine of the data model remains the VCS substrate: episodes attach to commits, they do not replace them. An episode is anchored to a parent commit (the state it started from) and, on success, to a promoted commit (the state it produced).
 
-### **5.1 Schema**
+### **5.1 Data Model**
 
-```sql
-episodes (
-  id uuid primary key,
-  repo_id uuid not null,
-  parent_commit bytea not null,
-  promoted_commit bytea,
-  agent_identity text not null,
-  model_id text not null,
-  harness_version text not null,
-  tool_versions jsonb not null,
-  decoding_params jsonb not null,
-  status text not null check (status in ('started','completed','failed','abandoned')),
-  started_at timestamptz not null,
-  finished_at timestamptz
-);
-```
+The episode data model has three entities. They are described here at the semantic level; the concrete v1 column types and constraints are in [`postgres-storage-plugin.md`](./postgres-storage-plugin.md).
 
-```sql
-episode_artifacts (
-  episode_id uuid not null references episodes(id),
-  seq integer not null,
-  kind text not null check (kind in (
-    'prompt','context','tool_call','tool_result',
-    'intermediate_patch','validation','judge'
-  )),
-  content_ref bytea,
-  inline jsonb,
-  created_at timestamptz not null,
-  primary key (episode_id, seq),
-  check ((content_ref is null) <> (inline is null))
-);
-```
+**Episode** — the run-level record, carrying which commit it started from, which commit (if any) it produced, and the full provenance tuple that defines reproducibility:
 
-```sql
-episode_links (
-  from_episode uuid not null references episodes(id),
-  to_episode uuid not null references episodes(id),
-  relation text not null check (relation in (
-    'sibling','retry_of','replay_of','superseded_by'
-  )),
-  created_at timestamptz not null,
-  primary key (from_episode, to_episode, relation)
-);
-```
+| Field                                                             | Meaning                                                             |
+| ----------------------------------------------------------------- | ------------------------------------------------------------------- |
+| `id`                                                              | Episode identity.                                                   |
+| `repo`                                                            | The repository the run belongs to.                                  |
+| `parent_commit`                                                   | The state the agent started from (required).                        |
+| `promoted_commit`                                                 | The state it produced on success; absent for failed/abandoned runs. |
+| `agent_identity`                                                  | Which agent/worker ran.                                             |
+| `model_id`, `harness_version`, `tool_versions`, `decoding_params` | The provenance tuple that defines reproducibility for replay.       |
+| `status`                                                          | One of `started`, `completed`, `failed`, `abandoned`.               |
+| `started_at`, `finished_at`                                       | Run timing.                                                         |
 
-`episodes` carries the run-level facts: which commit it started from, which commit (if any) it produced, and the full provenance tuple (model id, harness version, tool versions, decoding params) that defines reproducibility.
+**Episode artifact** — an ordered, typed log of everything observed during the run, identified by `(episode, seq)`:
 
-`episode_artifacts` is an ordered, typed log of everything observed during the run. Each row is either a `content_ref` pointing at a CAS object or a small `inline` jsonb payload — never both. `seq` preserves intra-episode ordering for replay.
+| Field         | Meaning                                                                                                   |
+| ------------- | --------------------------------------------------------------------------------------------------------- |
+| `episode_id`  | The episode this artifact belongs to.                                                                     |
+| `seq`         | Monotonic position; preserves intra-episode ordering for replay.                                          |
+| `kind`        | One of `prompt`, `context`, `tool_call`, `tool_result`, `intermediate_patch`, `validation`, `judge`.      |
+| `content_ref` | A pointer into the CAS (§4.1) for large payloads — _or_ —                                                 |
+| `inline`      | A small structured payload held directly. Exactly one of `content_ref` / `inline` is present, never both. |
+| `created_at`  | When the artifact was recorded.                                                                           |
 
-`episode_links` records relationships across episodes. `sibling` connects fan-out attempts that ran from the same parent commit; `retry_of` records resumed or re-attempted work; `replay_of` records re-runs against a different model or harness; `superseded_by` lets a later episode mark an earlier one as no longer canonical.
+**Episode link** — a relationship between two episodes, identified by `(from, to, relation)`:
+
+| Field                         | Meaning                                                                                                                                                                                                                                |
+| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `from_episode` / `to_episode` | The two related episodes.                                                                                                                                                                                                              |
+| `relation`                    | One of `sibling` (fan-out peers from the same parent commit), `retry_of` (resumed/re-attempted work), `replay_of` (re-run against a different model or harness), `superseded_by` (a later episode marks an earlier one non-canonical). |
+| `created_at`                  | When the link was recorded.                                                                                                                                                                                                            |
 
 ### **5.2 Storage Strategy for Tool Traces**
 
@@ -353,7 +332,7 @@ Sharp's merge contract is the central reason an autonomous agent harness can ado
 
 ### **6.1 Tier 1 — Deterministic Semantic Merge**
 
-In v1, semantic representations (§2.3) are queryable artifacts _and_ the inputs to merge. Sharp calls `ts.LanguageService.findRenameLocations()` for TypeScript and rust-analyzer's `textDocument/references` for Rust to enumerate every reference that needs updating when a symbol is renamed (`textDocument/rename` is the apply/preparatory call, not the enumeration one). These are the same reference-finding APIs editors drive for F2-rename; Sharp gets correct-by-construction reference lists rather than approximating them. The vast majority of cases that text-merge classifies as conflicts (or, worse, silently mis-resolves) collapse to a single deterministic answer. This is the common path. The corpus expectation is that most scenarios land here.
+In v1, semantic representations (§2.1) are queryable artifacts _and_ the inputs to merge. Sharp calls `ts.LanguageService.findRenameLocations()` for TypeScript and rust-analyzer's `textDocument/references` for Rust to enumerate every reference that needs updating when a symbol is renamed (`textDocument/rename` is the apply/preparatory call, not the enumeration one). These are the same reference-finding APIs editors drive for F2-rename; Sharp gets correct-by-construction reference lists rather than approximating them. The vast majority of cases that text-merge classifies as conflicts (or, worse, silently mis-resolves) collapse to a single deterministic answer. This is the common path. The corpus expectation is that most scenarios land here.
 
 **Semantic diff** — differences computed and surfaced at the symbol level, in addition to textual diffs — is the user-facing projection of the same machinery.
 
@@ -429,7 +408,7 @@ Implementation outline (full mechanics in `docs/engineering-plan.md`):
 
 - Projections are computed **lazily**. Cached against the (feature_tip, target_tip) tuple; invalidated when either advances; recomputed on next read.
 - Multiple targets per feature are supported. A single feature branch can carry projections against `main`, `release/v3`, and any other long-lived branch simultaneously.
-- Outstanding dilemmas are queryable via the SQL passthrough: `SELECT * FROM projections WHERE status = 'dilemma' AND branch_ref = 'refs/heads/feature/x'` makes "main moved and our feature is now in trouble" a queryable signal rather than a discovery made at PR-merge time.
+- Outstanding dilemmas are a queryable signal: an operator can ask the store for every projection whose status is `dilemma` for a given feature branch, making "main moved and our feature is now in trouble" something a pipeline polls rather than a discovery made at PR-merge time.
 - Project-side gates are easy: a `pre-receive` hook on the GitHub-equivalent path can require zero outstanding dilemmas on the speculative merge before a PR is opened.
 
 **Sharp deliberately does not ship a `rebase` command.** Anything that historically required `rebase` — landing a feature against an advanced `main`, producing a clean linear PR, keeping a long-lived feature current — is handled by the projection. The feature branch's actual DAG is preserved. If a use case is found that genuinely requires history rewriting (squash-and-amend before sharing externally, for example), it is layered on as an export-time projection (§7), not as a destructive operation on the source-of-truth branch.
@@ -469,9 +448,10 @@ Pushes a completed **linear** Sharp branch to a Git remote as a means of backup 
 
 Sharp enables:
 
+- merges decided at the altitude of symbols and types, so an autonomous harness is not stalled by spurious conflicts nor silently shipped a broken one
 - a real VCS substrate that agent harnesses can use directly, without bolting Git onto the side
 - structured capture of agent runs as first-class data, attached to the commits they produced
-- SQL-queryable development history across commits, episodes, and semantic layers
+- a single queryable store of development history across commits, episodes, and semantic layers
 - semantic representations of code changes available for retrieval, evaluation, and review
 - training and evaluation datasets drawn directly from production runs
 
@@ -486,5 +466,7 @@ This whitepaper specifies the Sharp protocol. The following companion documents 
 - **[`docs/v1-plan.md`](./v1-plan.md)** — concrete v1 implementation plan: scope, surface, validation thresholds, phased delivery, success criteria, engineering risks, and the security/privacy posture for the initial release.
 - **[`docs/engineering-plan.md`](./engineering-plan.md)** — design-level breakdown of how the v1 plan gets built: storage layer, server HTTP API, client basics, Tree-sitter and merge engine, git compatibility, episode library, analytics, operator CLI, and per-component definitions of done.
 - **[`docs/research.md`](./research.md)** — open research questions and post-v1 directions: cross-language semantic merge, control-flow graph analysis, multi-language normalization, episode-retention policy, replay-as-evaluation methodology, and the structured-dilemma format.
+- **[`docs/postgres-storage-plugin.md`](./postgres-storage-plugin.md)** — the concrete schema of the v1 PostgreSQL storage plugin: the relations that realize the §4–§5 data model, presented explicitly as _one swappable substrate's implementation_, not the product spec. This is the home for Postgres-specific schema detail kept out of the narrative chapters.
+- **[`docs/storage-substrate.md`](./storage-substrate.md)** — why the storage substrate (§2.3) is a single loosely-coupled implementation rather than a portability layer, the two-plane boundary, and the database-native VCS prior art (Dolt, TerminusDB, Irmin, Noms, Datomic) it situates against.
 - **[`docs/snapshots-vs-patches.md`](./snapshots-vs-patches.md)** — the architectural decision behind §4 and §6: why Sharp keeps a snapshot substrate rather than a Darcs/Pijul patch substrate, how it gets first-class conflicts anyway (via `jj`-style algebraic terms), and why Git/GitHub compatibility is a consequence of that choice rather than its driver.
 - **[`docs/test-plan.md`](./test-plan.md)** — the differential test harness driving Sharp's development: scenario fixtures, the Sharp-vs-git two-lane architecture, the three-tier merge contract from a test-correctness perspective, and the corpus that pins down "Sharp is better than git on real merges."
