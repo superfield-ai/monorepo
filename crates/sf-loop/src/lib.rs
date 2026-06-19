@@ -63,6 +63,77 @@ use std::sync::Arc;
 use tokio::task::JoinHandle;
 use uuid::Uuid;
 
+/// First-run LLM credential state, derived from the configured API key.
+///
+/// On a fresh appliance no `SF_LLM_API_KEY` is set, so the loop (and the studio
+/// agent) would silently run against the deterministic [`FixtureAgentExecutor`]
+/// — gardening placeholder content and answering canned echoes. Modelling the
+/// credential as an explicit state lets the daemon surface an
+/// [`LlmCredentialState::Unconfigured`] banner at boot/status rather than
+/// silently degrading, and lets tests assert which executor the appliance
+/// selects (issue #714).
+///
+/// Fixtures remain the intended path for CI/tests, which never set the key (or
+/// set `SF_OTEL_DISABLED=1`); they are NOT the intended first-run production
+/// path, which requires the operator to supply a credential.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LlmCredentialState {
+    /// A non-empty `SF_LLM_API_KEY` is present: the real [`LlmAgentExecutor`] is
+    /// selected and the appliance does real LLM work.
+    Configured,
+    /// No `SF_LLM_API_KEY` is set: the appliance is unconfigured and falls back
+    /// to the [`FixtureAgentExecutor`]. The daemon must surface this explicitly.
+    Unconfigured,
+}
+
+impl LlmCredentialState {
+    /// Derive the credential state from an API key value.
+    ///
+    /// A whitespace-only or empty key is treated as [`Unconfigured`].
+    ///
+    /// [`Unconfigured`]: LlmCredentialState::Unconfigured
+    pub fn from_key(api_key: &str) -> Self {
+        if api_key.trim().is_empty() {
+            LlmCredentialState::Unconfigured
+        } else {
+            LlmCredentialState::Configured
+        }
+    }
+
+    /// True when no usable credential is configured.
+    pub fn is_unconfigured(self) -> bool {
+        matches!(self, LlmCredentialState::Unconfigured)
+    }
+
+    /// A stable lowercase tag for status payloads and structured logs.
+    ///
+    /// This NEVER contains the key value — only the configured/unconfigured
+    /// state — so it is safe to log and persist (issue #714 acceptance: no key
+    /// is logged or persisted).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            LlmCredentialState::Configured => "configured",
+            LlmCredentialState::Unconfigured => "unconfigured",
+        }
+    }
+
+    /// Operator-facing message describing the state.
+    ///
+    /// Safe to log/print: contains no secret material.
+    pub fn boot_message(self) -> &'static str {
+        match self {
+            LlmCredentialState::Configured => {
+                "LLM credential configured: gardening loop and studio agent use the real LLM."
+            }
+            LlmCredentialState::Unconfigured => {
+                "LLM credential unconfigured (SF_LLM_API_KEY is empty): the gardening loop and \
+                 studio agent run fixtures only. Set SF_LLM_API_KEY for the appliance to do real \
+                 work — see docs/architecture.md \u{a7}First-run LLM credential."
+            }
+        }
+    }
+}
+
 /// Configuration for the gardening loop.
 #[derive(Debug, Clone)]
 pub struct LoopConfig {
@@ -107,6 +178,15 @@ impl LoopConfig {
             llm_endpoint,
             llm_model,
         }
+    }
+
+    /// The first-run LLM credential state derived from [`Self::llm_api_key`].
+    ///
+    /// [`LlmCredentialState::Configured`] selects the real [`LlmAgentExecutor`];
+    /// [`LlmCredentialState::Unconfigured`] selects the fixture fallback and is
+    /// what the daemon surfaces explicitly at boot (issue #714).
+    pub fn credential_state(&self) -> LlmCredentialState {
+        LlmCredentialState::from_key(&self.llm_api_key)
     }
 }
 
@@ -260,4 +340,56 @@ async fn run_loop(
 
     // Signal that the loop has fully stopped.
     let _ = done_tx.send(());
+}
+
+#[cfg(test)]
+mod credential_tests {
+    use super::*;
+
+    #[test]
+    fn empty_or_blank_key_is_unconfigured() {
+        assert_eq!(
+            LlmCredentialState::from_key(""),
+            LlmCredentialState::Unconfigured
+        );
+        assert_eq!(
+            LlmCredentialState::from_key("   \t\n"),
+            LlmCredentialState::Unconfigured
+        );
+        assert!(LlmCredentialState::from_key("").is_unconfigured());
+    }
+
+    #[test]
+    fn non_empty_key_is_configured() {
+        let state = LlmCredentialState::from_key("sk-ant-abc123");
+        assert_eq!(state, LlmCredentialState::Configured);
+        assert!(!state.is_unconfigured());
+    }
+
+    #[test]
+    fn config_credential_state_matches_key() {
+        let mut cfg = LoopConfig {
+            workspace_id: Uuid::nil(),
+            blueprint_path: std::path::PathBuf::from("x.yaml"),
+            llm_api_key: String::new(),
+            llm_endpoint: "e".into(),
+            llm_model: "m".into(),
+        };
+        assert_eq!(cfg.credential_state(), LlmCredentialState::Unconfigured);
+        cfg.llm_api_key = "sk-real".into();
+        assert_eq!(cfg.credential_state(), LlmCredentialState::Configured);
+    }
+
+    /// The state's loggable surfaces never echo a key value.
+    #[test]
+    fn surfaces_contain_no_secret() {
+        let key = "sk-ant-SECRET-xyz";
+        let state = LlmCredentialState::from_key(key);
+        assert!(!state.as_str().contains(key));
+        assert!(!state.boot_message().contains(key));
+        assert_eq!(state.as_str(), "configured");
+        assert!(LlmCredentialState::Unconfigured
+            .boot_message()
+            .contains("SF_LLM_API_KEY"));
+    }
 }

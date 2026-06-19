@@ -79,12 +79,41 @@ impl StudioAgent {
         }
     }
 
+    /// Build directly from explicit fields (test-only seam).
+    ///
+    /// `from_env` reads the process environment, which makes credential-state
+    /// assertions racy under parallel tests. This constructor lets a test pin
+    /// the key value without touching env vars (issue #714).
+    #[cfg(test)]
+    fn from_parts(api_key: impl Into<String>) -> Self {
+        Self {
+            api_key: api_key.into(),
+            endpoint: DEFAULT_ENDPOINT.to_string(),
+            model: DEFAULT_MODEL.to_string(),
+            client: reqwest::Client::new(),
+        }
+    }
+
+    /// True when a usable LLM credential is configured (`SF_LLM_API_KEY` is a
+    /// non-empty value).
+    ///
+    /// This mirrors `sf_loop::LlmCredentialState`: a configured key selects the
+    /// real LLM path (`reply` POSTs to the endpoint); an unconfigured one falls
+    /// back to the fixture. The studio agent and the gardening loop therefore
+    /// agree on first-run credential state (issue #714).
+    pub fn is_llm_configured(&self) -> bool {
+        !self.api_key.trim().is_empty()
+    }
+
     /// True when the agent will answer from a local fixture (no LLM call).
     ///
     /// This is the CI / no-key path. It matches `build_executor`'s fall back to
-    /// `FixtureAgentExecutor` when `SF_LLM_API_KEY` is empty.
+    /// `FixtureAgentExecutor` when `SF_LLM_API_KEY` is empty. Note that
+    /// `SF_OTEL_DISABLED=1` also forces fixture mode (offline CI) even when a
+    /// key is present — see [`Self::is_llm_configured`] for the credential-only
+    /// view.
     pub fn is_fixture(&self) -> bool {
-        self.api_key.is_empty() || env::var("SF_OTEL_DISABLED").as_deref() == Ok("1")
+        !self.is_llm_configured() || env::var("SF_OTEL_DISABLED").as_deref() == Ok("1")
     }
 
     /// Produce a reply to one chat `message`, scoped to `workspace_id`.
@@ -198,6 +227,33 @@ mod tests {
             reply.contains("how does ingest work?"),
             "reply echoes the user message"
         );
+    }
+
+    /// With SF_LLM_API_KEY set, the studio agent selects the REAL LLM path
+    /// (not the fixture) — issue #714 acceptance criterion 1 for the studio
+    /// agent. Asserted on a key-pinned agent so SF_OTEL_DISABLED in the test
+    /// environment does not mask the credential-state view.
+    #[test]
+    fn configured_key_selects_real_llm_path() {
+        let agent = StudioAgent::from_parts("sk-ant-SECRET-studio-key");
+        assert!(
+            agent.is_llm_configured(),
+            "a non-empty key must report the LLM as configured"
+        );
+        let blank = StudioAgent::from_parts("   ");
+        assert!(
+            !blank.is_llm_configured(),
+            "a blank key must report the LLM as unconfigured"
+        );
+        assert!(blank.is_fixture(), "a blank key must select fixture mode");
+    }
+
+    /// The key value never appears in the fixture reply (which is the only text
+    /// the unconfigured studio agent emits) — issue #714 no-leak guarantee.
+    #[tokio::test]
+    async fn fixture_reply_never_contains_key() {
+        let reply = fixture_reply("a question", "ws-1");
+        assert!(!reply.contains("sk-ant"), "fixture reply must carry no key");
     }
 
     #[test]
