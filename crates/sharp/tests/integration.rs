@@ -51,6 +51,9 @@
 //!   episode.  Requires `DATABASE_URL` and live rust-analyzer + cargo.
 //! - `merge_flow_run_merge_flow_records_episode` — exercises the production
 //!   `merge_flow::run_merge_flow` entry point end-to-end (DB + cargo).
+//! - `merge_flow_refuses_and_does_not_store_non_compiling_proposal` — the loop's
+//!   code-change candidate path (#706): a non-compiling proposal yields
+//!   `SharpError::MergeRefused` and stores no `merge_result` candidate event.
 //! - `merge_flow_onboard_workspace_is_idempotent` — verifies that
 //!   `merge_flow::onboard_workspace` registers a repo idempotently.
 
@@ -302,6 +305,10 @@ async fn episode_open_append_finish_query() {
 // ── Runtime signal integration tests ─────────────────────────────────────────
 
 /// Apply the runtime signal SQL migration on the test database.
+///
+/// Applies both 0004 (the table) and 0008 (the `workspace_id` column added by
+/// issue #708). 0008 uses `DO $$ ... $$` blocks, so it must NOT be split on
+/// `;` — it is executed as a single statement.
 async fn apply_runtime_signal_migration(pool: &sqlx::PgPool) {
     let sql = include_str!("../migrations/0004_sharp_runtime_signal.sql");
     for stmt in sql.split(';') {
@@ -314,6 +321,25 @@ async fn apply_runtime_signal_migration(pool: &sqlx::PgPool) {
             .await
             .expect("runtime signal migration stmt");
     }
+
+    let ws_sql = include_str!("../migrations/0008_sharp_runtime_signal_workspace.sql");
+    sqlx::query(ws_sql)
+        .execute(pool)
+        .await
+        .expect("runtime signal workspace migration");
+}
+
+/// Seed a `public.workspaces` row and return its id, so runtime signals can
+/// satisfy the `workspace_id` FK added by 0008.
+async fn seed_workspace(pool: &sqlx::PgPool) -> Uuid {
+    sqlx::query_scalar(
+        "INSERT INTO public.workspaces (slug, display_name) VALUES ($1, $2) RETURNING id",
+    )
+    .bind(unique_name("rts-ws"))
+    .bind("Runtime Signal Test Workspace")
+    .fetch_one(pool)
+    .await
+    .expect("workspace insert failed")
 }
 
 /// Integration test: a production error is recorded as episode signal linked
@@ -332,6 +358,7 @@ async fn apply_runtime_signal_migration(pool: &sqlx::PgPool) {
 async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
     let pool = connect_pool().await;
     apply_runtime_signal_migration(&pool).await;
+    let ws_id = seed_workspace(&pool).await;
 
     // Create a repo + open episode to attach the signal to.
     let repo_name = unique_name("signal-test-repo");
@@ -347,6 +374,7 @@ async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
     // Record a production crash.
     let sig = runtime_signal::record(
         &pool,
+        ws_id,
         ep.id,
         Some(&deployment_id),
         SignalKind::Crash,
@@ -358,6 +386,7 @@ async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
     .expect("record failed");
 
     assert_eq!(sig.episode_id, ep.id);
+    assert_eq!(sig.workspace_id, ws_id, "signal must carry its workspace");
     assert_eq!(sig.deployment_id.as_deref(), Some(deployment_id.as_str()));
     assert_eq!(sig.signal_kind, "crash");
     assert_eq!(sig.source, "pod/api-server");
@@ -407,6 +436,7 @@ async fn runtime_error_is_recorded_as_episode_signal_linked_to_deployment() {
 async fn behavioral_signal_is_queryable_from_store() {
     let pool = connect_pool().await;
     apply_runtime_signal_migration(&pool).await;
+    let ws_id = seed_workspace(&pool).await;
 
     let repo_name = unique_name("behavior-test-repo");
     let r = repo::init(&pool, &repo_name)
@@ -422,6 +452,7 @@ async fn behavioral_signal_is_queryable_from_store() {
     // Record a behavior signal for deploy A.
     runtime_signal::record(
         &pool,
+        ws_id,
         ep.id,
         Some(&deploy_a),
         SignalKind::Behavior,
@@ -435,6 +466,7 @@ async fn behavioral_signal_is_queryable_from_store() {
     // Record an error signal for deploy B.
     runtime_signal::record(
         &pool,
+        ws_id,
         ep.id,
         Some(&deploy_b),
         SignalKind::Error,
@@ -448,6 +480,7 @@ async fn behavioral_signal_is_queryable_from_store() {
     // A signal with no deployment_id (unknown origin).
     runtime_signal::record(
         &pool,
+        ws_id,
         ep.id,
         None,
         SignalKind::HealthFailure,
@@ -496,8 +529,11 @@ async fn record_signal_against_missing_episode_returns_not_found() {
     apply_runtime_signal_migration(&pool).await;
 
     let missing_id = Uuid::new_v4();
+    // The episode is verified before the workspace FK is touched, so the
+    // workspace id here is arbitrary.
     let err = runtime_signal::record(
         &pool,
+        Uuid::new_v4(),
         missing_id,
         None,
         SignalKind::Error,
@@ -1414,6 +1450,74 @@ async fn merge_flow_run_merge_flow_records_episode() {
         evs[0].payload["repo"].as_str(),
         Some(repo_name.as_str()),
         "repo field must match"
+    );
+}
+
+/// **merge_flow: a non-compiling proposal is refused and NOT stored** —
+/// the loop's code-change candidate path (#706). A proposed diff whose merged
+/// result fails `cargo check` must yield `SharpError::MergeRefused`, and the
+/// candidate `merge_result` event must never be written. The episode itself is
+/// closed with a `merge_refused` audit event, but no candidate is stored.
+///
+/// Requires DATABASE_URL, applied Sharp migrations, and `cargo` on PATH.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL, applied Sharp migrations, and cargo on PATH"]
+async fn merge_flow_refuses_and_does_not_store_non_compiling_proposal() {
+    let pool = connect_pool().await;
+
+    // The proposal ("ours") introduces a deliberate type error; "theirs" matches
+    // base (no competing edit), mirroring the loop's code-change step. The merged
+    // result will not compile, so the gate must refuse it.
+    let base_src = "fn main() {}\n";
+    let bad_proposal_src = "fn main() { let _x: i32 = \"type error from proposal\"; }\n";
+
+    let (dir, main_path) = make_temp_project(bad_proposal_src);
+    let workspace_root = dir.path().to_path_buf();
+
+    let req = MergeRequest {
+        repo_name: unique_name("sharp-code-change-refused"),
+        workspace_root: workspace_root.clone(),
+        base_files: vec![FileVersion {
+            path: main_path.clone(),
+            content: base_src.to_string(),
+        }],
+        our_files: vec![FileVersion {
+            path: main_path.clone(),
+            content: bad_proposal_src.to_string(),
+        }],
+        their_files: vec![FileVersion {
+            path: main_path.clone(),
+            content: base_src.to_string(),
+        }],
+        merge_options: MergeOptions {
+            workspace_root: workspace_root.clone(),
+            rust_analyzer_path: None,
+            ra_timeout_ms: 60_000,
+        },
+        pr_title: "loop: non-compiling code change proposal".to_string(),
+    };
+
+    let result = merge_flow::run_merge_flow(&pool, req).await;
+
+    // The gate must refuse the non-compiling proposal.
+    assert!(
+        matches!(result, Err(sharp::SharpError::MergeRefused { .. })),
+        "expected MergeRefused for a non-compiling proposal, got: {result:?}"
+    );
+
+    // The candidate change must NOT be stored: no `merge_result` event exists for
+    // the refused episode (only the `merge_refused` audit event, if any).
+    let merge_result_count = sqlx::query_scalar::<_, i64>(
+        "SELECT COUNT(*) FROM sharp.episode_events WHERE event_type = 'merge_result' \
+         AND payload->>'workspace' = $1",
+    )
+    .bind(workspace_root.to_string_lossy())
+    .fetch_one(&pool)
+    .await
+    .expect("count merge_result events");
+    assert_eq!(
+        merge_result_count, 0,
+        "a refused (non-compiling) proposal must not store a merge_result candidate"
     );
 }
 

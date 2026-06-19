@@ -6,7 +6,7 @@
 //!
 //! # Architecture
 //!
-//! The loop runs seven [`GardeningStep`] variants in order, then repeats:
+//! The loop runs eight [`GardeningStep`] variants in order, then repeats:
 //!
 //! 1. `StrategyResearch` — web research on company strategy → "strategy" page revision
 //! 2. `PrdReconcile`     — reconcile PRD against research → "prd" page revision
@@ -17,6 +17,10 @@
 //! 7. `ProjectGraphDerive` — parse the gardened plan into project-graph
 //!    Feature/Issue nodes (`insert_issue`/`insert_feature`); does NOT write a
 //!    `page_revisions` row
+//! 8. `CodeChangeProposal` — select an open node, ask the agent for a source
+//!    diff, and gate it through the Sharp semantic-merge + `cargo check` gate
+//!    (`sharp::merge_flow::run_merge_flow`); a non-compiling proposal is refused
+//!    (`SharpError::MergeRefused`) and discarded, never stored (#706)
 //!
 //! Each of steps 1–6 (the page-authoring steps):
 //! - Calls [`AgentExecutor::run`] to produce content + provenance.
@@ -24,7 +28,9 @@
 //! - Commits the cursor to `orchestrator.gardening_cursor`.
 //!
 //! The seventh step (`ProjectGraphDerive`) instead derives Feature/Issue nodes
-//! from the latest plan revision and commits the cursor as usual.
+//! from the latest plan revision; the eighth (`CodeChangeProposal`) emits a
+//! validated code-change candidate through Sharp. Both commit the cursor as
+//! usual.
 //!
 //! Restarting the daemon after a crash resumes from the last committed cursor.
 //!

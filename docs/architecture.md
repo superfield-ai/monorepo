@@ -87,6 +87,7 @@ Each component owns exactly one PostgreSQL schema. All tables, indexes, sequence
 | `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                                                                                                                                     |
 | `orchestrator`    | Orchestrator    | `gardening_cursor`                                                                                                                                                                                                                                                   |
 | `substrate`       | sf-db           | `backups`                                                                                                                                                                                                                                                            |
+| `forge`           | sf-db           | `changes`, `validation_runs`                                                                                                                                                                                                                                         |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -115,7 +116,7 @@ Each component owns its schema's migrations exclusively. Migration files are col
 | Nexum        | `crates/nexum/migrations/`                                         |
 | Auth         | `crates/sf-auth/src/migrations/` (Rust crate)                      |
 | Orchestrator | `orchestrator/migrations/` (current — `0001_gardening_cursor.sql`) |
-| sf-db        | `crates/sf-db/migrations/` (substrate workspace tables)            |
+| sf-db        | `crates/sf-db/migrations/` (substrate workspace + `forge` tables)  |
 
 The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
 
@@ -159,6 +160,33 @@ ORDER  BY r.name, commit_sha, cp.path;
 ```
 
 This query compiles and executes correctly under the namespaced schema layout. It would require `dblink` or FDW if the components lived in separate Postgres databases.
+
+## Change Lifecycle and Validation Gate
+
+The Change lifecycle state machine implements PRD US13 and Constraint §9 (the validation gate). Every proposed change traverses the PRD §6 lifecycle and cannot reach `merged` without a recorded passing validation run and any policy-required approval.
+
+**States (PRD §6):**
+
+```text
+draft → validating → awaiting-approval → merged | rejected | abandoned
+```
+
+Legal transitions (terminal states — `merged`, `rejected`, `abandoned` — have no outgoing edges):
+
+| From                | Allowed next states                          |
+| ------------------- | -------------------------------------------- |
+| `draft`             | `validating`, `abandoned`                    |
+| `validating`        | `awaiting-approval`, `rejected`, `abandoned` |
+| `awaiting-approval` | `merged`, `rejected`, `abandoned`            |
+
+**Storage (`forge` schema, `crates/sf-db/migrations/0004_change_lifecycle.sql`):**
+
+- `forge.changes` — one row per change, carrying its current `state`. A `CHECK` constraint pins the legal state vocabulary at the database level.
+- `forge.validation_runs` — validation runs recorded against a change (`queued → running → passed | failed`, PRD §6). A `passed` run is the merge precondition.
+
+**Module:** `crates/sf-db/src/change.rs` owns the state machine. `ChangeState::transition(next, has_passing_validation)` is pure (no database) and enforces both the legal-transition graph and the validation gate: a `* → merged` edge is rejected with `ChangeError::ValidationGate` unless a passing validation run is recorded. `transition_change` persists a transition, deriving the `has_passing_validation` flag from the `forge.validation_runs` rows so the gate cannot be bypassed at the database layer.
+
+**Read route:** `GET /studio/changes/{id}` (`crates/sf-serve/src/routes/change.rs`, auth-required) returns a change and its current state. The policy risk evaluation and change-content generation are out of scope for this state machine and tracked separately.
 
 ### AGE graph extension
 
