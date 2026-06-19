@@ -9,6 +9,11 @@
 //! - The **causal-chain query** for error diagnosis — traverses
 //!   error → session → user → requirement → code in a single call
 //!   (`causal_chain` module, issue #382).
+//! - The **runtime-signal feeder** — projects a deployed app's errors and
+//!   health signals (`sharp.runtime_signals`) into `nexum.entities` /
+//!   `nexum.relations`, joined to the deployment that produced them, so an
+//!   agent can reach from a production signal to its requirement and code
+//!   (`runtime_signal_projection` module, issue #708).
 //!
 //! All operations run in-process against the shared Postgres instance via
 //! `sf-db` and the governed 384-dim embedding model via the in-crate
@@ -46,6 +51,7 @@ pub mod ingest;
 pub mod links;
 pub mod parse;
 pub mod query;
+pub mod runtime_signal_projection;
 
 pub use ai_link::{classify_pair, process_ai_links, AiLinkError};
 pub use causal_chain::{error_to_cause_chain, CausalChain, CausalChainError, ChainNode};
@@ -55,4 +61,8 @@ pub use query::{
     edge_semantic_search, fulltext_search, graph_search, hybrid_search, semantic_search,
     BlockResult, DocRef, EdgeBlockRef, EdgeProbe, EdgeResult, EdgeSemanticOptions, FullTextOptions,
     GraphOptions, GraphResult, HybridOptions, QueryError, SemanticOptions,
+};
+pub use runtime_signal_projection::{
+    project_runtime_signal, ProjectedSignal, ProjectionError, DEPLOYMENT_ENTITY_TYPE,
+    OBSERVED_ON_RELATION, SIGNAL_ENTITY_TYPE,
 };

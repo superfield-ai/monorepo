@@ -116,3 +116,49 @@ Verify (no DB — SSE/router-wiring + mapping + e2e-gate unit tests):
 cargo test -p sf-serve -p superfield
 cargo clippy -p sf-serve -p superfield --all-targets -- -D warnings
 ```
+
+---
+
+## Runtime-signal feeder: production signals projected into the brain (issue #708)
+
+A deployed app's errors and health signals are recorded by the producer
+(`sharp::runtime_signal::record`) to `sharp.runtime_signals` and projected by
+the feeder (`nexum::runtime_signal_projection::project_runtime_signal`) into
+`nexum.entities`/`nexum.relations`: a `runtime_signal` entity joined to a
+`deployment` entity via an `observed_on` relation, all scoped to the signal's
+`workspace_id`. Signals now carry `workspace_id` (sharp migration
+`0008_sharp_runtime_signal_workspace.sql`; threaded through `record`,
+`RuntimeSignal`, and the queries) so a cross-workspace read cannot surface
+another tenant's signals. The deployment node is reused across signals. The TS
+`RuntimeSignalSource` is no longer `implemented:false`; the exported
+`RUNTIME_SIGNAL_SOURCE` descriptor names the producer + feeder.
+
+Key files:
+
+- `crates/sharp/src/runtime_signal.rs` — `record` (now takes `workspace_id`),
+  `RuntimeSignal.workspace_id`, queries select `workspace_id`.
+- `crates/sharp/migrations/0008_sharp_runtime_signal_workspace.sql` — adds
+  `workspace_id UUID NOT NULL` + FK to `public.workspaces`.
+- `crates/nexum/src/runtime_signal_projection.rs` — `project_runtime_signal`,
+  `SIGNAL_ENTITY_TYPE`/`DEPLOYMENT_ENTITY_TYPE`/`OBSERVED_ON_RELATION`.
+- `packages/core/commands/deploy.ts` — `RUNTIME_SIGNAL_SOURCE`
+  (`implemented: true`).
+
+Verify (no DB — unit tests + CI gates):
+
+```bash
+cargo test -p sharp -p nexum --lib
+cargo clippy -p sharp -p nexum --all-targets -- -D warnings
+bun --bun vitest run packages/core/tests/unit/deploy-command.test.ts
+```
+
+Verify with a database (DB-gated `#[ignore]` tests — signal becomes a nexum
+entity joinable to its deployment id; cross-workspace read does not surface it).
+Requires Postgres with the sharp + nexum migrations (incl. 0008 and sf-db
+`0003_workspace_id_threading.sql`) applied:
+
+```bash
+DATABASE_URL=postgres://… cargo test -p sharp -p nexum -- --ignored --test-threads=1 \
+  signal_projects_to_entity_joinable_to_deployment \
+  runtime_error_is_recorded_as_episode_signal_linked_to_deployment
+```
