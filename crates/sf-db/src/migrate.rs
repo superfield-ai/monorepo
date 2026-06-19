@@ -33,7 +33,9 @@
 //! must run after all component tables exist. The TS migrator applies them last
 //! (from `packages/db/migrations`, which this runner does NOT walk); to mirror
 //! that ordering, the appliance copy lives in the **last** component directory
-//! as `crates/sharp/migrations/0008_rls_workspace_isolation.sql`. See
+//! as `crates/sharp/migrations/0009_rls_workspace_isolation.sql` (the
+//! highest-numbered sharp migration, so it sorts after later sharp schema files
+//! such as `0008_sharp_runtime_signal_workspace.sql`). See
 //! `docs/architecture.md` §Cross-component joins and RLS scoping and issue #710.
 //!
 //! # Idempotency

@@ -169,7 +169,7 @@ DATABASE_URL=postgres://… cargo test -p sharp -p nexum -- --ignored --test-thr
 
 The appliance daemon's in-process migration runner (`crates/sf-db/src/migrate.rs`,
 COMPONENT_DIRS order `sf-db → sf-auth → nexum → sharp`) now applies the
-workspace-isolation RLS policies via `crates/sharp/migrations/0008_rls_workspace_isolation.sql`
+workspace-isolation RLS policies via `crates/sharp/migrations/0009_rls_workspace_isolation.sql`
 (mirrored into the LAST component dir so it runs after every schema exists). It
 creates a BYPASSRLS `superfield_admin` role, self-ensures the `workspace_id`
 column, and ENABLE+FORCE RLS with four CRUD policies keyed on `app.workspace_id`

@@ -1,4 +1,4 @@
--- Migration: 0008_rls_workspace_isolation
+-- Migration: 0009_rls_workspace_isolation
 -- Owner: cross-cutting substrate concern, mirrored into the last component
 --        directory (sharp) so the appliance boot migration runner applies it.
 --
@@ -14,10 +14,14 @@
 --   handlers set the workspace session variable but no policy read it
 --   (architecture.md §Cross-component joins and RLS scoping, issue #710).
 --
---   Placing the policies in the LAST component directory (sharp) guarantees
---   they run after every component schema (sf-db, auth, nexum, sharp) has been
---   created, mirroring the TS migrator's "RLS applied last" ordering. The
---   recorded migration id is `sharp/0008_rls_workspace_isolation`.
+--   Placing the policies in the LAST component directory (sharp) AND as its
+--   highest-numbered file guarantees they run after every component schema
+--   (sf-db, auth, nexum, sharp) has been created — including later sharp
+--   migrations such as 0008_sharp_runtime_signal_workspace.sql — mirroring the
+--   TS migrator's "RLS applied last" ordering. The runner sorts files within a
+--   component by ascending filename, so this file MUST keep the highest 00NN
+--   prefix in crates/sharp/migrations. The recorded migration id is
+--   `sharp/0009_rls_workspace_isolation`.
 --
 -- SESSION CONTRACT:
 --   Policies are keyed on the PostgreSQL session variable `app.workspace_id`,
@@ -91,6 +95,10 @@ BEGIN
   FOREACH tbl IN ARRAY ARRAY[
     -- sharp schema
     'sharp.repos',
+    'sharp.runtime_signals',
+    -- forge schema (autonomous change loop, sf-db/0004_change_lifecycle)
+    'forge.changes',
+    'forge.validation_runs',
     -- nexum schema
     'nexum.corpora',
     'nexum.documents',

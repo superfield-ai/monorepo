@@ -38,7 +38,7 @@ fn set_workspace_sql(workspace: &str) -> String {
 
 /// The migration id under test — the RLS file mirrored into the last component
 /// directory so the appliance runner applies it after every schema exists.
-const RLS_MIGRATION_ID: &str = "sharp/0008_rls_workspace_isolation";
+const RLS_MIGRATION_ID: &str = "sharp/0009_rls_workspace_isolation";
 
 /// Locate a Postgres bin dir with `initdb`, or `None` to skip the test.
 fn pg_bin_dir_or_skip() -> Option<PathBuf> {
