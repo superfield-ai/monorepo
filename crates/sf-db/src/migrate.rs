@@ -27,6 +27,15 @@
 //! migrator, so a database migrated by either runner is recognised by the
 //! other.
 //!
+//! # Cross-cutting migrations run last
+//!
+//! The workspace-isolation RLS policies span tables in every schema, so they
+//! must run after all component tables exist. The TS migrator applies them last
+//! (from `packages/db/migrations`, which this runner does NOT walk); to mirror
+//! that ordering, the appliance copy lives in the **last** component directory
+//! as `crates/sharp/migrations/0008_rls_workspace_isolation.sql`. See
+//! `docs/architecture.md` §Cross-component joins and RLS scoping and issue #710.
+//!
 //! # Idempotency
 //!
 //! The runner creates `schema_migrations` if absent, reads the set of applied
