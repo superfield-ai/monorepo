@@ -23,6 +23,17 @@ The full algebraic comparison of CRDTs, patch theory, and `jj`'s conflict repres
 lives in [`comparison-merge-theories.md`](./comparison-merge-theories.md); this doc is the
 focused architectural decision that falls out of it.
 
+**Scope.** This decision is scoped to v1's substrate. It chooses snapshots over a
+_line-graph_ patch substrate (Darcs/Pijul) — the choice between the two cells of the
+table's _lexical_ row, lifted to a semantic merge altitude. It does not settle the
+distinct, larger question of whether the canonical store should become a _semantic_ patch
+substrate (history as first-class symbol-level operations rather than snapshots). That is
+the unoccupied lower-right cell of the
+[`comparison-merge-theories.md`](./comparison-merge-theories.md) §4.5 matrix, and it is
+analyzed as Sharp's post-v1 fork in [`semantic-patches.md`](./semantic-patches.md). Where
+this document says "snapshots win," read "for v1's substrate, against a line-graph patch
+model" — not "against a semantic patch model," which is a separate decision held open.
+
 ---
 
 ## 1. The temptation is real
@@ -144,6 +155,19 @@ any order yields the same projection) and _associativity_ (incremental recompute
 from-scratch recompute) — rather than inheriting them as axioms. Where Tier 1 cannot honor
 them, that is a finding, not a shrug. You don't get to inherit a proof for a layer you are
 not operating on; you earn the property by testing the engine you actually ship.
+
+This is the honest answer _for a snapshot substrate_, and it is the right answer for v1.
+It is not the only possible answer. If history were recorded as first-class _semantic_
+operations rather than snapshots, order-independence would not be a corpus obligation but a
+consequence of the language-defined dependency relation between operations: two operations
+with disjoint symbol-level read/write sets commute by construction, and the rename-versus-
+signature-change pair that does _not_ commute is _identified_ as dependent rather than
+approximated as adjacent. The patch-theory laws return as near-theorems at the semantic
+layer, where Pijul could only prove them at the line layer — because the symbol graph
+supplies the read/write sets a line-graph structurally lacks. That is a different
+substrate, not a different merge engine, and it is deferred out of v1 and analyzed in
+[`semantic-patches.md`](./semantic-patches.md). Within the snapshot substrate this section
+commits to, the laws remain test obligations.
 
 ---
 

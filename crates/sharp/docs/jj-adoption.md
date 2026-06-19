@@ -137,7 +137,10 @@ needs a handle during the transition.
 
 **Why it matters for agents.** Agents inventing branch names
 (`feat/fix-login-attempt-7-final-v2`) is pure ceremony plus a collision and
-namespace-pollution surface. Names are for people; identity is for the data model.
+namespace-pollution surface. Names are for people; identity is for the data model. The
+deeper consequence — that a branch is then a _labeled set of diffs_ rather than a sequence
+of commits, with collapse as non-destructive set union — is developed in
+[`branch-semantics.md`](./branch-semantics.md).
 
 ## 8. A history algebra: the revset vocabulary as SQL functions
 
@@ -161,9 +164,14 @@ was.
 ## Considered and not adopted
 
 - **Pluggable storage backends.** `jj`'s backend abstraction validates that
-  database-native storage is not heresy, and we take the lesson of keeping the harness
-  API abstracted from storage — but Sharp stays Postgres-only by design (whitepaper
-  §2.2). Our workload wants one query engine, not a portability layer.
+  database-native storage is not heresy, and we take the lesson of keeping storage behind
+  a clean boundary — but Sharp ships and optimizes exactly one substrate, Postgres
+  (whitepaper §2.2). The distinction is that Sharp's boundary is _loose coupling_, not
+  `jj`'s _portability layer_: one first-class implementation that exploits Postgres fully,
+  not a maintained abstraction held to the intersection of several backends. Alternative
+  substrates are an admissible, unsupported extension direction — the object/ref plane
+  ports, the query/provenance plane is the reason Postgres is the floor. Our workload wants
+  one query engine, not a portability layer. See [`storage-substrate.md`](./storage-substrate.md).
 - **CLI-first interaction and revsets as a user interface.** Sharp's primary surface is
   library + HTTP + SQL (§2.5 of the comparison doc). We adopt the revset _vocabulary_
   (§8 above), not the terminal-first posture.

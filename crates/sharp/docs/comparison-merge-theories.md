@@ -137,7 +137,77 @@ it is not.
 
 The last row is the quiet headline: **all three lineages are syntactic.** They reason
 about sets, lines, graphs, and trees — never about symbols, types, or whether the merged
-program compiles. Whatever Sharp borrows, the semantic tiers are additive on top.
+program compiles. The tempting reading of this row — _"whatever Sharp borrows, the
+semantic tier is additive on top"_ — is exactly the framing the whitepaper's root axiom
+(§1.1) rejects. The semantic layer is not an addition to a VCS; it is the property a
+syntactic VCS was relying on a human to supply. The row does not name a feature these
+systems happen to lack — it names the altitude at which they decline to decide
+independence, and which an agent-first VCS, having no human to decide it instead, must
+occupy. Read that way, the row is not a footnote to the table; it is the axis the table
+was missing.
+
+## 4.5 The two axes are orthogonal
+
+The table's first row (unit of history) and its last row (semantic awareness) are two
+_independent_ design axes, routinely collapsed into one. The unit of history can be a
+snapshot or a first-class patch; the merge altitude can be lexical or semantic. Nothing
+ties the choices together. Crossed, they give four cells:
+
+|                   | **Snapshot / derived diff** | **Patch / first-class change** |
+| ----------------- | --------------------------- | ------------------------------ |
+| **Lexical atom**  | Git, Jujutsu                | Darcs, Pijul                   |
+| **Semantic atom** | **Sharp v1**                | **— unoccupied —**             |
+
+Sharp v1 is the lower-left cell: a snapshot substrate with a semantic merge altitude — a
+combination no prior system ships, and the whole of the
+[`snapshots-vs-patches.md`](./snapshots-vs-patches.md) decision. The lower-right cell —
+history as first-class _semantic_ operations, whose commutation the language _decides_
+rather than a line theory _approximates_ — is occupied by no shipping system. It is the
+only cell that differentiates against Git, Jujutsu, and Pijul at once, and it is where
+Pijul's hardest unsolved problem (sound commutation of line-patches) is dissolved rather
+than inherited, because a semantic operation carries its dependency relation with it where
+a line carries none. That cell is Sharp's named post-v1 fork, analyzed in
+[`semantic-patches.md`](./semantic-patches.md). The rest of this document analyzes the row
+Sharp lives in today; that document analyzes the column it could move along next.
+
+## 4.6 The other neighbor: the software-merge literature
+
+The three lineages above are merge _algebras_ — they reason about how changes combine in the
+abstract. Sharp's _other_ prior art is the software-merge research line, which has studied
+merging at exactly Sharp's altitude (syntactic and semantic structure) since the early
+1990s. It is the neighbor the root axiom (whitepaper §1.1) actually argues within, and it
+must be acknowledged honestly, because it both bounds Sharp's novelty and tempers its
+thesis. (Mens, _A State-of-the-Art Survey on Software Merging_, IEEE TSE 2002, gives the
+canonical taxonomy: textual / syntactic / semantic / operation-based merge.)
+
+- **Operation-based merge** (Lippe & van Oosterom, 1992) records edit _operations_ rather
+  than diffing states, and merges by replaying them. This is the direct ancestor of
+  [`semantic-patches.md`](./semantic-patches.md)'s "history as declared operations." Sharp's
+  contribution is not the operation-based model; it is capturing those operations from an
+  agent harness — which a human-facing VCS cannot — and deciding their independence by
+  serializability over the symbol graph.
+- **Refactoring-aware merge** (Dig et al., _MolhadoRef_, 2007) treats renames and moves as
+  first-class refactoring operations with language-computed effects — precisely Sharp's
+  "declared structural operation with a reference set." Sharp owes, and gives, its delta:
+  agent capture, the verification gate, and episodes.
+- **Structured / semistructured merge** (Apel et al., _Structured Merge with Auto-Tuning_,
+  JDime, ASE 2012; Cavalcanti, Borba & Accioly, OOPSLA 2017; Spork, 2021) merges over ASTs.
+  Its _empirical_ findings are the cautionary part: structured merge reduces conflicts
+  **meaningfully but partially**, is **expensive** (JDime auto-tunes specifically to fall
+  back to cheap textual merge where it can), and the conflict-mining studies find a
+  substantial fraction of real conflicts are **genuine** semantic disagreements that no
+  structure dissolves.
+- **Commercial language-aware merge** (SemanticMerge / Plastic SCM `gmaster`, c. 2013)
+  shipped working language-aware merge for mainstream languages and saw **limited adoption** —
+  a precedent a design betting on semantic merge must answer, not ignore.
+
+The consequence for this document and for whitepaper §1.1: the table's lineages reason
+_below_ symbols, and the software-merge literature has already shown that moving _up_ to
+symbols dissolves the spurious conflict class at real-but-bounded benefit and non-trivial
+cost. Sharp's wager is that the agent-first setting shifts the cost/benefit — operations are
+captured, not reconstructed ([`semantic-patches.md`](./semantic-patches.md) §6), and there is
+no human to absorb the spurious class for free — **not** that semantic merge is itself novel.
+That distinction belongs wherever the thesis is stated.
 
 ## 5. What Sharp takes from each
 

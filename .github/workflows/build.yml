@@ -7,12 +7,14 @@ on:
       - "**/*.md"
       - "docs/**"
       - "blueprint"
+      - ".github/workflows/**"
   pull_request:
     branches: [main]
     paths-ignore:
       - "**/*.md"
       - "docs/**"
       - "blueprint"
+      - ".github/workflows/**"
 
 concurrency:
   group: build-${{ github.ref }}
