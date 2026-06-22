@@ -1,0 +1,18 @@
+[package]
+name = "sf-connector"
+description = "Read-only systems-of-record connector seam: a Connector trait with no write path, a workspace-scoped credential schema, and a reference connector exercised against an in-memory fake source"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+uuid = { workspace = true, features = ["serde"] }
+thiserror = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+uuid = { workspace = true }
