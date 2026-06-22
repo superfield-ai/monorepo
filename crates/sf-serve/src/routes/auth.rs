@@ -36,19 +36,34 @@ pub struct IssueSessionRequest {
 }
 
 /// String role for JSON deserialization.
+///
+/// Accepts the seven canonical PRD §3 roles plus the two legacy aliases
+/// (`admin` → Owner, `member` → Collaborator) so existing clients keep working.
 #[derive(Debug, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum RoleInput {
-    Admin,
-    Member,
+    Owner,
+    Requestor,
+    Steerer,
+    Collaborator,
+    Agent,
+    Auditor,
     Viewer,
+    /// Legacy alias for [`Role::Owner`].
+    Admin,
+    /// Legacy alias for [`Role::Collaborator`].
+    Member,
 }
 
 impl From<RoleInput> for Role {
     fn from(r: RoleInput) -> Role {
         match r {
-            RoleInput::Admin => Role::Admin,
-            RoleInput::Member => Role::Member,
+            RoleInput::Owner | RoleInput::Admin => Role::Owner,
+            RoleInput::Requestor => Role::Requestor,
+            RoleInput::Steerer => Role::Steerer,
+            RoleInput::Collaborator | RoleInput::Member => Role::Collaborator,
+            RoleInput::Agent => Role::Agent,
+            RoleInput::Auditor => Role::Auditor,
             RoleInput::Viewer => Role::Viewer,
         }
     }
@@ -193,7 +208,7 @@ pub async fn register(
 
     match state
         .session_store()
-        .issue(workspace_id, user_id, Role::Admin)
+        .issue(workspace_id, user_id, Role::Owner)
         .await
     {
         Ok(session) => {

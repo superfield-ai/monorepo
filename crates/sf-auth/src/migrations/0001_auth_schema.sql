@@ -20,7 +20,14 @@ CREATE TABLE IF NOT EXISTS auth.sessions (
     token        UUID        PRIMARY KEY,
     workspace_id UUID        NOT NULL,
     user_id      UUID        NOT NULL,
-    role         TEXT        NOT NULL CHECK (role IN ('admin', 'member', 'viewer')),
+    -- Seven PRD §3 roles. The two legacy names ('admin', 'member') remain
+    -- accepted so sessions issued before the full role model keep validating;
+    -- sf_auth::session::parse_role maps them onto 'owner'/'collaborator'.
+    role         TEXT        NOT NULL CHECK (role IN (
+                     'owner', 'requestor', 'steerer', 'collaborator',
+                     'agent', 'auditor', 'viewer',
+                     'admin', 'member'
+                 )),
     issued_at    TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     expires_at   TIMESTAMPTZ NOT NULL,
     revoked      BOOLEAN     NOT NULL DEFAULT FALSE

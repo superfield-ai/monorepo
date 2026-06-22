@@ -12,27 +12,98 @@ use uuid::Uuid;
 
 /// The role of an authenticated principal within a workspace.
 ///
-/// Roles are coarse-grained at the auth layer; fine-grained permissions are
-/// enforced by RLS policies in each component schema.
+/// These are the seven roles defined in PRD §3 (User Roles). The role model
+/// is the *same* across both surfaces — the delivered app and the control
+/// panel — so a person's permissions are consistent wherever they act
+/// (PRD §3, US12).
+///
+/// Roles are coarse-grained at the auth layer; route-level authorization
+/// ([`Role::can_write`] / [`Role::is_owner`]) gates HTTP routes, and
+/// fine-grained data isolation is enforced by RLS policies in each component
+/// schema.
+///
+/// # Capability summary
+///
+/// | Role         | Read | Write | Set policy (Owner-only) |
+/// |--------------|------|-------|-------------------------|
+/// | Owner        | yes  | yes   | yes                     |
+/// | Requestor    | yes  | yes   | no                      |
+/// | Steerer      | yes  | yes   | no                      |
+/// | Collaborator | yes  | yes   | no                      |
+/// | Agent        | yes  | yes   | no                      |
+/// | Auditor      | yes  | no    | no                      |
+/// | Viewer       | yes  | no    | no                      |
+///
+/// See `docs/prd.md` §3 User Roles.
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum Role {
-    /// Full administrative access to the workspace.
-    Admin,
-    /// Standard member access — can read and write within the workspace.
-    Member,
-    /// Read-only viewer access.
+    /// Owner / Sponsor — provisions and governs the Forge; the only role that
+    /// may set policy (PRD §3).
+    Owner,
+    /// Requestor (business unit) — owns an unserved need, requests an app, and
+    /// operates it once it exists.
+    Requestor,
+    /// Steerer (Product / Engineering lead) — directs agent work and reviews
+    /// or approves gated changes.
+    Steerer,
+    /// Collaborator — proposes and reviews changes within a workspace and
+    /// operates the software so its behavior becomes signal.
+    Collaborator,
+    /// Agent — a first-class, non-human actor that reads the brain and writes
+    /// observations, candidate changes, validation results, and outcomes,
+    /// acting only within the policy set by the Owner.
+    Agent,
+    /// Auditor / Compliance reviewer — read-only access to the full history of
+    /// changes, decisions, and the reasons behind them.
+    Auditor,
+    /// Viewer — read-only access to project state.
     Viewer,
 }
+
+/// The complete set of PRD §3 roles, in declaration order.
+///
+/// Used by tests to assert the role model has exactly the seven roles the PRD
+/// requires.
+pub const ALL_ROLES: [Role; 7] = [
+    Role::Owner,
+    Role::Requestor,
+    Role::Steerer,
+    Role::Collaborator,
+    Role::Agent,
+    Role::Auditor,
+    Role::Viewer,
+];
 
 impl Role {
     /// Return the string identifier stored in the database and used in RLS.
     pub fn as_str(&self) -> &'static str {
         match self {
-            Role::Admin => "admin",
-            Role::Member => "member",
+            Role::Owner => "owner",
+            Role::Requestor => "requestor",
+            Role::Steerer => "steerer",
+            Role::Collaborator => "collaborator",
+            Role::Agent => "agent",
+            Role::Auditor => "auditor",
             Role::Viewer => "viewer",
         }
+    }
+
+    /// Whether this role may perform write operations (create / mutate state).
+    ///
+    /// Auditor and Viewer are read-only (PRD §3); every other role may write
+    /// within the policy set by the Owner.
+    pub fn can_write(&self) -> bool {
+        !matches!(self, Role::Auditor | Role::Viewer)
+    }
+
+    /// Whether this role may set workspace policy.
+    ///
+    /// Only the Owner sets policy — "what counts as a valid correction, what
+    /// risk level may ship without human review, and what requires sign-off"
+    /// (PRD §3).
+    pub fn is_owner(&self) -> bool {
+        matches!(self, Role::Owner)
     }
 }
 
@@ -97,18 +168,22 @@ mod tests {
     fn principal_id_format() {
         let ws = Uuid::parse_str("00000000-0000-0000-0000-000000000001").unwrap();
         let user = Uuid::parse_str("00000000-0000-0000-0000-000000000002").unwrap();
-        let ctx = AuthContext::new(ws, user, Role::Member);
+        let ctx = AuthContext::new(ws, user, Role::Collaborator);
         assert_eq!(
             ctx.principal_id(),
             "00000000-0000-0000-0000-000000000001/00000000-0000-0000-0000-000000000002"
         );
-        assert_eq!(ctx.role, Role::Member);
+        assert_eq!(ctx.role, Role::Collaborator);
     }
 
     #[test]
     fn role_display() {
-        assert_eq!(Role::Admin.to_string(), "admin");
-        assert_eq!(Role::Member.to_string(), "member");
+        assert_eq!(Role::Owner.to_string(), "owner");
+        assert_eq!(Role::Requestor.to_string(), "requestor");
+        assert_eq!(Role::Steerer.to_string(), "steerer");
+        assert_eq!(Role::Collaborator.to_string(), "collaborator");
+        assert_eq!(Role::Agent.to_string(), "agent");
+        assert_eq!(Role::Auditor.to_string(), "auditor");
         assert_eq!(Role::Viewer.to_string(), "viewer");
     }
 
@@ -116,8 +191,41 @@ mod tests {
     fn context_workspace_and_user_ids_preserved() {
         let ws = Uuid::new_v4();
         let user = Uuid::new_v4();
-        let ctx = AuthContext::new(ws, user, Role::Admin);
+        let ctx = AuthContext::new(ws, user, Role::Owner);
         assert_eq!(ctx.workspace_id, ws);
         assert_eq!(ctx.user_id, user);
+    }
+
+    /// PRD §3 mandates exactly seven roles. Guard against drift.
+    #[test]
+    fn role_model_has_exactly_seven_roles() {
+        assert_eq!(ALL_ROLES.len(), 7);
+        // Every role's wire string is unique.
+        let mut seen = std::collections::HashSet::new();
+        for role in &ALL_ROLES {
+            assert!(seen.insert(role.as_str()), "duplicate role: {}", role);
+        }
+        assert_eq!(seen.len(), 7);
+    }
+
+    /// Auditor and Viewer are read-only; all five other roles may write.
+    #[test]
+    fn write_capability_matches_prd() {
+        assert!(Role::Owner.can_write());
+        assert!(Role::Requestor.can_write());
+        assert!(Role::Steerer.can_write());
+        assert!(Role::Collaborator.can_write());
+        assert!(Role::Agent.can_write());
+        assert!(!Role::Auditor.can_write());
+        assert!(!Role::Viewer.can_write());
+    }
+
+    /// Only the Owner may set policy.
+    #[test]
+    fn only_owner_sets_policy() {
+        assert!(Role::Owner.is_owner());
+        for role in ALL_ROLES.iter().filter(|r| **r != Role::Owner) {
+            assert!(!role.is_owner(), "{} must not be owner", role);
+        }
     }
 }

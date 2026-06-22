@@ -193,12 +193,20 @@ pub fn parse(args: &[String]) -> Result<Cmd, CliError> {
             let workspace_id = ws.parse::<Uuid>()?;
             let user_id = uid.parse::<Uuid>()?;
             let role = match role_str.as_str() {
-                "admin" => sf_auth::Role::Admin,
-                "member" => sf_auth::Role::Member,
+                "owner" => sf_auth::Role::Owner,
+                "requestor" => sf_auth::Role::Requestor,
+                "steerer" => sf_auth::Role::Steerer,
+                "collaborator" => sf_auth::Role::Collaborator,
+                "agent" => sf_auth::Role::Agent,
+                "auditor" => sf_auth::Role::Auditor,
                 "viewer" => sf_auth::Role::Viewer,
+                // Legacy aliases.
+                "admin" => sf_auth::Role::Owner,
+                "member" => sf_auth::Role::Collaborator,
                 other => {
                     return Err(CliError::Usage(format!(
-                        "unknown role '{}'; expected admin|member|viewer",
+                        "unknown role '{}'; expected owner|requestor|steerer|\
+                         collaborator|agent|auditor|viewer",
                         other
                     )))
                 }
@@ -485,10 +493,10 @@ mod tests {
     }
 
     #[test]
-    fn parse_session_issue_admin() {
+    fn parse_session_issue_owner() {
         let ws = "00000000-0000-0000-0000-000000000001";
         let uid = "00000000-0000-0000-0000-000000000002";
-        let cmd = parse(&args(&["session", "issue", ws, uid, "admin"])).unwrap();
+        let cmd = parse(&args(&["session", "issue", ws, uid, "owner"])).unwrap();
         match cmd {
             Cmd::SessionIssue {
                 workspace_id,
@@ -497,7 +505,7 @@ mod tests {
             } => {
                 assert_eq!(workspace_id.to_string(), ws);
                 assert_eq!(user_id.to_string(), uid);
-                assert_eq!(role, sf_auth::Role::Admin);
+                assert_eq!(role, sf_auth::Role::Owner);
             }
             other => panic!("unexpected: {:?}", other),
         }

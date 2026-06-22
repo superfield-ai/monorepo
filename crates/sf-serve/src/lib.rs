@@ -38,6 +38,7 @@
 
 pub mod agent;
 pub mod auth;
+pub mod authz;
 pub mod error;
 pub mod loop_handle;
 pub mod orchestrator_state;
@@ -60,6 +61,7 @@ use tokio::net::TcpListener;
 use tower_http::services::{ServeDir, ServeFile};
 
 pub use auth::auth_middleware;
+pub use authz::{require_owner, require_write};
 pub use error::ServeError;
 pub use loop_handle::{LoopHandle, LoopHandleError, NoopLoopHandle};
 pub use orchestrator_state::{

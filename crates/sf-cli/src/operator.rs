@@ -106,8 +106,8 @@ mod tests {
     #[test]
     fn role_roundtrip() {
         use sf_auth::Role;
-        assert_eq!(Role::Admin.as_str(), "admin");
-        assert_eq!(Role::Member.as_str(), "member");
+        assert_eq!(Role::Owner.as_str(), "owner");
+        assert_eq!(Role::Collaborator.as_str(), "collaborator");
         assert_eq!(Role::Viewer.as_str(), "viewer");
     }
 }
