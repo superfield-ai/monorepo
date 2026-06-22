@@ -13,6 +13,7 @@
 //! | GET    | `/analytics/loops`              | Per-loop (plan/dev/doc) health           |
 //! | GET    | `/analytics/slots`              | Active work slots                        |
 //! | GET    | `/orchestrator/logs`            | SSE: live log tail                       |
+//! | GET    | `/analytics/check-runs`         | Non-stream CI check-runs for one `sha`   |
 //! | GET    | `/analytics/check-runs/stream`  | SSE: live CI/check-run feed              |
 //! | POST   | `/orchestrator/start`           | Start the loop                           |
 //! | POST   | `/orchestrator/stop`            | Stop (drain) the loop                    |
@@ -35,7 +36,7 @@
 use std::convert::Infallible;
 
 use axum::{
-    extract::State,
+    extract::{Query, State},
     middleware,
     response::{
         sse::{Event, KeepAlive, Sse},
@@ -107,6 +108,43 @@ pub async fn logs_stream(
         Err(_) => None,
     });
     Sse::new(stream).keep_alive(KeepAlive::default())
+}
+
+/// Query parameters for `GET /analytics/check-runs`.
+#[derive(Debug, Deserialize)]
+pub struct CheckRunsQuery {
+    /// The commit SHA whose check-runs are requested.
+    pub sha: String,
+}
+
+/// `GET /analytics/check-runs?sha=<sha>` — non-stream CI check-runs for one
+/// commit.
+///
+/// Returns the check-run results for `sha` as a JSON envelope matching the
+/// control-panel `CheckRunsResponse` interface
+/// (`packages/control/apps/src/lib/check-runs.ts`):
+///
+/// ```json
+/// { "checkRuns": [ { "name": "...", "status": "...", "conclusion": "..." } ] }
+/// ```
+///
+/// `TurnTimeline.tsx` (CheckRunBadge) and `VisualDiffPanel.tsx`
+/// (TestOutputPane) poll this route to render real CI status for a commit
+/// rather than silently failing.
+///
+/// **Producerless in v0**: the producer of check-run data (A7) is a separate
+/// feature in this phase, so this route returns a well-formed envelope with an
+/// empty `checkRuns` array until that producer lands. The route is auth-required
+/// and workspace-scoped (the auth middleware injects the [`AuthContext`]); a
+/// request without a valid session token never reaches this handler and is
+/// rejected with `401` by the middleware.
+pub async fn check_runs(
+    State(_state): State<AppState>,
+    Extension(_ctx): Extension<AuthContext>,
+    Query(_query): Query<CheckRunsQuery>,
+) -> impl IntoResponse {
+    // No producer is wired in v0; return the documented empty envelope.
+    Json(json!({ "checkRuns": [] }))
 }
 
 /// `GET /analytics/check-runs/stream` — SSE stream of CI/check-run events.
@@ -199,6 +237,7 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/analytics/loops", get(loops))
         .route("/analytics/slots", get(slots))
+        .route("/analytics/check-runs", get(check_runs))
         .route("/analytics/check-runs/stream", get(check_runs_stream))
         .with_state(state)
 }
@@ -421,6 +460,55 @@ mod tests {
         state.orchestrator().publish_log("ci: build ok");
         let got = rx.recv().await.expect("recv");
         assert_eq!(got, "ci: build ok");
+    }
+
+    /// `GET /analytics/check-runs?sha=<sha>` returns `200` with the documented
+    /// `{ "checkRuns": [...] }` JSON envelope (acceptance: API test for the
+    /// JSON envelope). v0 is producerless, so the array is empty but the
+    /// envelope is well-formed and parseable by `CheckRunsResponse`.
+    #[tokio::test]
+    async fn check_runs_returns_json_envelope() {
+        let state = lazy_state();
+        let resp = router_with(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/analytics/check-runs?sha=deadbeef")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::OK);
+        let ct = resp
+            .headers()
+            .get("content-type")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or_default()
+            .to_string();
+        assert!(ct.starts_with("application/json"), "got content-type {ct}");
+        let j = body_json(resp).await;
+        assert!(
+            j["checkRuns"].is_array(),
+            "checkRuns must be a JSON array, got {j}"
+        );
+        assert_eq!(j["checkRuns"].as_array().unwrap().len(), 0);
+    }
+
+    /// `GET /analytics/check-runs` without a `sha` query parameter is a bad
+    /// request — the `sha` is required to identify the commit.
+    #[tokio::test]
+    async fn check_runs_without_sha_is_rejected() {
+        let state = lazy_state();
+        let resp = router_with(state)
+            .oneshot(
+                Request::builder()
+                    .uri("/analytics/check-runs")
+                    .body(Body::empty())
+                    .unwrap(),
+            )
+            .await
+            .unwrap();
+        assert_eq!(resp.status(), StatusCode::BAD_REQUEST);
     }
 
     /// `GET /analytics/check-runs/stream` is an SSE stream that emits a

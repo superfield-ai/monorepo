@@ -205,6 +205,39 @@ mod integration {
         );
     }
 
+    /// `GET /analytics/check-runs?sha=<sha>` requires auth: a request without a
+    /// session token is rejected with 401 by the auth middleware before it ever
+    /// reaches the handler (acceptance: API test for auth on the non-stream CI
+    /// route, issue #713).
+    ///
+    /// Like the other middleware-path tests this needs the auth schema, so it is
+    /// `#[ignore]`d unless DATABASE_URL is set.
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with auth schema migrated"]
+    async fn check_runs_unauthenticated_returns_401() {
+        let (router, _) = match make_test_router().await {
+            Some(t) => t,
+            None => {
+                eprintln!("skip: DATABASE_URL not set");
+                return;
+            }
+        };
+
+        // No token provided.
+        let req = Request::builder()
+            .method(Method::GET)
+            .uri("/analytics/check-runs?sha=deadbeef")
+            .body(Body::empty())
+            .unwrap();
+
+        let resp = router.oneshot(req).await.unwrap();
+        assert_eq!(
+            resp.status(),
+            StatusCode::UNAUTHORIZED,
+            "missing token must yield 401 on /analytics/check-runs"
+        );
+    }
+
     /// Unit-style test: revoked session is rejected with 401.
     ///
     /// Issues a session, revokes it, then confirms a request with the revoked
