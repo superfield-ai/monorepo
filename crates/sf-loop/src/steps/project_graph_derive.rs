@@ -35,7 +35,7 @@
 //! empty (no `ISSUE:` lines), leaving the cursor to advance without writing.
 
 use crate::agent::{AgentExecutor, AgentRequest};
-use crate::steps::StepError;
+use crate::steps::{StepError, StepOutcome};
 use uuid::Uuid;
 
 /// A parsed derivation: a list of issues, each with its child feature titles.
@@ -96,7 +96,7 @@ pub(super) async fn run(
     pool: &sqlx::PgPool,
     _workspace_id: Uuid,
     executor: &dyn AgentExecutor,
-) -> Result<(), StepError> {
+) -> Result<StepOutcome, StepError> {
     let plan = sf_db::fetch_page_content(pool, "plan")
         .await
         .unwrap_or(None)
@@ -139,7 +139,9 @@ pub(super) async fn run(
         }
     }
 
-    Ok(())
+    Ok(StepOutcome {
+        cost_usd: resp.cost_usd,
+    })
 }
 
 #[cfg(test)]

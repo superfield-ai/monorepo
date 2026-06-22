@@ -36,6 +36,8 @@ export interface SlotInfo {
   startedAt: string;
   elapsedMs: number;
   heartbeatAt?: number;
+  /** Accumulated US-dollar cost reported for this slot's agent work (issue #712). */
+  costUsd?: number;
 }
 
 /** Maximum heartbeat history entries retained per slot. */

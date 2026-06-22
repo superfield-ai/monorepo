@@ -271,3 +271,47 @@ cargo test -p sf-connector
 cargo clippy -p sf-connector --all-targets -- -D warnings
 cargo fmt -p sf-connector -- --check
 ```
+
+---
+
+## Orchestrator analytics producers: work-slots, cost, plan/doc lanes, check-runs (#712)
+
+The gardening loop drives the orchestrator's observable surface. Running with an
+observer (`GardeningLoop::start_observed(.., Some(OrchestratorState))`), per
+step the loop:
+
+- publishes a real `WorkSlot` (`OrchestratorState::set_slots`) carrying an
+  accumulating `costUsd` so `/analytics/slots` is non-empty with live cost;
+- records a per-lane tick via `OrchestratorState::record_tick(Lane, ms)` where
+  `GardeningStep::lane()` maps steps → `plan`/`dev`/`doc`, so `/analytics/loops`
+  reports live health on ALL three lanes (not only `dev`);
+- emits a check-run event via `publish_ci_event` so
+  `/analytics/check-runs/stream` has a real producer.
+
+Cost source is the `AgentExecutor`: `AgentResponse::cost_usd` —
+`LlmAgentExecutor` derives it from the model's `usage` tokens
+(`cost_from_usage`); `FixtureAgentExecutor` returns a fixed non-zero cost. Each
+step returns a `StepOutcome { cost_usd }` from `run_step`. `WorkSlot`/`SlotInfo`
+carry a `costUsd` field (Rust + TS).
+
+Key files:
+
+- `crates/sf-loop/src/agent.rs` — `AgentResponse::cost_usd`, `cost_from_usage`,
+  fixture `FIXTURE_COST_USD`.
+- `crates/sf-loop/src/steps/mod.rs` — `StepOutcome`, `LoopLane`,
+  `GardeningStep::lane()`; all step `run`s return `StepOutcome`.
+- `crates/sf-loop/src/lib.rs` — `run_loop` publishes slots/cost, records
+  per-lane ticks, emits CI events (`lane_to_serve`/`lane_label`).
+- `crates/sf-serve/src/orchestrator_state.rs` — `Lane`, `record_tick`/
+  `record_failure`, `WorkSlot.cost_usd`.
+- `crates/superfield/tests/daemon_loop_integration.rs` —
+  `loop_publishes_cost_slots_lanes_and_ci_events` (DB-gated, `#[ignore]`).
+- `packages/core/api-state.ts` + `OrchestratorController.ts` — `SlotInfo.costUsd`.
+
+Verify (no DB — route/state unit tests cover the API contract; the loop-driven
+assertion is the DB-gated `#[ignore]` integration test):
+
+```bash
+cargo test -p sf-serve -p sf-loop -p superfield
+cargo clippy -p sf-serve -p sf-loop -p superfield --all-targets -- -D warnings
+```

@@ -173,6 +173,14 @@ pub struct WorkSlot {
     /// Unix-ms timestamp of the last heartbeat, if any.
     #[serde(rename = "heartbeatAt", skip_serializing_if = "Option::is_none")]
     pub heartbeat_at: Option<i64>,
+    /// Accumulated US-dollar cost the slot's agent work has reported.
+    ///
+    /// PRD US10 requires monitoring every active agent including cost; the
+    /// gardening loop populates this from the agent executor's reported cost so
+    /// the Orchestrator slot cards show real, accumulating spend rather than
+    /// nothing (issue #712).
+    #[serde(rename = "costUsd")]
+    pub cost_usd: f64,
 }
 
 /// Shared, cheaply-cloneable handle to the live orchestrator state.
@@ -210,6 +218,20 @@ struct LoopMap {
     plan: LoopHealth,
     dev: LoopHealth,
     doc: LoopHealth,
+}
+
+/// One of the three control-panel loop lanes a tick/failure is recorded against.
+///
+/// The gardening loop maps each step to a lane so the Orchestrator tab reports
+/// live `plan` and `doc` health, not only `dev` (issue #712).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Lane {
+    /// Planning lane (`plan`).
+    Plan,
+    /// Development lane (`dev`).
+    Dev,
+    /// Documentation lane (`doc`).
+    Doc,
 }
 
 impl Default for OrchestratorState {
@@ -297,24 +319,48 @@ impl OrchestratorState {
         guard.dev = health;
     }
 
-    /// Record a successful tick on the `dev` lane: stamp `lastTickAt`, clear the
+    /// Record a successful tick on a specific lane: stamp `lastTickAt`, clear the
     /// failure counter and circuit, and store the tick duration.
-    pub fn record_dev_tick(&self, duration_ms: i64) {
+    ///
+    /// The gardening loop calls this with the lane the just-finished step maps
+    /// to, so `plan`/`dev`/`doc` all report real health (issue #712).
+    pub fn record_tick(&self, lane: Lane, duration_ms: i64) {
         let mut guard = self.0.loops.write().expect("loops rwlock poisoned");
-        guard.dev.last_tick_at = Some(self.unix_ms());
-        guard.dev.last_tick_duration_ms = Some(duration_ms);
-        guard.dev.consecutive_failures = 0;
-        guard.dev.circuit_tripped = false;
-        guard.dev.idle_reason = None;
+        let health = Self::lane_mut(&mut guard, lane);
+        health.last_tick_at = Some(self.unix_ms());
+        health.last_tick_duration_ms = Some(duration_ms);
+        health.consecutive_failures = 0;
+        health.circuit_tripped = false;
+        health.idle_reason = None;
     }
 
-    /// Record a failed tick on the `dev` lane: bump the failure counter and trip
+    /// Record a failed tick on a specific lane: bump the failure counter and trip
     /// the circuit once three consecutive failures accumulate.
-    pub fn record_dev_failure(&self) {
+    pub fn record_failure(&self, lane: Lane) {
         let mut guard = self.0.loops.write().expect("loops rwlock poisoned");
-        guard.dev.consecutive_failures += 1;
-        if guard.dev.consecutive_failures >= 3 {
-            guard.dev.circuit_tripped = true;
+        let health = Self::lane_mut(&mut guard, lane);
+        health.consecutive_failures += 1;
+        if health.consecutive_failures >= 3 {
+            health.circuit_tripped = true;
+        }
+    }
+
+    /// Record a successful tick on the `dev` lane (convenience wrapper).
+    pub fn record_dev_tick(&self, duration_ms: i64) {
+        self.record_tick(Lane::Dev, duration_ms);
+    }
+
+    /// Record a failed tick on the `dev` lane (convenience wrapper).
+    pub fn record_dev_failure(&self) {
+        self.record_failure(Lane::Dev);
+    }
+
+    /// Borrow the [`LoopHealth`] for a lane out of the lane map.
+    fn lane_mut(map: &mut LoopMap, lane: Lane) -> &mut LoopHealth {
+        match lane {
+            Lane::Plan => &mut map.plan,
+            Lane::Dev => &mut map.dev,
+            Lane::Doc => &mut map.doc,
         }
     }
 
@@ -452,6 +498,55 @@ mod tests {
     }
 
     #[test]
+    fn record_tick_targets_the_named_lane() {
+        let st = OrchestratorState::new();
+        // A plan tick lands on the plan lane and leaves dev/doc at defaults.
+        st.record_tick(Lane::Plan, 7);
+        let loops = st.loops_json();
+        assert_eq!(loops["plan"]["lastTickDurationMs"], 7);
+        assert!(loops["plan"]["lastTickAt"].is_i64());
+        assert!(loops["dev"]["lastTickAt"].is_null());
+        assert!(loops["doc"]["lastTickAt"].is_null());
+
+        // A doc tick lands on the doc lane.
+        st.record_tick(Lane::Doc, 9);
+        let loops = st.loops_json();
+        assert_eq!(loops["doc"]["lastTickDurationMs"], 9);
+        assert!(loops["doc"]["lastTickAt"].is_i64());
+    }
+
+    #[test]
+    fn record_failure_trips_per_lane_circuit() {
+        let st = OrchestratorState::new();
+        st.record_failure(Lane::Doc);
+        st.record_failure(Lane::Doc);
+        st.record_failure(Lane::Doc);
+        let loops = st.loops_json();
+        assert_eq!(loops["doc"]["consecutiveFailures"], 3);
+        assert_eq!(loops["doc"]["circuitTripped"], true);
+        // Other lanes are untouched.
+        assert_eq!(loops["plan"]["consecutiveFailures"], 0);
+    }
+
+    #[test]
+    fn work_slot_serializes_cost_usd() {
+        let slot = WorkSlot {
+            slot: 0,
+            issue_number: 712,
+            role: "doc".into(),
+            session_id: "s".into(),
+            backend: "gardening-loop".into(),
+            model: "fixture".into(),
+            started_at: "2026-06-19T00:00:00Z".into(),
+            elapsed_ms: 1,
+            heartbeat_at: None,
+            cost_usd: 0.0125,
+        };
+        let v = serde_json::to_value(&slot).expect("serialize");
+        assert_eq!(v["costUsd"], 0.0125);
+    }
+
+    #[test]
     fn slots_replace_round_trips() {
         let st = OrchestratorState::new();
         assert!(st.slots().is_empty());
@@ -465,10 +560,12 @@ mod tests {
             started_at: "2026-06-18T00:00:00Z".into(),
             elapsed_ms: 1000,
             heartbeat_at: Some(1_700_000_000_000),
+            cost_usd: 0.25,
         }]);
         let slots = st.slots();
         assert_eq!(slots.len(), 1);
         assert_eq!(slots[0].issue_number, 674);
+        assert_eq!(slots[0].cost_usd, 0.25);
     }
 
     #[tokio::test]

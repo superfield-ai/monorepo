@@ -32,7 +32,7 @@
 //! - `docs/architecture.md` §Daemon Lifecycle — runtime-signal ingestion.
 
 use crate::agent::{AgentExecutor, AgentRequest};
-use crate::steps::StepError;
+use crate::steps::{StepError, StepOutcome};
 use sf_db::{insert_page_revision, RuntimeSignalSummary};
 use uuid::Uuid;
 
@@ -86,21 +86,22 @@ pub(crate) fn build_request(signals_md: &str, prd: &str, plan: &str) -> AgentReq
 
 /// Run the IntentSpecInference step.
 ///
-/// Reads recent runtime signals. With none, no-ops and returns `Ok(())` so the
-/// cursor advances. With signals present, reads the `prd` / `plan` pages, asks
-/// the executor for a spec delta, and writes it as a `spec-delta-proposal` page
-/// revision tagged as a human-confirmation proposal.
+/// Reads recent runtime signals. With none, no-ops and returns an empty
+/// [`StepOutcome`] so the cursor advances at zero cost. With signals present,
+/// reads the `prd` / `plan` pages, asks the executor for a spec delta, and
+/// writes it as a `spec-delta-proposal` page revision tagged as a
+/// human-confirmation proposal, reporting the executor cost (issue #712).
 pub(super) async fn run(
     pool: &sqlx::PgPool,
     workspace_id: Uuid,
     executor: &dyn AgentExecutor,
-) -> Result<(), StepError> {
+) -> Result<StepOutcome, StepError> {
     let signals = sf_db::fetch_recent_runtime_signals(pool, SIGNAL_LIMIT).await?;
 
     // No-op path: no behavioral traces → nothing to infer. The loop commits the
-    // cursor after we return Ok, so the step still advances.
+    // cursor after we return Ok, so the step still advances at zero cost.
     if signals.is_empty() {
-        return Ok(());
+        return Ok(StepOutcome::default());
     }
 
     let prd = sf_db::fetch_page_content(pool, "prd")
@@ -137,7 +138,9 @@ pub(super) async fn run(
     )
     .await?;
 
-    Ok(())
+    Ok(StepOutcome {
+        cost_usd: resp.cost_usd,
+    })
 }
 
 // ---------------------------------------------------------------------------

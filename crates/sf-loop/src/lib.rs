@@ -62,7 +62,7 @@ pub use agent::{
 pub use blueprint::BlueprintRules;
 pub use cursor::{commit_cursor, load_cursor, CursorError};
 pub use handle::GardeningLoopHandle;
-pub use steps::{GardeningStep, STEP_ORDER};
+pub use steps::{GardeningStep, LoopLane, StepOutcome, STEP_ORDER};
 
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -255,6 +255,11 @@ async fn run_loop(
         }
     };
 
+    // Accumulated US-dollar cost across the whole loop lifetime, surfaced on the
+    // published work slot so the Orchestrator cards show real, growing spend
+    // (PRD US10 / issue #712).
+    let mut accumulated_cost_usd: f64 = 0.0;
+
     'outer: loop {
         // Check for drain signal before starting a new pass.
         if drain_rx.try_recv().is_ok() {
@@ -294,8 +299,25 @@ async fn run_loop(
             }
 
             tracing::info!("gardening: running step {:?}", step.name());
+            let lane = lane_to_serve(step.lane());
+            let started = chrono::Utc::now();
             if let Some(obs) = observer.as_ref() {
                 obs.publish_log(format!("gardening: running step {}", step.name()));
+                // Publish a real in-flight work slot for the running step so the
+                // Orchestrator cards show live work and accumulated cost rather
+                // than an empty list (issue #712).
+                obs.set_slots(vec![sf_serve::WorkSlot {
+                    slot: idx as u32,
+                    issue_number: config.workspace_id.as_u128() as i64 & 0x7fff,
+                    role: lane_label(step.lane()).to_string(),
+                    session_id: format!("gardening-{}", step.name()),
+                    backend: "gardening-loop".to_string(),
+                    model: config.llm_model.clone(),
+                    started_at: started.to_rfc3339(),
+                    elapsed_ms: 0,
+                    heartbeat_at: Some(started.timestamp_millis()),
+                    cost_usd: accumulated_cost_usd,
+                }]);
             }
 
             let tick_start = std::time::Instant::now();
@@ -310,13 +332,43 @@ async fn run_loop(
             let tick_ms = tick_start.elapsed().as_millis() as i64;
 
             match result {
-                Ok(()) => {
+                Ok(outcome) => {
+                    accumulated_cost_usd += outcome.cost_usd;
                     if let Some(obs) = observer.as_ref() {
-                        obs.record_dev_tick(tick_ms);
+                        obs.record_tick(lane, tick_ms);
+                        // Refresh the slot with the elapsed time and the now-grown
+                        // accumulated cost.
+                        obs.set_slots(vec![sf_serve::WorkSlot {
+                            slot: idx as u32,
+                            issue_number: config.workspace_id.as_u128() as i64 & 0x7fff,
+                            role: lane_label(step.lane()).to_string(),
+                            session_id: format!("gardening-{}", step.name()),
+                            backend: "gardening-loop".to_string(),
+                            model: config.llm_model.clone(),
+                            started_at: started.to_rfc3339(),
+                            elapsed_ms: tick_ms,
+                            heartbeat_at: Some(chrono::Utc::now().timestamp_millis()),
+                            cost_usd: accumulated_cost_usd,
+                        }]);
+                        // Emit a real check-run event on the CI stream so the
+                        // Orchestrator CI feed has a producer (issue #712).
+                        obs.publish_ci_event(
+                            serde_json::json!({
+                                "step": step.name(),
+                                "lane": lane_label(step.lane()),
+                                "status": "completed",
+                                "conclusion": "success",
+                                "durationMs": tick_ms,
+                                "costUsd": outcome.cost_usd,
+                                "completedAt": chrono::Utc::now().to_rfc3339(),
+                            })
+                            .to_string(),
+                        );
                         obs.publish_log(format!(
-                            "gardening: step {} ok ({} ms)",
+                            "gardening: step {} ok ({} ms, ${:.4})",
                             step.name(),
-                            tick_ms
+                            tick_ms,
+                            outcome.cost_usd
                         ));
                     }
                     if let Err(e) = commit_cursor(&pool, config.workspace_id, step.name()).await {
@@ -326,7 +378,18 @@ async fn run_loop(
                 Err(e) => {
                     tracing::error!("step {} failed: {}", step.name(), e);
                     if let Some(obs) = observer.as_ref() {
-                        obs.record_dev_failure();
+                        obs.record_failure(lane);
+                        obs.publish_ci_event(
+                            serde_json::json!({
+                                "step": step.name(),
+                                "lane": lane_label(step.lane()),
+                                "status": "completed",
+                                "conclusion": "failure",
+                                "durationMs": tick_ms,
+                                "completedAt": chrono::Utc::now().to_rfc3339(),
+                            })
+                            .to_string(),
+                        );
                         obs.publish_log(format!("gardening: step {} failed: {}", step.name(), e));
                     }
                     // On failure, pause briefly and retry the pass from the cursor.
@@ -345,6 +408,25 @@ async fn run_loop(
 
     // Signal that the loop has fully stopped.
     let _ = done_tx.send(());
+}
+
+/// Map a [`LoopLane`] to the matching [`sf_serve::Lane`] the orchestrator state
+/// records health against.
+fn lane_to_serve(lane: LoopLane) -> sf_serve::Lane {
+    match lane {
+        LoopLane::Plan => sf_serve::Lane::Plan,
+        LoopLane::Dev => sf_serve::Lane::Dev,
+        LoopLane::Doc => sf_serve::Lane::Doc,
+    }
+}
+
+/// Human-readable lane label used on the published work slot and CI events.
+fn lane_label(lane: LoopLane) -> &'static str {
+    match lane {
+        LoopLane::Plan => "plan",
+        LoopLane::Dev => "dev",
+        LoopLane::Doc => "doc",
+    }
 }
 
 #[cfg(test)]

@@ -12,7 +12,7 @@
 //!   metadata JSON containing `"step"` and `"sources"` keys.
 
 use crate::agent::{AgentExecutor, AgentRequest};
-use crate::steps::StepError;
+use crate::steps::{StepError, StepOutcome};
 use sf_db::insert_page_revision;
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ pub(super) async fn run(
     pool: &sqlx::PgPool,
     workspace_id: Uuid,
     executor: &dyn AgentExecutor,
-) -> Result<(), StepError> {
+) -> Result<StepOutcome, StepError> {
     // Read existing strategy page content (may be empty on first run).
     let existing = sf_db::fetch_page_content(pool, "strategy")
         .await
@@ -56,7 +56,9 @@ pub(super) async fn run(
 
     insert_page_revision(pool, workspace_id, "strategy", &resp.content, &provenance).await?;
 
-    Ok(())
+    Ok(StepOutcome {
+        cost_usd: resp.cost_usd,
+    })
 }
 
 // ---------------------------------------------------------------------------

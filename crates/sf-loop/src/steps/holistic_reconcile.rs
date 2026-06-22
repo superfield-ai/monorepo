@@ -11,7 +11,7 @@
 //! - Assert the related page `page_revisions` row has a new version (count +1).
 
 use crate::agent::{AgentExecutor, AgentRequest};
-use crate::steps::StepError;
+use crate::steps::{StepError, StepOutcome};
 use sf_db::insert_page_revision;
 use uuid::Uuid;
 
@@ -22,7 +22,7 @@ pub(super) async fn run(
     pool: &sqlx::PgPool,
     workspace_id: Uuid,
     executor: &dyn AgentExecutor,
-) -> Result<(), StepError> {
+) -> Result<StepOutcome, StepError> {
     // Read all pages.
     let mut contents: Vec<(&str, String)> = Vec::new();
     for page in RECONCILE_PAGES {
@@ -59,7 +59,9 @@ pub(super) async fn run(
     let resp = executor.run(req).await?;
 
     if resp.content.trim() == "NO_CHANGES" {
-        return Ok(());
+        return Ok(StepOutcome {
+            cost_usd: resp.cost_usd,
+        });
     }
 
     // Parse the response for "## UPDATE: <page_name>" sections.
@@ -76,7 +78,9 @@ pub(super) async fn run(
         }
     }
 
-    Ok(())
+    Ok(StepOutcome {
+        cost_usd: resp.cost_usd,
+    })
 }
 
 /// Parse `## UPDATE: <page_name>` sections from the LLM response.

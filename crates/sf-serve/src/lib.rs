@@ -65,7 +65,7 @@ pub use authz::{require_owner, require_write};
 pub use error::ServeError;
 pub use loop_handle::{LoopHandle, LoopHandleError, NoopLoopHandle};
 pub use orchestrator_state::{
-    ClusterStatus, LoopHealth, OrchestratorState, ProcessState, WorkSlot,
+    ClusterStatus, Lane, LoopHealth, OrchestratorState, ProcessState, WorkSlot,
 };
 pub use state::AppState;
 

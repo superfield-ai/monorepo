@@ -41,6 +41,14 @@ pub struct AgentResponse {
     pub content: String,
     /// Provenance metadata (agent step name, source URLs, etc.).
     pub provenance: String,
+    /// Estimated US-dollar cost of the call, as reported by the executor.
+    ///
+    /// This is the cost-accounting source the orchestrator's work-slot cards
+    /// surface (issue #712). The real [`LlmAgentExecutor`] derives it from the
+    /// model's reported input/output token usage; the
+    /// [`FixtureAgentExecutor`] returns a small fixed cost so tests observe a
+    /// non-zero, populated `costUsd` field on the published `WorkSlot`.
+    pub cost_usd: f64,
 }
 
 /// Errors from the agent executor.
@@ -62,6 +70,20 @@ pub enum AgentError {
 pub trait AgentExecutor: Send + Sync {
     /// Execute a single agent request and return the response.
     fn run<'a>(&'a self, req: AgentRequest) -> BoxFuture<'a, Result<AgentResponse, AgentError>>;
+}
+
+/// Indicative input-token price in US dollars per million tokens.
+const INPUT_USD_PER_MTOK: f64 = 1.0;
+/// Indicative output-token price in US dollars per million tokens.
+const OUTPUT_USD_PER_MTOK: f64 = 5.0;
+
+/// Estimate the US-dollar cost of a call from its input/output token counts.
+///
+/// Used by [`LlmAgentExecutor`] to populate [`AgentResponse::cost_usd`] from the
+/// model's reported usage so the orchestrator work-slot cards show real,
+/// accumulating cost (issue #712).
+fn cost_from_usage(input_tokens: f64, output_tokens: f64) -> f64 {
+    (input_tokens * INPUT_USD_PER_MTOK + output_tokens * OUTPUT_USD_PER_MTOK) / 1_000_000.0
 }
 
 // ---------------------------------------------------------------------------
@@ -102,6 +124,7 @@ impl AgentExecutor for LlmAgentExecutor {
                 return Ok(AgentResponse {
                     content: format!("[disabled] {}", req.user),
                     provenance: "sf_otel_disabled".to_string(),
+                    cost_usd: 0.0,
                 });
             }
 
@@ -140,9 +163,18 @@ impl AgentExecutor for LlmAgentExecutor {
                 .ok_or_else(|| AgentError::Parse("missing content[0].text".to_string()))?
                 .to_string();
 
+            // Cost accounting: derive the US-dollar cost from the model's
+            // reported token usage (Anthropic Messages API `usage` block). We
+            // use indicative per-million-token rates; the exact figure is
+            // informational for the orchestrator slot cards (issue #712).
+            let input_tokens = json["usage"]["input_tokens"].as_f64().unwrap_or(0.0);
+            let output_tokens = json["usage"]["output_tokens"].as_f64().unwrap_or(0.0);
+            let cost_usd = cost_from_usage(input_tokens, output_tokens);
+
             Ok(AgentResponse {
                 content,
                 provenance: format!("llm:{}", self.model),
+                cost_usd,
             })
         })
     }
@@ -162,6 +194,11 @@ pub struct FixtureAgentExecutor {
     pub content: String,
     /// Provenance tag to return.
     pub provenance: String,
+    /// US-dollar cost to report on every `AgentResponse`.
+    ///
+    /// Non-zero by default so tests observe a populated `costUsd` field on the
+    /// work slot the loop publishes (issue #712 acceptance criterion).
+    pub cost_usd: f64,
     /// Number of times `run()` has been called.
     call_count: Arc<AtomicUsize>,
 }
@@ -175,12 +212,16 @@ impl Default for FixtureAgentExecutor {
     }
 }
 
+/// The fixed cost a [`FixtureAgentExecutor`] reports per call (US dollars).
+const FIXTURE_COST_USD: f64 = 0.01;
+
 impl FixtureAgentExecutor {
     /// Create with custom content and provenance.
     pub fn new(content: impl Into<String>, provenance: impl Into<String>) -> Self {
         Self {
             content: content.into(),
             provenance: provenance.into(),
+            cost_usd: FIXTURE_COST_USD,
             call_count: Arc::new(AtomicUsize::new(0)),
         }
     }
@@ -197,6 +238,7 @@ impl AgentExecutor for FixtureAgentExecutor {
         let resp = AgentResponse {
             content: self.content.clone(),
             provenance: self.provenance.clone(),
+            cost_usd: self.cost_usd,
         };
         Box::pin(async move { Ok(resp) })
     }
@@ -222,6 +264,30 @@ mod tests {
             .expect("fixture must not fail");
         assert!(!resp.content.is_empty());
         assert_eq!(exec.call_count(), 1);
+    }
+
+    /// The fixture reports a non-zero cost so the loop publishes a slot with a
+    /// populated `costUsd` field (issue #712 acceptance criterion).
+    #[tokio::test]
+    async fn fixture_executor_reports_nonzero_cost() {
+        let exec = FixtureAgentExecutor::default();
+        let resp = exec
+            .run(AgentRequest {
+                system: "s".into(),
+                user: "u".into(),
+            })
+            .await
+            .expect("fixture must not fail");
+        assert!(resp.cost_usd > 0.0, "fixture cost must be populated");
+    }
+
+    /// Cost is derived from reported input/output token usage.
+    #[test]
+    fn cost_from_usage_scales_with_tokens() {
+        // 1M input @ $1/M + 1M output @ $5/M = $6.
+        assert!((cost_from_usage(1_000_000.0, 1_000_000.0) - 6.0).abs() < 1e-9);
+        assert_eq!(cost_from_usage(0.0, 0.0), 0.0);
+        assert!(cost_from_usage(100.0, 100.0) > 0.0);
     }
 
     #[tokio::test]

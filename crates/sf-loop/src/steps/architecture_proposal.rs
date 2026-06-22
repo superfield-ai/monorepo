@@ -11,7 +11,7 @@
 
 use crate::agent::{AgentExecutor, AgentRequest};
 use crate::blueprint::BlueprintRules;
-use crate::steps::StepError;
+use crate::steps::{StepError, StepOutcome};
 use sf_db::insert_page_revision;
 use uuid::Uuid;
 
@@ -20,7 +20,7 @@ pub(super) async fn run(
     workspace_id: Uuid,
     executor: &dyn AgentExecutor,
     blueprint: &BlueprintRules,
-) -> Result<(), StepError> {
+) -> Result<StepOutcome, StepError> {
     let prd = sf_db::fetch_page_content(pool, "prd")
         .await
         .unwrap_or(None)
@@ -69,7 +69,9 @@ pub(super) async fn run(
     )
     .await?;
 
-    Ok(())
+    Ok(StepOutcome {
+        cost_usd: resp.cost_usd,
+    })
 }
 
 // ---------------------------------------------------------------------------
