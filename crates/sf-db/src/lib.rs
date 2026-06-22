@@ -31,6 +31,14 @@
 //!   enforces the validation gate (a change cannot reach `merged` without a
 //!   recorded passing `forge.validation_runs` row). Backed by
 //!   `crates/sf-db/migrations/0004_change_lifecycle.sql` (`forge` schema).
+//! - [`policy`]: the policy engine for autonomous-versus-approval governance
+//!   (issue #716). [`policy::PolicyState`] models the PRD §6 policy lifecycle
+//!   (`drafted → active → revised → retired`) with a pure legal-transition
+//!   table, and [`policy::evaluate_change_against_active_policy`] is the merge
+//!   gate: it consults the workspace's single `active` policy and decides
+//!   autonomous-ship versus approval-required for a change's risk (PRD US4,
+//!   Constraint §9). Backed by `crates/sf-db/migrations/0005_policy_engine.sql`
+//!   (`forge` schema).
 //! - [`page_revision::insert_page_revision`]: write entrypoint for the
 //!   gardening loop page-revision path (issues #490, #491). Inserts a row
 //!   into `nexum.page_revisions` with the rendered content and provenance tag.
@@ -56,6 +64,7 @@ pub mod config;
 pub mod migrate;
 pub mod page_query;
 pub mod page_revision;
+pub mod policy;
 pub mod pool;
 pub mod project_graph;
 pub mod provisioner;
@@ -75,6 +84,10 @@ pub use migrate::{
 };
 pub use page_query::{fetch_page_content, PageQueryError, KNOWN_PAGES};
 pub use page_revision::{insert_page_revision, PageRevisionError};
+pub use policy::{
+    evaluate_change_against_active_policy, fetch_active_policy, fetch_policy, insert_policy,
+    transition_policy, MergeDecision, Policy, PolicyError, PolicyState, RiskLevel,
+};
 pub use pool::{acquire_with_workspace_id, acquire_workspace, connect};
 pub use project_graph::{
     fetch_project_page, insert_acceptance_criterion, insert_feature, insert_issue,
