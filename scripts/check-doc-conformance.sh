@@ -60,11 +60,11 @@ assert_match "cluster events seed-once-at-boot caveat present" \
   "seed.*boot|once at boot|no .*poller" "$ARCH"
 
 # 3. RLS paragraph names the k3s/TS-migrator track AND states the appliance
-#    runner does not apply it.
+#    runner now applies/enforces it (issue #710 landed).
 assert_match "RLS paragraph references k3s/migrator track" \
   "migrator|k3s" "$ARCH"
-assert_match "RLS paragraph states appliance runner does not yet apply it" \
-  "appliance .*(does not yet apply|not yet apply)|not yet on the appliance runner" \
+assert_match "RLS paragraph states appliance now enforces it" \
+  "enforced on both deployment tracks|appliance .*(now denied|now applies|now enforced)|now denied by the database" \
   "$ARCH"
 
 # 3b. RLS must NOT carry a bare unqualified "not yet implemented".

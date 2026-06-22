@@ -67,3 +67,18 @@ open/in_progress/validated/closed) backs BOTH `POST /studio/issues/update` and
 `POST /studio/steer`. `list_nodes(pool, Some("Issue"|"Feature"))` backs the
 list API + CLI. Don't re-implement node mutation in `sf-serve`/`sf-cli` — call
 these. An invalid state returns `ProjectGraphError::InvalidState` → HTTP 400.
+
+## `PgPool::close().await` deadlocks if a checked-out `PoolConnection` is still alive
+
+In sf-db integration tests (e.g. `rls_workspace_isolation_integration.rs`),
+`PgPool::close().await` waits for EVERY checked-out connection to be returned to
+the pool before it resolves. A `let mut conn = pool.acquire().await?` binding
+holds its connection until the local is dropped at end of scope. If you call
+`pool.close().await` while such a local is still alive (even after
+`tx.rollback()`/`tx.commit()`, which only ends the transaction — not the
+connection checkout), `close()` blocks forever and the test hangs with no panic
+and no DB activity (connections sit `idle` at `Client` wait). Symptom: the test
+binary runs, provisions Postgres, applies migrations, then never prints a
+`test result:` line. Fix: `drop(conn)` (and any second `conn2`) BEFORE
+`pool.close().await`, or scope each acquired connection in its own `{ ... }`
+block. The `LocalPostgresProvisioner` harness itself is fine — `provision_migrate_integration.rs` (which never holds a connection across `close()`) passes in ~4s.
