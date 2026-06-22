@@ -125,6 +125,7 @@ The migration runner (tracked separately) applies all pending migrations from al
 **Joins are cheap because all schemas live in the same instance.** A query can join `sharp.objects` to `nexum.blocks` to `orchestrator.gardening_cursor` in a single statement with no network round-trip. This is the primary motivation for the single-instance architecture.
 
 **RLS policies are scoped per schema, and are now enforced on both deployment tracks.** The workspace-isolation policies are real: `ENABLE` + `FORCE ROW LEVEL SECURITY` with full CRUD policies across the sharp/nexum/auth tables, keyed on the `app.workspace_id` session variable. They exist in two interchangeable forms with passing acceptance tests:
+
 - the k3s/TS form, `packages/db/migrations/0001_rls_workspace_isolation.sql` (`packages/db/tests/integration/rls-workspace-isolation.test.ts`);
 - the appliance form, `crates/sharp/migrations/0009_rls_workspace_isolation.sql` (`crates/sf-db/tests/rls_workspace_isolation_integration.rs`).
 
