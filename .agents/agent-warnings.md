@@ -41,12 +41,24 @@ DB provisioning, so DB-gated integration tests must be `#[ignore]`d (matching th
 ## `STEP_ORDER` has SEVEN gardening steps, not six (issue #672)
 
 `crates/sf-loop/src/steps/mod.rs`: issue #672 added
-`GardeningStep::ProjectGraphDerive` as the 7th step (last in `STEP_ORDER`). Any
-new test/doc that hard-codes the count must say 7 (see
-`step_order_has_seven_entries`). The derive step writes the **project graph**
+`GardeningStep::ProjectGraphDerive` as the 7th step (last in `STEP_ORDER`). The derive step writes the **project graph**
 (`insert_issue`/`insert_feature`), not page revisions — so it does NOT touch
 `nexum.page_revisions` and a DB integration test for it needs the
 `0002_project_graph.sql` nexum migration applied, not the page-revision schema.
+
+**SUPERSEDED by #709 + #706:** `STEP_ORDER` now has NINE steps.
+`GardeningStep::IntentSpecInference` (#709) was inserted at index 5 (after
+`PlanProposal`, before `HolisticReconcile`), and `GardeningStep::CodeChangeProposal`
+(#706/#722) is now the 9th/last step. Any test/doc that hard-codes the count must
+say 9 (see `step_order_has_nine_entries`; the last-step assertion is
+`code_change_proposal_runs_last`). `IntentSpecInference` reads
+`sharp.runtime_signals` via `sf_db::fetch_recent_runtime_signals` and, when
+signals exist, writes a `spec-delta-proposal` page revision (a PROPOSAL, never
+auto-applied); with no signals it no-ops (writes nothing) and the cursor still
+advances. Its DB integration test needs BOTH the nexum page-revision schema and
+the `0004_sharp_runtime_signal.sql` sharp migration applied. Prefer the
+relative ordering assertion (`intent_spec_inference_runs_before_holistic_reconcile`)
+over a hardcoded index, since later steps keep shifting the count.
 
 ## Project-graph create/update lives in `sf_db::project_graph`, not the studio crate
 

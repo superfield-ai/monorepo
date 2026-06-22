@@ -16,6 +16,7 @@
 //! | `strategy`     | `nexum.page_revisions` for page name `strategy`     |
 //! | `technical`    | `nexum.page_revisions` for page name `technical`    |
 //! | `project`      | `nexum.page_revisions` for page name `project`      |
+//! | `spec-delta-proposal` | `nexum.page_revisions` for `spec-delta-proposal` |
 //!
 //! # Query design
 //!
@@ -57,6 +58,10 @@ pub const KNOWN_PAGES: &[&str] = &[
     "strategy",
     "technical",
     "project",
+    // Proposed specification delta inferred from runtime signals (issue #709).
+    // Written by the IntentSpecInference gardening step as a *proposal* for a
+    // human to confirm or correct — never auto-applied to the real spec pages.
+    "spec-delta-proposal",
 ];
 
 /// Errors that can occur during a page query.
@@ -68,7 +73,7 @@ pub enum PageQueryError {
 
     /// The caller requested a page name that is not in the registry.
     #[error(
-        "unknown page '{0}'; known pages: prd, architecture, plan, strategy, technical, project"
+        "unknown page '{0}'; known pages: prd, architecture, plan, strategy, technical, project, spec-delta-proposal"
     )]
     UnknownPage(String),
 }

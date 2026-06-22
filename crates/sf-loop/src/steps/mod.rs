@@ -1,6 +1,6 @@
 //! Gardening step definitions and dispatcher.
 //!
-//! [`GardeningStep`] enumerates the seven knowledge-base improvement steps.
+//! [`GardeningStep`] enumerates the nine knowledge-base improvement steps.
 //! [`STEP_ORDER`] defines the canonical execution order.
 //! [`run_step`] dispatches to the appropriate implementation module.
 //!
@@ -25,6 +25,7 @@
 mod architecture_proposal;
 mod code_change_proposal;
 mod holistic_reconcile;
+mod intent_spec_inference;
 mod plan_proposal;
 mod prd_reconcile;
 mod project_graph_derive;
@@ -59,9 +60,12 @@ pub enum StepError {
     /// failures reach this variant.
     #[error("sharp error: {0}")]
     Sharp(#[from] sharp::SharpError),
+    /// Runtime-signal read error (intent-to-spec inference).
+    #[error("runtime signal error: {0}")]
+    RuntimeSignal(#[from] sf_db::RuntimeSignalError),
 }
 
-/// The eight gardening steps, in execution order.
+/// The nine gardening steps, in execution order.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GardeningStep {
     /// Research company strategy from seed documents.
@@ -74,6 +78,8 @@ pub enum GardeningStep {
     ArchitectureProposal,
     /// Propose implementation plan from architecture.
     PlanProposal,
+    /// Infer a proposed spec delta from runtime signals (#709, PRD US6).
+    IntentSpecInference,
     /// Holistically reconcile all five pages for consistency.
     HolisticReconcile,
     /// Derive Feature/Issue project-graph nodes from brain knowledge (#672).
@@ -92,6 +98,7 @@ impl GardeningStep {
             Self::TechnicalResearch => "technical_research",
             Self::ArchitectureProposal => "architecture_proposal",
             Self::PlanProposal => "plan_proposal",
+            Self::IntentSpecInference => "intent_spec_inference",
             Self::HolisticReconcile => "holistic_reconcile",
             Self::ProjectGraphDerive => "project_graph_derive",
             Self::CodeChangeProposal => "code_change_proposal",
@@ -129,7 +136,10 @@ pub const STEP_ORDER: &[GardeningStep] = &[
     GardeningStep::TechnicalResearch,
     GardeningStep::ArchitectureProposal,
     GardeningStep::PlanProposal,
-    // <-- #672 knowledge-derivation step inserts here (before HolisticReconcile).
+    // Intent-to-spec inference (#709) reads runtime signals and proposes a spec
+    // delta. Placed before HolisticReconcile so the holistic pass runs last over
+    // the now-richer state, matching the documented insertion contract above.
+    GardeningStep::IntentSpecInference,
     GardeningStep::HolisticReconcile,
     GardeningStep::ProjectGraphDerive,
     // #706 code-change step runs last: it proposes a validated source change
@@ -160,6 +170,9 @@ pub async fn run_step(
             architecture_proposal::run(pool, workspace_id, executor, blueprint).await
         }
         GardeningStep::PlanProposal => plan_proposal::run(pool, workspace_id, executor).await,
+        GardeningStep::IntentSpecInference => {
+            intent_spec_inference::run(pool, workspace_id, executor).await
+        }
         GardeningStep::HolisticReconcile => {
             holistic_reconcile::run(pool, workspace_id, executor).await
         }
@@ -188,8 +201,8 @@ mod tests {
     }
 
     #[test]
-    fn step_order_has_eight_entries() {
-        assert_eq!(STEP_ORDER.len(), 8);
+    fn step_order_has_nine_entries() {
+        assert_eq!(STEP_ORDER.len(), 9);
     }
 
     #[test]
@@ -198,6 +211,15 @@ mod tests {
             STEP_ORDER.last().copied(),
             Some(GardeningStep::CodeChangeProposal),
             "the code-change proposal step must run last, over the gardened graph",
+        );
+    }
+
+    #[test]
+    fn intent_spec_inference_runs_before_holistic_reconcile() {
+        let pos = |s: GardeningStep| STEP_ORDER.iter().position(|x| *x == s).unwrap();
+        assert!(
+            pos(GardeningStep::IntentSpecInference) < pos(GardeningStep::HolisticReconcile),
+            "intent_spec_inference must precede holistic_reconcile"
         );
     }
 
