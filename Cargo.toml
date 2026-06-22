@@ -8,6 +8,7 @@ members = [
     "crates/nexum",
     "crates/sf-cli",
     "crates/sf-serve",
+    "crates/sf-notify",
     "crates/sf-loop",
     "crates/sf-deploy",
     "crates/fastenv",
@@ -30,6 +31,7 @@ sharp = { path = "crates/sharp" }
 nexum = { path = "crates/nexum" }
 sf-cli = { path = "crates/sf-cli" }
 sf-serve = { path = "crates/sf-serve" }
+sf-notify = { path = "crates/sf-notify" }
 sf-loop = { path = "crates/sf-loop" }
 sf-deploy = { path = "crates/sf-deploy" }
 fastenv = { path = "crates/fastenv" }

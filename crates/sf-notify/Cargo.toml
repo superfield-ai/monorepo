@@ -1,0 +1,26 @@
+[package]
+name = "sf-notify"
+description = "Outbound notification channel — alerts a responsible human when a change awaits approval or a high-severity runtime signal fires (PRD §7)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sf_notify"
+path = "src/lib.rs"
+
+[dependencies]
+tokio = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+thiserror = { workspace = true }
+chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = "0.1"
+reqwest = { version = "0.12", features = ["json", "rustls-tls"], default-features = false }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["full", "test-util"] }
+tokio-test = "0.4"

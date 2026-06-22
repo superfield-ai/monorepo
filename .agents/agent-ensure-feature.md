@@ -226,3 +226,25 @@ Verify (no DB — gate logic + role-model unit tests; DB e2e tests are `#[ignore
 cargo test -p sf-auth -p sf-serve
 cargo clippy -p sf-auth -p sf-serve --all-targets -- -D warnings
 ```
+
+---
+
+## Outbound notification channel for approvals and high-severity signals (issue #717)
+
+PRD §7: a human is alerted when a change enters `awaiting-approval` or a
+high-severity runtime signal fires. The `sf-notify` crate provides the seam:
+`NotificationChannel` (Send+Sync transport trait) with a real `WebhookChannel`
+and a test `InMemoryChannel`; `Notifier` exposes `notify_awaiting_approval`
+(always dispatches) and `notify_signal` (dispatches iff `SignalSeverity::is_high`
+— High/Critical; Low/Medium suppressed). Severity is a notification-layer
+concept (NOT a column on `sharp.runtime_signals`) so the channel stays decoupled
+from the signal store and the policy engine (#716) — the policy decides WHEN,
+this crate SENDS.
+
+Verify (no DB — pure unit + doc tests; matches CI gates):
+
+```bash
+cargo test -p sf-notify
+cargo clippy -p sf-notify --all-targets -- -D warnings
+cargo fmt -p sf-notify -- --check
+```
