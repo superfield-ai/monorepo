@@ -227,11 +227,10 @@ pub fn cluster_status_from_health(
 /// a hardcoded constant.
 ///
 /// `set_cluster_status` de-dupes, so repeated identical observations broadcast
-/// nothing — the stream only ever carries real transitions. A periodic poller
-/// that keeps publishing across the daemon's lifetime (so a restart-to-healthy
-/// flip mid-session drives the preview reload) is the natural follow-up; this
-/// seed wires the producer at boot without restructuring supervisor ownership /
-/// the strict shutdown sequence.
+/// nothing — the stream only ever carries real transitions. This seeds the
+/// initial status at boot; [`run_cluster_status_poller`] then keeps publishing
+/// across the daemon's lifetime so a restart-to-healthy flip mid-session drives
+/// the preview reload (issue #715).
 pub fn seed_cluster_status(
     supervisor: &dyn ManifestSupervisor,
     orchestrator: &sf_serve::OrchestratorState,

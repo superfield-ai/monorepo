@@ -60,9 +60,11 @@ assert_match "analytics slots/check-runs flagged producerless" \
 assert_match "non-stream /analytics/check-runs?sha= route documented" \
   "check-runs\?sha=" "$ARCH"
 
-# 2. Cluster events: v0 seeds status once at boot, no periodic poller.
-assert_match "cluster events seed-once-at-boot caveat present" \
-  "seed.*boot|once at boot|no .*poller" "$ARCH"
+# 2. Cluster events: a continuous health poller now drives mid-session
+#    cluster-status transitions (issue #715 landed; the seed-once-at-boot
+#    caveat is retired).
+assert_match "cluster events continuous health poller documented" \
+  "continuous health poller|continuous poller|run_cluster_status_poller" "$ARCH"
 
 # 3. RLS paragraph names the k3s/TS-migrator track AND states the appliance
 #    runner now applies/enforces it (issue #710 landed).
