@@ -137,8 +137,9 @@ impl GardeningStep {
     /// lanes from real step activity):
     /// - **Doc**: `strategy_research`, `technical_research`, `holistic_reconcile`
     ///   — the knowledge-page authoring/reconciliation steps.
-    /// - **Plan**: `prd_reconcile`, `architecture_proposal`, `plan_proposal`
-    ///   — the steps that shape the PRD/architecture/plan documents.
+    /// - **Plan**: `prd_reconcile`, `architecture_proposal`, `plan_proposal`,
+    ///   `intent_spec_inference` — the steps that shape the PRD/architecture/plan
+    ///   documents (intent-to-spec inference proposes a spec delta to them, #709).
     /// - **Dev**: `project_graph_derive` — derives the Feature/Issue work graph;
     ///   `code_change_proposal` — proposes a validated source change for an open
     ///   node through the Sharp semantic-merge gate (#706).
@@ -147,7 +148,10 @@ impl GardeningStep {
             Self::StrategyResearch | Self::TechnicalResearch | Self::HolisticReconcile => {
                 LoopLane::Doc
             }
-            Self::PrdReconcile | Self::ArchitectureProposal | Self::PlanProposal => LoopLane::Plan,
+            Self::PrdReconcile
+            | Self::ArchitectureProposal
+            | Self::PlanProposal
+            | Self::IntentSpecInference => LoopLane::Plan,
             Self::ProjectGraphDerive | Self::CodeChangeProposal => LoopLane::Dev,
         }
     }
