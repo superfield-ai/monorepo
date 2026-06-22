@@ -18,17 +18,14 @@
 //!
 //! # Authorization
 //!
-//! The surface is granted to read-only **auditor-equivalent** roles only.
-//! Against today's coarse role model ([`sf_auth::Role`] = `Admin`/`Member`/
-//! `Viewer`) that means [`Role::Viewer`] (read-only, the closest analogue to
-//! the planned `Auditor`) and [`Role::Admin`] (the closest analogue to the
-//! planned `Owner`). [`Role::Member`] — a read/write role — is denied with
-//! `403 Forbidden`, satisfying the acceptance criterion "403 for
-//! non-Auditor/non-Owner roles".
-//!
-//! When the seven-role model (sibling #711: `Owner`, `Auditor`, …) lands, swap
-//! the role set in [`is_auditor_role`] for `Owner | Auditor`; nothing else in
-//! this module changes.
+//! The surface is granted to read-only **auditor** access plus the workspace
+//! `Owner`. Against the seven-role model ([`sf_auth::Role`] = `Owner`,
+//! `Requestor`, `Steerer`, `Collaborator`, `Agent`, `Auditor`, `Viewer`) that
+//! means exactly [`Role::Auditor`] (the compliance reviewer with read-only
+//! access to full history) and [`Role::Owner`] (who governs the Forge). Every
+//! other role — including the read-only `Viewer` and all read/write roles such
+//! as `Collaborator` — is denied with `403 Forbidden`, satisfying the
+//! acceptance criterion "403 for non-Auditor/non-Owner roles".
 //!
 //! # Sparse data
 //!
@@ -58,10 +55,10 @@ use crate::state::AppState;
 
 /// Whether `role` may use the read-only auditor query surface.
 ///
-/// See the module-level "Authorization" note for the mapping to the planned
-/// seven-role model.
+/// Exactly the compliance `Auditor` and the workspace `Owner`; see the
+/// module-level "Authorization" note.
 fn is_auditor_role(role: &Role) -> bool {
-    matches!(role, Role::Viewer | Role::Admin)
+    matches!(role, Role::Auditor | Role::Owner)
 }
 
 /// Render a [`ChainNode`] as a stable JSON object for the audit envelope.
@@ -182,15 +179,19 @@ mod tests {
     // ── Unit tests (no database) ──────────────────────────────────────────────
 
     #[test]
-    fn viewer_and_admin_are_auditor_roles_member_is_not() {
+    fn auditor_and_owner_are_auditor_roles_others_are_not() {
         assert!(
-            is_auditor_role(&Role::Viewer),
-            "viewer ≈ auditor (read-only)"
+            is_auditor_role(&Role::Auditor),
+            "auditor — compliance read-only access"
         );
-        assert!(is_auditor_role(&Role::Admin), "admin ≈ owner");
+        assert!(is_auditor_role(&Role::Owner), "owner governs the Forge");
         assert!(
-            !is_auditor_role(&Role::Member),
-            "member is a write role and must be denied"
+            !is_auditor_role(&Role::Collaborator),
+            "collaborator is a write role and must be denied"
+        );
+        assert!(
+            !is_auditor_role(&Role::Viewer),
+            "viewer is read-only but not an auditor and must be denied"
         );
     }
 
@@ -308,8 +309,8 @@ mod tests {
             .expect("WORKSPACE_ID must be a UUID");
 
         let decision_id = insert_decision(&pool, workspace_id).await;
-        // Auditor-equivalent read-only role.
-        let token = mint_session(&pool, workspace_id, Role::Viewer).await;
+        // Read-only compliance auditor role.
+        let token = mint_session(&pool, workspace_id, Role::Auditor).await;
 
         let req = Request::builder()
             .method(Method::GET)
@@ -348,12 +349,12 @@ mod tests {
     }
 
     /// Acceptance criterion: the route is denied (403) for a non-auditor,
-    /// non-owner role (`Member`), proving role-gating.
+    /// non-owner role (`Collaborator`), proving role-gating.
     ///
     /// Skipped unless `DATABASE_URL` + `WORKSPACE_ID` are set.
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL with nexum + auth schema and WORKSPACE_ID"]
-    async fn auditor_route_forbidden_for_member_role() {
+    async fn auditor_route_forbidden_for_collaborator_role() {
         let router = match make_test_router().await {
             Some(r) => r,
             None => {
@@ -370,8 +371,8 @@ mod tests {
             .expect("WORKSPACE_ID must be a UUID");
 
         let decision_id = insert_decision(&pool, workspace_id).await;
-        // Member is a read/write role → not an auditor/owner.
-        let token = mint_session(&pool, workspace_id, Role::Member).await;
+        // Collaborator is a read/write role → not an auditor/owner.
+        let token = mint_session(&pool, workspace_id, Role::Collaborator).await;
 
         let req = Request::builder()
             .method(Method::GET)
@@ -384,7 +385,7 @@ mod tests {
         assert_eq!(
             resp.status(),
             StatusCode::FORBIDDEN,
-            "member role must be forbidden from the auditor surface"
+            "collaborator role must be forbidden from the auditor surface"
         );
 
         sqlx::query("DELETE FROM nexum.entities WHERE id = $1")
