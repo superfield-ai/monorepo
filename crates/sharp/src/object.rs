@@ -30,6 +30,15 @@ impl ObjectType {
     }
 }
 
+/// The per-object hash-algorithm tag written to `sharp.objects.algo`
+/// (whitepaper §4.0 / §4.1). Both writer paths ([`store`] and [`store_canonical`])
+/// currently produce SHA-256 ids, so they tag rows `'sha256'`. The column
+/// defaults to `'sha1'` (the whitepaper default) for any row inserted without an
+/// explicit value; the value must always match the hash function that produced
+/// the id. A repo-level `objectformat` selector (out of scope here) will later
+/// let writers emit `'sha1'` ids instead.
+const ALGO_SHA256: &str = "sha256";
+
 /// Compute the SHA-256 hex digest of `data`.
 pub fn sha256_hex(data: &[u8]) -> String {
     let mut hasher = Sha256::new();
@@ -59,8 +68,8 @@ pub async fn store(
 
     sqlx::query(
         r#"
-        INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data, algo)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (sha256) DO NOTHING
         "#,
     )
@@ -69,6 +78,7 @@ pub async fn store(
     .bind(type_str)
     .bind(size)
     .bind(data)
+    .bind(ALGO_SHA256)
     .execute(pool)
     .await?;
 
@@ -107,10 +117,11 @@ pub async fn store_canonical(
         ObjectKind::Commit | ObjectKind::Tag => "commit",
     };
     let size = payload.len() as i64;
+    // `HashAlgo::Sha256` above produces the id, so tag the row `'sha256'`.
     sqlx::query(
         r#"
-        INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data)
-        VALUES ($1, $2, $3, $4, $5)
+        INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data, algo)
+        VALUES ($1, $2, $3, $4, $5, $6)
         ON CONFLICT (sha256) DO NOTHING
         "#,
     )
@@ -119,6 +130,7 @@ pub async fn store_canonical(
     .bind(object_type)
     .bind(size)
     .bind(payload)
+    .bind(ALGO_SHA256)
     .execute(pool)
     .await?;
     Ok(id)

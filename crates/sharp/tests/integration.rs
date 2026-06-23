@@ -209,6 +209,148 @@ async fn init_add_commit_roundtrip() {
     assert!(history[1].parent_sha.is_none());
 }
 
+// ── Per-object hash-algorithm (`algo`) tests (issue #725) ─────────────────────
+
+/// Apply the core VCS schema (0001) and the per-object `algo` migration (0010)
+/// on the test database so the `algo`-column tests can run in isolation.
+///
+/// 0001 contains no `DO $$ ... $$` blocks, so it is split on `;`. 0010 DOES use
+/// a `DO $$ ... $$` guard, so it must be executed as a single statement (the
+/// same rule the runtime-signal helper follows for 0008).
+async fn apply_objects_algo_migration(pool: &sqlx::PgPool) {
+    let core = include_str!("../migrations/0001_sharp_vcs_schema.sql");
+    for stmt in core.split(';') {
+        let stmt = stmt.trim();
+        if stmt.is_empty() {
+            continue;
+        }
+        sqlx::query(stmt)
+            .execute(pool)
+            .await
+            .expect("0001 core schema stmt");
+    }
+
+    let algo_sql = include_str!("../migrations/0010_sharp_objects_algo.sql");
+    sqlx::query(algo_sql)
+        .execute(pool)
+        .await
+        .expect("0010 objects algo migration");
+}
+
+/// Integration test (issue #725): a stored object round-trips its `algo`, the
+/// column defaults to the whitepaper `'sha1'` value, and a `'sha256'` object can
+/// coexist with a `'sha1'` object in the same repo (mixed-algorithm repo).
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL and applied Sharp migrations including 0010"]
+async fn objects_algo_column() {
+    let pool = connect_pool().await;
+    apply_objects_algo_migration(&pool).await;
+
+    let r = repo::init(&pool, &unique_name("algo-test-repo"))
+        .await
+        .expect("repo init failed");
+
+    // `object::store` tags its rows `'sha256'` (it emits a SHA-256 id).
+    let sha = object::store(&pool, r.id, object::ObjectType::Blob, b"algo-roundtrip")
+        .await
+        .expect("object store failed");
+
+    let stored_algo: String =
+        sqlx::query_scalar("SELECT algo FROM sharp.objects WHERE sha256 = $1")
+            .bind(&sha)
+            .fetch_one(&pool)
+            .await
+            .expect("select algo failed");
+    assert_eq!(
+        stored_algo, "sha256",
+        "store() must tag the object with the algorithm that produced its id"
+    );
+
+    // Insert a row WITHOUT an explicit algo to prove the column default is the
+    // whitepaper §4.1 default of 'sha1'.
+    let default_id = format!("default-algo-{}", Uuid::new_v4().as_simple());
+    sqlx::query(
+        "INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data) \
+         VALUES ($1, $2, 'blob', 0, $3)",
+    )
+    .bind(&default_id)
+    .bind(r.id)
+    .bind(&b""[..])
+    .execute(&pool)
+    .await
+    .expect("default-algo insert failed");
+
+    let default_algo: String =
+        sqlx::query_scalar("SELECT algo FROM sharp.objects WHERE sha256 = $1")
+            .bind(&default_id)
+            .fetch_one(&pool)
+            .await
+            .expect("select default algo failed");
+    assert_eq!(
+        default_algo, "sha1",
+        "the algo column must default to 'sha1'"
+    );
+
+    // Mixed-repo coexistence: insert an explicit SHA-1-tagged object alongside
+    // the SHA-256 object above, in the SAME repo.
+    let sha1_id = format!("sha1-object-{}", Uuid::new_v4().as_simple());
+    sqlx::query(
+        "INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data, algo) \
+         VALUES ($1, $2, 'blob', 3, $3, 'sha1')",
+    )
+    .bind(&sha1_id)
+    .bind(r.id)
+    .bind(&b"abc"[..])
+    .execute(&pool)
+    .await
+    .expect("sha1 object insert failed");
+
+    // Both algorithms now coexist in the one repo.
+    let algos: Vec<String> = sqlx::query_scalar(
+        "SELECT DISTINCT algo FROM sharp.objects WHERE repo_id = $1 ORDER BY algo",
+    )
+    .bind(r.id)
+    .fetch_all(&pool)
+    .await
+    .expect("distinct algo query failed");
+    assert_eq!(
+        algos,
+        vec!["sha1".to_string(), "sha256".to_string()],
+        "a single repo must hold both sha1 and sha256 objects"
+    );
+}
+
+/// Integration test (issue #725): inserting an object with an `algo` value
+/// outside ('sha1','sha256') is rejected by the CHECK constraint.
+#[tokio::test]
+#[ignore = "integration: requires DATABASE_URL and applied Sharp migrations including 0010"]
+async fn objects_algo_check_constraint() {
+    let pool = connect_pool().await;
+    apply_objects_algo_migration(&pool).await;
+
+    let r = repo::init(&pool, &unique_name("algo-check-repo"))
+        .await
+        .expect("repo init failed");
+
+    let bad_id = format!("bad-algo-{}", Uuid::new_v4().as_simple());
+    let result = sqlx::query(
+        "INSERT INTO sharp.objects (sha256, repo_id, object_type, size_bytes, data, algo) \
+         VALUES ($1, $2, 'blob', 0, $3, 'md5')",
+    )
+    .bind(&bad_id)
+    .bind(r.id)
+    .bind(&b""[..])
+    .execute(&pool)
+    .await;
+
+    let err = result.expect_err("an invalid algo value must be rejected by the check constraint");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("objects_algo_check") || msg.to_lowercase().contains("check"),
+        "error must reference the algo check constraint: {msg}"
+    );
+}
+
 /// Integration test: episode open/append/finish/query works end-to-end.
 ///
 /// Verifies:
