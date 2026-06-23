@@ -19,10 +19,10 @@ Whitepaper §4.0 (Content-Addressing Hash) and §4.1 (Core Objects) record the
 hash algorithm **per object** via an `algo` column on the object store:
 
 | Field  | Meaning                                                          |
-| ------ | --------------------------------------------------------------- |
+| ------ | ---------------------------------------------------------------- |
 | `algo` | Which hash produced the id: `sha1` (default) or `sha256` (§4.0). |
 
-The product rationale: Sharp's object IDs *are* Git's object IDs. Git defaults to
+The product rationale: Sharp's object IDs _are_ Git's object IDs. Git defaults to
 SHA-1 (with SHA-1DC collision detection) and supports SHA-256 behind
 `objectformat=sha256`. To support mixed-algorithm repos during the SHA-1 →
 SHA-256 transition, every stored object must record which algorithm produced its
@@ -76,9 +76,9 @@ algorithm.
 
 ### 3a. Writers (must carry the per-object algorithm — #725)
 
-| Site | Function | Algorithm today | Notes for #725 |
-| ---- | -------- | --------------- | -------------- |
-| `crates/sharp/src/object.rs:50` | `object::store` | SHA-256 (raw bytes, `sha256_hex`) | The `INSERT INTO sharp.objects (...)` at line 62 omits `algo`; must add it. The id is the raw-bytes SHA-256 (`sha256_hex`, line 34). |
+| Site                            | Function                  | Algorithm today                           | Notes for #725                                                                                                                                                                                                                                                                                                            |
+| ------------------------------- | ------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
+| `crates/sharp/src/object.rs:50` | `object::store`           | SHA-256 (raw bytes, `sha256_hex`)         | The `INSERT INTO sharp.objects (...)` at line 62 omits `algo`; must add it. The id is the raw-bytes SHA-256 (`sha256_hex`, line 34).                                                                                                                                                                                      |
 | `crates/sharp/src/object.rs:95` | `object::store_canonical` | `HashAlgo::Sha256` (hard-coded, line 101) | `id_hex(hash_object(kind, payload, HashAlgo::Sha256))` — the git-canonical, header-prefixed id. The `INSERT` at line 112 omits `algo`. This is the site that, in a real `objectformat=sha256`/SHA-1 world, must thread the repo's `HashAlgo`. `HashAlgo` already exists in `crates/sharp/src/git_canonical.rs:63` (`Sha1` | `Sha256`); #725 / a later issue can pass it in instead of the hard-coded `Sha256`. |
 
 `store` callers (raw-bytes SHA-256 path):
@@ -97,20 +97,20 @@ algorithm.
 
 ### 3b. Readers (key by id; inherit stored algorithm — no change needed for #725)
 
-| Site | Function | Notes |
-| ---- | -------- | ----- |
-| `crates/sharp/src/object.rs:132` | `object::load` | `SELECT data FROM sharp.objects WHERE sha256 = $1`. Keys by id only; does not need `algo`. (#725 may optionally `SELECT algo` to verify, but it is not required.) |
-| `crates/sharp/src/workspace.rs:313` | `object::load` | materialize: read root tree |
-| `crates/sharp/src/workspace.rs:325,338` | `object::load` | materialize: read blob (file / symlink) |
-| `crates/sharp/src/projections.rs:300` | `object::load` | read blob for projection |
+| Site                                    | Function       | Notes                                                                                                                                                             |
+| --------------------------------------- | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `crates/sharp/src/object.rs:132`        | `object::load` | `SELECT data FROM sharp.objects WHERE sha256 = $1`. Keys by id only; does not need `algo`. (#725 may optionally `SELECT algo` to verify, but it is not required.) |
+| `crates/sharp/src/workspace.rs:313`     | `object::load` | materialize: read root tree                                                                                                                                       |
+| `crates/sharp/src/workspace.rs:325,338` | `object::load` | materialize: read blob (file / symlink)                                                                                                                           |
+| `crates/sharp/src/projections.rs:300`   | `object::load` | read blob for projection                                                                                                                                          |
 
 ### 3c. Two id models share the table (pre-existing, documented)
 
 `object.rs` already documents (lines 78–88) that `store` keys on the raw-bytes
 SHA-256 while `store_canonical` keys on the header-prefixed git-canonical id.
 Both are SHA-256 today, both live in `sharp.objects`, addressing different rows.
-The `algo` column does **not** distinguish these two id *models* — it records the
-hash *function* (`sha1` vs `sha256`). Both current models are `sha256`, so #725's
+The `algo` column does **not** distinguish these two id _models_ — it records the
+hash _function_ (`sha1` vs `sha256`). Both current models are `sha256`, so #725's
 default-`sha1`-but-write-`sha256` choice must be deliberate (see §4, note B).
 
 ---

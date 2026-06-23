@@ -13,8 +13,8 @@ The project graph the loop derived, rendered as markdown via
 Two modes, in priority order:
 
 1. **LLM judge** (preferred) — if `SF_EVAL_JUDGE_CMD` is set, pipe the graph
-   markdown to it; it returns `PASS`/`FAIL` to the question *"does this graph
-   describe a working <app>?"*. Gives a real semantic judgement.
+   markdown to it; it returns `PASS`/`FAIL` to the question _"does this graph
+   describe a working <app>?"_. Gives a real semantic judgement.
 2. **Structural fallback** — when no judge is configured, a coarse keyword check.
    For `todo-app`: the graph must mention a task/todo **and** all three verbs
    (add, list, complete). Cheap, deterministic, easy to fool — fine for a first

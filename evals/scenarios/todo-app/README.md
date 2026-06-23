@@ -8,13 +8,13 @@
 
 Kickstart a fresh Superfield project from a one-paragraph **To Do** intent, run
 the gardening loop, and measure **how many turns** it takes to reach an
-*acceptable* result.
+_acceptable_ result.
 
 ## Inputs
 
 - **Seed intent** — [`seed/todo-seed.md`](./seed/todo-seed.md), gardened in at
   kickstart.
-- **Snapshot** *(future)* — `snapshot/`, a frozen brain state to start from for
+- **Snapshot** _(future)_ — `snapshot/`, a frozen brain state to start from for
   reproducibility. Empty for now; the scenario starts from a clean workspace.
 
 ## Acceptance bar

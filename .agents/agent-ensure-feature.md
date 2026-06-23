@@ -326,11 +326,13 @@ loop's LLM call selects a wire provider via `SF_LLM_PROVIDER`: `anthropic`
 endpoint/model and `OPENCODE_ZEN_API_KEY`. `crates/sf-eval` is the Tier-2 live
 runner: pure turn counting from a `gardening_cursor` sequence, project-graph +
 compiling-candidate graders, and `result.json` emission with `turns_to_acceptable`
-+ per-rung pass/fail. `.github/workflows/eval-todo-app.yml` (heavy class:
-schedule + dispatch, no PR gate) runs the todo-app scenario against Big Pickle
-via Zen and uploads `result.json`.
+
+- per-rung pass/fail. `.github/workflows/eval-todo-app.yml` (heavy class:
+  schedule + dispatch, no PR gate) runs the todo-app scenario against Big Pickle
+  via Zen and uploads `result.json`.
 
 Files:
+
 - `crates/sf-loop/src/provider.rs` — `LlmProvider` (pure wire shaping).
 - `crates/sf-loop/src/agent.rs` / `lib.rs` — `LlmAgentExecutor::with_provider`,
   `LoopConfig.llm_provider`, provider-aware `from_env` defaults.

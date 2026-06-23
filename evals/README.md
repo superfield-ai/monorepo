@@ -14,11 +14,11 @@ from running the appliance.
 
 ## Three concepts (keep them separate)
 
-| Concept      | Answers                              | Lives in     | Example                                  |
-| ------------ | ------------------------------------ | ------------ | ---------------------------------------- |
-| **Scenario** | *What are we testing, and what counts as pass?* | `scenarios/` | `todo-app` — build a To Do app           |
-| **Runner**   | *How do we execute and measure?*     | `runners/`   | `live` — seed → serve → poll turns → grade |
-| **Grader**   | *How do we check one thing?*         | `graders/`   | `project-graph` — does the graph describe the app? |
+| Concept      | Answers                                         | Lives in     | Example                                            |
+| ------------ | ----------------------------------------------- | ------------ | -------------------------------------------------- |
+| **Scenario** | _What are we testing, and what counts as pass?_ | `scenarios/` | `todo-app` — build a To Do app                     |
+| **Runner**   | _How do we execute and measure?_                | `runners/`   | `live` — seed → serve → poll turns → grade         |
+| **Grader**   | _How do we check one thing?_                    | `graders/`   | `project-graph` — does the graph describe the app? |
 
 A scenario is **data** (inputs + acceptance bar). A runner is the **engine**
 that drives any scenario. A grader is a **reusable check** a scenario's
@@ -48,7 +48,7 @@ evals/
 
 ## Why scenario-first (not `tier1/`, `tier2/`)
 
-Tiers are a property of the *runner*, not the test material, and one scenario is
+Tiers are a property of the _runner_, not the test material, and one scenario is
 exercised by multiple tiers (the same scenario's live trace is later replayed by
 Tier-1 graders). Keeping the test material in one place per scenario means you
 describe the To Do app once, not once per tier.

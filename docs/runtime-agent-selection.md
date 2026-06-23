@@ -14,8 +14,8 @@ A vendor CLI that Superfield can spawn: `claude`, `codex`, or `opencode`.
 
 An abstract capability level independent of any backend:
 
-| Tier     | Claude | Codex        | OpenCode                   |
-| -------- | ------ | ------------ | -------------------------- |
+| Tier     | Claude | Codex        | OpenCode            |
+| -------- | ------ | ------------ | ------------------- |
 | `high`   | opus   | o3           | opencode/big-pickle |
 | `medium` | sonnet | gpt-5.4      | opencode/big-pickle |
 | `low`    | haiku  | gpt-5.4-mini | opencode/big-pickle |

@@ -55,6 +55,6 @@ key and no login.
 - **Poll-based turn counting** — a step finishing faster than `POLL_INTERVAL`
   can be missed between polls; treat the count as a near-lower-bound and lean on
   `page_revisions` to corroborate.
-- **Non-determinism** — for a real metric, run the scenario *k* times and report
+- **Non-determinism** — for a real metric, run the scenario _k_ times and report
   the distribution of `turns_to_acceptable`, not a single number (see
   [`docs/eval-design.md`](../../docs/eval-design.md) §Handling non-determinism).

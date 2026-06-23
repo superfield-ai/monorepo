@@ -9,11 +9,11 @@ actually reaches.
 `accepted = rung1 AND rung2`. The browser smoke is observed but not part of the
 accept/fail gate today.
 
-| Rung   | Must be true                                                       | Grader                                                  |
-| ------ | ----------------------------------------------------------------- | ------------------------------------------------------- |
-| 1      | The project graph describes **add / list / complete a task**      | [`project-graph`](../../graders/project-graph.md)       |
-| 2      | A **compiling** code candidate exists (`CodeChangeProposal` passed) | [`compiling-candidate`](../../graders/compiling-candidate.md) |
-| smoke  | Studio **renders** the plan + issue rail                          | [`browser-smoke`](../../graders/browser-smoke.md)       |
+| Rung  | Must be true                                                        | Grader                                                        |
+| ----- | ------------------------------------------------------------------- | ------------------------------------------------------------- |
+| 1     | The project graph describes **add / list / complete a task**        | [`project-graph`](../../graders/project-graph.md)             |
+| 2     | A **compiling** code candidate exists (`CodeChangeProposal` passed) | [`compiling-candidate`](../../graders/compiling-candidate.md) |
+| smoke | Studio **renders** the plan + issue rail                            | [`browser-smoke`](../../graders/browser-smoke.md)             |
 
 ## When deploy lands
 
