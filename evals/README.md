@@ -5,11 +5,12 @@ that turns intent into software. This is the home of our equivalent of an
 end-to-end test: the artifacts that confirm a user is getting what they expect
 from running the appliance.
 
-> **Documentation only for now.** Everything here is a markdown spec. The Rust
-> grader library + runner binary will land later in `crates/sf-eval`; run
-> outputs land in `results/` (gitignored). See
-> [`docs/eval-design.md`](../docs/eval-design.md) for the full design and the
-> Tier 0–3 pyramid.
+> **Specs here, code in `crates/sf-eval`.** This tree holds the scenario data
+> and the markdown specs for each runner/grader; the Rust grader library + the
+> `sf-eval` live-runner binary that execute them live in
+> [`crates/sf-eval`](../crates/sf-eval/) (issue #748). Run outputs land in
+> `results/` (gitignored). See [`docs/eval-design.md`](../docs/eval-design.md)
+> for the full design and the Tier 0–3 pyramid.
 
 ## Three concepts (keep them separate)
 

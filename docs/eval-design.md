@@ -134,8 +134,9 @@ The hard part. Our defenses:
 
 ## Where it lives
 
-The [`evals/`](../evals/) tree (and, later, a `crates/sf-eval` crate for the
-Rust grader library + runner binary). The tree separates three concepts —
+The [`evals/`](../evals/) tree (data + specs) plus the
+[`crates/sf-eval`](../crates/sf-eval/) crate — the Rust grader library + the
+`sf-eval` live-runner binary (issue #748). The tree separates three concepts —
 **scenarios** (data), **runners** (engines), **graders** (reusable checks) — so
 adding a scenario is a new dir, not new plumbing:
 
@@ -155,12 +156,16 @@ Tier 3 as a Studio panel reading the `sharp.episodes` table.
 
 ## First scenario: `todo-app`
 
-The minimal starting point — **specified** in
-[`evals/scenarios/todo-app/`](../evals/scenarios/todo-app/) (documentation only
-for now; no code yet) — is a single scenario, driven by the
+The minimal starting point — specified in
+[`evals/scenarios/todo-app/`](../evals/scenarios/todo-app/) and run by the
+`sf-eval` binary — is a single scenario, driven by the
 [`live` runner](../evals/runners/live.md), that exercises the real CLI and
 browser end to end and answers one question: **how many turns does it take the
-appliance to reach an acceptable To Do app?**
+appliance to reach an acceptable To Do app?** CI exercises it in
+[`.github/workflows/eval-todo-app.yml`](../.github/workflows/eval-todo-app.yml),
+which drives the loop with OpenCode's free Big Pickle model (GLM-4.6) via Zen
+(`SF_LLM_PROVIDER=openai-compatible`, `OPENCODE_ZEN_API_KEY` — no Anthropic key)
+and uploads `result.json`.
 
 - **Kickstart:** `superfield garden seed/todo-seed.md` seeds a one-paragraph
   intent (add / list / complete a task), then `superfield serve` boots the loop.
@@ -197,6 +202,8 @@ user's expectation checkable and prove the entire loop end to end.
 | ---------------------- | --------------------------------------------------------------- |
 | Gardening loop         | `crates/sf-loop/src/lib.rs` (`GardeningLoop`)                    |
 | Agent executor seam    | `crates/sf-loop/src/agent.rs` (`LlmAgentExecutor` / `Fixture…`) |
+| LLM provider wire      | `crates/sf-loop/src/provider.rs` (`LlmProvider`; `SF_LLM_PROVIDER`) |
+| Eval runner + graders  | `crates/sf-eval` (`sf-eval run`, `evaluate_run`, graders)        |
 | Episode trace          | `sharp.episodes`, `sharp.episode_typed_artifacts`               |
 | Merge gates            | `crates/sharp/src/{cargo_check,ast_equivalence,tier1}.rs`       |
 | Project graph / nodes  | `nexum.project_nodes` (incl. unused `AcceptanceCriterion`)      |

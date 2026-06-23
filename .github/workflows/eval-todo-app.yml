@@ -1,0 +1,97 @@
+name: Eval — todo-app
+
+# Per-scenario Tier-2 eval (issue #748). Drives the WHOLE gardening loop against
+# a live model — OpenCode's free Big Pickle (GLM-4.6) via Zen's OpenAI-compatible
+# endpoint — so it is slow, stochastic, and reaches an external service. Under the
+# CI taxonomy that makes it `heavy`: sweep-only, never a PR gate. It therefore has
+# NO pull_request trigger and runs only on a nightly schedule, on manual dispatch,
+# or on push to the default branch when its own inputs change.
+env:
+  CI_CLASS: heavy
+
+on:
+  schedule:
+    # Nightly at 04:30 UTC — gated like the live-smoke pattern.
+    - cron: "30 4 * * *"
+  workflow_dispatch:
+    inputs:
+      turn_budget:
+        description: "Max gardening turns before giving up"
+        required: false
+        default: "60"
+  push:
+    branches: [main]
+    paths:
+      - "crates/sf-eval/**"
+      - "crates/sf-loop/src/provider.rs"
+      - "evals/scenarios/todo-app/**"
+      - "evals/runners/live.md"
+      - ".github/workflows/eval-todo-app.yml"
+
+concurrency:
+  group: eval-todo-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval-todo-app:
+    name: todo-app scenario (live, Big Pickle via Zen)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    container:
+      image: rust:latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      # OpenAI-compatible provider → OpenCode's free Big Pickle (GLM-4.6) via Zen.
+      # No Anthropic secret: the free Zen key is the only credential needed.
+      SF_LLM_PROVIDER: openai-compatible
+      SF_LLM_ENDPOINT: https://opencode.ai/zen/v1/chat/completions
+      SF_LLM_MODEL: opencode/big-pickle
+      OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+      TURN_BUDGET: ${{ github.event.inputs.turn_budget || '60' }}
+      WORKSPACE_ID: ${{ github.run_id }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Build the eval harness and appliance
+        run: cargo build --bin superfield -p sf-eval
+
+      - name: Run the todo-app scenario (live runner)
+        run: |
+          set -euo pipefail
+          if [ -z "${OPENCODE_ZEN_API_KEY}" ]; then
+            echo "OPENCODE_ZEN_API_KEY is not set; the live runner needs the free Zen key." >&2
+            echo "Set the OPENCODE_ZEN_API_KEY repository secret to run this scenario." >&2
+            exit 1
+          fi
+          # The live runner owns reset -> seed -> serve -> poll-turns -> grade ->
+          # emit; it writes evals/results/todo-app/<workspace-id>/result.json.
+          cargo run -p sf-eval --bin sf-eval -- \
+            run \
+            --scenario evals/scenarios/todo-app \
+            --turn-budget "${TURN_BUDGET}" \
+            --workspace-id "${WORKSPACE_ID}"
+
+      - name: Upload result.json
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-todo-app-result-${{ github.run_id }}
+          path: evals/results/todo-app/**/result.json
+          if-no-files-found: warn

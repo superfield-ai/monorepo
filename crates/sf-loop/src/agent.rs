@@ -14,6 +14,7 @@
 //!   times it was invoked (supports the call-counter assertions in the test
 //!   plan).
 
+use crate::provider::LlmProvider;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{
@@ -93,11 +94,17 @@ fn cost_from_usage(input_tokens: f64, output_tokens: f64) -> f64 {
 /// Real LLM executor that calls the configured API endpoint.
 ///
 /// Controlled by:
+/// - `SF_LLM_PROVIDER` — `anthropic` (default) or `openai-compatible` wire shape.
 /// - `SF_LLM_API_KEY`   — authentication header value.
 /// - `SF_LLM_ENDPOINT`  — URL to POST to.
 /// - `SF_LLM_MODEL`     — model name.
 /// - `SF_OTEL_DISABLED` — when `"1"`, all HTTP is skipped.
+///
+/// The wire shaping (headers, request body, response parsing) is delegated to
+/// [`LlmProvider`], so the Anthropic and OpenAI-compatible paths share one HTTP
+/// flow and differ only in pure, unit-tested shaping (issue #748).
 pub struct LlmAgentExecutor {
+    provider: LlmProvider,
     api_key: String,
     endpoint: String,
     model: String,
@@ -105,9 +112,20 @@ pub struct LlmAgentExecutor {
 }
 
 impl LlmAgentExecutor {
-    /// Create from the given config fields.
+    /// Create from the given config fields, defaulting to the Anthropic wire.
     pub fn new(api_key: String, endpoint: String, model: String) -> Self {
+        Self::with_provider(LlmProvider::Anthropic, api_key, endpoint, model)
+    }
+
+    /// Create with an explicit [`LlmProvider`] wire shape.
+    pub fn with_provider(
+        provider: LlmProvider,
+        api_key: String,
+        endpoint: String,
+        model: String,
+    ) -> Self {
         Self {
+            provider,
             api_key,
             endpoint,
             model,
@@ -128,21 +146,22 @@ impl AgentExecutor for LlmAgentExecutor {
                 });
             }
 
-            // Build the Anthropic Messages API request body.
-            let body = serde_json::json!({
-                "model": self.model,
-                "max_tokens": 4096,
-                "system": req.system,
-                "messages": [{"role": "user", "content": req.user}]
-            });
+            // Build the provider-specific request body (Anthropic Messages vs.
+            // OpenAI-compatible chat completions).
+            let body = self
+                .provider
+                .request_body(&self.model, &req.system, &req.user, 4096);
 
-            let resp = self
+            let mut request = self
                 .client
                 .post(&self.endpoint)
-                .header("x-api-key", &self.api_key)
-                .header("anthropic-version", "2023-06-01")
                 .header("content-type", "application/json")
-                .json(&body)
+                .json(&body);
+            for (name, value) in self.provider.auth_headers(&self.api_key) {
+                request = request.header(name, value);
+            }
+
+            let resp = request
                 .send()
                 .await
                 .map_err(|e| AgentError::Http(e.to_string()))?;
@@ -158,22 +177,21 @@ impl AgentExecutor for LlmAgentExecutor {
                 .await
                 .map_err(|e| AgentError::Parse(e.to_string()))?;
 
-            let content = json["content"][0]["text"]
-                .as_str()
-                .ok_or_else(|| AgentError::Parse("missing content[0].text".to_string()))?
-                .to_string();
+            let content = self
+                .provider
+                .parse_content(&json)
+                .ok_or_else(|| AgentError::Parse("missing assistant content".to_string()))?;
 
             // Cost accounting: derive the US-dollar cost from the model's
-            // reported token usage (Anthropic Messages API `usage` block). We
-            // use indicative per-million-token rates; the exact figure is
-            // informational for the orchestrator slot cards (issue #712).
-            let input_tokens = json["usage"]["input_tokens"].as_f64().unwrap_or(0.0);
-            let output_tokens = json["usage"]["output_tokens"].as_f64().unwrap_or(0.0);
+            // reported token usage. We use indicative per-million-token rates;
+            // the exact figure is informational for the orchestrator slot cards
+            // (issue #712).
+            let (input_tokens, output_tokens) = self.provider.parse_usage(&json);
             let cost_usd = cost_from_usage(input_tokens, output_tokens);
 
             Ok(AgentResponse {
                 content,
-                provenance: format!("llm:{}", self.model),
+                provenance: format!("llm:{}:{}", self.provider.as_str(), self.model),
                 cost_usd,
             })
         })

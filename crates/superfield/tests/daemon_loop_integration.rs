@@ -42,6 +42,7 @@ fn loop_config(workspace_id: Uuid) -> LoopConfig {
     LoopConfig {
         workspace_id,
         blueprint_path: std::path::PathBuf::from("blueprint/rules/graph.yaml"),
+        llm_provider: sf_loop::LlmProvider::Anthropic,
         llm_api_key: String::new(),
         llm_endpoint: "http://127.0.0.1:0/never".to_string(),
         llm_model: "fixture".to_string(),

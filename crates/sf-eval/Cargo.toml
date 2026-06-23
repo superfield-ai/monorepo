@@ -1,0 +1,28 @@
+[package]
+name = "sf-eval"
+description = "Evaluation harness for the autonomous gardening loop — Tier-2 live runner + graders (issue #748)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+name = "sf_eval"
+path = "src/lib.rs"
+
+[[bin]]
+name = "sf-eval"
+path = "src/main.rs"
+
+[dependencies]
+sf-loop = { workspace = true }
+sf-db = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+uuid = { version = "1", features = ["v4", "serde"] }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

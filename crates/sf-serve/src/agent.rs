@@ -32,6 +32,36 @@ use std::env;
 const DEFAULT_ENDPOINT: &str = "https://api.anthropic.com/v1/messages";
 /// Default model (matches the gardening loop default).
 const DEFAULT_MODEL: &str = "claude-haiku-4-5-20251001";
+/// Default OpenAI-compatible endpoint — OpenCode's Zen chat completions.
+const DEFAULT_OPENAI_ENDPOINT: &str = "https://opencode.ai/zen/v1/chat/completions";
+/// Default OpenAI-compatible model — OpenCode's free Big Pickle (GLM-4.6).
+const DEFAULT_OPENAI_MODEL: &str = "opencode/big-pickle";
+
+/// The LLM wire protocol the studio agent speaks (mirrors `sf_loop::LlmProvider`).
+///
+/// `sf-loop` depends on `sf-serve`, so this small mirror avoids a dependency
+/// cycle while keeping the two agents in agreement on the `SF_LLM_PROVIDER`
+/// contract: `anthropic` (default) or `openai-compatible` (free OpenCode Big
+/// Pickle via Zen — issue #748).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum StudioProvider {
+    /// Anthropic Messages API.
+    Anthropic,
+    /// OpenAI-compatible Chat Completions.
+    OpenAiCompatible,
+}
+
+impl StudioProvider {
+    /// Resolve from a `SF_LLM_PROVIDER` value (defaults to Anthropic).
+    fn from_value(value: Option<&str>) -> Self {
+        match value.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
+            Some("openai-compatible") | Some("openai_compatible") | Some("openai") => {
+                StudioProvider::OpenAiCompatible
+            }
+            _ => StudioProvider::Anthropic,
+        }
+    }
+}
 
 /// Error surfaced to the client as a `{"type":"error"}` frame.
 #[derive(Debug, thiserror::Error)]
@@ -50,6 +80,7 @@ pub enum AgentError {
 /// construction). Reuses one [`reqwest::Client`] for the connection's turns.
 #[derive(Clone)]
 pub struct StudioAgent {
+    provider: StudioProvider,
     api_key: String,
     endpoint: String,
     model: String,
@@ -62,16 +93,26 @@ impl StudioAgent {
     /// When `SF_LLM_API_KEY` is empty the agent runs in **fixture mode** (no
     /// outbound HTTP); see [`StudioAgent::reply`].
     pub fn from_env() -> Self {
-        let api_key = env::var("SF_LLM_API_KEY").unwrap_or_default();
+        let provider = StudioProvider::from_value(env::var("SF_LLM_PROVIDER").ok().as_deref());
+        let (default_endpoint, default_model) = match provider {
+            StudioProvider::Anthropic => (DEFAULT_ENDPOINT, DEFAULT_MODEL),
+            StudioProvider::OpenAiCompatible => (DEFAULT_OPENAI_ENDPOINT, DEFAULT_OPENAI_MODEL),
+        };
+        let api_key = env::var("SF_LLM_API_KEY")
+            .ok()
+            .filter(|s| !s.is_empty())
+            .or_else(|| env::var("OPENCODE_ZEN_API_KEY").ok())
+            .unwrap_or_default();
         let endpoint = env::var("SF_LLM_ENDPOINT")
             .ok()
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| DEFAULT_ENDPOINT.to_string());
+            .unwrap_or_else(|| default_endpoint.to_string());
         let model = env::var("SF_LLM_MODEL")
             .ok()
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| DEFAULT_MODEL.to_string());
+            .unwrap_or_else(|| default_model.to_string());
         Self {
+            provider,
             api_key,
             endpoint,
             model,
@@ -87,6 +128,7 @@ impl StudioAgent {
     #[cfg(test)]
     fn from_parts(api_key: impl Into<String>) -> Self {
         Self {
+            provider: StudioProvider::Anthropic,
             api_key: api_key.into(),
             endpoint: DEFAULT_ENDPOINT.to_string(),
             model: DEFAULT_MODEL.to_string(),
@@ -131,20 +173,38 @@ impl StudioAgent {
             "You are the Superfield product agent for workspace {workspace_id}. \
              Answer concisely about the workspace's authored knowledge."
         );
-        let body = serde_json::json!({
-            "model": self.model,
-            "max_tokens": 1024,
-            "system": system,
-            "messages": [{"role": "user", "content": message}],
-        });
+        let body = match self.provider {
+            StudioProvider::Anthropic => serde_json::json!({
+                "model": self.model,
+                "max_tokens": 1024,
+                "system": system,
+                "messages": [{"role": "user", "content": message}],
+            }),
+            StudioProvider::OpenAiCompatible => serde_json::json!({
+                "model": self.model,
+                "max_tokens": 1024,
+                "messages": [
+                    {"role": "system", "content": system},
+                    {"role": "user", "content": message},
+                ],
+            }),
+        };
 
-        let resp = self
+        let mut request = self
             .client
             .post(&self.endpoint)
-            .header("x-api-key", &self.api_key)
-            .header("anthropic-version", "2023-06-01")
             .header("content-type", "application/json")
-            .json(&body)
+            .json(&body);
+        request = match self.provider {
+            StudioProvider::Anthropic => request
+                .header("x-api-key", &self.api_key)
+                .header("anthropic-version", "2023-06-01"),
+            StudioProvider::OpenAiCompatible => {
+                request.header("authorization", format!("Bearer {}", self.api_key))
+            }
+        };
+
+        let resp = request
             .send()
             .await
             .map_err(|e| AgentError::Http(e.to_string()))?;
@@ -160,10 +220,12 @@ impl StudioAgent {
             .await
             .map_err(|e| AgentError::Parse(e.to_string()))?;
 
-        let content = json["content"][0]["text"]
-            .as_str()
-            .ok_or_else(|| AgentError::Parse("missing content[0].text".to_string()))?
-            .to_string();
+        let content = match self.provider {
+            StudioProvider::Anthropic => json["content"][0]["text"].as_str(),
+            StudioProvider::OpenAiCompatible => json["choices"][0]["message"]["content"].as_str(),
+        }
+        .ok_or_else(|| AgentError::Parse("missing assistant content".to_string()))?
+        .to_string();
 
         Ok(content)
     }
@@ -267,5 +329,28 @@ mod tests {
     #[test]
     fn chunk_reply_empty_is_empty() {
         assert!(chunk_reply("").is_empty());
+    }
+
+    /// `SF_LLM_PROVIDER` resolution mirrors the loop: default Anthropic, with the
+    /// openai-compatible aliases selecting the Big Pickle/Zen path (issue #748).
+    #[test]
+    fn studio_provider_resolves_from_value() {
+        assert_eq!(StudioProvider::from_value(None), StudioProvider::Anthropic);
+        assert_eq!(
+            StudioProvider::from_value(Some("")),
+            StudioProvider::Anthropic
+        );
+        for v in [
+            "openai-compatible",
+            "OpenAI-Compatible",
+            "openai_compatible",
+            "openai",
+        ] {
+            assert_eq!(
+                StudioProvider::from_value(Some(v)),
+                StudioProvider::OpenAiCompatible,
+                "value {v:?} must select the openai-compatible path"
+            );
+        }
     }
 }

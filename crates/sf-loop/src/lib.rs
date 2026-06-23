@@ -54,6 +54,7 @@ pub mod agent;
 pub mod blueprint;
 pub mod cursor;
 pub mod handle;
+pub mod provider;
 pub mod steps;
 
 pub use agent::{
@@ -62,6 +63,7 @@ pub use agent::{
 pub use blueprint::BlueprintRules;
 pub use cursor::{commit_cursor, load_cursor, CursorError};
 pub use handle::GardeningLoopHandle;
+pub use provider::LlmProvider;
 pub use steps::{GardeningStep, LoopLane, StepOutcome, STEP_ORDER};
 
 use std::sync::Arc;
@@ -146,6 +148,8 @@ pub struct LoopConfig {
     pub workspace_id: Uuid,
     /// Path to `blueprint/rules/graph.yaml`.
     pub blueprint_path: std::path::PathBuf,
+    /// LLM wire provider (from `SF_LLM_PROVIDER`; default: `anthropic`).
+    pub llm_provider: LlmProvider,
     /// LLM API key (from `SF_LLM_API_KEY` env var).
     pub llm_api_key: String,
     /// LLM endpoint URL (from `SF_LLM_ENDPOINT`).
@@ -170,15 +174,41 @@ impl LoopConfig {
             .map(std::path::PathBuf::from)
             .unwrap_or_else(|_| std::path::PathBuf::from("blueprint/rules/graph.yaml"));
 
-        let llm_api_key = std::env::var("SF_LLM_API_KEY").unwrap_or_default();
+        let llm_provider = LlmProvider::from_env();
+        // The OpenAI-compatible (free OpenCode Big Pickle via Zen) path and the
+        // Anthropic path have different default endpoints and models, so the
+        // default tracks the selected provider unless explicitly overridden.
+        let (default_endpoint, default_model) = match llm_provider {
+            LlmProvider::Anthropic => (
+                "https://api.anthropic.com/v1/messages",
+                "claude-haiku-4-5-20251001",
+            ),
+            LlmProvider::OpenAiCompatible => (
+                "https://opencode.ai/zen/v1/chat/completions",
+                "opencode/big-pickle",
+            ),
+        };
+
+        let llm_api_key = std::env::var("SF_LLM_API_KEY")
+            .ok()
+            .filter(|s| !s.is_empty())
+            // The OpenAI-compatible path uses OPENCODE_ZEN_API_KEY as a fallback
+            // so the free Zen key wires the loop without an Anthropic secret.
+            .or_else(|| std::env::var("OPENCODE_ZEN_API_KEY").ok())
+            .unwrap_or_default();
         let llm_endpoint = std::env::var("SF_LLM_ENDPOINT")
-            .unwrap_or_else(|_| "https://api.anthropic.com/v1/messages".to_string());
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| default_endpoint.to_string());
         let llm_model = std::env::var("SF_LLM_MODEL")
-            .unwrap_or_else(|_| "claude-haiku-4-5-20251001".to_string());
+            .ok()
+            .filter(|s| !s.is_empty())
+            .unwrap_or_else(|| default_model.to_string());
 
         Self {
             workspace_id,
             blueprint_path,
+            llm_provider,
             llm_api_key,
             llm_endpoint,
             llm_model,
@@ -458,6 +488,7 @@ mod credential_tests {
         let mut cfg = LoopConfig {
             workspace_id: Uuid::nil(),
             blueprint_path: std::path::PathBuf::from("x.yaml"),
+            llm_provider: LlmProvider::Anthropic,
             llm_api_key: String::new(),
             llm_endpoint: "e".into(),
             llm_model: "m".into(),
