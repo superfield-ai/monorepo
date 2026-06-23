@@ -1,0 +1,51 @@
+name: Actionlint
+
+# Lints the GitHub Actions workflow files themselves — static validation of
+# YAML structure, expression syntax, and action inputs. This is fast,
+# change-local, and asserts no behavior, so under the CI taxonomy it is
+# `code-hygiene`: runs on draft + r4r PRs and on push to the default branch.
+# It is scoped to workflow files (and its own definition), so it only runs when
+# CI definitions change, which includes the per-scenario eval workflow
+# (.github/workflows/eval-todo-app.yml) — issue #748 test plan.
+env:
+  CI_CLASS: code-hygiene
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/**"
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - ".github/workflows/**"
+  schedule:
+    # Nightly full sweep — lints every workflow regardless of recent changes.
+    - cron: "15 5 * * *"
+
+concurrency:
+  group: actionlint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  actionlint:
+    name: Actionlint
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install actionlint
+        run: |
+          set -euo pipefail
+          VERSION=1.7.7
+          curl -sSL \
+            "https://github.com/rhysd/actionlint/releases/download/v${VERSION}/actionlint_${VERSION}_linux_amd64.tar.gz" \
+            -o /tmp/actionlint.tar.gz
+          tar -xzf /tmp/actionlint.tar.gz -C /tmp actionlint
+          install -m 0755 /tmp/actionlint /usr/local/bin/actionlint
+      - name: Lint workflows
+        run: actionlint -color
