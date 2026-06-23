@@ -351,3 +351,38 @@ cargo clippy -p sf-loop -p sf-serve -p sf-eval --all-targets -- -D warnings
 test -f .github/workflows/eval-todo-app.yml
 ~/.agents/scripts/auto/ci-taxonomy-lint.sh .github/workflows/eval-todo-app.yml
 ```
+
+## Per-object hash-algorithm `algo` column on `sharp.objects` (issue #725)
+
+`sharp.objects` carries an `algo TEXT NOT NULL DEFAULT 'sha1'` column constrained
+to `('sha1','sha256')` (whitepaper §4.0/§4.1), so a single repo can hold both
+SHA-1 and SHA-256 objects during Git's hash transition. Added as the NEW additive
+migration `0010_sharp_objects_algo.sql` (NOT an edit to the deployed 0001 — the
+runner only applies pending files). The migration backfills existing rows to
+`'sha256'` because every current writer emits a SHA-256 id. Both writers
+(`object::store`, `object::store_canonical` in `crates/sharp/src/object.rs`) tag
+their INSERTs `'sha256'` via the `ALGO_SHA256` const; readers/FK tables are
+unchanged. Repo-level `objectformat` selection (letting writers emit `'sha1'`) is
+a separate, out-of-scope feature.
+
+Key files:
+
+- `crates/sharp/migrations/0010_sharp_objects_algo.sql` — additive column +
+  backfill + `objects_algo_check` CHECK + `(algo, sha256)` index.
+- `crates/sharp/src/object.rs` — `ALGO_SHA256` const; `algo` bound in both
+  `store` and `store_canonical` INSERTs.
+- `crates/sharp/tests/integration.rs` — `objects_algo_column` (round-trip,
+  default, mixed-repo coexistence) and `objects_algo_check_constraint` (invalid
+  algo rejected), DB-gated `#[ignore]`, applying 0001+0010 via
+  `apply_objects_algo_migration`.
+
+Verify (no DB in CI — the algo tests are DB-gated `#[ignore]`; CI gates are build
+
+- clippy + fmt):
+
+```bash
+cargo build -p sharp --all-targets
+cargo clippy -p sharp --all-targets -- -D warnings
+cargo fmt -p sharp --check
+cargo test -p sharp
+```
