@@ -96,6 +96,43 @@ assert_match "provisioner bin-dir auto-discovery documented" \
 assert_match "'web' corpus documented as control-panel authoring corpus" \
   "web. corpus" "$ARCH"
 
+# --- governance tail (issues #716–#719) -------------------------------------
+
+# 9. Auditor query surface: the read-only /studio/audit/decisions/{id} route,
+#    gated to Owner/Auditor (#719).
+assert_match "auditor query surface route documented" \
+  "/studio/audit/decisions" "$ARCH"
+assert_match "auditor surface gated to Owner/Auditor" \
+  "Role::Auditor|Owner/Auditor" "$ARCH"
+
+# 10. Policy engine: the drafted→active→revised→retired lifecycle and the
+#     autonomous-vs-approval merge gate (#716). The change-lifecycle section
+#     must no longer say the policy risk evaluation is 'tracked separately'.
+assert_match "policy engine lifecycle documented" \
+  "drafted .* active .* revised .* retired" "$ARCH"
+assert_match "policy engine merge gate (autonomous vs approval) documented" \
+  "MergeDecision|autonomous-versus-approval|autonomous vs approval|fail-closed" "$ARCH"
+assert_absent "policy risk eval no longer claimed 'tracked separately'" \
+  "policy risk evaluation .*tracked separately" "$ARCH"
+
+# 11. Outbound notification channel sf-notify: always-on approval alert,
+#     severity-gated signal alert, severity is NOT a runtime_signals column (#717).
+assert_match "sf-notify NotificationChannel seam documented" \
+  "NotificationChannel|sf-notify" "$ARCH"
+assert_match "sf-notify notify_awaiting_approval / notify_signal documented" \
+  "notify_awaiting_approval|notify_signal" "$ARCH"
+assert_match "sf-notify severity is a notification-layer concept, not a signal column" \
+  "not a signal-store column|not on Sharp.s .runtime_signals|notification-layer concept" "$ARCH"
+
+# 12. Read-only systems-of-record connector seam: Connector trait, per-workspace
+#     credentials, reference connector, structural read-only guarantee (#718).
+assert_match "sf-connector Connector seam documented" \
+  "sf-connector|Connector. trait" "$ARCH"
+assert_match "sf-connector read-only by construction documented" \
+  "read-only by construction|no .*write.*sync.* method|structural rather than" "$ARCH"
+assert_match "sf-connector per-workspace credentials documented" \
+  "ConnectorCredentials|per-workspace credential" "$ARCH"
+
 # --- crates/sf-loop/src/lib.rs ----------------------------------------------
 
 # 7. Loop header no longer says 'six' for the step count and references
