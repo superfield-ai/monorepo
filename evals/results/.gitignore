@@ -1,0 +1,3 @@
+# Run outputs are not committed — only this ignore file is.
+*
+!.gitignore

@@ -118,7 +118,8 @@ pub fn appliance_manifest(app_image: &str, postgres_image: &str) -> FastenvManif
 pub fn build_executor(config: &LoopConfig) -> Arc<dyn AgentExecutor> {
     match select_executor_kind(config.credential_state()) {
         ExecutorKind::Fixture => Arc::new(FixtureAgentExecutor::default()),
-        ExecutorKind::Llm => Arc::new(LlmAgentExecutor::new(
+        ExecutorKind::Llm => Arc::new(LlmAgentExecutor::with_provider(
+            config.llm_provider,
             config.llm_api_key.clone(),
             config.llm_endpoint.clone(),
             config.llm_model.clone(),
@@ -704,6 +705,7 @@ mod tests {
         LoopConfig {
             workspace_id: uuid::Uuid::nil(),
             blueprint_path: std::path::PathBuf::from("blueprint/rules/graph.yaml"),
+            llm_provider: sf_loop::LlmProvider::Anthropic,
             llm_api_key: api_key.to_string(),
             llm_endpoint: "https://api.anthropic.com/v1/messages".to_string(),
             llm_model: "claude-haiku-4-5-20251001".to_string(),

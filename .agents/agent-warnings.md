@@ -82,3 +82,56 @@ binary runs, provisions Postgres, applies migrations, then never prints a
 `test result:` line. Fix: `drop(conn)` (and any second `conn2`) BEFORE
 `pool.close().await`, or scope each acquired connection in its own `{ ... }`
 block. The `LocalPostgresProvisioner` harness itself is fine — `provision_migrate_integration.rs` (which never holds a connection across `close()`) passes in ~4s.
+
+## `LoopConfig` has a `llm_provider: LlmProvider` field (issue #748)
+
+`crates/sf-loop/src/lib.rs`: `LoopConfig` gained `llm_provider` (the
+`SF_LLM_PROVIDER` wire selector). Every struct literal must set it — the test
+helpers in `crates/superfield/tests/daemon_loop_integration.rs` and
+`crates/superfield/src/daemon_runtime.rs` (`config_with_key`) already do
+(`sf_loop::LlmProvider::Anthropic`). Build the real executor with
+`LlmAgentExecutor::with_provider(config.llm_provider, ...)`, not the bare
+`::new` (which is now an Anthropic-only convenience). `LlmProvider` shaping is
+pure (`provider.rs`) — unit-test request/response there, never via a network.
+
+## `opencode/minimax-m2.5-free` is retired — use `opencode/big-pickle` (issue #748)
+
+The free no-key CI loop model is OpenCode's Big Pickle (GLM-4.6),
+`opencode/big-pickle`, via Zen's OpenAI-compatible endpoint
+(`https://opencode.ai/zen/v1/chat/completions`, `OPENCODE_ZEN_API_KEY`). Do NOT
+reintroduce `opencode/minimax-m2.5-free` in docs or config; `docs/runtime-agent-selection.md`
+was corrected. `SF_LLM_PROVIDER=openai-compatible` selects this path.
+
+## Per-scenario eval workflows are `heavy` class — schedule/dispatch only, no PR gate
+
+`.github/workflows/eval-todo-app.yml` runs the WHOLE loop against a live model
+(Big Pickle via Zen), so it is `CI_CLASS: heavy`: no `pull_request` trigger at
+all, only `schedule:` + `workflow_dispatch:` (+ `push` to main on its own
+paths). Adding a `pull_request` trigger fails `ci-taxonomy-lint.sh`. New
+scenarios reuse this shape.
+
+## The keyless eval path is `opencode-server`, NOT the Zen HTTP key or `opencode run` (issue #748)
+
+**SUPERSEDES the two entries above that say "Big Pickle via Zen,
+`OPENCODE_ZEN_API_KEY`, `SF_LLM_PROVIDER=openai-compatible`".** The owner's
+direction (2026-06-23): the eval live run is driven **keyless** — a fresh
+`opencode` install reaches the free Big Pickle model with NO key and NO login, so
+the workflow references no repo secret (blocker #752 "missing-opencode-zen-secret"
+was closed invalid). Three hard-won facts:
+
+- Drive the keyless provider `SF_LLM_PROVIDER=opencode-server`
+  (`LlmProvider::OpenCodeServer`), which talks to a local `opencode serve` over
+  its session API: `POST /session` (note: NO `/api` prefix for the mutating
+  routes — `POST /api/session` falls through to the SPA HTML) then
+  `POST /session/{id}/message`. The assistant text is in `parts[].text`; usage in
+  `info.tokens.{input,output}`. The server base URL is `SF_OPENCODE_SERVER`
+  (default `http://127.0.0.1:4096`), carried in `LoopConfig.llm_endpoint`.
+- Do NOT use `opencode run` (the CLI) for capture: in non-interactive/piped mode
+  it exits 0 but prints the assistant text to NEITHER stdout NOR stderr (only a
+  TTY renderer gets it); even `--format json` emits just `step_start`. The text
+  IS produced (it lands in the `part` SQLite table), but the only reliable
+  programmatic capture is the `opencode serve` session API.
+- Keyless providers are `Configured` even with empty `SF_LLM_API_KEY`:
+  `LlmProvider::is_keyless()` gates `LoopConfig::credential_state()` and the
+  executor's empty-key guard, so the loop selects the real `LlmAgentExecutor`,
+  not the fixture. Mirror lives in `sf-serve`'s `StudioProvider::OpenCodeServer`.

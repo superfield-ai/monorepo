@@ -12,6 +12,7 @@ members = [
     "crates/sf-loop",
     "crates/sf-deploy",
     "crates/sf-connector",
+    "crates/sf-eval",
     "crates/fastenv",
 ]
 
@@ -36,6 +37,7 @@ sf-notify = { path = "crates/sf-notify" }
 sf-loop = { path = "crates/sf-loop" }
 sf-deploy = { path = "crates/sf-deploy" }
 sf-connector = { path = "crates/sf-connector" }
+sf-eval = { path = "crates/sf-eval" }
 fastenv = { path = "crates/fastenv" }
 
 # third-party deps shared across crates

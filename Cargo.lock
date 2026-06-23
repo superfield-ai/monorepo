@@ -3527,6 +3527,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "sf-eval"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "sf-db",
+ "sf-loop",
+ "sqlx",
+ "tempfile",
+ "tokio",
+ "uuid",
+]
+
+[[package]]
 name = "sf-loop"
 version = "0.1.0"
 dependencies = [

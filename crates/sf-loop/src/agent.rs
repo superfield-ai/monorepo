@@ -14,6 +14,7 @@
 //!   times it was invoked (supports the call-counter assertions in the test
 //!   plan).
 
+use crate::provider::LlmProvider;
 use std::future::Future;
 use std::pin::Pin;
 use std::sync::{
@@ -93,11 +94,17 @@ fn cost_from_usage(input_tokens: f64, output_tokens: f64) -> f64 {
 /// Real LLM executor that calls the configured API endpoint.
 ///
 /// Controlled by:
+/// - `SF_LLM_PROVIDER` — `anthropic` (default) or `openai-compatible` wire shape.
 /// - `SF_LLM_API_KEY`   — authentication header value.
 /// - `SF_LLM_ENDPOINT`  — URL to POST to.
 /// - `SF_LLM_MODEL`     — model name.
 /// - `SF_OTEL_DISABLED` — when `"1"`, all HTTP is skipped.
+///
+/// The wire shaping (headers, request body, response parsing) is delegated to
+/// [`LlmProvider`], so the Anthropic and OpenAI-compatible paths share one HTTP
+/// flow and differ only in pure, unit-tested shaping (issue #748).
 pub struct LlmAgentExecutor {
+    provider: LlmProvider,
     api_key: String,
     endpoint: String,
     model: String,
@@ -105,22 +112,115 @@ pub struct LlmAgentExecutor {
 }
 
 impl LlmAgentExecutor {
-    /// Create from the given config fields.
+    /// Create from the given config fields, defaulting to the Anthropic wire.
     pub fn new(api_key: String, endpoint: String, model: String) -> Self {
+        Self::with_provider(LlmProvider::Anthropic, api_key, endpoint, model)
+    }
+
+    /// Create with an explicit [`LlmProvider`] wire shape.
+    pub fn with_provider(
+        provider: LlmProvider,
+        api_key: String,
+        endpoint: String,
+        model: String,
+    ) -> Self {
         Self {
+            provider,
             api_key,
             endpoint,
             model,
             client: reqwest::Client::new(),
         }
     }
+
+    /// Drive one prompt through a **keyless** `opencode serve` instance.
+    ///
+    /// Talks to the local server's session API: `POST /session` to open a
+    /// session, then `POST /session/{id}/message` with the model + a single text
+    /// part (built by [`LlmProvider::opencode_message_body`]). The assistant text
+    /// comes back in `parts[].text` and is extracted by
+    /// [`LlmProvider::parse_opencode_message`]; token usage by
+    /// [`LlmProvider::parse_opencode_usage`].
+    ///
+    /// A fresh `opencode` install reaches OpenCode's free Big Pickle model with
+    /// **no API key and no login**, so this is the path CI uses to exercise the
+    /// loop against a live model without any repo secret (issue #748). The server
+    /// base URL is [`Self::endpoint`] (from `SF_OPENCODE_SERVER`, default
+    /// [`LlmProvider::DEFAULT_OPENCODE_SERVER`]); the workflow boots
+    /// `opencode serve` on it before the appliance starts.
+    ///
+    /// Unlike the headless `opencode run` CLI — which does not print the
+    /// assistant text to stdout in non-interactive mode — the server API returns
+    /// the completed message synchronously, which is why the keyless path drives
+    /// the server rather than the CLI.
+    async fn run_opencode_server(&self, req: &AgentRequest) -> Result<AgentResponse, AgentError> {
+        let base = self.endpoint.trim_end_matches('/');
+
+        // 1. Open a session. `directory` scopes the session to a working dir.
+        let session: serde_json::Value = self
+            .client
+            .post(format!("{base}/session"))
+            .header("content-type", "application/json")
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| AgentError::Http(format!("opencode create session: {e}")))?
+            .error_for_status()
+            .map_err(|e| AgentError::Http(format!("opencode create session: {e}")))?
+            .json()
+            .await
+            .map_err(|e| AgentError::Parse(format!("opencode session json: {e}")))?;
+        let session_id = session["id"]
+            .as_str()
+            .ok_or_else(|| AgentError::Parse("opencode session missing id".to_string()))?;
+
+        // 2. Send the prompt and read the completed assistant message.
+        let body = self
+            .provider
+            .opencode_message_body(&self.model, &req.system, &req.user);
+        let resp = self
+            .client
+            .post(format!("{base}/session/{session_id}/message"))
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AgentError::Http(format!("opencode message: {e}")))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(AgentError::Http(format!(
+                "opencode message {status}: {text}"
+            )));
+        }
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| AgentError::Parse(format!("opencode message json: {e}")))?;
+
+        let content = self
+            .provider
+            .parse_opencode_message(&json)
+            .ok_or_else(|| AgentError::Parse("opencode message had no text part".to_string()))?;
+        let (input_tokens, output_tokens) = self.provider.parse_opencode_usage(&json);
+
+        Ok(AgentResponse {
+            content,
+            provenance: format!("opencode-server:{}", self.model),
+            cost_usd: cost_from_usage(input_tokens, output_tokens),
+        })
+    }
 }
 
 impl AgentExecutor for LlmAgentExecutor {
     fn run<'a>(&'a self, req: AgentRequest) -> BoxFuture<'a, Result<AgentResponse, AgentError>> {
         Box::pin(async move {
-            // Guard: skip all outbound calls when SF_OTEL_DISABLED=1.
-            if std::env::var("SF_OTEL_DISABLED").as_deref() == Ok("1") || self.api_key.is_empty() {
+            // Guard: skip all outbound work when SF_OTEL_DISABLED=1, or when an
+            // HTTP provider has no key. The keyless OpenCode server provider has no
+            // key by design, so an empty key does NOT disable it (issue #748).
+            let disabled = std::env::var("SF_OTEL_DISABLED").as_deref() == Ok("1");
+            let missing_http_key = self.api_key.is_empty() && !self.provider.is_keyless();
+            if disabled || missing_http_key {
                 return Ok(AgentResponse {
                     content: format!("[disabled] {}", req.user),
                     provenance: "sf_otel_disabled".to_string(),
@@ -128,21 +228,28 @@ impl AgentExecutor for LlmAgentExecutor {
                 });
             }
 
-            // Build the Anthropic Messages API request body.
-            let body = serde_json::json!({
-                "model": self.model,
-                "max_tokens": 4096,
-                "system": req.system,
-                "messages": [{"role": "user", "content": req.user}]
-            });
+            // Keyless OpenCode server: drive `opencode serve` over its session
+            // API (no key). The endpoint is the server base URL, not an LLM URL.
+            if self.provider.is_keyless() {
+                return self.run_opencode_server(&req).await;
+            }
 
-            let resp = self
+            // Build the provider-specific request body (Anthropic Messages vs.
+            // OpenAI-compatible chat completions).
+            let body = self
+                .provider
+                .request_body(&self.model, &req.system, &req.user, 4096);
+
+            let mut request = self
                 .client
                 .post(&self.endpoint)
-                .header("x-api-key", &self.api_key)
-                .header("anthropic-version", "2023-06-01")
                 .header("content-type", "application/json")
-                .json(&body)
+                .json(&body);
+            for (name, value) in self.provider.auth_headers(&self.api_key) {
+                request = request.header(name, value);
+            }
+
+            let resp = request
                 .send()
                 .await
                 .map_err(|e| AgentError::Http(e.to_string()))?;
@@ -158,22 +265,21 @@ impl AgentExecutor for LlmAgentExecutor {
                 .await
                 .map_err(|e| AgentError::Parse(e.to_string()))?;
 
-            let content = json["content"][0]["text"]
-                .as_str()
-                .ok_or_else(|| AgentError::Parse("missing content[0].text".to_string()))?
-                .to_string();
+            let content = self
+                .provider
+                .parse_content(&json)
+                .ok_or_else(|| AgentError::Parse("missing assistant content".to_string()))?;
 
             // Cost accounting: derive the US-dollar cost from the model's
-            // reported token usage (Anthropic Messages API `usage` block). We
-            // use indicative per-million-token rates; the exact figure is
-            // informational for the orchestrator slot cards (issue #712).
-            let input_tokens = json["usage"]["input_tokens"].as_f64().unwrap_or(0.0);
-            let output_tokens = json["usage"]["output_tokens"].as_f64().unwrap_or(0.0);
+            // reported token usage. We use indicative per-million-token rates;
+            // the exact figure is informational for the orchestrator slot cards
+            // (issue #712).
+            let (input_tokens, output_tokens) = self.provider.parse_usage(&json);
             let cost_usd = cost_from_usage(input_tokens, output_tokens);
 
             Ok(AgentResponse {
                 content,
-                provenance: format!("llm:{}", self.model),
+                provenance: format!("llm:{}:{}", self.provider.as_str(), self.model),
                 cost_usd,
             })
         })

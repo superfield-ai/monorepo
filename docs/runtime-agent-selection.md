@@ -14,11 +14,11 @@ A vendor CLI that Superfield can spawn: `claude`, `codex`, or `opencode`.
 
 An abstract capability level independent of any backend:
 
-| Tier     | Claude | Codex        | OpenCode                   |
-| -------- | ------ | ------------ | -------------------------- |
-| `high`   | opus   | o3           | opencode/minimax-m2.5-free |
-| `medium` | sonnet | gpt-5.4      | opencode/minimax-m2.5-free |
-| `low`    | haiku  | gpt-5.4-mini | opencode/minimax-m2.5-free |
+| Tier     | Claude | Codex        | OpenCode            |
+| -------- | ------ | ------------ | ------------------- |
+| `high`   | opus   | o3           | opencode/big-pickle |
+| `medium` | sonnet | gpt-5.4      | opencode/big-pickle |
+| `low`    | haiku  | gpt-5.4-mini | opencode/big-pickle |
 
 ### Job type
 
@@ -40,7 +40,7 @@ Build an ordered list of `(backend, model)` pairs for this job type:
 
 ```
 preferred → (claude, sonnet)
-failovers → (codex, gpt-5.4) | (opencode, minimax-m2.5-free)
+failovers → (codex, gpt-5.4) | (opencode, big-pickle)
 ```
 
 If the caller supplies an explicit `provider` override that is not `"auto"`, the candidate list collapses to a single entry using the caller-supplied backend and the job type's tier.
@@ -80,7 +80,7 @@ tiers:
     - backend: codex
       model: o3
     - backend: opencode
-      model: opencode/minimax-m2.5-free
+      model: opencode/big-pickle
 
   thinking-medium:
     - backend: claude
@@ -88,7 +88,7 @@ tiers:
     - backend: codex
       model: gpt-5.4
     - backend: opencode
-      model: opencode/minimax-m2.5-free
+      model: opencode/big-pickle
 
   thinking-low:
     - backend: claude
@@ -96,7 +96,7 @@ tiers:
     - backend: codex
       model: gpt-5.4-mini
     - backend: opencode
-      model: opencode/minimax-m2.5-free
+      model: opencode/big-pickle
 
   coding-medium:
     - backend: codex
@@ -104,7 +104,7 @@ tiers:
     - backend: claude
       model: sonnet
     - backend: opencode
-      model: opencode/minimax-m2.5-free
+      model: opencode/big-pickle
 ```
 
 When a job type references `"thinking-medium"` in its failover list, the resolver expands it to the ordered `(backend, model)` pairs from this table. These pairs are appended to the candidate list after any explicitly named failovers.
@@ -290,19 +290,19 @@ tiers:
   thinking-high:
     - { backend: claude, model: opus }
     - { backend: codex, model: o3 }
-    - { backend: opencode, model: opencode/minimax-m2.5-free }
+    - { backend: opencode, model: opencode/big-pickle }
   thinking-medium:
     - { backend: claude, model: sonnet }
     - { backend: codex, model: gpt-5.4 }
-    - { backend: opencode, model: opencode/minimax-m2.5-free }
+    - { backend: opencode, model: opencode/big-pickle }
   thinking-low:
     - { backend: claude, model: haiku }
     - { backend: codex, model: gpt-5.4-mini }
-    - { backend: opencode, model: opencode/minimax-m2.5-free }
+    - { backend: opencode, model: opencode/big-pickle }
   coding-medium:
     - { backend: codex, model: gpt-5.4 }
     - { backend: claude, model: sonnet }
-    - { backend: opencode, model: opencode/minimax-m2.5-free }
+    - { backend: opencode, model: opencode/big-pickle }
 
 # Per-job overrides. Keys are job type names (see catalogue above).
 # Fully replaces the built-in preferred + failovers for that job type.
