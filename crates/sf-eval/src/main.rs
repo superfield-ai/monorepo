@@ -14,10 +14,12 @@
 //! [`evals/runners/live.md`](../../../../evals/runners/live.md)).
 //!
 //! Seeding and serving are the operator's / workflow's responsibility — the
-//! workflow sets `SF_LLM_PROVIDER=openai-compatible` + `OPENCODE_ZEN_API_KEY`,
-//! seeds the intent (`superfield garden <scenario>/seed/*.md`), and boots
-//! `superfield serve`; this binary observes the running loop. It needs
-//! `DATABASE_URL` pointed at the appliance's Postgres.
+//! workflow starts a keyless `opencode serve`, sets
+//! `SF_LLM_PROVIDER=opencode-server` (keyless: the local opencode server drives
+//! the free Big Pickle model with no API key), seeds the intent
+//! (`superfield garden <scenario>/seed/*.md`), and boots `superfield serve`;
+//! this binary observes the running loop. It needs `DATABASE_URL` pointed at the
+//! appliance's Postgres.
 
 use std::path::{Path, PathBuf};
 use std::time::Duration;

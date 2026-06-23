@@ -163,9 +163,11 @@ The minimal starting point — specified in
 browser end to end and answers one question: **how many turns does it take the
 appliance to reach an acceptable To Do app?** CI exercises it in
 [`.github/workflows/eval-todo-app.yml`](../.github/workflows/eval-todo-app.yml),
-which drives the loop with OpenCode's free Big Pickle model (GLM-4.6) via Zen
-(`SF_LLM_PROVIDER=openai-compatible`, `OPENCODE_ZEN_API_KEY` — no Anthropic key)
-and uploads `result.json`.
+which drives the loop **keylessly** with OpenCode's free Big Pickle model
+(GLM-4.6): `SF_LLM_PROVIDER=opencode-server` points the loop at a local
+`opencode serve` (its `POST /session` + `/session/{id}/message` API), which on a
+fresh install reaches the free model with **no API key and no login** — so the
+run needs no Anthropic key and no repo secret. It uploads `result.json`.
 
 - **Kickstart:** `superfield garden seed/todo-seed.md` seeds a one-paragraph
   intent (add / list / complete a task), then `superfield serve` boots the loop.

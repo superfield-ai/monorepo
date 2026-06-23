@@ -43,9 +43,12 @@ by the `nexum.page_revisions` row count.
 
 ## Knobs
 
-`WORKSPACE_ID`, `TURN_BUDGET`, `POLL_INTERVAL`, `STUDIO_URL`, `BIND`, and any
-grader-specific env (e.g. `SF_EVAL_JUDGE_CMD`). Requires a real model key — the
-fixture executor won't produce meaningful output.
+`WORKSPACE_ID`, `TURN_BUDGET`, `POLL_INTERVAL`, `STUDIO_URL`, `BIND`,
+`SF_OPENCODE_SERVER`, and any grader-specific env (e.g. `SF_EVAL_JUDGE_CMD`).
+Requires a **live** model, not the fixture executor. CI gets one keylessly:
+`SF_LLM_PROVIDER=opencode-server` points the loop at a local `opencode serve`
+that drives OpenCode's free Big Pickle (GLM-4.6) — a fresh install needs no API
+key and no login.
 
 ## Rough edges to design around
 

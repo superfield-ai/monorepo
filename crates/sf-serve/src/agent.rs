@@ -41,14 +41,20 @@ const DEFAULT_OPENAI_MODEL: &str = "opencode/big-pickle";
 ///
 /// `sf-loop` depends on `sf-serve`, so this small mirror avoids a dependency
 /// cycle while keeping the two agents in agreement on the `SF_LLM_PROVIDER`
-/// contract: `anthropic` (default) or `openai-compatible` (free OpenCode Big
-/// Pickle via Zen — issue #748).
+/// contract: `anthropic` (default), `openai-compatible`, or the keyless
+/// `opencode-server` path (free OpenCode Big Pickle, no key — issue #748).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StudioProvider {
     /// Anthropic Messages API.
     Anthropic,
     /// OpenAI-compatible Chat Completions.
     OpenAiCompatible,
+    /// Keyless OpenCode server (`opencode serve`) — drives the free Big Pickle model
+    /// with no API key (issue #748). The studio agent does not itself shell out
+    /// to the CLI for chat replies, but it recognizes the provider so its
+    /// credential-state view agrees with the gardening loop: a keyless provider
+    /// reports the LLM as configured even with no `SF_LLM_API_KEY`.
+    OpenCodeServer,
 }
 
 impl StudioProvider {
@@ -58,8 +64,19 @@ impl StudioProvider {
             Some("openai-compatible") | Some("openai_compatible") | Some("openai") => {
                 StudioProvider::OpenAiCompatible
             }
+            Some("opencode")
+            | Some("opencode-cli")
+            | Some("opencode-server")
+            | Some("opencode_server")
+            | Some("opencodeserver") => StudioProvider::OpenCodeServer,
             _ => StudioProvider::Anthropic,
         }
+    }
+
+    /// True when this provider authenticates with **no API key** (the keyless
+    /// OpenCode server path — issue #748).
+    fn is_keyless(self) -> bool {
+        matches!(self, StudioProvider::OpenCodeServer)
     }
 }
 
@@ -96,12 +113,13 @@ impl StudioAgent {
         let provider = StudioProvider::from_value(env::var("SF_LLM_PROVIDER").ok().as_deref());
         let (default_endpoint, default_model) = match provider {
             StudioProvider::Anthropic => (DEFAULT_ENDPOINT, DEFAULT_MODEL),
-            StudioProvider::OpenAiCompatible => (DEFAULT_OPENAI_ENDPOINT, DEFAULT_OPENAI_MODEL),
+            StudioProvider::OpenAiCompatible | StudioProvider::OpenCodeServer => {
+                (DEFAULT_OPENAI_ENDPOINT, DEFAULT_OPENAI_MODEL)
+            }
         };
         let api_key = env::var("SF_LLM_API_KEY")
             .ok()
             .filter(|s| !s.is_empty())
-            .or_else(|| env::var("OPENCODE_ZEN_API_KEY").ok())
             .unwrap_or_default();
         let endpoint = env::var("SF_LLM_ENDPOINT")
             .ok()
@@ -136,15 +154,16 @@ impl StudioAgent {
         }
     }
 
-    /// True when a usable LLM credential is configured (`SF_LLM_API_KEY` is a
-    /// non-empty value).
+    /// True when a usable LLM credential is configured.
     ///
-    /// This mirrors `sf_loop::LlmCredentialState`: a configured key selects the
-    /// real LLM path (`reply` POSTs to the endpoint); an unconfigured one falls
-    /// back to the fixture. The studio agent and the gardening loop therefore
-    /// agree on first-run credential state (issue #714).
+    /// This mirrors `sf_loop::LlmCredentialState`: a configured credential selects
+    /// the real LLM path; an unconfigured one falls back to the fixture. A
+    /// non-empty `SF_LLM_API_KEY` is configured, and so is a **keyless** provider
+    /// (the OpenCode server path — issue #748), where the server is the credential. The
+    /// studio agent and the gardening loop therefore agree on first-run
+    /// credential state (issues #714, #748).
     pub fn is_llm_configured(&self) -> bool {
-        !self.api_key.trim().is_empty()
+        self.provider.is_keyless() || !self.api_key.trim().is_empty()
     }
 
     /// True when the agent will answer from a local fixture (no LLM call).
@@ -180,14 +199,16 @@ impl StudioAgent {
                 "system": system,
                 "messages": [{"role": "user", "content": message}],
             }),
-            StudioProvider::OpenAiCompatible => serde_json::json!({
-                "model": self.model,
-                "max_tokens": 1024,
-                "messages": [
-                    {"role": "system", "content": system},
-                    {"role": "user", "content": message},
-                ],
-            }),
+            StudioProvider::OpenAiCompatible | StudioProvider::OpenCodeServer => {
+                serde_json::json!({
+                    "model": self.model,
+                    "max_tokens": 1024,
+                    "messages": [
+                        {"role": "system", "content": system},
+                        {"role": "user", "content": message},
+                    ],
+                })
+            }
         };
 
         let mut request = self
@@ -199,7 +220,7 @@ impl StudioAgent {
             StudioProvider::Anthropic => request
                 .header("x-api-key", &self.api_key)
                 .header("anthropic-version", "2023-06-01"),
-            StudioProvider::OpenAiCompatible => {
+            StudioProvider::OpenAiCompatible | StudioProvider::OpenCodeServer => {
                 request.header("authorization", format!("Bearer {}", self.api_key))
             }
         };
@@ -222,7 +243,9 @@ impl StudioAgent {
 
         let content = match self.provider {
             StudioProvider::Anthropic => json["content"][0]["text"].as_str(),
-            StudioProvider::OpenAiCompatible => json["choices"][0]["message"]["content"].as_str(),
+            StudioProvider::OpenAiCompatible | StudioProvider::OpenCodeServer => {
+                json["choices"][0]["message"]["content"].as_str()
+            }
         }
         .ok_or_else(|| AgentError::Parse("missing assistant content".to_string()))?
         .to_string();
@@ -352,5 +375,35 @@ mod tests {
                 "value {v:?} must select the openai-compatible path"
             );
         }
+        for v in [
+            "opencode",
+            "opencode-cli",
+            "opencode-server",
+            "OpenCode-Server",
+        ] {
+            assert_eq!(
+                StudioProvider::from_value(Some(v)),
+                StudioProvider::OpenCodeServer,
+                "value {v:?} must select the keyless opencode server path"
+            );
+        }
+    }
+
+    /// The keyless OpenCode server provider reports the LLM as configured even with
+    /// no `SF_LLM_API_KEY` — the studio agent agrees with the gardening loop's
+    /// keyless credential state (issue #748).
+    #[test]
+    fn keyless_opencode_server_reports_configured() {
+        let agent = StudioAgent {
+            provider: StudioProvider::OpenCodeServer,
+            api_key: String::new(),
+            endpoint: DEFAULT_OPENAI_ENDPOINT.to_string(),
+            model: DEFAULT_OPENAI_MODEL.to_string(),
+            client: reqwest::Client::new(),
+        };
+        assert!(
+            agent.is_llm_configured(),
+            "keyless opencode server must report the LLM as configured with no key"
+        );
     }
 }

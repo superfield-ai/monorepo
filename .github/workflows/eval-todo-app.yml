@@ -1,11 +1,13 @@
 name: Eval — todo-app
 
 # Per-scenario Tier-2 eval (issue #748). Drives the WHOLE gardening loop against
-# a live model — OpenCode's free Big Pickle (GLM-4.6) via Zen's OpenAI-compatible
-# endpoint — so it is slow, stochastic, and reaches an external service. Under the
-# CI taxonomy that makes it `heavy`: sweep-only, never a PR gate. It therefore has
-# NO pull_request trigger and runs only on a nightly schedule, on manual dispatch,
-# or on push to the default branch when its own inputs change.
+# a live model — OpenCode's free Big Pickle (GLM-4.6) — driven **keylessly**
+# through the `opencode` CLI: a fresh install reaches the free model with NO API
+# key and NO login, so this needs no repo secret. The run is slow, stochastic,
+# and reaches an external service, which under the CI taxonomy makes it `heavy`:
+# sweep-only, never a PR gate. It therefore has NO pull_request trigger and runs
+# only on a nightly schedule, on manual dispatch, or on push to the default
+# branch when its own inputs change.
 env:
   CI_CLASS: heavy
 
@@ -24,6 +26,7 @@ on:
     paths:
       - "crates/sf-eval/**"
       - "crates/sf-loop/src/provider.rs"
+      - "crates/sf-loop/src/agent.rs"
       - "evals/scenarios/todo-app/**"
       - "evals/runners/live.md"
       - ".github/workflows/eval-todo-app.yml"
@@ -34,23 +37,40 @@ concurrency:
 
 jobs:
   eval-todo-app:
-    name: todo-app scenario (live, Big Pickle via Zen)
+    name: todo-app scenario (live, keyless Big Pickle via opencode)
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
-    container:
-      image: rust:latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: superfield
+          POSTGRES_PASSWORD: superfield
+          POSTGRES_DB: superfield
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U superfield"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         shell: bash
     env:
-      # OpenAI-compatible provider → OpenCode's free Big Pickle (GLM-4.6) via Zen.
-      # No Anthropic secret: the free Zen key is the only credential needed.
-      SF_LLM_PROVIDER: openai-compatible
-      SF_LLM_ENDPOINT: https://opencode.ai/zen/v1/chat/completions
+      # Keyless: the loop drives the free Big Pickle model through a local
+      # `opencode serve`, which on a fresh install needs no API key and no login.
+      # NO repo secret is referenced anywhere in this workflow.
+      SF_LLM_PROVIDER: opencode-server
       SF_LLM_MODEL: opencode/big-pickle
-      OPENCODE_ZEN_API_KEY: ${{ secrets.OPENCODE_ZEN_API_KEY }}
+      SF_OPENCODE_SERVER: http://127.0.0.1:4096
+      # Shared Postgres for the appliance (boot migrates it) and the observer.
+      DATABASE_URL: postgres://superfield:superfield@localhost:5432/superfield
       TURN_BUDGET: ${{ github.event.inputs.turn_budget || '60' }}
-      WORKSPACE_ID: ${{ github.run_id }}
+      # A fixed, valid UUID so the seed, the loop, and the observer share one
+      # workspace.
+      WORKSPACE_ID: 00000000-0000-4000-8000-000000000748
+      SF_NO_DAEMON: "1"
     steps:
       - uses: actions/checkout@v4
 
@@ -69,24 +89,96 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
-      - name: Build the eval harness and appliance
-        run: cargo build --bin superfield -p sf-eval
-
-      - name: Run the todo-app scenario (live runner)
+      - name: Install the keyless opencode CLI
         run: |
           set -euo pipefail
-          if [ -z "${OPENCODE_ZEN_API_KEY}" ]; then
-            echo "OPENCODE_ZEN_API_KEY is not set; the live runner needs the free Zen key." >&2
-            echo "Set the OPENCODE_ZEN_API_KEY repository secret to run this scenario." >&2
-            exit 1
-          fi
-          # The live runner owns reset -> seed -> serve -> poll-turns -> grade ->
-          # emit; it writes evals/results/todo-app/<workspace-id>/result.json.
+          # A fresh opencode install drives the free Big Pickle model with no
+          # login. The official installer drops the binary in ~/.opencode/bin.
+          curl -fsSL https://opencode.ai/install | bash
+          echo "$HOME/.opencode/bin" >> "$GITHUB_PATH"
+
+      - name: Start the keyless opencode server
+        run: |
+          set -euo pipefail
+          opencode --version
+          # `opencode serve` exposes the session API (POST /session, then
+          # /session/{id}/message) that the loop's keyless executor drives. A
+          # fresh install reaches the free Big Pickle model with no API key and
+          # no login — no credential is configured here.
+          nohup opencode serve --port 4096 >opencode-serve.log 2>&1 &
+          echo "OPENCODE_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 30); do
+            if curl -fsS "http://127.0.0.1:4096/api/health" >/dev/null 2>&1; then
+              echo "opencode server up after ${i}s"; break
+            fi
+            sleep 1
+          done
+
+      - name: Verify the keyless model is reachable
+        run: |
+          set -euo pipefail
+          # One keyless round-trip through the session API proves the free model
+          # answers with no credential. Fail the sweep if the text is empty.
+          SID=$(curl -fsS -X POST "http://127.0.0.1:4096/session?directory=$PWD" \
+            -H 'content-type: application/json' -d '{}' \
+            | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+          TEXT=$(curl -fsS -X POST "http://127.0.0.1:4096/session/$SID/message" \
+            -H 'content-type: application/json' --max-time 120 \
+            -d '{"model":{"providerID":"opencode","modelID":"big-pickle"},"parts":[{"type":"text","text":"Reply with the single word READY."}]}' \
+            | python3 -c "import json,sys; d=json.load(sys.stdin); print(''.join(p.get('text','') for p in d.get('parts',[]) if p.get('type')=='text'))")
+          echo "keyless model replied: '${TEXT}'"
+          test -n "${TEXT}" || { echo "keyless opencode model returned no text" >&2; exit 1; }
+
+      - name: Build the appliance and the eval harness
+        run: cargo build --bin superfield -p sf-eval
+
+      - name: Boot the appliance (health-gated provision, migrate, serve, loop)
+        run: |
+          set -euo pipefail
+          # SF_START_DAEMON enters the health-gated boot; with an external
+          # DATABASE_URL it uses the no-op provisioner, runs migrations, then
+          # serves and starts the gardening loop. SF_NO_DAEMON keeps it in the
+          # foreground so we can background it here and capture its log.
+          SF_START_DAEMON=1 cargo run --bin superfield -- serve >appliance.log 2>&1 &
+          echo "APPLIANCE_PID=$!" >> "$GITHUB_ENV"
+          # Wait for the HTTP layer to bind (boot migrates first, so this also
+          # gates on a migrated DB).
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:7000/healthz" >/dev/null 2>&1 \
+               || curl -fsS "http://127.0.0.1:7000/" >/dev/null 2>&1; then
+              echo "appliance up after ${i}0s"; break
+            fi
+            sleep 10
+          done
+
+      - name: Seed the todo-app intent
+        run: |
+          set -euo pipefail
+          cargo run --bin superfield -- garden \
+            evals/scenarios/todo-app/seed/*.md \
+            --workspace-id "${WORKSPACE_ID}"
+
+      - name: Run the todo-app scenario (live runner, keyless)
+        run: |
+          set -euo pipefail
+          # The live runner observes the running loop via DATABASE_URL: it polls
+          # the gardening cursor, grades each poll, and writes
+          # evals/results/todo-app/<workspace-id>/result.json.
           cargo run -p sf-eval --bin sf-eval -- \
             run \
             --scenario evals/scenarios/todo-app \
             --turn-budget "${TURN_BUDGET}" \
             --workspace-id "${WORKSPACE_ID}"
+
+      - name: Stop the appliance and the opencode server
+        if: always()
+        run: |
+          if [ -n "${APPLIANCE_PID:-}" ]; then kill "${APPLIANCE_PID}" 2>/dev/null || true; fi
+          if [ -n "${OPENCODE_PID:-}" ]; then kill "${OPENCODE_PID}" 2>/dev/null || true; fi
+          echo "--- appliance.log (tail) ---"
+          tail -n 100 appliance.log 2>/dev/null || true
+          echo "--- opencode-serve.log (tail) ---"
+          tail -n 40 opencode-serve.log 2>/dev/null || true
 
       - name: Upload result.json
         if: always()

@@ -175,16 +175,24 @@ impl LoopConfig {
             .unwrap_or_else(|_| std::path::PathBuf::from("blueprint/rules/graph.yaml"));
 
         let llm_provider = LlmProvider::from_env();
-        // The OpenAI-compatible (free OpenCode Big Pickle via Zen) path and the
-        // Anthropic path have different default endpoints and models, so the
-        // default tracks the selected provider unless explicitly overridden.
+        // Each provider has its own default endpoint + model, so the default
+        // tracks the selected provider unless explicitly overridden. For the
+        // keyless OpenCode server provider the "endpoint" is the local
+        // `opencode serve` base URL (from `SF_OPENCODE_SERVER`), not an LLM URL.
         let (default_endpoint, default_model) = match llm_provider {
             LlmProvider::Anthropic => (
-                "https://api.anthropic.com/v1/messages",
+                "https://api.anthropic.com/v1/messages".to_string(),
                 "claude-haiku-4-5-20251001",
             ),
             LlmProvider::OpenAiCompatible => (
-                "https://opencode.ai/zen/v1/chat/completions",
+                "https://opencode.ai/zen/v1/chat/completions".to_string(),
+                "opencode/big-pickle",
+            ),
+            LlmProvider::OpenCodeServer => (
+                std::env::var("SF_OPENCODE_SERVER")
+                    .ok()
+                    .filter(|s| !s.is_empty())
+                    .unwrap_or_else(|| LlmProvider::DEFAULT_OPENCODE_SERVER.to_string()),
                 "opencode/big-pickle",
             ),
         };
@@ -192,14 +200,11 @@ impl LoopConfig {
         let llm_api_key = std::env::var("SF_LLM_API_KEY")
             .ok()
             .filter(|s| !s.is_empty())
-            // The OpenAI-compatible path uses OPENCODE_ZEN_API_KEY as a fallback
-            // so the free Zen key wires the loop without an Anthropic secret.
-            .or_else(|| std::env::var("OPENCODE_ZEN_API_KEY").ok())
             .unwrap_or_default();
         let llm_endpoint = std::env::var("SF_LLM_ENDPOINT")
             .ok()
             .filter(|s| !s.is_empty())
-            .unwrap_or_else(|| default_endpoint.to_string());
+            .unwrap_or(default_endpoint);
         let llm_model = std::env::var("SF_LLM_MODEL")
             .ok()
             .filter(|s| !s.is_empty())
@@ -215,13 +220,22 @@ impl LoopConfig {
         }
     }
 
-    /// The first-run LLM credential state derived from [`Self::llm_api_key`].
+    /// The first-run LLM credential state.
     ///
     /// [`LlmCredentialState::Configured`] selects the real [`LlmAgentExecutor`];
     /// [`LlmCredentialState::Unconfigured`] selects the fixture fallback and is
     /// what the daemon surfaces explicitly at boot (issue #714).
+    ///
+    /// A **keyless** provider (the OpenCode server path — issue #748) is always
+    /// [`LlmCredentialState::Configured`]: the local `opencode serve` is the credential,
+    /// so the appliance does real work with no `SF_LLM_API_KEY` set. HTTP
+    /// providers still require a non-empty key.
     pub fn credential_state(&self) -> LlmCredentialState {
-        LlmCredentialState::from_key(&self.llm_api_key)
+        if self.llm_provider.is_keyless() {
+            LlmCredentialState::Configured
+        } else {
+            LlmCredentialState::from_key(&self.llm_api_key)
+        }
     }
 }
 

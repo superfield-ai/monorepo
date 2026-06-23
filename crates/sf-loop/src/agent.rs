@@ -132,18 +132,106 @@ impl LlmAgentExecutor {
             client: reqwest::Client::new(),
         }
     }
+
+    /// Drive one prompt through a **keyless** `opencode serve` instance.
+    ///
+    /// Talks to the local server's session API: `POST /session` to open a
+    /// session, then `POST /session/{id}/message` with the model + a single text
+    /// part (built by [`LlmProvider::opencode_message_body`]). The assistant text
+    /// comes back in `parts[].text` and is extracted by
+    /// [`LlmProvider::parse_opencode_message`]; token usage by
+    /// [`LlmProvider::parse_opencode_usage`].
+    ///
+    /// A fresh `opencode` install reaches OpenCode's free Big Pickle model with
+    /// **no API key and no login**, so this is the path CI uses to exercise the
+    /// loop against a live model without any repo secret (issue #748). The server
+    /// base URL is [`Self::endpoint`] (from `SF_OPENCODE_SERVER`, default
+    /// [`LlmProvider::DEFAULT_OPENCODE_SERVER`]); the workflow boots
+    /// `opencode serve` on it before the appliance starts.
+    ///
+    /// Unlike the headless `opencode run` CLI — which does not print the
+    /// assistant text to stdout in non-interactive mode — the server API returns
+    /// the completed message synchronously, which is why the keyless path drives
+    /// the server rather than the CLI.
+    async fn run_opencode_server(&self, req: &AgentRequest) -> Result<AgentResponse, AgentError> {
+        let base = self.endpoint.trim_end_matches('/');
+
+        // 1. Open a session. `directory` scopes the session to a working dir.
+        let session: serde_json::Value = self
+            .client
+            .post(format!("{base}/session"))
+            .header("content-type", "application/json")
+            .json(&serde_json::json!({}))
+            .send()
+            .await
+            .map_err(|e| AgentError::Http(format!("opencode create session: {e}")))?
+            .error_for_status()
+            .map_err(|e| AgentError::Http(format!("opencode create session: {e}")))?
+            .json()
+            .await
+            .map_err(|e| AgentError::Parse(format!("opencode session json: {e}")))?;
+        let session_id = session["id"]
+            .as_str()
+            .ok_or_else(|| AgentError::Parse("opencode session missing id".to_string()))?;
+
+        // 2. Send the prompt and read the completed assistant message.
+        let body = self
+            .provider
+            .opencode_message_body(&self.model, &req.system, &req.user);
+        let resp = self
+            .client
+            .post(format!("{base}/session/{session_id}/message"))
+            .header("content-type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| AgentError::Http(format!("opencode message: {e}")))?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let text = resp.text().await.unwrap_or_default();
+            return Err(AgentError::Http(format!(
+                "opencode message {status}: {text}"
+            )));
+        }
+        let json: serde_json::Value = resp
+            .json()
+            .await
+            .map_err(|e| AgentError::Parse(format!("opencode message json: {e}")))?;
+
+        let content = self
+            .provider
+            .parse_opencode_message(&json)
+            .ok_or_else(|| AgentError::Parse("opencode message had no text part".to_string()))?;
+        let (input_tokens, output_tokens) = self.provider.parse_opencode_usage(&json);
+
+        Ok(AgentResponse {
+            content,
+            provenance: format!("opencode-server:{}", self.model),
+            cost_usd: cost_from_usage(input_tokens, output_tokens),
+        })
+    }
 }
 
 impl AgentExecutor for LlmAgentExecutor {
     fn run<'a>(&'a self, req: AgentRequest) -> BoxFuture<'a, Result<AgentResponse, AgentError>> {
         Box::pin(async move {
-            // Guard: skip all outbound calls when SF_OTEL_DISABLED=1.
-            if std::env::var("SF_OTEL_DISABLED").as_deref() == Ok("1") || self.api_key.is_empty() {
+            // Guard: skip all outbound work when SF_OTEL_DISABLED=1, or when an
+            // HTTP provider has no key. The keyless OpenCode server provider has no
+            // key by design, so an empty key does NOT disable it (issue #748).
+            let disabled = std::env::var("SF_OTEL_DISABLED").as_deref() == Ok("1");
+            let missing_http_key = self.api_key.is_empty() && !self.provider.is_keyless();
+            if disabled || missing_http_key {
                 return Ok(AgentResponse {
                     content: format!("[disabled] {}", req.user),
                     provenance: "sf_otel_disabled".to_string(),
                     cost_usd: 0.0,
                 });
+            }
+
+            // Keyless OpenCode server: drive `opencode serve` over its session
+            // API (no key). The endpoint is the server base URL, not an LLM URL.
+            if self.provider.is_keyless() {
+                return self.run_opencode_server(&req).await;
             }
 
             // Build the provider-specific request body (Anthropic Messages vs.

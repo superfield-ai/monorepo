@@ -10,16 +10,22 @@
 //!   (`/v1/chat/completions`): an `Authorization: Bearer <key>` header, the
 //!   system prompt folded into the messages array as a `system`-role message,
 //!   and a response shaped `choices[0].message.content`.
+//! - [`LlmProvider::OpenCodeServer`] — **keyless**: talks to a local `opencode
+//!   serve` instance over its session API (`POST /session`, then
+//!   `POST /session/{id}/message`). A fresh `opencode` install drives OpenCode's
+//!   free **Big Pickle** model (`opencode/big-pickle`, GLM-4.6) with **no API key
+//!   and no login**, so this is the path CI uses to exercise the whole gardening
+//!   loop against a live model without any repo secret (issue #748). The
+//!   assistant text comes back in `parts[].text`; usage in `info.tokens`.
 //!
-//! The OpenAI-compatible path is what lets the appliance drive the loop with
-//! OpenCode's free **Big Pickle** model (`opencode/big-pickle`, GLM-4.6) via
-//! Zen's OpenAI-compatible endpoint (`https://opencode.ai/zen/v1/chat/completions`)
-//! using a free `OPENCODE_ZEN_API_KEY` — no Anthropic key, so CI can exercise the
-//! whole loop without a paid secret (issue #748).
+//! The two `messages`/`content`-shaped wires (`Anthropic`, `OpenAiCompatible`)
+//! require a key; the [`LlmProvider::OpenCodeServer`] path is the keyless one —
+//! see [`LlmProvider::is_keyless`], [`LlmProvider::opencode_message_body`], and
+//! [`LlmProvider::parse_opencode_message`].
 //!
 //! Everything here is **pure** request/response shaping (no I/O) so it is unit
-//! tested without a network: [`LlmAgentExecutor`](crate::LlmAgentExecutor) calls
-//! these to build its body, headers, and to parse the assistant text.
+//! tested without a network. [`LlmAgentExecutor`](crate::LlmAgentExecutor) calls
+//! these to build its bodies, headers, and to parse the assistant text.
 
 /// Which LLM wire protocol the loop speaks.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -30,23 +36,39 @@ pub enum LlmProvider {
     #[default]
     Anthropic,
     /// OpenAI-compatible Chat Completions (`Authorization: Bearer`,
-    /// `system`-role message, `choices[0].message.content`). Used for the free
-    /// OpenCode Big Pickle (GLM-4.6) path via Zen.
+    /// `system`-role message, `choices[0].message.content`). Used for an
+    /// OpenAI-compatible HTTP gateway when an explicit key is supplied.
     OpenAiCompatible,
+    /// Keyless OpenCode server: drives a local `opencode serve` instance over
+    /// its session API to reach OpenCode's free Big Pickle (GLM-4.6) model with
+    /// **no API key and no login**. This is the keyless path for CI (issue #748).
+    /// See [`LlmProvider::opencode_message_body`] and
+    /// [`LlmProvider::parse_opencode_message`].
+    OpenCodeServer,
 }
 
 impl LlmProvider {
     /// Resolve the provider from the `SF_LLM_PROVIDER` value.
     ///
-    /// Recognized (case-insensitive) values for the OpenAI-compatible path:
-    /// `openai-compatible`, `openai_compatible`, `openai`. Anything else —
-    /// including an unset/empty value — resolves to [`LlmProvider::Anthropic`],
-    /// so the default appliance keeps talking to Anthropic.
+    /// Recognized (case-insensitive) values:
+    /// - OpenAI-compatible HTTP: `openai-compatible`, `openai_compatible`,
+    ///   `openai`.
+    /// - Keyless OpenCode server: `opencode`, `opencode-cli`, `opencode-server`,
+    ///   `opencode_server`, `opencodeserver`.
+    ///
+    /// Anything else — including an unset/empty value — resolves to
+    /// [`LlmProvider::Anthropic`], so the default appliance keeps talking to
+    /// Anthropic.
     pub fn from_env_value(value: Option<&str>) -> Self {
         match value.map(str::trim).map(str::to_ascii_lowercase).as_deref() {
             Some("openai-compatible") | Some("openai_compatible") | Some("openai") => {
                 LlmProvider::OpenAiCompatible
             }
+            Some("opencode")
+            | Some("opencode-cli")
+            | Some("opencode-server")
+            | Some("opencode_server")
+            | Some("opencodeserver") => LlmProvider::OpenCodeServer,
             _ => LlmProvider::Anthropic,
         }
     }
@@ -61,7 +83,81 @@ impl LlmProvider {
         match self {
             LlmProvider::Anthropic => "anthropic",
             LlmProvider::OpenAiCompatible => "openai-compatible",
+            LlmProvider::OpenCodeServer => "opencode-server",
         }
+    }
+
+    /// True when this provider needs **no API key** to authenticate.
+    ///
+    /// Only [`LlmProvider::OpenCodeServer`] is keyless: it drives a local
+    /// `opencode serve` instance, which on a fresh install reaches OpenCode's
+    /// free Big Pickle model with no login. The two key-based wires
+    /// ([`LlmProvider::Anthropic`], [`LlmProvider::OpenAiCompatible`]) always
+    /// require a key. The loop's credential-state gate uses this so a keyless
+    /// provider selects the real executor even with an empty `SF_LLM_API_KEY`
+    /// (issue #748).
+    pub fn is_keyless(self) -> bool {
+        matches!(self, LlmProvider::OpenCodeServer)
+    }
+
+    /// Default `opencode serve` base URL the keyless executor talks to.
+    ///
+    /// Overridable via `SF_OPENCODE_SERVER`. The workflow boots `opencode serve`
+    /// on this port before starting the appliance (issue #748).
+    pub const DEFAULT_OPENCODE_SERVER: &'static str = "http://127.0.0.1:4096";
+
+    /// Build the JSON body for `POST /session/{id}/message` against a keyless
+    /// `opencode serve` (only meaningful for [`LlmProvider::OpenCodeServer`]).
+    ///
+    /// The opencode session API takes a `model` (`{providerID, modelID}`) and a
+    /// `parts` array. The `model` string is `provider/model` (e.g.
+    /// `opencode/big-pickle`); it is split on the first `/`. The system prompt
+    /// and the user prompt are folded into a single text part (the session API
+    /// has no separate system field), matching the keyless CLI's single-message
+    /// shape.
+    pub fn opencode_message_body(self, model: &str, system: &str, user: &str) -> serde_json::Value {
+        let (provider_id, model_id) = match model.split_once('/') {
+            Some((p, m)) => (p, m),
+            None => ("opencode", model),
+        };
+        let text = if system.trim().is_empty() {
+            user.to_string()
+        } else {
+            format!("{system}\n\n{user}")
+        };
+        serde_json::json!({
+            "model": { "providerID": provider_id, "modelID": model_id },
+            "parts": [ { "type": "text", "text": text } ],
+        })
+    }
+
+    /// Extract the assistant text from a keyless `opencode serve` message
+    /// response (the `{ "info": {...}, "parts": [...] }` shape).
+    ///
+    /// Concatenates every `parts[]` entry of `type == "text"`. Returns `None`
+    /// when no text part is present.
+    pub fn parse_opencode_message(self, json: &serde_json::Value) -> Option<String> {
+        let parts = json["parts"].as_array()?;
+        let text: String = parts
+            .iter()
+            .filter(|p| p["type"] == "text")
+            .filter_map(|p| p["text"].as_str())
+            .collect::<Vec<_>>()
+            .join("");
+        if text.is_empty() {
+            None
+        } else {
+            Some(text)
+        }
+    }
+
+    /// Extract `(input_tokens, output_tokens)` from a keyless `opencode serve`
+    /// message response (`info.tokens.input` / `info.tokens.output`).
+    pub fn parse_opencode_usage(self, json: &serde_json::Value) -> (f64, f64) {
+        (
+            json["info"]["tokens"]["input"].as_f64().unwrap_or(0.0),
+            json["info"]["tokens"]["output"].as_f64().unwrap_or(0.0),
+        )
     }
 
     /// Build the JSON request body for `system` + `user` prompts.
@@ -82,7 +178,10 @@ impl LlmProvider {
                 "system": system,
                 "messages": [{"role": "user", "content": user}],
             }),
-            LlmProvider::OpenAiCompatible => serde_json::json!({
+            // The OpenCode CLI path never builds an HTTP body (it shells out via
+            // `cli_command`), but it shares the OpenAI-compatible message shape
+            // for any caller that inspects the body for diagnostics.
+            LlmProvider::OpenAiCompatible | LlmProvider::OpenCodeServer => serde_json::json!({
                 "model": model,
                 "max_tokens": max_tokens,
                 "messages": [
@@ -106,7 +205,9 @@ impl LlmProvider {
                 ("x-api-key", api_key.to_string()),
                 ("anthropic-version", "2023-06-01".to_string()),
             ],
-            LlmProvider::OpenAiCompatible => {
+            // The keyless OpenCode CLI sends no auth header (no HTTP at all);
+            // grouped with the OpenAI-compatible Bearer shape, which it ignores.
+            LlmProvider::OpenAiCompatible | LlmProvider::OpenCodeServer => {
                 vec![("authorization", format!("Bearer {api_key}"))]
             }
         }
@@ -119,7 +220,9 @@ impl LlmProvider {
     pub fn parse_content(self, json: &serde_json::Value) -> Option<String> {
         let text = match self {
             LlmProvider::Anthropic => json["content"][0]["text"].as_str(),
-            LlmProvider::OpenAiCompatible => json["choices"][0]["message"]["content"].as_str(),
+            LlmProvider::OpenAiCompatible | LlmProvider::OpenCodeServer => {
+                json["choices"][0]["message"]["content"].as_str()
+            }
         };
         text.map(str::to_string)
     }
@@ -137,7 +240,7 @@ impl LlmProvider {
                 json["usage"]["input_tokens"].as_f64().unwrap_or(0.0),
                 json["usage"]["output_tokens"].as_f64().unwrap_or(0.0),
             ),
-            LlmProvider::OpenAiCompatible => (
+            LlmProvider::OpenAiCompatible | LlmProvider::OpenCodeServer => (
                 json["usage"]["prompt_tokens"].as_f64().unwrap_or(0.0),
                 json["usage"]["completion_tokens"].as_f64().unwrap_or(0.0),
             ),
@@ -220,6 +323,67 @@ mod tests {
         });
         assert_eq!(provider.parse_content(&resp).as_deref(), Some("the answer"));
         assert_eq!(provider.parse_usage(&resp), (12.0, 34.0));
+    }
+
+    /// Acceptance criterion (issue #748, keyless rework): the OpenCode server
+    /// provider is keyless, builds the session-API message body, and parses the
+    /// assistant text + usage from the `{info, parts}` response — the exact shape
+    /// a real keyless `opencode serve` returns.
+    #[test]
+    fn opencode_server_is_keyless_and_shapes_session_message() {
+        // Resolves from the documented aliases.
+        for v in [
+            "opencode",
+            "opencode-cli",
+            "opencode-server",
+            "OpenCode-Server",
+        ] {
+            assert_eq!(
+                LlmProvider::from_env_value(Some(v)),
+                LlmProvider::OpenCodeServer,
+                "value {v:?} must resolve to OpenCodeServer"
+            );
+        }
+
+        let provider = LlmProvider::OpenCodeServer;
+        assert!(
+            provider.is_keyless(),
+            "the opencode server path needs no key"
+        );
+        assert!(!LlmProvider::Anthropic.is_keyless());
+        assert!(!LlmProvider::OpenAiCompatible.is_keyless());
+        assert_eq!(provider.as_str(), "opencode-server");
+
+        // Request body: model split on '/', system + user folded into one text part.
+        let body = provider.opencode_message_body("opencode/big-pickle", "be terse", "say hi");
+        assert_eq!(body["model"]["providerID"], "opencode");
+        assert_eq!(body["model"]["modelID"], "big-pickle");
+        assert_eq!(body["parts"][0]["type"], "text");
+        assert_eq!(body["parts"][0]["text"], "be terse\n\nsay hi");
+        // A bare model (no '/') defaults the providerID to "opencode".
+        let body2 = provider.opencode_message_body("big-pickle", "", "only user");
+        assert_eq!(body2["model"]["providerID"], "opencode");
+        assert_eq!(body2["model"]["modelID"], "big-pickle");
+        assert_eq!(body2["parts"][0]["text"], "only user");
+
+        // Response parse: concatenate text parts; usage from info.tokens.
+        let resp = serde_json::json!({
+            "info": { "tokens": { "input": 8422, "output": 3 }, "finish": "stop" },
+            "parts": [
+                { "type": "step-start" },
+                { "type": "text", "text": "PO" },
+                { "type": "text", "text": "NG" }
+            ]
+        });
+        assert_eq!(
+            provider.parse_opencode_message(&resp).as_deref(),
+            Some("PONG")
+        );
+        assert_eq!(provider.parse_opencode_usage(&resp), (8422.0, 3.0));
+
+        // No text part → None (the headless-empty case the runner must surface).
+        let empty = serde_json::json!({ "info": {}, "parts": [ { "type": "step-start" } ] });
+        assert_eq!(provider.parse_opencode_message(&empty), None);
     }
 
     /// The Anthropic path keeps its Messages-API wire shape unchanged.
