@@ -40,15 +40,19 @@ jobs:
     name: todo-app scenario (live, keyless Big Pickle via opencode)
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 40
+    # The self-hosted runner forbids container-less jobs. Run inside the shared
+    # CI image; the Postgres service is then reachable at host `postgres`.
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
     services:
       postgres:
-        image: postgres:16
+        # pgvector/pgvector:pg16 ships the `vector` extension the nexum schema
+        # migration requires (the appliance boot runs every migration).
+        image: pgvector/pgvector:pg16
         env:
           POSTGRES_USER: superfield
           POSTGRES_PASSWORD: superfield
           POSTGRES_DB: superfield
-        ports:
-          - 5432:5432
         options: >-
           --health-cmd "pg_isready -U superfield"
           --health-interval 10s
@@ -65,7 +69,8 @@ jobs:
       SF_LLM_MODEL: opencode/big-pickle
       SF_OPENCODE_SERVER: http://127.0.0.1:4096
       # Shared Postgres for the appliance (boot migrates it) and the observer.
-      DATABASE_URL: postgres://superfield:superfield@localhost:5432/superfield
+      # Host is the service name `postgres` because the job runs in a container.
+      DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
       TURN_BUDGET: ${{ github.event.inputs.turn_budget || '60' }}
       # A fixed, valid UUID so the seed, the loop, and the observer share one
       # workspace.
@@ -120,12 +125,11 @@ jobs:
           # One keyless round-trip through the session API proves the free model
           # answers with no credential. Fail the sweep if the text is empty.
           SID=$(curl -fsS -X POST "http://127.0.0.1:4096/session?directory=$PWD" \
-            -H 'content-type: application/json' -d '{}' \
-            | python3 -c "import json,sys;print(json.load(sys.stdin)['id'])")
+            -H 'content-type: application/json' -d '{}' | jq -r '.id')
           TEXT=$(curl -fsS -X POST "http://127.0.0.1:4096/session/$SID/message" \
             -H 'content-type: application/json' --max-time 120 \
             -d '{"model":{"providerID":"opencode","modelID":"big-pickle"},"parts":[{"type":"text","text":"Reply with the single word READY."}]}' \
-            | python3 -c "import json,sys; d=json.load(sys.stdin); print(''.join(p.get('text','') for p in d.get('parts',[]) if p.get('type')=='text'))")
+            | jq -r '[.parts[] | select(.type=="text") | .text] | join("")')
           echo "keyless model replied: '${TEXT}'"
           test -n "${TEXT}" || { echo "keyless opencode model returned no text" >&2; exit 1; }
 

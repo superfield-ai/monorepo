@@ -32,6 +32,10 @@ jobs:
   actionlint:
     name: Actionlint
     runs-on: [self-hosted, Linux, X64]
+    # The self-hosted runner forbids container-less jobs, so run inside the
+    # shared CI image like every other job on this runner.
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
     timeout-minutes: 10
     defaults:
       run:
