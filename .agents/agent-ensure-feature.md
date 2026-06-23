@@ -315,3 +315,37 @@ assertion is the DB-gated `#[ignore]` integration test):
 cargo test -p sf-serve -p sf-loop -p superfield
 cargo clippy -p sf-serve -p sf-loop -p superfield --all-targets -- -D warnings
 ```
+
+## Eval harness: live runner, openai-compatible provider, todo-app CI (issue #748)
+
+The appliance has an evaluation harness for the autonomous gardening loop. The
+loop's LLM call selects a wire provider via `SF_LLM_PROVIDER`: `anthropic`
+(default; `x-api-key`, top-level `system`, `content[0].text`) or
+`openai-compatible` (`Authorization: Bearer`, system-role message,
+`choices[0].message.content`), defaulting to OpenCode's free Big Pickle (GLM-4.6)
+endpoint/model and `OPENCODE_ZEN_API_KEY`. `crates/sf-eval` is the Tier-2 live
+runner: pure turn counting from a `gardening_cursor` sequence, project-graph +
+compiling-candidate graders, and `result.json` emission with `turns_to_acceptable`
++ per-rung pass/fail. `.github/workflows/eval-todo-app.yml` (heavy class:
+schedule + dispatch, no PR gate) runs the todo-app scenario against Big Pickle
+via Zen and uploads `result.json`.
+
+Files:
+- `crates/sf-loop/src/provider.rs` — `LlmProvider` (pure wire shaping).
+- `crates/sf-loop/src/agent.rs` / `lib.rs` — `LlmAgentExecutor::with_provider`,
+  `LoopConfig.llm_provider`, provider-aware `from_env` defaults.
+- `crates/sf-serve/src/agent.rs` — `StudioProvider` mirror (no dep cycle).
+- `crates/sf-eval/{runner,graders,result}.rs` + `src/main.rs` (`sf-eval run`).
+- `.github/workflows/eval-todo-app.yml`.
+- `docs/runtime-agent-selection.md` — model is `opencode/big-pickle`, NOT
+  the retired `opencode/minimax-m2.5-free`.
+
+Verify:
+
+```bash
+cargo test -p sf-loop -- openai_compatible_request_uses_bearer_auth_and_parses_choices provider_defaults_to_anthropic
+cargo test -p sf-eval -- live_runner_emits_result_json_with_turns
+cargo clippy -p sf-loop -p sf-serve -p sf-eval --all-targets -- -D warnings
+test -f .github/workflows/eval-todo-app.yml
+~/.agents/scripts/auto/ci-taxonomy-lint.sh .github/workflows/eval-todo-app.yml
+```
