@@ -87,10 +87,30 @@ jobs:
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
 
       # ── pgvector connect probe (scout AC: the DB the suite uses is reachable)
-      - name: Ping pgvector Postgres
+      # The ci-runner image does NOT ship the libpq client tools (no pg_isready
+      # / psql), so probe the same TCP host:port the integration suite connects
+      # to with bash's /dev/tcp. The service-level `pg_isready` health-check (in
+      # the service `options` above) already gates job start on DB readiness;
+      # this step is a portable, in-container reachability assertion on the
+      # exact DATABASE_URL host. `bun packages/db/migrate.ts up` below is the
+      # full connect-and-write proof.
+      - name: Probe pgvector Postgres reachability
         run: |
           set -euo pipefail
-          pg_isready -d "${DATABASE_URL}"
+          # Derive host:port from DATABASE_URL (postgres://user:pass@host:port/db).
+          hostport="${DATABASE_URL#*@}"
+          hostport="${hostport%%/*}"
+          host="${hostport%%:*}"
+          port="${hostport##*:}"
+          echo "Probing ${host}:${port} (from DATABASE_URL) ..."
+          for i in $(seq 1 30); do
+            if (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; then
+              echo "pgvector reachable at ${host}:${port} after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "FAIL: ${host}:${port} not reachable from the job container" >&2
+          exit 1
 
       - name: Install stable Rust toolchain
         uses: dtolnay/rust-toolchain@stable
