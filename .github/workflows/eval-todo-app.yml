@@ -70,6 +70,12 @@ jobs:
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install C toolchain (required by Rust build scripts)
+        # The ci-runner image ships python3 + curl but no C compiler; cargo's
+        # build scripts need a linker (`cc`) or every crate fails with
+        # "linker `cc` not found". Mirrors the install step in ci-control.yml.
+        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libssl-dev
+
       - name: Cache Cargo registry + build
         uses: actions/cache@v4
         with:
