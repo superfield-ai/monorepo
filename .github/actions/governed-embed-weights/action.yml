@@ -1,9 +1,9 @@
 # Composite action: make the governed embedding weights present OFFLINE.
 #
-# SCOUT STUB (issue #770) — Mechanism A skeleton, see
+# Mechanism A (issue #760, built on the #770 scout stub), see
 # docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md §1.2.
-# This action is NOT referenced by any workflow yet. The required embedder job
-# (#760) and the eval fix (#762) wire it in; this scout only pins the contract.
+# The required embedder job (.github/workflows/embedder-coverage.yml) and the
+# eval fix (#762) wire this in.
 #
 # WHY THIS EXISTS: hf-hub 0.3.2 (the version in Cargo.lock) has NO offline
 # switch — HF_HUB_OFFLINE=1 is a Python-only flag the Rust crate ignores.
@@ -13,53 +13,116 @@
 # at the exact path hf-hub's `cache.get()` looks for, so the cache-HIT branch
 # is taken and `download()` is never reached.
 #
-# The exact tree (HF_HOME default = ~/.cache/huggingface):
-#   ~/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/
+# The exact tree (cache root = <HF_HOME>/hub):
+#   <HF_HOME>/hub/models--sentence-transformers--all-MiniLM-L6-v2/
 #     ├── refs/c9745ed                      # text file: the FULL 40-char SHA
 #     └── snapshots/<full-sha>/{config.json,tokenizer.json,model.safetensors}
 # `c9745ed` (GOVERNED_MODEL_REVISION) is the refs FILENAME; the snapshots dir is
 # named with the FULL commit SHA the refs file points at.
+#
+# MECHANISM. We do NOT hardcode the full commit SHA. Instead one online
+# `Embedder::new()` populate (run on cache miss, with network available) writes
+# both the refs/<rev> file and the snapshots/<full-sha>/ tree automatically —
+# exactly the layout hf-hub's cache-HIT branch needs. `actions/cache` then
+# saves the resulting tree keyed on `models/embedding.lock`, so every later run
+# (and the same run's subsequent offline test steps) restores it and resolves
+# with zero huggingface.co egress. A revision bump in the lockfile rotates the
+# cache key and forces a fresh populate.
 
 name: Governed embed weights (offline)
 description: >-
-  Restore the governed all-MiniLM-L6-v2 weights (rev c9745ed) into the hf-hub
-  cache so Embedder::new() resolves offline. SCOUT STUB — no-op skeleton.
+  Restore (or, on cache miss, populate) the governed all-MiniLM-L6-v2 weights
+  (rev c9745ed) into the hf-hub cache so Embedder::new() resolves offline.
 
 inputs:
   hf-home:
-    description: HF_HOME root (the cache root is <hf-home>/hub). Defaults to ~/.cache/huggingface.
+    description: >-
+      HF_HOME root (the hf-hub cache root is <hf-home>/hub). Defaults to a
+      workspace-local path so the cache tree is captured by actions/cache and
+      shared across steps. Embedder::new()/Api::new() honor HF_HOME.
     required: false
     default: ""
+
+outputs:
+  hf-home:
+    description: The resolved HF_HOME this action populated (export as env for the test steps).
+    value: ${{ steps.resolve.outputs.hf-home }}
 
 runs:
   using: composite
   steps:
-    # ── Step 1: restore the pre-baked cache tree, keyed on the lockfile ───────
-    # A revision bump in models/embedding.lock invalidates the cache, forcing a
-    # fresh populate. SCOUT STUB: present so #760/#762 only flip enabled: true
-    # and fill the populate fallback below — no behaviour wired here.
-    - name: Restore governed-weights cache (stub)
+    # ── Step 0: resolve HF_HOME and export it for downstream steps ───────────
+    # hf-hub honors only HF_HOME (it appends `hub`). A workspace-local default
+    # keeps the populated tree inside the checkout so actions/cache captures it
+    # deterministically regardless of the runner's $HOME.
+    - name: Resolve HF_HOME
+      id: resolve
       shell: bash
       run: |
         set -euo pipefail
-        echo "[scout-stub] governed-embed-weights: Mechanism A restore goes here."
-        echo "[scout-stub] cache key: governed-embed-${{ hashFiles('models/embedding.lock') }}"
-        echo "[scout-stub] target tree: <HF_HOME or ~/.cache/huggingface>/hub/"
-        echo "[scout-stub]   models--sentence-transformers--all-MiniLM-L6-v2/{refs/c9745ed,snapshots/<full-sha>/...}"
-        echo "[scout-stub] #760/#762: replace with actions/cache restore + an"
-        echo "[scout-stub]   online Embedder::new() populate fallback on cache miss."
-        # Intentionally no actions/cache call and no download: a no-op scout stub
-        # must not pull weights or change runtime behaviour.
+        hf_home="${{ inputs.hf-home }}"
+        if [ -z "${hf_home}" ]; then
+          hf_home="${GITHUB_WORKSPACE}/.hf-cache"
+        fi
+        mkdir -p "${hf_home}/hub"
+        echo "hf-home=${hf_home}" >> "${GITHUB_OUTPUT}"
+        echo "HF_HOME=${hf_home}" >> "${GITHUB_ENV}"
+        echo "Resolved HF_HOME=${hf_home} (cache root ${hf_home}/hub)"
 
-    # ── Step 2: prove offline resolution (the probe contract) ────────────────
-    # SCOUT STUB: documents the verification #760 runs. Does NOT invoke the
-    # embedder (that would be real behaviour + a network resolve on this empty
-    # stub). The real check is `cargo test -p nexum --test offline_weights_probe
-    # -- --include-ignored` with the cache populated and egress blocked.
-    - name: Verify offline resolution (stub)
+    # ── Step 1: restore the pre-baked cache tree, keyed on the lockfile ───────
+    # A revision bump in models/embedding.lock rotates the key, invalidating the
+    # cache and forcing a fresh populate below.
+    - name: Restore governed-weights cache
+      id: cache
+      uses: actions/cache@v4
+      with:
+        path: ${{ steps.resolve.outputs.hf-home }}/hub
+        key: governed-embed-weights-${{ runner.os }}-${{ hashFiles('models/embedding.lock') }}
+
+    # ── Step 2: populate on cache miss (ONE online Embedder::new()) ──────────
+    # Only runs when the cache missed. Network is required here; the populate
+    # writes refs/<rev> + snapshots/<full-sha>/{config,tokenizer,model} for us.
+    # We drive it through the offline-resolution probe test, which constructs
+    # Embedder::new() exactly once and embeds a string — so the populate is also
+    # a real load-and-infer smoke. With the cache warm this same test re-runs
+    # offline in the job's verify step.
+    - name: Populate governed weights (online, cache miss only)
+      if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
       run: |
         set -euo pipefail
-        echo "[scout-stub] offline probe goes here (#760):"
-        echo "[scout-stub]   cargo test -p nexum --test offline_weights_probe -- --include-ignored"
-        echo "[scout-stub] with the cache populated and huggingface.co egress blocked → exit 0."
+        echo "Cache miss — populating governed weights via one online Embedder::new()."
+        echo "HF_HOME=${HF_HOME}"
+        cargo test -p nexum --test offline_weights_probe -- \
+          --include-ignored --exact embedder_resolves_governed_weights_offline
+        echo "Populated cache tree:"
+        find "${HF_HOME}/hub/models--sentence-transformers--all-MiniLM-L6-v2" \
+          -maxdepth 3 -type f -print
+
+    # ── Step 3: verify the exact offline cache layout is present ─────────────
+    # Fail LOUDLY (non-zero) if the tree hf-hub's cache-HIT branch needs is not
+    # materialised — a green job must never mask absent weights. Asserts the
+    # refs/<rev> file and the three snapshot files exist under the full-SHA dir.
+    - name: Assert governed-weights cache layout
+      shell: bash
+      run: |
+        set -euo pipefail
+        root="${HF_HOME}/hub/models--sentence-transformers--all-MiniLM-L6-v2"
+        ref="${root}/refs/c9745ed"
+        if [ ! -f "${ref}" ]; then
+          echo "FAIL: missing refs file ${ref} (the governed revision pointer)" >&2
+          exit 1
+        fi
+        full_sha="$(tr -d '[:space:]' < "${ref}")"
+        if [ -z "${full_sha}" ]; then
+          echo "FAIL: refs/c9745ed is empty (must contain the full 40-char SHA)" >&2
+          exit 1
+        fi
+        snap="${root}/snapshots/${full_sha}"
+        for f in config.json tokenizer.json model.safetensors; do
+          if [ ! -e "${snap}/${f}" ]; then
+            echo "FAIL: missing ${snap}/${f} — Embedder::new() would fall through to download()" >&2
+            exit 1
+          fi
+        done
+        echo "OK: governed weights present offline at ${snap} (rev c9745ed -> ${full_sha})"

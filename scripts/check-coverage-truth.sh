@@ -6,8 +6,9 @@
 #   masquerade as "tested". A green check only proves a unit *compiled*; this
 #   validator asserts the manifest's recorded compiled / migrated / EXECUTED
 #   inventory matches what CI actually does, and that the nexum embedder
-#   integration suite is recorded as tests_executed_in_ci = 0 (the regression
-#   guard for the zero-executed gap).
+#   integration suite is recorded as tests_executed_in_ci > 0 — the
+#   embedder-coverage.yml job (issue #760) now runs it for real, closing the
+#   zero-executed gap; this assertion guards against regressing back to 0.
 #
 # WHAT IT ENFORCES (exit non-zero on any divergence)
 #   1. Manifest parses as valid TOML and has [meta] with schema_version (int)
@@ -23,10 +24,13 @@
 #        - migrated_in_ci: true iff the unit owns migrations ci-migrate.yml
 #          applies (parsed from .github/workflows/ci-migrate.yml paths).
 #        - tests_executed_in_ci truthiness: 0 iff no CI job executes a suite for
-#          this unit, >0 iff one does. Crates are always 0 (no cargo-test job).
-#          Packages are >0 iff they have *.test.ts under tests/unit or
-#          tests/integration (the test-unit / test-integration globs).
-#   5. crates/nexum is recorded tests_executed_in_ci = 0 (explicit assertion).
+#          this unit, >0 iff one does. A crate is >0 iff embedder-coverage.yml
+#          runs it (`cargo test -p <crate>`, parsed from the workflow); every
+#          other crate has no cargo-test job -> 0. Packages are >0 iff they have
+#          *.test.ts under tests/unit or tests/integration (the test-unit /
+#          test-integration globs).
+#   5. crates/nexum is recorded tests_executed_in_ci > 0 AND embedder-coverage
+#      .yml actually executes it (explicit assertion — the gap is now closed).
 #
 # CANONICAL DOCS
 #   docs/prd.md, docs/adr-embedding-model.md
@@ -153,6 +157,25 @@ if os.path.isfile(migrate_yml):
 else:
     err(".github/workflows/ci-migrate.yml not found; cannot derive migrated_in_ci")
 
+# crate-execution reality: the embedder-coverage job (issue #760) is the one
+# workflow that actually RUNS a crate's tests (the real-embedder proof). Derive
+# which crates it executes by scanning its `cargo test -p <crate>` invocations,
+# so the manifest's tests_executed_in_ci for crates is checked against the
+# workflow, not a hardcoded "every crate is 0". Any crate NOT named here still
+# has no executing job -> reality 0 (the regression guard for the rest).
+embedder_yml = os.path.join(ROOT, ".github/workflows/embedder-coverage.yml")
+crate_executes_paths = set()
+if os.path.isfile(embedder_yml):
+    with open(embedder_yml, "r", encoding="utf-8") as fh:
+        embedder_text = fh.read()
+    # Match `cargo test -p <crate>` (the crate package name maps 1:1 to its
+    # crates/<crate> directory for the workspace crates this job runs).
+    for m in re.finditer(r"cargo test\s+-p\s+([A-Za-z0-9_-]+)", embedder_text):
+        crate = m.group(1)
+        candidate = f"crates/{crate}"
+        if os.path.isdir(os.path.join(ROOT, candidate)):
+            crate_executes_paths.add(candidate)
+
 
 def package_executes(path):
     """True iff a package has a suite the test-unit/test-integration globs run.
@@ -253,8 +276,11 @@ for idx, row in enumerate(units):
 
     # tests_executed_in_ci truthiness reality.
     if top == "crates":
-        # No cargo-test/nextest job exists anywhere -> every crate is 0.
-        real_executes = False
+        # A crate executes iff a CI workflow runs its tests. The only such
+        # workflow is embedder-coverage.yml (issue #760), whose `cargo test -p
+        # <crate>` invocations are parsed above. Every other crate has no
+        # executing job -> 0 (the regression guard for the rest).
+        real_executes = path in crate_executes_paths
     else:
         real_executes = package_executes(path)
 
@@ -265,7 +291,7 @@ for idx, row in enumerate(units):
         )
     if (not real_executes) and teic > 0:
         where = (
-            "no cargo-test job runs crate tests"
+            "no cargo-test job runs this crate's tests"
             if top == "crates"
             else "no *.test.ts under tests/unit or tests/integration is executed"
         )
@@ -283,19 +309,32 @@ stale = sorted(manifest_paths - disk_units)
 for p in stale:
     err(f"manifest row for non-existent path (stale): {p}")
 
-# ── Explicit embedder regression-guard assertion ─────────────────────────────
+# ── Explicit embedder assertion (issue #760: the gap is now CLOSED) ──────────
+# The embedder-coverage job (#760) runs the nexum embedder for real (pgvector +
+# governed weights + `cargo test -p nexum ... --include-ignored`). The manifest
+# MUST now record crates/nexum as tests_executed_in_ci > 0 AND embedder-coverage
+# .yml must actually execute it — this assertion fails LOUDLY if either the
+# manifest under-claims (back to the 0 gap) or the job stops running nexum.
 nexum = next(
     (r for r in units if isinstance(r, dict) and r.get("path") == "crates/nexum"),
     None,
 )
 if nexum is None:
-    err("required row crates/nexum is missing (embedder regression guard)")
-elif nexum.get("tests_executed_in_ci") != 0:
-    err(
-        "crates/nexum must record tests_executed_in_ci=0 (the embedder "
-        "zero-executed regression guard) but found "
-        f"{nexum.get('tests_executed_in_ci')!r}"
-    )
+    err("required row crates/nexum is missing (embedder coverage guard)")
+else:
+    teic_nexum = nexum.get("tests_executed_in_ci")
+    if not isinstance(teic_nexum, int) or isinstance(teic_nexum, bool) or teic_nexum <= 0:
+        err(
+            "crates/nexum must record tests_executed_in_ci>0 — the embedder is "
+            "now run for real by embedder-coverage.yml (issue #760) — but found "
+            f"{teic_nexum!r}"
+        )
+    if "crates/nexum" not in crate_executes_paths:
+        err(
+            "embedder-coverage.yml must execute the nexum embedder "
+            "(`cargo test -p nexum ...`) — the manifest claims crates/nexum is "
+            "executed but no such invocation was found in the workflow"
+        )
 
 # ── Report ───────────────────────────────────────────────────────────────────
 if errors:
@@ -309,6 +348,7 @@ n_packages = sum(1 for r in units if r.get("kind") == "package")
 print(
     f"PASS  {MANIFEST}: {len(units)} units validated against reality "
     f"({n_crates} crates, {n_packages} packages); "
-    f"crates/nexum tests_executed_in_ci=0 guard intact."
+    f"crates/nexum tests_executed_in_ci>0 (embedder run for real by "
+    f"embedder-coverage.yml) guard intact."
 )
 PY
