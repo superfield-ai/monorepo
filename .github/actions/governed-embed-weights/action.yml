@@ -20,14 +20,19 @@
 # `c9745ed` (GOVERNED_MODEL_REVISION) is the refs FILENAME; the snapshots dir is
 # named with the FULL commit SHA the refs file points at.
 #
-# MECHANISM. We do NOT hardcode the full commit SHA. Instead one online
-# `Embedder::new()` populate (run on cache miss, with network available) writes
-# both the refs/<rev> file and the snapshots/<full-sha>/ tree automatically —
-# exactly the layout hf-hub's cache-HIT branch needs. `actions/cache` then
-# saves the resulting tree keyed on `models/embedding.lock`, so every later run
-# (and the same run's subsequent offline test steps) restores it and resolves
-# with zero huggingface.co egress. A revision bump in the lockfile rotates the
-# cache key and forces a fresh populate.
+# MECHANISM. We do NOT hardcode the full commit SHA. On a cache miss a populate
+# step resolves the full commit SHA for revision c9745ed from the HF API, writes
+# refs/c9745ed, and `curl -fL`s the three governed files into
+# snapshots/<full-sha>/ — exactly the layout hf-hub's cache-HIT branch needs.
+# We use curl rather than hf-hub's own download() because hf-hub 0.3.2's
+# metadata() follows the huggingface.co -> S3-CDN redirect through ureq, which
+# fails with `RelativeUrlWithoutBase` on a runner whose CDN egress is proxied;
+# curl -L follows the same redirect with its own resolver and succeeds.
+# `actions/cache` then saves the resulting tree keyed on `models/embedding.lock`,
+# so every later run (and this run's offline test steps) restores it and
+# resolves with zero huggingface.co egress. A revision bump in the lockfile
+# rotates the cache key and forces a fresh populate. A final step runs the
+# offline-resolution probe to PROVE Embedder::new() takes the cache-HIT branch.
 
 name: Governed embed weights (offline)
 description: >-
@@ -79,25 +84,55 @@ runs:
         path: ${{ steps.resolve.outputs.hf-home }}/hub
         key: governed-embed-weights-${{ runner.os }}-${{ hashFiles('models/embedding.lock') }}
 
-    # ── Step 2: populate on cache miss (ONE online Embedder::new()) ──────────
-    # Only runs when the cache missed. Network is required here; the populate
-    # writes refs/<rev> + snapshots/<full-sha>/{config,tokenizer,model} for us.
-    # We drive it through the offline-resolution probe test, which constructs
-    # Embedder::new() exactly once and embeds a string — so the populate is also
-    # a real load-and-infer smoke. With the cache warm this same test re-runs
-    # offline in the job's verify step.
+    # ── Step 2: populate on cache miss (curl the files into the exact tree) ──
+    # Only runs when the cache missed. We do NOT drive the populate through
+    # hf-hub's own download(): its metadata() does a no-redirect GET to
+    # huggingface.co then follows the `Location` header to the S3 CDN, and on
+    # this runner that redirect parse fails with `RelativeUrlWithoutBase` (the
+    # CDN egress is proxied/blocked even though huggingface.co itself answers).
+    # `curl -fL` follows the redirect to the CDN with curl's own resolver and
+    # succeeds where ureq fails. We materialise EXACTLY the hf-hub cache-HIT
+    # layout: resolve the full commit SHA for revision c9745ed, write
+    # refs/c9745ed, and fetch the three files into snapshots/<full-sha>/. Then
+    # every offline Embedder::new() takes the cache-HIT branch (no download()).
     - name: Populate governed weights (online, cache miss only)
       if: steps.cache.outputs.cache-hit != 'true'
       shell: bash
+      env:
+        GOVERNED_MODEL: sentence-transformers/all-MiniLM-L6-v2
+        GOVERNED_REV: c9745ed
       run: |
         set -euo pipefail
-        echo "Cache miss — populating governed weights via one online Embedder::new()."
+        echo "Cache miss — fetching governed weights via curl into the hf-hub cache tree."
         echo "HF_HOME=${HF_HOME}"
-        cargo test -p nexum --test offline_weights_probe -- \
-          --include-ignored --exact embedder_resolves_governed_weights_offline
+        root="${HF_HOME}/hub/models--sentence-transformers--all-MiniLM-L6-v2"
+        mkdir -p "${root}/refs"
+
+        # Resolve the FULL 40-char commit SHA for the pinned short revision.
+        # huggingface.co/api/models/<id>/revision/<rev> returns JSON with `sha`.
+        # Parse with python3 (the ci-runner image ships it; jq is not present).
+        api_url="https://huggingface.co/api/models/${GOVERNED_MODEL}/revision/${GOVERNED_REV}"
+        echo "Resolving full SHA from ${api_url}"
+        full_sha="$(curl -fsSL "${api_url}" \
+          | python3 -c 'import json,sys; print(json.load(sys.stdin)["sha"])')"
+        if [ -z "${full_sha}" ]; then
+          echo "FAIL: could not resolve full commit SHA for ${GOVERNED_REV}" >&2
+          exit 1
+        fi
+        echo "Resolved ${GOVERNED_REV} -> ${full_sha}"
+        printf '%s' "${full_sha}" > "${root}/refs/${GOVERNED_REV}"
+
+        snap="${root}/snapshots/${full_sha}"
+        mkdir -p "${snap}"
+        # Fetch each governed file from the resolve endpoint (curl -L follows the
+        # 302 to the CDN). Pin the FULL SHA in the URL for reproducibility.
+        for f in config.json tokenizer.json model.safetensors; do
+          url="https://huggingface.co/${GOVERNED_MODEL}/resolve/${full_sha}/${f}"
+          echo "Downloading ${f} <- ${url}"
+          curl -fL --retry 3 --retry-delay 2 -o "${snap}/${f}" "${url}"
+        done
         echo "Populated cache tree:"
-        find "${HF_HOME}/hub/models--sentence-transformers--all-MiniLM-L6-v2" \
-          -maxdepth 3 -type f -print
+        find "${root}" -maxdepth 3 -type f -print
 
     # ── Step 3: verify the exact offline cache layout is present ─────────────
     # Fail LOUDLY (non-zero) if the tree hf-hub's cache-HIT branch needs is not
@@ -126,3 +161,16 @@ runs:
           fi
         done
         echo "OK: governed weights present offline at ${snap} (rev c9745ed -> ${full_sha})"
+
+    # ── Step 4: prove offline resolution (the cache-HIT branch is taken) ─────
+    # Run the offline-resolution probe with the cache now populated: it
+    # constructs Embedder::new() and embeds a string. If resolution still hit
+    # the network it would fail with RelativeUrlWithoutBase; passing here PROVES
+    # the cache-HIT branch is taken and the weights resolve with no egress.
+    - name: Verify offline resolution (Embedder::new from cache)
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "HF_HOME=${HF_HOME} — resolving governed weights offline."
+        cargo test -p nexum --test offline_weights_probe -- \
+          --include-ignored --exact embedder_resolves_governed_weights_offline
