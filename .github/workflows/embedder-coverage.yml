@@ -1,0 +1,92 @@
+name: Embedder coverage (pgvector + governed weights)
+
+# SCOUT STUB (issue #770) for the embedding-coverage-proof phase. Pins the
+# pgvector + DATABASE_URL provisioning and the governed-weights restore seam the
+# required embedder job (#760) will fill in. See
+# docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md §2.
+#
+# CLASS = heavy: it provisions resources (pgvector + model weights) and is
+# destined to run the real embedder, which the taxonomy classes as a sweep, not
+# a PR gate. Per the taxonomy, `heavy` carries NO `pull_request` trigger (so it
+# never gates a PR and never fires on a commit) and MUST run in at least one
+# sweep context — here a nightly `schedule`, which on this scout stub is a cheap,
+# honest probe that pgvector provisioning still connects (the scout AC).
+# `workflow_dispatch` adds manual on-demand runs. #760 promotes the actual test
+# run to a required context via its OWN feature-correctness/system-correctness
+# job; it does not make THIS file a gate.
+env:
+  CI_CLASS: heavy
+
+on:
+  workflow_dispatch: {}
+  schedule:
+    # Nightly sweep (03:17 UTC). Satisfies the heavy sweep-context rule and
+    # gives the pgvector connect probe a recurring smoke run.
+    - cron: "17 3 * * *"
+
+concurrency:
+  group: embedder-coverage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  embedder-coverage:
+    name: nexum embedder coverage (stub probe)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    # Container-less jobs are forbidden on the self-hosted runner; run inside the
+    # shared CI image so the Postgres service is reachable at host `postgres`.
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    services:
+      postgres:
+        # pgvector/pgvector:pg16 ships the `vector` extension the nexum schema
+        # migration requires (blocks.embedding vector(384)).
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: superfield
+          POSTGRES_PASSWORD: superfield
+          POSTGRES_DB: superfield
+        options: >-
+          --health-cmd "pg_isready -U superfield -d superfield"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      # Host is the service name `postgres` because the job runs in a container.
+      DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+
+      # ── pgvector connect probe (scout AC: psql/sqlx ping exits 0) ───────────
+      - name: Ping pgvector Postgres
+        run: |
+          set -euo pipefail
+          # pg_isready ships with the pg client tools in the ci-runner image and
+          # exercises the same DATABASE_URL host/port the integration suite uses.
+          pg_isready -d "${DATABASE_URL}"
+
+      # ── SCOUT-STUB SEAMS for #760 (filled in by the feature) ───────────────
+      # 1. Apply the nexum migration set (shared migrator applies
+      #    public → auth → nexum → sharp in order):
+      #      - run: bun install --frozen-lockfile
+      #      - run: bun packages/db/migrate.ts up
+      # 2. Make the governed weights present offline (composite action stub):
+      #      - uses: ./.github/actions/governed-embed-weights
+      # 3. Run the embedder tests for real, loud on no-tests and on absent deps:
+      #      - run: cargo test -p nexum --test integration --include-ignored
+      #      - run: cargo test -p nexum embed:: --include-ignored
+      #    (#761 arms the require-marker so a missing DB/weights fails loudly.)
+      - name: Embedder coverage seam (stub)
+        run: |
+          set -euo pipefail
+          echo "[scout-stub] #760 fills in: migrate up → restore governed weights"
+          echo "[scout-stub]   (uses: ./.github/actions/governed-embed-weights) →"
+          echo "[scout-stub]   cargo test -p nexum --test integration --include-ignored"
+          echo "[scout-stub]   + the embed.rs #[ignore] tests, asserting a 384-dim vector."
+          echo "[scout-stub] See docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md §3."

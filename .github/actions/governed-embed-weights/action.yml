@@ -1,0 +1,65 @@
+# Composite action: make the governed embedding weights present OFFLINE.
+#
+# SCOUT STUB (issue #770) — Mechanism A skeleton, see
+# docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md §1.2.
+# This action is NOT referenced by any workflow yet. The required embedder job
+# (#760) and the eval fix (#762) wire it in; this scout only pins the contract.
+#
+# WHY THIS EXISTS: hf-hub 0.3.2 (the version in Cargo.lock) has NO offline
+# switch — HF_HUB_OFFLINE=1 is a Python-only flag the Rust crate ignores.
+# `Embedder::new()` resolves weights cache-first then falls through to the
+# network on a miss, producing `RelativeUrlWithoutBase` on a no-egress runner
+# (the eval-todo-app Seed failure). The ONLY lever is to pre-populate the cache
+# at the exact path hf-hub's `cache.get()` looks for, so the cache-HIT branch
+# is taken and `download()` is never reached.
+#
+# The exact tree (HF_HOME default = ~/.cache/huggingface):
+#   ~/.cache/huggingface/hub/models--sentence-transformers--all-MiniLM-L6-v2/
+#     ├── refs/c9745ed                      # text file: the FULL 40-char SHA
+#     └── snapshots/<full-sha>/{config.json,tokenizer.json,model.safetensors}
+# `c9745ed` (GOVERNED_MODEL_REVISION) is the refs FILENAME; the snapshots dir is
+# named with the FULL commit SHA the refs file points at.
+
+name: Governed embed weights (offline)
+description: >-
+  Restore the governed all-MiniLM-L6-v2 weights (rev c9745ed) into the hf-hub
+  cache so Embedder::new() resolves offline. SCOUT STUB — no-op skeleton.
+
+inputs:
+  hf-home:
+    description: HF_HOME root (the cache root is <hf-home>/hub). Defaults to ~/.cache/huggingface.
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    # ── Step 1: restore the pre-baked cache tree, keyed on the lockfile ───────
+    # A revision bump in models/embedding.lock invalidates the cache, forcing a
+    # fresh populate. SCOUT STUB: present so #760/#762 only flip enabled: true
+    # and fill the populate fallback below — no behaviour wired here.
+    - name: Restore governed-weights cache (stub)
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "[scout-stub] governed-embed-weights: Mechanism A restore goes here."
+        echo "[scout-stub] cache key: governed-embed-${{ hashFiles('models/embedding.lock') }}"
+        echo "[scout-stub] target tree: <HF_HOME or ~/.cache/huggingface>/hub/"
+        echo "[scout-stub]   models--sentence-transformers--all-MiniLM-L6-v2/{refs/c9745ed,snapshots/<full-sha>/...}"
+        echo "[scout-stub] #760/#762: replace with actions/cache restore + an"
+        echo "[scout-stub]   online Embedder::new() populate fallback on cache miss."
+        # Intentionally no actions/cache call and no download: a no-op scout stub
+        # must not pull weights or change runtime behaviour.
+
+    # ── Step 2: prove offline resolution (the probe contract) ────────────────
+    # SCOUT STUB: documents the verification #760 runs. Does NOT invoke the
+    # embedder (that would be real behaviour + a network resolve on this empty
+    # stub). The real check is `cargo test -p nexum --test offline_weights_probe
+    # -- --include-ignored` with the cache populated and egress blocked.
+    - name: Verify offline resolution (stub)
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "[scout-stub] offline probe goes here (#760):"
+        echo "[scout-stub]   cargo test -p nexum --test offline_weights_probe -- --include-ignored"
+        echo "[scout-stub] with the cache populated and huggingface.co egress blocked → exit 0."
