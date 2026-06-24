@@ -5,31 +5,19 @@ name: Eval — todo-app
 # through the `opencode` CLI: a fresh install reaches the free model with NO API
 # key and NO login, so this needs no repo secret. The run is slow, stochastic,
 # and reaches an external service, which under the CI taxonomy makes it `heavy`:
-# sweep-only, never a PR gate. It therefore has NO pull_request trigger and runs
-# only on a nightly schedule, on manual dispatch, or on push to the default
-# branch when its own inputs change.
+# sweep-only, never a PR gate. It runs ONLY on explicit manual dispatch
+# (`workflow_dispatch`) — there is no `pull_request`, no `schedule`, and no
+# `push` trigger, so it never fires on a commit, merge, or nightly cron.
 env:
   CI_CLASS: heavy
 
 on:
-  schedule:
-    # Nightly at 04:30 UTC — gated like the live-smoke pattern.
-    - cron: "30 4 * * *"
   workflow_dispatch:
     inputs:
       turn_budget:
         description: "Max gardening turns before giving up"
         required: false
         default: "60"
-  push:
-    branches: [main]
-    paths:
-      - "crates/sf-eval/**"
-      - "crates/sf-loop/src/provider.rs"
-      - "crates/sf-loop/src/agent.rs"
-      - "evals/scenarios/todo-app/**"
-      - "evals/runners/live.md"
-      - ".github/workflows/eval-todo-app.yml"
 
 concurrency:
   group: eval-todo-app-${{ github.ref }}
