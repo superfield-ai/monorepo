@@ -59,3 +59,33 @@ jobs:
       - uses: actions/checkout@v4
       - run: bun install --frozen-lockfile
       - run: bun run format:check
+
+  coverage-truth:
+    name: Coverage truth
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      # The validator needs a TOML parser. tomllib is stdlib on Python >= 3.11;
+      # for older images fall back to the tomli backport. Installing here keeps
+      # the check self-sufficient and makes the parser hard-fail (never a silent
+      # skip) impossible to trip on a missing dependency.
+      - name: Ensure a TOML parser is available
+        run: |
+          if python3 -c 'import tomllib' 2>/dev/null; then
+            echo "tomllib (stdlib) available"
+          elif python3 -c 'import tomli' 2>/dev/null; then
+            echo "tomli backport available"
+          else
+            python3 -m pip install --quiet tomli \
+              || pip3 install --quiet tomli \
+              || pip install --quiet tomli
+          fi
+      - name: Validate executed-coverage truth table
+        run: scripts/check-coverage-truth.sh
+      - name: Self-test the coverage-truth validator
+        run: tests/coverage-truth-selftest.sh
