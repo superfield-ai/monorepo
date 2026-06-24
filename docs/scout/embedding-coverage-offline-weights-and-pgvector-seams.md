@@ -6,12 +6,12 @@
 **Canonical docs:** `docs/adr-embedding-model.md`; `models/embedding.lock`
 **Downstream issues:**
 
-| Issue | Feature | What this scout pins for it |
-| ----- | ------- | --------------------------- |
-| #760 | Required real-embedder job (pgvector + governed weights run nexum integration + embed.rs ignored tests) | The offline-weights mechanism, the pgvector provisioning, the `--include-ignored` invocation, and the exact test seams. |
-| #761 | Convert embedder/DB silent skips to loud CI failures | The exact `maybe_pool()` silent-skip and `#[ignore]` lines to rewrite, and where the loud-fail guard goes. |
-| #762 | Provision governed weights for `eval-todo-app` Seed (fix `Embedder::new` `RelativeUrlWithoutBase`) | The exact pre-population step to insert before the garden Seed step in `eval-todo-app.yml`. |
-| #763 | Replace the manual embedder verify in `.agents/agent-ensure-feature.md` with the CI-backed command | The CI job/command the manual verify (L161) is replaced by. |
+| Issue | Feature                                                                                                 | What this scout pins for it                                                                                             |
+| ----- | ------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| #760  | Required real-embedder job (pgvector + governed weights run nexum integration + embed.rs ignored tests) | The offline-weights mechanism, the pgvector provisioning, the `--include-ignored` invocation, and the exact test seams. |
+| #761  | Convert embedder/DB silent skips to loud CI failures                                                    | The exact `maybe_pool()` silent-skip and `#[ignore]` lines to rewrite, and where the loud-fail guard goes.              |
+| #762  | Provision governed weights for `eval-todo-app` Seed (fix `Embedder::new` `RelativeUrlWithoutBase`)      | The exact pre-population step to insert before the garden Seed step in `eval-todo-app.yml`.                             |
+| #763  | Replace the manual embedder verify in `.agents/agent-ensure-feature.md` with the CI-backed command      | The CI job/command the manual verify (L161) is replaced by.                                                             |
 
 This is a **stub-only / documentation** pass. It introduces **no** change to
 runtime behaviour. `cargo build -p nexum` and `cargo test -p nexum` pass
@@ -23,7 +23,7 @@ features' job.
 
 > **Loud-skip invariant (phase thesis).** Nothing in this scout bakes in a
 > silent-skip. The `maybe_pool()` early-return and the `#[ignore]` markers are
-> the *existing* silent-skip pattern this phase exists to remove. This note
+> the _existing_ silent-skip pattern this phase exists to remove. This note
 > documents where the loud-fail wiring goes (§4); it does **not** add a new
 > skip and it does **not** remove the existing one (that is #761).
 
@@ -85,13 +85,13 @@ pub fn get(&self, filename: &str) -> Option<PathBuf> {
 
 Pinned facts, derived from the crate source:
 
-| Element | Value | Source |
-| ------- | ----- | ------ |
-| Cache **root** | `$HF_HOME/hub`, else `~/.cache/huggingface/hub` | `src/lib.rs:194` (`Default for Cache`) — note `HF_HOME` is the only env var honored; it then appends `hub`. |
-| Repo **folder name** | `models--sentence-transformers--all-MiniLM-L6-v2` | `folder_name()` `src/lib.rs:247` — `format!("models--{repo_id}").replace('/', "--")`. |
-| **refs file** | `<root>/<repo>/refs/c9745ed` containing the **full commit SHA** | `ref_path()` `src/lib.rs:155`; revision = `GOVERNED_MODEL_REVISION = "c9745ed"`. |
-| **snapshot dir** | `<root>/<repo>/snapshots/<full-commit-sha>/` | `pointer_path()` `src/lib.rs:184`. |
-| Required **files** | `config.json`, `tokenizer.json`, `model.safetensors` under the snapshot dir | the three `repo.get(...)` calls in `embed.rs:151-159`. |
+| Element              | Value                                                                       | Source                                                                                                      |
+| -------------------- | --------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------- |
+| Cache **root**       | `$HF_HOME/hub`, else `~/.cache/huggingface/hub`                             | `src/lib.rs:194` (`Default for Cache`) — note `HF_HOME` is the only env var honored; it then appends `hub`. |
+| Repo **folder name** | `models--sentence-transformers--all-MiniLM-L6-v2`                           | `folder_name()` `src/lib.rs:247` — `format!("models--{repo_id}").replace('/', "--")`.                       |
+| **refs file**        | `<root>/<repo>/refs/c9745ed` containing the **full commit SHA**             | `ref_path()` `src/lib.rs:155`; revision = `GOVERNED_MODEL_REVISION = "c9745ed"`.                            |
+| **snapshot dir**     | `<root>/<repo>/snapshots/<full-commit-sha>/`                                | `pointer_path()` `src/lib.rs:184`.                                                                          |
+| Required **files**   | `config.json`, `tokenizer.json`, `model.safetensors` under the snapshot dir | the three `repo.get(...)` calls in `embed.rs:151-159`.                                                      |
 
 So the full minimal tree the mechanism must materialise (with `HF_HOME=$HOME/.cache/huggingface`, i.e. the default):
 
@@ -107,10 +107,10 @@ So the full minimal tree the mechanism must materialise (with `HF_HOME=$HOME/.ca
             └── model.safetensors
 ```
 
-> **Gotcha for #760/#762:** `c9745ed` is the *short* SHA used as the revision
+> **Gotcha for #760/#762:** `c9745ed` is the _short_ SHA used as the revision
 > string. The `refs/c9745ed` file must contain the **full** commit SHA, and
 > the `snapshots/<...>` directory must be named with that **full** SHA — the
-> short SHA is only the refs *filename*. Pin the full SHA when authoring the
+> short SHA is only the refs _filename_. Pin the full SHA when authoring the
 > bake step (resolve it once from the Hub, then commit it / cache it). A real
 > hf-hub download writes both files automatically, so the simplest bake is: do
 > ONE online `Embedder::new()` on a populate runner, then `actions/cache` the
@@ -142,7 +142,7 @@ by this scout.
 never runs in the default suite and changes no behaviour) documenting how a
 downstream job verifies offline resolution: with the cache pre-populated and
 network disabled, `Embedder::new()` must return `Ok` and resolve all three
-files without touching the network. The probe asserts the *path* contract, not
+files without touching the network. The probe asserts the _path_ contract, not
 inference, and is the seam #760's `--include-ignored` job turns on.
 
 ---
@@ -157,13 +157,13 @@ provisioning pattern already lives in the repo — `ci-migrate.yml:37-55` and
 
 Pinned facts:
 
-| Concern | Pinned value | Source |
-| ------- | ------------ | ------ |
-| Image | `pgvector/pgvector:pg16` (ships the `vector` extension nexum's `vector(384)` columns need) | `ci-migrate.yml:41`, `eval-todo-app.yml:39` |
-| Service host | `postgres` (service name; jobs run **inside** the `ci-runner` container, so `localhost` is wrong) | `eval-todo-app.yml:32`, `:61` |
-| `DATABASE_URL` | `postgres://superfield:superfield@postgres:5432/superfield` | `ci-migrate.yml:55` |
-| Health gate | `pg_isready -U superfield -d superfield`, 5–10s interval, 10 retries | `ci-migrate.yml:46-50` |
-| Migration apply | `bun packages/db/migrate.ts up` — applies **all** component migrations in order `public → auth → nexum → sharp` | `packages/db/migrator.ts:13,157-158,221` |
+| Concern         | Pinned value                                                                                                    | Source                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------- | ------------------------------------------- |
+| Image           | `pgvector/pgvector:pg16` (ships the `vector` extension nexum's `vector(384)` columns need)                      | `ci-migrate.yml:41`, `eval-todo-app.yml:39` |
+| Service host    | `postgres` (service name; jobs run **inside** the `ci-runner` container, so `localhost` is wrong)               | `eval-todo-app.yml:32`, `:61`               |
+| `DATABASE_URL`  | `postgres://superfield:superfield@postgres:5432/superfield`                                                     | `ci-migrate.yml:55`                         |
+| Health gate     | `pg_isready -U superfield -d superfield`, 5–10s interval, 10 retries                                            | `ci-migrate.yml:46-50`                      |
+| Migration apply | `bun packages/db/migrate.ts up` — applies **all** component migrations in order `public → auth → nexum → sharp` | `packages/db/migrator.ts:13,157-158,221`    |
 
 So the nexum migration set (`crates/nexum/migrations/0001..0003`) is applied by
 the **same** `bun packages/db/migrate.ts up` the existing migrate job uses; the
@@ -199,10 +199,10 @@ Every test then does `let pool = match maybe_pool().await { Some(p) => p, None =
 `integration.rs` lines **240, 301, 381, 448, 509, 577, 675, 747, 818** (and any
 added later). Confirm with `grep -n "maybe_pool().await" crates/nexum/tests/integration.rs`.
 
-| Issue | Edits here |
-| ----- | ---------- |
-| **#761** (loud-skip) | **Owns this function.** Replace the `?` silent early-return with a require-marker-gated hard fail: when a CI marker env (e.g. `NEXUM_REQUIRE_DB=1`) is set, a missing `DATABASE_URL` must `panic!`/return a failing result (non-zero exit), **not** `None`. With the marker unset (local dev) it still returns `None` and skips. Keep the `None`-skip path only for the unset-marker case. Add a dedicated `#[test]` asserting the guard fails when the marker is set and `DATABASE_URL` is unset (AC of #761). **Do not** change the call-site `match … None => return` shape — only the guard semantics inside `maybe_pool()`. |
-| **#760** (required job) | **Does NOT edit this function.** It sets `DATABASE_URL` (and, post-#761, the require-marker) in the workflow so `maybe_pool()` returns `Some` for real and the suite executes. It edits **CI only**, not this file. |
+| Issue                   | Edits here                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **#761** (loud-skip)    | **Owns this function.** Replace the `?` silent early-return with a require-marker-gated hard fail: when a CI marker env (e.g. `NEXUM_REQUIRE_DB=1`) is set, a missing `DATABASE_URL` must `panic!`/return a failing result (non-zero exit), **not** `None`. With the marker unset (local dev) it still returns `None` and skips. Keep the `None`-skip path only for the unset-marker case. Add a dedicated `#[test]` asserting the guard fails when the marker is set and `DATABASE_URL` is unset (AC of #761). **Do not** change the call-site `match … None => return` shape — only the guard semantics inside `maybe_pool()`. |
+| **#760** (required job) | **Does NOT edit this function.** It sets `DATABASE_URL` (and, post-#761, the require-marker) in the workflow so `maybe_pool()` returns `Some` for real and the suite executes. It edits **CI only**, not this file.                                                                                                                                                                                                                                                                                                                                                                                                              |
 
 > Ordering note: if #761 lands first, #760's job must export the require-marker
 > so the loud guard is active. If #760 lands first, it runs with the existing
@@ -223,13 +223,13 @@ fn embed_batch_returns_correct_count() { … }     // 314-327
 
 The three `#[ignore]` attributes are at lines **276, 294, 315**.
 
-| Issue | Edits here |
-| ----- | ---------- |
-| **#760** (required job) | Runs these via `cargo test -p nexum --include-ignored` (or the equivalent) in the provisioned job — **without** removing `#[ignore]** (they stay `#[ignore]` for local default runs; CI opts in with `--include-ignored`). It asserts `embed_returns_governed_dimension` executes and passes. The job, not this file, changes. |
-| **#761** (loud-skip) | Makes `embed_returns_governed_dimension` *loud-fail* when weights are absent under the require-marker. Two options it must choose between (pin in #761): (a) de-ignore it and gate the skip on the marker like §3.1; or (b) keep `#[ignore]` and add a separate marker-gated `#[test]` that asserts weights are present. Update the `#[ignore = "..."]` reason strings if it changes the semantics. |
+| Issue                   | Edits here                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **#760** (required job) | Runs these via `cargo test -p nexum --include-ignored` (or the equivalent) in the provisioned job — **without** removing `#[ignore]** (they stay `#[ignore]`for local default runs; CI opts in with`--include-ignored`). It asserts `embed_returns_governed_dimension` executes and passes. The job, not this file, changes.                                                                        |
+| **#761** (loud-skip)    | Makes `embed_returns_governed_dimension` _loud-fail_ when weights are absent under the require-marker. Two options it must choose between (pin in #761): (a) de-ignore it and gate the skip on the marker like §3.1; or (b) keep `#[ignore]` and add a separate marker-gated `#[test]` that asserts weights are present. Update the `#[ignore = "..."]` reason strings if it changes the semantics. |
 
 > The two features touch **different** aspects of the same `mod tests`: #760
-> only changes the *invocation* (CI flag), #761 changes the *skip semantics*
+> only changes the _invocation_ (CI flag), #761 changes the _skip semantics_
 > (the attribute / a guard). To stay conflict-free, **#761 owns any edit to the
 > `#[ignore]` attributes and test bodies; #760 owns only the workflow.** If
 > both need to touch `embed.rs`, #761 goes first.
@@ -275,12 +275,12 @@ without re-discovering them.
 
 ## 5. Scout deliverables in this PR (all compile-safe, behaviour-neutral)
 
-| Path | Purpose | Active? |
-| ---- | ------- | ------- |
-| `docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md` | This note. | doc only |
-| `.github/actions/governed-embed-weights/action.yml` | Stub composite action: Mechanism A skeleton (cache-restore the snapshot tree keyed on `models/embedding.lock`; no-op on hit). | **not referenced by any workflow** |
-| `.github/workflows/embedder-coverage.yml` | Stub job: pgvector service + `pg_isready` ping + commented `--include-ignored` skeleton. `workflow_dispatch` only, `CI_CLASS: heavy`. | **manual dispatch only; not a gate** |
-| `crates/nexum/tests/offline_weights_probe.rs` | `#[ignore]`d probe documenting the offline path contract `Embedder::new()` must satisfy. | `#[ignore]` — never runs by default |
+| Path                                                                  | Purpose                                                                                                                               | Active?                              |
+| --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| `docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md` | This note.                                                                                                                            | doc only                             |
+| `.github/actions/governed-embed-weights/action.yml`                   | Stub composite action: Mechanism A skeleton (cache-restore the snapshot tree keyed on `models/embedding.lock`; no-op on hit).         | **not referenced by any workflow**   |
+| `.github/workflows/embedder-coverage.yml`                             | Stub job: pgvector service + `pg_isready` ping + commented `--include-ignored` skeleton. `workflow_dispatch` only, `CI_CLASS: heavy`. | **manual dispatch only; not a gate** |
+| `crates/nexum/tests/offline_weights_probe.rs`                         | `#[ignore]`d probe documenting the offline path contract `Embedder::new()` must satisfy.                                              | `#[ignore]` — never runs by default  |
 
 Nothing here is a required context, runs the real embedder in the default
 suite, or alters `embed.rs`/`integration.rs` behaviour.
