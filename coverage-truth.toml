@@ -1,90 +1,258 @@
-# coverage-truth.toml — executed-coverage truth table (SKELETON)
+# coverage-truth.toml — executed-coverage truth table
 #
-# STATUS: dev-scout skeleton (issue #769). This file pins the *manifest schema*
-# only. It is intentionally NOT yet a populated, enforced inventory — that is the
-# job of the coverage-truth feature, issue #759. Until #759 lands, this skeleton
-# parses as valid TOML and documents the agreed-upon shape so the feature is
-# purely additive.
-#
-# ── Why this exists (canonical motivation) ────────────────────────────────────
-# Gates trust a green CI check as "tested", but a green check only proves a unit
-# *compiled* — not that any of its tests *executed*. The governed embedder merged
-# green with zero executed coverage and only broke when a job first used it at
-# runtime. This manifest is the machine-checkable inventory that makes the
-# zero-executed gap visible and regression-guarded.
+# STATUS: populated + enforced (issue #759, built on the #769 dev-scout skeleton).
+# scripts/check-coverage-truth.sh validates every row in this file against what
+# CI actually compiles, migrates, and EXECUTES. A green CI check only proves a
+# unit *compiled*; this manifest is the machine-checkable record of what truly
+# *runs*, so the embedder's zero-executed gap stays visible and regression-guarded.
 #
 # Canonical docs: docs/prd.md, docs/adr-embedding-model.md
 #
-# ── Schema (pinned by #769; populated by #759) ────────────────────────────────
+# ── Schema ────────────────────────────────────────────────────────────────────
 # Top-level [meta] table:
 #   schema_version : integer  — bump on any breaking field change.
 #   generated_by   : string   — the tool/script that owns regeneration.
 #
 # One [[unit]] array-of-tables entry per directory under crates/* and packages/*.
-# Every field below is REQUIRED on every [[unit]] row (check-coverage-truth.sh
-# asserts presence; #759 enforces values against reality):
+# Required fields on every [[unit]] row (check-coverage-truth.sh asserts presence,
+# type, AND value against reality):
 #
 #   path                 : string  — repo-relative dir, e.g. "crates/nexum" or
-#                                     "packages/db". Primary key; must be unique
-#                                     and must exist on disk.
+#                                     "packages/db". Primary key; unique; on disk.
 #   kind                 : string  — "crate" | "package". Derived from path[0].
-#   compiled_in_ci       : bool    — true if some CI workflow compiles this unit
-#                                     (e.g. rust.yml `cargo build --workspace`
-#                                     for every crate; bun typecheck for packages).
-#   migrated_in_ci       : bool    — true if this unit owns DB migrations that
+#   compiled_in_ci       : bool    — true if a CI workflow compiles this unit.
+#                                     Crates: rust.yml `cargo build --workspace`.
+#                                     Packages: build.yml `bun run typecheck`.
+#   migrated_in_ci       : bool    — true iff this unit owns DB migrations that
 #                                     ci-migrate.yml applies against Postgres.
-#                                     false for units with no migrations/.
-#   tests_executed_in_ci : integer — count of this unit's tests that a CI job
-#                                     actually RUNS (not merely compiles). 0 is a
-#                                     valid, meaningful value: it is the
-#                                     regression-guard flag for an untested unit.
-#                                     The number is a floor asserted by #759's
-#                                     check, not an exact live count.
+#   tests_executed_in_ci : integer — count of this unit's tests a CI job actually
+#                                     RUNS (not merely compiles). 0 is the
+#                                     meaningful regression-guard value for an
+#                                     untested unit. Treated as a FLOOR: the check
+#                                     asserts 0 <=> no executed suite exists, and
+#                                     >0 <=> an executed suite exists (it does not
+#                                     pin the exact live test count).
 #
-# Optional per-row fields (may be omitted; documented here for #759):
-#   executed_by          : string  — the workflow/job that executes the tests,
-#                                     e.g. "test-integration.yml". Empty/omitted
-#                                     when tests_executed_in_ci = 0.
-#   note                 : string  — free-text rationale, e.g. why a count is 0
-#                                     (gated on DATABASE_URL / model weights).
+# Optional per-row fields:
+#   executed_by          : string  — workflow/job that executes the tests.
+#                                     Empty/omitted when tests_executed_in_ci = 0.
+#   note                 : string  — free-text rationale (e.g. why a count is 0).
 #
-# ── Pinned CI seam (where #759 wires the check) ───────────────────────────────
-# check-coverage-truth.sh runs as a workflow step on pull_request → main. The
-# natural host is a lightweight bun/python job (e.g. alongside build.yml's
-# typecheck/lint/format jobs) so it has no Postgres/weights dependency. #759
-# adds the `- run: scripts/check-coverage-truth.sh` step and the self-test;
-# #769 does NOT make it a required branch-protection context.
+# ── How the values are derived (and re-verified by the check) ─────────────────
+# compiled_in_ci:
+#   * every crate — rust.yml runs `cargo build --workspace --all-targets`.
+#   * every package — build.yml runs `bun run typecheck` over the workspace.
+# migrated_in_ci — true only for the migration paths ci-migrate.yml lists:
+#   packages/db, crates/sf-db, crates/sf-auth, crates/nexum, crates/sharp.
+# tests_executed_in_ci:
+#   * NO workflow runs `cargo test`/`cargo nextest` — rust.yml only builds. So
+#     EVERY crate is 0 today.
+#   * Packages are executed only via the test-unit/test-integration globs
+#     `packages/*/tests/unit` and `packages/*/tests/integration` (and the
+#     paths-gated test-e2e for packages/core). A package is >0 iff it has at
+#     least one *.test.ts under tests/unit or tests/integration.
+#   * packages/control has only Playwright e2e specs under tests/e2e (not matched
+#     by the unit/integration globs) -> 0.
+#   * packages/control-core keeps its *.test.ts directly under tests/ (NOT under
+#     tests/unit) so the glob does NOT pick them up -> 0 today. (Wiring those in
+#     is a later phase; recording 0 here is the regression guard.)
 #
-# ── KEY FINDING this skeleton encodes (for #759 to populate) ──────────────────
-# NO workflow runs `cargo test` / `cargo nextest`. rust.yml only does
-# `cargo build --workspace --all-targets` (compiles tests, never runs them) plus
-# `cargo run --bin superfield -- noop`. Therefore EVERY crates/* row currently
-# has tests_executed_in_ci = 0. The nexum integration suite
-# (crates/nexum/tests/integration.rs) is additionally gated on DATABASE_URL and
-# silently skips — this is the exact embedder zero-executed gap #759 must record.
+# ── Pinned CI seam ────────────────────────────────────────────────────────────
+# scripts/check-coverage-truth.sh runs as a workflow step on pull_request -> main
+# in the lightweight coverage-truth job of build.yml (no Postgres/weights). Per
+# #759 scope it is NOT a required branch-protection context — that is the
+# coverage-enforcement phase.
 
 [meta]
 schema_version = 1
 generated_by = "scripts/check-coverage-truth.sh"
 
-# ── Example rows (illustrative shape only; NOT the populated inventory) ────────
-# #759 replaces these with one row per crates/* and packages/* directory.
+# ── crates/* (13) ─────────────────────────────────────────────────────────────
+# No `cargo test` job exists, so every crate is tests_executed_in_ci = 0.
+
+[[unit]]
+path = "crates/fastenv"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
 
 [[unit]]
 path = "crates/nexum"
 kind = "crate"
-compiled_in_ci = true       # rust.yml: cargo build --workspace --all-targets
-migrated_in_ci = true       # ci-migrate.yml applies crates/nexum/migrations/**
-tests_executed_in_ci = 0    # embedder gap: no `cargo test` job exists, and the
-                            # integration suite is gated on DATABASE_URL
-executed_by = ""
-note = "scout skeleton: nexum/embedder integration suite gated on DATABASE_URL; no cargo-test job runs it. #759 records this 0 as the regression guard."
+compiled_in_ci = true
+migrated_in_ci = true
+tests_executed_in_ci = 0
+note = "embedder gap: nexum/tests/integration.rs is DATABASE_URL-gated and silently skips; no cargo-test job runs it. This 0 is the regression guard until the embedding-coverage-proof phase. ci-migrate.yml applies crates/nexum/migrations/**."
+
+[[unit]]
+path = "crates/sf-auth"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = true
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests. ci-migrate.yml applies crates/sf-auth/src/migrations/**."
+
+[[unit]]
+path = "crates/sf-cli"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+
+[[unit]]
+path = "crates/sf-connector"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+
+[[unit]]
+path = "crates/sf-db"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = true
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests. ci-migrate.yml applies crates/sf-db/migrations/**."
+
+[[unit]]
+path = "crates/sf-deploy"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+
+[[unit]]
+path = "crates/sf-eval"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+
+[[unit]]
+path = "crates/sf-loop"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+
+[[unit]]
+path = "crates/sf-notify"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+
+[[unit]]
+path = "crates/sf-serve"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+
+[[unit]]
+path = "crates/sharp"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = true
+tests_executed_in_ci = 0
+note = "rust.yml builds but never runs crate tests. ci-migrate.yml applies crates/sharp/migrations/**."
+
+[[unit]]
+path = "crates/superfield"
+kind = "crate"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "rust.yml builds + `cargo run --bin superfield -- noop` smoke; no crate tests are executed."
+
+# ── packages/* (9) ────────────────────────────────────────────────────────────
+# Executed via test-unit.yml (packages/*/tests/unit) and test-integration.yml
+# (packages/*/tests/integration). >0 iff a matched suite exists on disk.
+
+[[unit]]
+path = "packages/cli"
+kind = "package"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 1
+executed_by = "test-unit.yml, test-integration.yml"
+note = "tests/unit/*.test.ts + tests/integration/*.test.ts both glob-matched and executed."
+
+[[unit]]
+path = "packages/control"
+kind = "package"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "only Playwright e2e specs under tests/e2e; not matched by the unit/integration globs, so no suite executes in CI today."
+
+[[unit]]
+path = "packages/control-core"
+kind = "package"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 0
+note = "regression guard: *.test.ts sit directly under tests/ (not tests/unit), so the packages/*/tests/unit glob does NOT pick them up; nothing executes them in CI yet."
+
+[[unit]]
+path = "packages/core"
+kind = "package"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 1
+executed_by = "test-unit.yml, test-integration.yml, test-e2e.yml"
+note = "tests/unit + tests/integration glob-matched; tests/e2e additionally runs via test-e2e.yml (paths-gated on deploy.ts)."
 
 [[unit]]
 path = "packages/db"
 kind = "package"
-compiled_in_ci = true       # build.yml typecheck
-migrated_in_ci = true       # ci-migrate.yml applies packages/db/migrations/**
-tests_executed_in_ci = 0    # placeholder count; #759 sets the real floor
-executed_by = ""
-note = "scout skeleton placeholder; #759 populates the true executed count."
+compiled_in_ci = true
+migrated_in_ci = true
+tests_executed_in_ci = 1
+executed_by = "test-unit.yml, test-integration.yml"
+note = "tests/unit + tests/integration glob-matched. ci-migrate.yml applies packages/db/migrations/**. NOTE: extra tests/*.test.ts directly under tests/ are NOT glob-matched, but the unit/integration suites mean this package executes >0."
+
+[[unit]]
+path = "packages/firecracker"
+kind = "package"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 1
+executed_by = "test-unit.yml"
+note = "tests/unit/*.test.ts glob-matched and executed."
+
+[[unit]]
+path = "packages/git"
+kind = "package"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 1
+executed_by = "test-unit.yml"
+note = "tests/unit/*.test.ts glob-matched and executed."
+
+[[unit]]
+path = "packages/github"
+kind = "package"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 1
+executed_by = "test-unit.yml"
+note = "tests/unit/*.test.ts glob-matched and executed."
+
+[[unit]]
+path = "packages/sharp"
+kind = "package"
+compiled_in_ci = true
+migrated_in_ci = false
+tests_executed_in_ci = 1
+executed_by = "test-integration.yml"
+note = "tests/integration/*.integration.test.ts glob-matched and executed."
