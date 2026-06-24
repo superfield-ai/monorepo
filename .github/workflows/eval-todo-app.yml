@@ -125,7 +125,13 @@ jobs:
           test -n "${TEXT}" || { echo "keyless opencode model returned no text" >&2; exit 1; }
 
       - name: Build the appliance and the eval harness
-        run: cargo build --bin superfield -p sf-eval
+        run: |
+          # The appliance binary lives in the `superfield` package; the eval
+          # harness is the `sf-eval` bin in the `sf-eval` package. Build each
+          # with the same invocation the later run steps use, so this pre-warms
+          # the cache rather than failing on a cross-package --bin lookup.
+          cargo build --bin superfield
+          cargo build -p sf-eval --bin sf-eval
 
       - name: Boot the appliance (health-gated provision, migrate, serve, loop)
         run: |
