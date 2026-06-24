@@ -1,0 +1,90 @@
+# coverage-truth.toml — executed-coverage truth table (SKELETON)
+#
+# STATUS: dev-scout skeleton (issue #769). This file pins the *manifest schema*
+# only. It is intentionally NOT yet a populated, enforced inventory — that is the
+# job of the coverage-truth feature, issue #759. Until #759 lands, this skeleton
+# parses as valid TOML and documents the agreed-upon shape so the feature is
+# purely additive.
+#
+# ── Why this exists (canonical motivation) ────────────────────────────────────
+# Gates trust a green CI check as "tested", but a green check only proves a unit
+# *compiled* — not that any of its tests *executed*. The governed embedder merged
+# green with zero executed coverage and only broke when a job first used it at
+# runtime. This manifest is the machine-checkable inventory that makes the
+# zero-executed gap visible and regression-guarded.
+#
+# Canonical docs: docs/prd.md, docs/adr-embedding-model.md
+#
+# ── Schema (pinned by #769; populated by #759) ────────────────────────────────
+# Top-level [meta] table:
+#   schema_version : integer  — bump on any breaking field change.
+#   generated_by   : string   — the tool/script that owns regeneration.
+#
+# One [[unit]] array-of-tables entry per directory under crates/* and packages/*.
+# Every field below is REQUIRED on every [[unit]] row (check-coverage-truth.sh
+# asserts presence; #759 enforces values against reality):
+#
+#   path                 : string  — repo-relative dir, e.g. "crates/nexum" or
+#                                     "packages/db". Primary key; must be unique
+#                                     and must exist on disk.
+#   kind                 : string  — "crate" | "package". Derived from path[0].
+#   compiled_in_ci       : bool    — true if some CI workflow compiles this unit
+#                                     (e.g. rust.yml `cargo build --workspace`
+#                                     for every crate; bun typecheck for packages).
+#   migrated_in_ci       : bool    — true if this unit owns DB migrations that
+#                                     ci-migrate.yml applies against Postgres.
+#                                     false for units with no migrations/.
+#   tests_executed_in_ci : integer — count of this unit's tests that a CI job
+#                                     actually RUNS (not merely compiles). 0 is a
+#                                     valid, meaningful value: it is the
+#                                     regression-guard flag for an untested unit.
+#                                     The number is a floor asserted by #759's
+#                                     check, not an exact live count.
+#
+# Optional per-row fields (may be omitted; documented here for #759):
+#   executed_by          : string  — the workflow/job that executes the tests,
+#                                     e.g. "test-integration.yml". Empty/omitted
+#                                     when tests_executed_in_ci = 0.
+#   note                 : string  — free-text rationale, e.g. why a count is 0
+#                                     (gated on DATABASE_URL / model weights).
+#
+# ── Pinned CI seam (where #759 wires the check) ───────────────────────────────
+# check-coverage-truth.sh runs as a workflow step on pull_request → main. The
+# natural host is a lightweight bun/python job (e.g. alongside build.yml's
+# typecheck/lint/format jobs) so it has no Postgres/weights dependency. #759
+# adds the `- run: scripts/check-coverage-truth.sh` step and the self-test;
+# #769 does NOT make it a required branch-protection context.
+#
+# ── KEY FINDING this skeleton encodes (for #759 to populate) ──────────────────
+# NO workflow runs `cargo test` / `cargo nextest`. rust.yml only does
+# `cargo build --workspace --all-targets` (compiles tests, never runs them) plus
+# `cargo run --bin superfield -- noop`. Therefore EVERY crates/* row currently
+# has tests_executed_in_ci = 0. The nexum integration suite
+# (crates/nexum/tests/integration.rs) is additionally gated on DATABASE_URL and
+# silently skips — this is the exact embedder zero-executed gap #759 must record.
+
+[meta]
+schema_version = 1
+generated_by = "scripts/check-coverage-truth.sh"
+
+# ── Example rows (illustrative shape only; NOT the populated inventory) ────────
+# #759 replaces these with one row per crates/* and packages/* directory.
+
+[[unit]]
+path = "crates/nexum"
+kind = "crate"
+compiled_in_ci = true       # rust.yml: cargo build --workspace --all-targets
+migrated_in_ci = true       # ci-migrate.yml applies crates/nexum/migrations/**
+tests_executed_in_ci = 0    # embedder gap: no `cargo test` job exists, and the
+                            # integration suite is gated on DATABASE_URL
+executed_by = ""
+note = "scout skeleton: nexum/embedder integration suite gated on DATABASE_URL; no cargo-test job runs it. #759 records this 0 as the regression guard."
+
+[[unit]]
+path = "packages/db"
+kind = "package"
+compiled_in_ci = true       # build.yml typecheck
+migrated_in_ci = true       # ci-migrate.yml applies packages/db/migrations/**
+tests_executed_in_ci = 0    # placeholder count; #759 sets the real floor
+executed_by = ""
+note = "scout skeleton placeholder; #759 populates the true executed count."
