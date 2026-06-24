@@ -111,13 +111,16 @@ jobs:
         run: |
           set -euo pipefail
           # One keyless round-trip through the session API proves the free model
-          # answers with no credential. Fail the sweep if the text is empty.
+          # answers with no credential — the same server API the loop drives via
+          # SF_OPENCODE_SERVER. The CI image ships python3 and curl but NOT jq,
+          # so parse the JSON with the python stdlib. Fail if the text is empty.
           SID=$(curl -fsS -X POST "http://127.0.0.1:4096/session?directory=$PWD" \
-            -H 'content-type: application/json' -d '{}' | jq -r '.id')
+            -H 'content-type: application/json' -d '{}' \
+            | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')
           TEXT=$(curl -fsS -X POST "http://127.0.0.1:4096/session/$SID/message" \
             -H 'content-type: application/json' --max-time 120 \
             -d '{"model":{"providerID":"opencode","modelID":"big-pickle"},"parts":[{"type":"text","text":"Reply with the single word READY."}]}' \
-            | jq -r '[.parts[] | select(.type=="text") | .text] | join("")')
+            | python3 -c 'import json,sys; d=json.load(sys.stdin); print("".join(p.get("text","") for p in d.get("parts",[]) if p.get("type")=="text"))')
           echo "keyless model replied: '${TEXT}'"
           test -n "${TEXT}" || { echo "keyless opencode model returned no text" >&2; exit 1; }
 
