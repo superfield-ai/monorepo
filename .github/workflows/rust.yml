@@ -1,28 +1,30 @@
 name: Rust
 
+# The `rust-test` job below is a REQUIRED branch-protection context (issue
+# #764). A required status check must be SATISFIABLE on every PR shape that is
+# allowed to merge — if the workflow never triggers, the required context never
+# reports and branch protection (strict=true) leaves the PR BLOCKED forever
+# (the docs-only-required-checks-skipped failure mode, blocker #753). The old
+# narrow `paths:` allowlist (Cargo/crates/rust.yml/nextest.toml only) would have
+# made the new required context unsatisfiable for the many PRs that touch only
+# TS packages or only workflow files — i.e. it would have started BLOCKING those
+# PRs. So this trigger now mirrors the OTHER required heavy Rust job
+# (embedder-coverage.yml): `paths-ignore` for pure docs/text only, so the
+# required Rust test context reports on every code/workflow PR. (Pure docs-only
+# PRs remain governed by blocker #753, same as the existing six required
+# contexts; this change does not make that envelope worse.)
 on:
   push:
     branches: [main]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "!crates/**/*.md"
-      - "!crates/**/docs/**"
-      - ".github/workflows/rust.yml"
-      - ".config/nextest.toml"
-      - ".github/actions/provision-test-substrate/**"
+    paths-ignore: ["**.md", "**.txt"]
   pull_request:
     branches: [main]
-    paths:
-      - "Cargo.toml"
-      - "Cargo.lock"
-      - "crates/**"
-      - "!crates/**/*.md"
-      - "!crates/**/docs/**"
-      - ".github/workflows/rust.yml"
-      - ".config/nextest.toml"
-      - ".github/actions/provision-test-substrate/**"
+    # `ready_for_review` is in the type list so promoting a draft to ready
+    # re-triggers the required job (it is draft-gated below, like
+    # embedder-coverage.yml).
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore: ["**.md", "**.txt"]
+  workflow_dispatch: {}
 
 concurrency:
   group: rust-${{ github.ref }}
@@ -70,14 +72,113 @@ jobs:
       - name: Format check
         run: cargo fmt --all --check
 
+  # ── REQUIRED WORKSPACE TEST RUN (issue #764) ────────────────────────────────
+  # The general enforcement of invariant 2 ("exit 0 != tested") for Rust: a
+  # REQUIRED status context that actually RUNS the Rust suite, so a green Rust
+  # check can no longer mean only "the workspace compiled". Today rust.yml's
+  # `build` job builds + clippies + fmts but executes ZERO tests; this job runs
+  # `cargo nextest run --workspace` and is registered in main's required
+  # branch-protection contexts (the job `name:` below is that context).
+  #
+  # SCOPE — deliberately the hermetic, non-#[ignore]d workspace suite (NO
+  # `--run-ignored all`, NO DB). The DB-gated #[ignore]d corpus is the
+  # `rust-test-seam` job's concern (issue #765): a large fraction of those
+  # ignored tests genuinely FAIL even against a correct substrate (they need an
+  # unprovisioned rust-analyzer / tsserver bun-bridge, or assert not-yet-built
+  # schema), so pulling them into the REQUIRED happy-path run would turn CI red.
+  # We must NOT silence them with skips (loud-skip-never-silent-skip). So the
+  # required run executes the >0 hermetic unit/integration tests that pass
+  # without external resources, while `--no-tests=fail` still makes a
+  # zero-collection run a HARD failure (the self-check below proves it).
+  #
+  # This job does NOT add any `cargo nextest run -p <crate>` invocation, so it
+  # does not change the per-crate execution model scripts/check-coverage-truth.sh
+  # derives from the seam job's `-p` line, nor the per-package count source #766
+  # consumes — those stay anchored on `rust-test-seam`.
+  rust-test:
+    # The required context name. Keep STABLE: it is registered verbatim in main's
+    # required_status_checks, so renaming it silently drops the protection.
+    name: Rust workspace tests (nextest, no-tests=fail)
+    # Draft-gated like embedder-coverage.yml (a test-execution / system-
+    # correctness job): skipped while the PR is a draft (a skipped required check
+    # counts as success), and re-run for real on `ready_for_review`. Non-PR
+    # events (push/dispatch) have no draft field -> the guard is false -> it runs.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 30
+    container:
+      # rust:latest ships a C toolchain (build scripts need a linker); mirrors
+      # the `build` job. cargo-nextest is installed below.
+      image: rust:latest
+    env:
+      CI_CLASS: system-correctness
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # Pinned nextest the phase standardises on (0.9.85; `--no-tests=fail`).
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: "cargo nextest --version (resolves, exit 0)"
+        run: cargo nextest --version
+
+      # ── AC1: the required happy-path run ────────────────────────────────────
+      # `cargo nextest run --workspace` executes the hermetic (non-#[ignore]d)
+      # Rust suite. `--no-tests=fail` is passed EXPLICITLY (also the 0.9.85
+      # default) so a future empty/mis-filtered run hard-fails instead of going
+      # green. `--profile ci` selects the deterministic CI profile (retries=0,
+      # fail-fast=false) pinned in .config/nextest.toml. The run exits 0 on a
+      # clean tree with >0 tests collected; nextest's own "Summary" line in the
+      # log reports the executed count (AC: a reported test count > 0). If zero
+      # tests were somehow collected, --no-tests=fail makes THIS step red.
+      - name: "Workspace nextest run (--no-tests=fail, >0 tests, exit 0) [AC1]"
+        run: cargo nextest run --workspace --profile ci --no-tests=fail
+
+      # ── AC2: the self-check proving --no-tests=fail is active ───────────────
+      # Constrain the run to a filter that matches NOTHING. With --no-tests=fail
+      # nextest must exit NON-zero on the empty collection. We invert the exit
+      # code: if the constrained run unexpectedly SUCCEEDS, the enforcement is
+      # not active and we fail the job loudly; if it fails (the expected path),
+      # the self-check passes. This proves a green Rust check can never be a
+      # zero-tests-ran false green.
+      - name: "Self-check: zero-collection run must fail (--no-tests=fail proof) [AC2]"
+        run: |
+          set -euo pipefail
+          # A filter no test name can match -> nextest collects zero tests.
+          NONE='test(/__sf_zero_collection_selfcheck_no_such_test__/)'
+          if cargo nextest run --workspace --profile ci --no-tests=fail -E "$NONE"; then
+            echo "FAIL: a zero-collection nextest run exited 0 — --no-tests=fail is NOT active; a green Rust check could mean 0 tests ran." >&2
+            exit 1
+          fi
+          echo "OK: zero-collection run exited non-zero as required — --no-tests=fail is active."
+
   # ── SHARED RUST-TEST SEAM (dev-scout #771, coverage-enforcement phase) ──────
   # This job is the shared Rust-test seam the three phase features land on:
   #   #765 (THIS PR) — fills in the provision-test-substrate composite action
   #          (pgvector + DATABASE_URL + migrations + governed weights), declares
   #          the pgvector `services:` block + container image ON THIS JOB, and
   #          runs the DB-gated tests in the named crates so they EXECUTE.
-  #   #764 — widens the consuming nextest run to `--workspace` and REGISTERS this
-  #          job's name as a required branch-protection context.
+  #   #764 — (DONE) the REQUIRED `--workspace` run + `--no-tests=fail` enforcement
+  #          landed as the SEPARATE `rust-test` job above (the hermetic,
+  #          non-#[ignore]d suite), and that job's name is the registered
+  #          branch-protection context. The seam below stays NON-required and
+  #          DB-gated so its genuinely-failing ignored corpus never gates main.
+  #          This seam remains the per-package executed-count source for #766.
   #   #766 — consumes the per-package executed-count JSON emitted below in its
   #          coverage-delta gate.
   #
@@ -85,6 +186,12 @@ jobs:
   # Scout findings: docs/scout/coverage-enforcement-rust-test-substrate-seams.md
   rust-test-seam:
     name: Rust test seam (scout #771, not required)
+    # Draft-gated: now that rust.yml triggers on every non-docs PR (issue #764
+    # broadened the trigger so the required `rust-test` context is satisfiable),
+    # this heavy DB-substrate job skips drafts and runs from ready-for-review on,
+    # matching the embedder-coverage.yml system-correctness pattern. It is NOT a
+    # required context, so a skip here never blocks a merge.
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: [self-hosted, Linux, X64]
     timeout-minutes: 45
     container:
