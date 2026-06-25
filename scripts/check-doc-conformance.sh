@@ -23,6 +23,7 @@ cd "$ROOT"
 ARCH="docs/architecture.md"
 SF_LOOP_LIB="crates/sf-loop/src/lib.rs"
 SF_PROJECT="crates/sf-serve/src/routes/project.rs"
+AGENT_ENSURE=".agents/agent-ensure-feature.md"
 
 fail=0
 
@@ -147,6 +148,23 @@ assert_match "sf-loop lib.rs references ProjectGraphDerive" \
 #    surface. It must explicitly disclaim ownership of that surface.
 assert_match "project.rs disclaims implementing the /studio/issues surface" \
   "does NOT implement|empty seam|landed in" "$SF_PROJECT"
+
+# --- .agents/agent-ensure-feature.md (issue #763) ---------------------------
+
+# 13. The nexum embedder must NOT be verified by a manual local command. The
+#     embedder-coverage CI job (#760) executes its #[ignore]d tests via
+#     --include-ignored; agent-ensure-feature.md must point at that job, not
+#     instruct a hand-run `cargo test -p nexum … --ignored`. This closes the
+#     gap (#763) that let the embedder merge unexecuted.
+# The manual form is `cargo test … -p nexum … -- --ignored`. The CI-backed
+# form is `-- --include-ignored`, so the ` -- +--ignored` separator (a bare
+# `--ignored`, not `--include-ignored`) uniquely flags the regressed manual
+# command and never matches the legitimate CI reference.
+assert_absent "agent-ensure-feature.md has no manual nexum embedder verify" \
+  "cargo test .*-p nexum.* -- +--ignored" "$AGENT_ENSURE"
+assert_match "agent-ensure-feature.md points at the CI-backed embedder job" \
+  "nexum embedder coverage|cargo test -p nexum --test integration -- --include-ignored" \
+  "$AGENT_ENSURE"
 
 # ----------------------------------------------------------------------------
 

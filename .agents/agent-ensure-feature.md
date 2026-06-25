@@ -158,10 +158,20 @@ Requires Postgres with the sharp + nexum migrations (incl. 0008 and sf-db
 `0003_workspace_id_threading.sql`) applied:
 
 ```bash
-DATABASE_URL=postgres://… cargo test -p sharp -p nexum -- --ignored --test-threads=1 \
+DATABASE_URL=postgres://… cargo test -p sharp -- --ignored --test-threads=1 \
   signal_projects_to_entity_joinable_to_deployment \
   runtime_error_is_recorded_as_episode_signal_linked_to_deployment
 ```
+
+The nexum embedder is **not** verified by hand. Its DB-gated `#[ignore]`
+coverage runs in CI as the required job
+**`nexum embedder coverage (pgvector + governed weights)`**
+(`.github/workflows/embedder-coverage.yml`), which executes
+`cargo test -p nexum --test integration -- --include-ignored --test-threads=1`
+plus the `embed.rs` governed-dimension tests
+(`cargo test -p nexum --lib embed::tests:: -- --include-ignored --test-threads=1`).
+Trust that job — do not re-introduce a manual local embedder verify (a bare
+`--ignored` nexum run); the CI job runs the ignored tests for you.
 
 ---
 
