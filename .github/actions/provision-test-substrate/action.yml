@@ -1,0 +1,134 @@
+# Composite action: provision the shared Rust-test SUBSTRATE — pgvector
+# Postgres + DATABASE_URL + applied migrations + governed embed weights — so a
+# full-workspace `cargo nextest run` executes the DB-gated and embedder-gated
+# tests across crates (sf-db, sf-serve, sharp, superfield, sf-loop, nexum)
+# instead of silently skipping them.
+#
+# STATUS: SCOUT SKELETON (dev-scout #771). This action is a COMPILE-SAFE,
+# NO-OP-BY-DEFAULT seam. It exists so the three coverage-enforcement features
+# (#765 fills it in, #764 consumes it, #766 reads its output) agree on the
+# interface up front and do not collide editing rust.yml. It changes NO runtime
+# behaviour: with `mode: stub` (the default) every provisioning step is a
+# documented echo, the action exits 0, and it exports nothing required. The
+# REAL provisioning is issue #765 — it must factor the ALREADY-MERGED
+# mechanisms below into the steps marked `# [#765] WIRE HERE`.
+#
+# ── REUSE PATH (do NOT reinvent — both pieces are merged on main) ─────────────
+#   1. Governed weights (OFFLINE): the merged composite action
+#      `.github/actions/governed-embed-weights` (issue #760) restores/populates
+#      the hf-hub cache keyed on `models/embedding.lock` and PROVES offline
+#      resolution. #765 calls it as a step here (it is itself a composite
+#      action; `uses:` is allowed inside a composite). Do NOT re-implement the
+#      curl/refs/snapshots dance — just `uses: ./.github/actions/governed-embed-weights`.
+#   2. pgvector + DATABASE_URL + migrations: the merged job
+#      `.github/workflows/embedder-coverage.yml` (issue #760) is the working
+#      pattern — a `pgvector/pgvector:pg16` SERVICE, `DATABASE_URL=
+#      postgres://superfield:superfield@postgres:5432/superfield`, a /dev/tcp
+#      reachability probe, `bun install --frozen-lockfile`, then
+#      `bun packages/db/migrate.ts up` to apply the FULL migration set
+#      (public -> auth -> nexum -> sharp -> orchestrator; the orchestrator dir
+#      is now registered via crates/sf-db/src/migrate.rs and the TS migrator).
+#
+# IMPORTANT — the Postgres SERVICE cannot live inside a composite action: GitHub
+# `services:` are declared on the JOB, not on a composite action. So #765 must
+# declare the pgvector service + the container image ON THE rust-test JOB in
+# rust.yml (mirroring embedder-coverage.yml), pass the resulting DATABASE_URL in
+# as the `database-url` input here, and this action does the
+# reachability-probe + migrate + weights inside the job. This action is the
+# REUSABLE inner provisioning; the service wiring stays job-level.
+#
+# Canonical docs: docs/adr-schema-boundary.md, docs/adr-embedding-model.md
+# Scout findings:  docs/scout/coverage-enforcement-rust-test-substrate-seams.md
+
+name: Provision test substrate (pgvector + weights)
+description: >-
+  SCOUT SKELETON. Provision pgvector Postgres + DATABASE_URL + migrations +
+  governed embed weights so DB/embedder-gated Rust tests execute under nextest.
+  No-op in stub mode; issue #765 fills in the WIRE-HERE steps.
+
+inputs:
+  mode:
+    description: >-
+      "stub" (default) — no-op documented echoes, exit 0, changes nothing.
+      "provision" — issue #765's real path (probe + migrate + weights). Left
+      unimplemented in this scout so nothing becomes load-bearing yet.
+    required: false
+    default: "stub"
+  database-url:
+    description: >-
+      The pgvector DATABASE_URL the rust-test JOB stood up via a `services:`
+      block (services cannot be declared in a composite action). #765 passes the
+      job-level service URL here; the provision path probes + migrates it.
+    required: false
+    default: ""
+  hf-home:
+    description: >-
+      Optional HF_HOME forwarded to the governed-embed-weights action. Empty =
+      that action's workspace-local default (.hf-cache).
+    required: false
+    default: ""
+
+outputs:
+  database-url:
+    description: The DATABASE_URL the substrate exposes (echoed back for the test step).
+    value: ${{ steps.report.outputs.database-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Substrate mode banner
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "provision-test-substrate: mode=${{ inputs.mode }} (scout skeleton)"
+        if [ "${{ inputs.mode }}" != "provision" ]; then
+          echo "STUB MODE: no provisioning performed. Issue #765 implements the"
+          echo "WIRE-HERE steps. Nothing here is required or load-bearing yet."
+        fi
+
+    # ── [#765] WIRE HERE — pgvector reachability probe ────────────────────────
+    # Copy the /dev/tcp probe from embedder-coverage.yml (the ci-runner image
+    # ships no libpq/pg_isready). Derive host:port from `database-url`. LOUD
+    # fail (exit 1) if unreachable — never silent-skip.
+    - name: Probe pgvector reachability ([#765] wire here)
+      if: inputs.mode == 'provision'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "[#765] TODO: port the /dev/tcp reachability probe from"
+        echo "        .github/workflows/embedder-coverage.yml against:"
+        echo "        DATABASE_URL=${{ inputs.database-url }}"
+        echo "FAIL LOUDLY if unreachable (exit 1). Do NOT swallow the error."
+        exit 1   # scout guard: the provision path is intentionally not wired.
+
+    # ── [#765] WIRE HERE — apply the full migration set ───────────────────────
+    # `bun install --frozen-lockfile` then `bun packages/db/migrate.ts up`
+    # (public -> auth -> nexum -> sharp -> orchestrator). This is the SAME
+    # migrator the daemon's crates/sf-db/src/migrate.rs mirrors.
+    - name: Apply migrations ([#765] wire here)
+      if: inputs.mode == 'provision'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "[#765] TODO: bun install --frozen-lockfile && bun packages/db/migrate.ts up"
+
+    # ── [#765] WIRE HERE — governed weights, OFFLINE (reuse #760's action) ────
+    # This is the merged composite action; just call it. It restores/populates
+    # the hf-hub cache keyed on models/embedding.lock and PROVES offline
+    # resolution. Uncomment in #765:
+    #   - uses: ./.github/actions/governed-embed-weights
+    #     with: { hf-home: "${{ inputs.hf-home }}" }
+    - name: Provision governed weights ([#765] wire here — uses ./.github/actions/governed-embed-weights)
+      if: inputs.mode == 'provision'
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "[#765] TODO: uses: ./.github/actions/governed-embed-weights (merged in #760)"
+        echo "        Do NOT re-implement the curl/refs/snapshots cache dance."
+
+    - name: Report substrate outputs
+      id: report
+      shell: bash
+      run: |
+        set -euo pipefail
+        echo "database-url=${{ inputs.database-url }}" >> "${GITHUB_OUTPUT}"

@@ -10,6 +10,8 @@ on:
       - "!crates/**/*.md"
       - "!crates/**/docs/**"
       - ".github/workflows/rust.yml"
+      - ".config/nextest.toml"
+      - ".github/actions/provision-test-substrate/**"
   pull_request:
     branches: [main]
     paths:
@@ -19,6 +21,8 @@ on:
       - "!crates/**/*.md"
       - "!crates/**/docs/**"
       - ".github/workflows/rust.yml"
+      - ".config/nextest.toml"
+      - ".github/actions/provision-test-substrate/**"
 
 concurrency:
   group: rust-${{ github.ref }}
@@ -65,3 +69,126 @@ jobs:
 
       - name: Format check
         run: cargo fmt --all --check
+
+  # ── SCOUT SEAM (dev-scout #771, coverage-enforcement phase) ─────────────────
+  # This job PINS the shared Rust-test seam the three phase features all edit, so
+  # they land sequentially WITHOUT colliding on rust.yml:
+  #   #765 — fills in the provision-test-substrate composite action (pgvector +
+  #          DATABASE_URL + migrations + governed weights) and declares the
+  #          pgvector `services:` block + container image ON THIS JOB.
+  #   #764 — promotes the trivial `cargo nextest run -p sf-auth` below to a
+  #          `cargo nextest run --workspace --profile ci --no-tests=fail` and
+  #          REGISTERS this job's name as a required branch-protection context.
+  #   #766 — consumes the per-package executed-count JSON emitted below in its
+  #          coverage-delta gate.
+  #
+  # It is DELIBERATELY NOT a required context (that promotion is #764), runs only
+  # a single DB-free crate (sf-auth's non-ignored unit tests), and references
+  # the provision-test-substrate skeleton in `stub` mode so it stays green with
+  # no DB. Scout findings: docs/scout/coverage-enforcement-rust-test-substrate-seams.md
+  rust-test-seam:
+    name: Rust test seam (scout #771, not required)
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      # ci-runner image (python3 + curl); cargo-nextest is installed below.
+      # #765 adds the pgvector `services:` block here (a GitHub service cannot
+      # live in a composite action; it must be declared on the job).
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install C toolchain (Rust build scripts need a linker)
+        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libssl-dev
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # nextest binary. Pinned tool the phase standardises on (--no-tests=fail).
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      - name: "cargo nextest --version (AC: resolves, exit 0)"
+        run: cargo nextest --version
+
+      # ── Reusable substrate seam (stub mode = no-op; #765 fills it in) ────────
+      # Referenced here so `grep -rn 'provision-test-substrate' .github/workflows/`
+      # returns a hit (scout AC). In stub mode it provisions nothing and exits 0,
+      # so this seam job stays green without a DB. #765 flips it to `provision`
+      # and passes the job-level pgvector DATABASE_URL in.
+      - name: Provision test substrate (stub seam — provision-test-substrate)
+        uses: ./.github/actions/provision-test-substrate
+        with:
+          mode: stub
+
+      # ── Trivial nextest run over one DB-free crate (AC + test plan) ──────────
+      # sf-auth's non-ignored unit tests need NO DATABASE_URL (the DB-gated ones
+      # are #[ignore]d and excluded by default). Asserts exit 0 AND that >0 tests
+      # executed, so a "no tests collected" run can never pass green — the
+      # LOUD-fail thesis. --no-tests=fail is passed EXPLICITLY (it is also the
+      # 0.9.85 default) so the enforcement is visible and survives a default
+      # change. #764 widens `-p sf-auth` to `--workspace`.
+      - name: Trivial nextest run (cargo nextest run -p sf-auth, >0 tests)
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          cargo nextest run -p sf-auth --profile ci --no-tests=fail \
+            2>&1 | tee nextest-run.log
+          # nextest's summary line: "Summary [   0.123s] N tests run: ..."
+          ran="$(grep -oE 'Summary \[[^]]*\] [0-9]+ tests? run' nextest-run.log \
+            | grep -oE '[0-9]+ tests? run' | grep -oE '[0-9]+' | head -1 || true)"
+          echo "sf-auth tests executed: ${ran:-0}"
+          if [ -z "${ran:-}" ] || [ "${ran}" -le 0 ]; then
+            echo "FAIL: 0 sf-auth tests executed — exit 0 != tested" >&2
+            exit 1
+          fi
+
+      # ── Per-package executed-count source for #766 (pinned JSON contract) ────
+      # #766's coverage-delta gate needs per-PACKAGE executed counts. Source:
+      # nextest libtest-json events. Each per-test "ok"/"failed" event names the
+      # test "<pkg>::<binary>$<path>"; the owning package is the prefix before
+      # "::". This step PROVES the extraction works and prints the per-package
+      # map #766 consumes. Demonstration only — not a gate in this scout.
+      - name: Per-package executed-count source (pin for #766)
+        env:
+          NEXTEST_EXPERIMENTAL_LIBTEST_JSON: "1"
+        run: |
+          set -euo pipefail
+          cargo nextest run -p sf-auth --profile ci --no-tests=fail \
+            --message-format libtest-json 2>/dev/null > nextest.jsonl || true
+          python3 - <<'PY'
+          import json, collections
+          executed = collections.Counter()
+          with open("nextest.jsonl") as fh:
+              for line in fh:
+                  line = line.strip()
+                  if not line.startswith("{"):
+                      continue
+                  try:
+                      ev = json.loads(line)
+                  except json.JSONDecodeError:
+                      continue
+                  if ev.get("type") == "test" and ev.get("event") in ("ok", "failed"):
+                      pkg = ev.get("name", "").split("::", 1)[0]
+                      if pkg:
+                          executed[pkg] += 1
+          print("per-package executed-test counts (for #766 coverage-delta):")
+          for pkg, n in sorted(executed.items()):
+              print(f"  {pkg}: {n}")
+          if not executed:
+              raise SystemExit("FAIL: extracted zero per-package counts from nextest JSON")
+          PY
