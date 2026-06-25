@@ -89,3 +89,13 @@ jobs:
         run: scripts/check-coverage-truth.sh
       - name: Self-test the coverage-truth validator
         run: tests/coverage-truth-selftest.sh
+      # Subsystem-test-job-presence guardrail (issue #767): every executed
+      # subsystem must run in a REQUIRED status context and each language present
+      # must have a required executing job. Runs in this existing required job so
+      # it is satisfiable on every PR shape (no new required context — blocker
+      # #753); the self-test proves it actually rejects a missing/non-required
+      # job (loud, never silently skipped).
+      - name: Assert every subsystem has a required executing test job
+        run: scripts/check-test-job-presence.sh
+      - name: Self-test the test-job-presence guardrail
+        run: tests/test-job-presence-selftest.sh

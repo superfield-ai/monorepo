@@ -1,0 +1,37 @@
+# required-status-contexts.txt — canonical mirror of main's required_status_checks
+#
+# This is the DEFAULT required-contexts list consumed by
+# scripts/check-test-job-presence.sh (issue #767). The guardrail asserts that
+# every EXECUTED subsystem in coverage-truth.toml is run by a job whose status
+# context appears in THIS list, and that each language present (Rust, TS) has at
+# least one such required executing job (test-coverage policy invariant 4 at
+# subsystem granularity).
+#
+# It MUST be kept in lockstep with the branch-protection required_status_checks
+# on `main`. If a required context is added/renamed/removed there, update this
+# file in the same PR. The job `name:` strings below are the verbatim status
+# context identities (GitHub uses the job name as the check-run name).
+#
+# Format: one context name per line. Blank lines and lines beginning with `#`
+# are ignored. Trailing/leading whitespace is trimmed.
+#
+# Source of each name (workflow:job):
+#   build.yml:typecheck                  -> Typecheck
+#   build.yml:lint                       -> Lint
+#   build.yml:format                     -> Format
+#   test-unit.yml:test-unit              -> Unit tests
+#   test-integration.yml:test-integration-> Integration (API) tests
+#   container-build.yml / build          -> Compile and build container image
+#   embedder-coverage.yml:embedder-coverage -> nexum embedder coverage (...)
+#   rust.yml:rust-test                   -> Rust workspace tests (nextest, no-tests=fail)
+#   rust.yml:coverage-delta              -> Rust coverage-delta (touched package ran >0 tests)
+
+Typecheck
+Lint
+Format
+Unit tests
+Integration (API) tests
+Compile and build container image
+nexum embedder coverage (pgvector + governed weights)
+Rust workspace tests (nextest, no-tests=fail)
+Rust coverage-delta (touched package ran >0 tests)
