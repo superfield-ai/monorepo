@@ -1,0 +1,57 @@
+# cargo-nextest configuration — pinned by dev-scout #771 for the
+# coverage-enforcement phase (downstream features #764, #765, #766).
+#
+# STATUS: SCOUT SKELETON. This file pins the nextest invocation/config seam so
+# the three phase features land sequentially without colliding on it. It does
+# NOT make any nextest job a required context (that is #764) and it does NOT
+# add the coverage-delta gate (#766). It only fixes the contract so those
+# features agree on HOW nextest runs.
+#
+# Canonical docs: docs/prd.md, docs/adr-schema-boundary.md
+# Scout findings:  docs/scout/coverage-enforcement-rust-test-substrate-seams.md
+#
+# ── WHY THIS FILE EXISTS ──────────────────────────────────────────────────────
+# Invariant 2 (exit 0 != tested): rust.yml today only *builds* the workspace; no
+# job *runs* the Rust suite, so a green Rust check proves nothing executed. The
+# phase makes `cargo nextest run --workspace` a required context (#764). The
+# load-bearing flag is `--no-tests=fail`: nextest must HARD-FAIL when a run
+# collects zero tests, so an empty/mis-filtered run can never masquerade as
+# green. In nextest 0.9.85 (the pinned toolchain) `--no-tests=fail` is the
+# DEFAULT, but #764 must pass it EXPLICITLY on the command line so the
+# enforcement is visible in the workflow and survives a future default change.
+#
+# `--no-tests` has no [profile] equivalent in this nextest version, so the
+# enforcement lives on the command line, not here. This file pins the rest of
+# the contract: deterministic output, a CI-stable retry/slow-timeout policy,
+# and a dedicated `ci` profile the required job selects with `--profile ci`.
+
+# nextest's own config schema version (not the repo's). Pinned so a newer
+# nextest validating an older repo gives a clear error instead of silent drift.
+nextest-version = { required = "0.9.85" }
+
+[profile.default]
+# Local-developer defaults. Kept minimal; CI uses [profile.ci] below.
+# A failing test prints its full output immediately.
+failure-output = "immediate"
+# Show a slow-test warning so a hanging integration test is visible in logs.
+slow-timeout = { period = "60s", terminate-after = 3 }
+
+[profile.ci]
+# The profile the REQUIRED workspace job (#764) selects: `--profile ci`.
+# Final output collected at the end keeps the CI log readable.
+failure-output = "immediate-final"
+# Surface slow tests but do not kill them inside the 45-min job budget.
+slow-timeout = { period = "120s" }
+# CI must be deterministic: do NOT auto-retry. A flaky test is a real signal in
+# a coverage-enforcement phase whose whole point is "tests actually run".
+retries = 0
+# Fail-fast off: collect the full per-package executed-count picture in one run
+# so #766's coverage-delta gate sees every touched package's count, not just up
+# to the first failure.
+fail-fast = false
+
+# NOTE for #766 (coverage-delta gate): the per-package EXECUTED-test count is
+# NOT read from this file. It comes from nextest's machine-readable output at
+# run time (libtest-json `suite` events: started.test_count and the terminal
+# passed/failed/ignored), keyed by the binary-id package prefix. See the scout
+# doc §3 for the exact extraction. This [profile.ci] only fixes the run shape.
