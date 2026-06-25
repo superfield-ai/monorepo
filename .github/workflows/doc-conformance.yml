@@ -34,3 +34,7 @@ jobs:
       - run: scripts/check-sharp-doc-framing.sh
       - name: Prettier check (Sharp docs)
         run: bunx prettier --check 'crates/sharp/docs/**/*.md'
+      # Executed-coverage testing invariants doc (issue #768) — formatting is
+      # CI-enforced alongside the doc-conformance grep assertions.
+      - name: Prettier check (testing invariants)
+        run: bunx prettier --check docs/testing-invariants.md

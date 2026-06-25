@@ -135,3 +135,27 @@ was closed invalid). Three hard-won facts:
   `LlmProvider::is_keyless()` gates `LoopConfig::credential_state()` and the
   executor's empty-key guard, so the loop selects the real `LlmAgentExecutor`,
   not the fixture. Mirror lives in `sf-serve`'s `StudioProvider::OpenCodeServer`.
+
+## The four executed-coverage testing invariants — a green CI signal means "nobody objected," not "the code ran"
+
+Canonical wording lives in `docs/testing-invariants.md` and the loop's
+`_shared/test-coverage-policy.md`; both are guarded by the `Doc conformance`
+job. A governed subsystem once merged green with zero executed CI coverage. Do
+NOT add a test that would skip when its dependency is absent, and do NOT trust a
+green job as proof the diff ran.
+
+1. **Loud-skip, never silent-skip.** A test that needs an external resource (a
+   DB, model weights, network, an API key) must **fail in CI when the resource
+   is absent**, not skip. `#[ignore]`, `t.Skip()`, `@Disabled`,
+   `skipif(not os.getenv(...))`, and fixtures returning `None`/`nil` when the
+   resource is missing all produce a false green.
+2. **Exit 0 ≠ tested.** A command that passes when zero tests ran proves
+   nothing was exercised. Require evidence the diff was _executed_ — >0 tests
+   collected and run — and make "no tests collected" red (`--no-tests=fail`,
+   `--passWithNoTests=false`, `--strict-markers`).
+3. **Runtime behaviour needs an executed-in-CI assertion.** Doc-grep, lint,
+   type-check, format, and compile are **not** coverage for a model, endpoint,
+   migration, or background job.
+4. **Required checks must cover the languages present.** Every language present
+   has a **test-executing** job in the required branch-protection contexts, not
+   just a build job (`scripts/check-test-job-presence.sh`, #767).
