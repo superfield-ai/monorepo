@@ -109,6 +109,16 @@ pub async fn garden_ingest(
         return Err(GardenError::NoFiles);
     }
 
+    // Ensure the tenant row exists FIRST. Every downstream write — the corpus,
+    // the ingested documents, and (critically) the gardening loop's
+    // `nexum.page_revisions` rows — carries a `workspace_id` that is a foreign
+    // key onto `public.workspaces(id)`. Without this row the loop's first
+    // page-revision write fails `page_revisions_workspace_id_fkey`, so the loop
+    // never commits a cursor turn and the live eval observer polls forever
+    // (issue #762). Seeding the workspace here makes the appliance's fixed
+    // WORKSPACE_ID a real tenant before any loop step runs.
+    ensure_workspace(pool, workspace_id).await?;
+
     // Ensure the seed corpus exists; create it if absent.
     let corpus_id = ensure_seed_corpus(pool, workspace_id).await?;
 
@@ -162,6 +172,37 @@ fn file_stem(path: &str) -> String {
         .and_then(|s| s.to_str())
         .unwrap_or(path)
         .to_string()
+}
+
+/// Ensure a `public.workspaces` row exists for `workspace_id`, creating it if
+/// absent.
+///
+/// The whole schema foreign-keys tenant rows onto `public.workspaces(id)`
+/// (`page_revisions_workspace_id_fkey`, the corpus/document tables, the policy
+/// engine, …). When the appliance gardens a fixed `WORKSPACE_ID` that was never
+/// provisioned through the normal signup path (the eval-todo-app sweep and any
+/// scripted garden run), that row is missing and the loop's page-revision
+/// writes fail the FK on every pass. Inserting it idempotently here — keyed on
+/// the id, with a derived unique slug — makes the workspace a first-class tenant
+/// so the loop can commit cursor turns (issue #762).
+///
+/// `ON CONFLICT (id) DO NOTHING` keeps this safe to re-run and a no-op for a
+/// workspace created the normal way.
+async fn ensure_workspace(pool: &PgPool, workspace_id: Uuid) -> Result<(), GardenError> {
+    // A deterministic, unique slug derived from the id so repeated garden runs
+    // against the same workspace never collide on the `slug` UNIQUE constraint.
+    let slug = format!("garden-{workspace_id}");
+    sqlx::query(
+        "INSERT INTO public.workspaces (id, slug, display_name) \
+         VALUES ($1, $2, $3) ON CONFLICT (id) DO NOTHING",
+    )
+    .bind(workspace_id)
+    .bind(slug)
+    .bind("Garden seed workspace")
+    .execute(pool)
+    .await?;
+
+    Ok(())
 }
 
 /// Ensure the `"seed"` corpus exists in `nexum.corpora`, creating it if absent.

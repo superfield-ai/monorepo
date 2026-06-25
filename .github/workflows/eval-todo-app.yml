@@ -17,7 +17,13 @@ on:
       turn_budget:
         description: "Max gardening turns before giving up"
         required: false
-        default: "60"
+        # The live observer breaks and writes result.json once the gardening
+        # loop reaches this many cursor advances (or acceptance). The free Big
+        # Pickle model is slow on the saturated self-hosted runner — a 30-turn
+        # budget run did not finish a single pass inside the job wall — so keep
+        # the default small enough that a budget-exhaust run reliably emits
+        # result.json. Raise via the dispatch input for a longer scoring sweep.
+        default: "8"
 
 concurrency:
   group: eval-todo-app-${{ github.ref }}
@@ -27,7 +33,13 @@ jobs:
   eval-todo-app:
     name: todo-app scenario (live, keyless Big Pickle via opencode)
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 40
+    # The keyless free Big Pickle model is slow and the self-hosted runner is
+    # queue-saturated. The live observer (`sf-eval`) terminates deterministically
+    # once the gardening loop reaches the turn budget or acceptance, then writes
+    # result.json, so this wall is a backstop, not the normal exit. 40m proved
+    # too tight (the budget run was killed mid-flight before result.json), so
+    # give the live loop real headroom.
+    timeout-minutes: 75
     # The self-hosted runner forbids container-less jobs. Run inside the shared
     # CI image; the Postgres service is then reachable at host `postgres`.
     container:
@@ -87,6 +99,23 @@ jobs:
           key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
           restore-keys: |
             ${{ runner.os }}-cargo-
+
+      # ── Make the governed embed weights present OFFLINE (Mechanism A) ───────
+      # The garden Seed step below (`cargo run --bin superfield -- garden`)
+      # constructs Embedder::new(), which resolves the all-MiniLM-L6-v2 weights
+      # cache-first then falls through to a network download() on a miss. On a
+      # no-egress runner that download produces `RelativeUrlWithoutBase` — the
+      # Seed failure this issue (#762) fixes. This shared composite action
+      # (#760) restores the hf-hub cache tree keyed on models/embedding.lock, or
+      # on a miss does ONE online curl-based populate, then asserts the exact
+      # refs/<rev> + snapshots/<full-sha>/ layout exists (failing LOUDLY if not)
+      # and runs the offline-resolution probe. It exports HF_HOME to $GITHUB_ENV
+      # so the Seed step below resolves the weights cache-HIT branch with zero
+      # huggingface.co egress. Runs before the build/boot/Seed steps. The C
+      # toolchain (above) and Cargo cache (above) are already in place, which
+      # the action's offline probe (cargo test -p nexum) needs.
+      - name: Provision governed embed weights (offline)
+        uses: ./.github/actions/governed-embed-weights
 
       - name: Install the keyless opencode CLI
         run: |

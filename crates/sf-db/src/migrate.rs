@@ -19,7 +19,11 @@
 //!
 //! Component SQL directories are applied in dependency order:
 //!
-//!   `sf-db` (substrate) -> `sf-auth` -> `nexum` -> `sharp`
+//!   `sf-db` (substrate) -> `sf-auth` -> `nexum` -> `sharp` -> `orchestrator`
+//!
+//! The `orchestrator` schema (the gardening loop's resumable cursor) sorts last
+//! as a cross-cutting concern that depends only on the component tables
+//! existing (issue #762).
 //!
 //! Within each directory, files are applied in ascending filename order
 //! (`NNNN_description.sql`). The recorded migration id is
@@ -109,6 +113,14 @@ const COMPONENT_DIRS: &[(&str, &[&str])] = &[
     ("sf-auth", &["crates", "sf-auth", "src", "migrations"]),
     ("nexum", &["crates", "nexum", "migrations"]),
     ("sharp", &["crates", "sharp", "migrations"]),
+    // The gardening loop engine's resumable cursor lives in its own
+    // `orchestrator` schema (issue #491). The daemon's running loop writes
+    // `orchestrator.gardening_cursor` and the live eval runner reads it, so the
+    // appliance boot must apply this migration too — without it the loop cannot
+    // commit a cursor and the eval observer polls a non-existent relation
+    // forever (issue #762). It is a cross-cutting concern that depends only on
+    // the component schemas existing, so it sorts last.
+    ("orchestrator", &["orchestrator", "migrations"]),
 ];
 
 /// Resolve the repository root used to locate the component migration SQL.
@@ -303,6 +315,7 @@ mod tests {
         scaffold(
             &tmp,
             &[
+                ("orchestrator/migrations", "0001_cursor.sql", "-- cursor"),
                 ("crates/sharp/migrations", "0001_sharp.sql", "-- sharp"),
                 ("crates/nexum/migrations", "0001_nexum.sql", "-- nexum"),
                 ("crates/sf-auth/src/migrations", "0001_auth.sql", "-- auth"),
@@ -319,8 +332,10 @@ mod tests {
                 "sf-auth/0001_auth",
                 "nexum/0001_nexum",
                 "sharp/0001_sharp",
+                "orchestrator/0001_cursor",
             ],
-            "components must apply in sf-db -> sf-auth -> nexum -> sharp order"
+            "components must apply in sf-db -> sf-auth -> nexum -> sharp -> \
+             orchestrator order"
         );
 
         fs::remove_dir_all(&tmp).ok();
@@ -375,11 +390,27 @@ mod tests {
             migs.iter().map(|m| &m.id).collect::<Vec<_>>()
         );
         assert!(migs.iter().any(|m| m.id.starts_with("sharp/")));
+        // The orchestrator gardening-cursor migration must be discovered too —
+        // the running loop and the live eval runner depend on it (issue #762).
+        assert!(
+            migs.iter().any(|m| m.id.starts_with("orchestrator/")),
+            "expected the orchestrator gardening-cursor migration, got {:?}",
+            migs.iter().map(|m| &m.id).collect::<Vec<_>>()
+        );
         // sf-db must precede sharp.
         let first_sharp = migs.iter().position(|m| m.id.starts_with("sharp/"));
         let last_db = migs.iter().rposition(|m| m.id.starts_with("sf-db/"));
         if let (Some(s), Some(d)) = (first_sharp, last_db) {
             assert!(d < s, "all sf-db migrations must precede sharp migrations");
+        }
+        // orchestrator sorts last — after all sharp migrations.
+        let first_orch = migs.iter().position(|m| m.id.starts_with("orchestrator/"));
+        let last_sharp = migs.iter().rposition(|m| m.id.starts_with("sharp/"));
+        if let (Some(o), Some(s)) = (first_orch, last_sharp) {
+            assert!(
+                s < o,
+                "all sharp migrations must precede the orchestrator migration"
+            );
         }
     }
 }

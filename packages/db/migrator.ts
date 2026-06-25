@@ -10,7 +10,7 @@
  * Migrations are applied in component dependency order as established by
  * docs/adr-schema-boundary.md:
  *
- *   public (substrate) → auth → nexum → sharp → (future: episodes)
+ *   public (substrate) → auth → nexum → sharp → orchestrator
  *
  * Migration files live in two forms:
  *
@@ -135,7 +135,7 @@ const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
  * Component SQL migration directories, in the order they must be applied.
  *
  * Order follows docs/adr-schema-boundary.md dependency sequence:
- *   public (substrate/sf-db) → auth → nexum → sharp
+ *   public (substrate/sf-db) → auth → nexum → sharp → orchestrator
  *
  * Within each directory, files are applied in ascending filename order
  * (NNNN_description.sql). The runner id for a SQL migration is
@@ -160,6 +160,15 @@ const COMPONENT_MIGRATION_DIRS: Array<{
   {
     component: "sharp",
     path: resolve(REPO_ROOT, "crates", "sharp", "migrations"),
+  },
+  // The gardening loop engine's resumable cursor lives in its own
+  // `orchestrator` schema (issue #491). It is a cross-cutting concern that
+  // depends only on the component schemas existing, so it sorts last. The
+  // running daemon writes `orchestrator.gardening_cursor` and the live eval
+  // runner reads it (issue #762), so both runners must apply it.
+  {
+    component: "orchestrator",
+    path: resolve(REPO_ROOT, "orchestrator", "migrations"),
   },
 ];
 
