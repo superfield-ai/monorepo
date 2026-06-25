@@ -39,9 +39,60 @@ use uuid::Uuid;
 
 // ── Pool helper ───────────────────────────────────────────────────────────────
 
+/// CI require-marker. When set (to any non-empty value), a missing
+/// `DATABASE_URL` is a LOUD failure (panic / non-zero exit) instead of a silent
+/// skip. The required embedder job (`.github/workflows/embedder-coverage.yml`)
+/// exports `NEXUM_REQUIRE_DB=1`, so a future regression that drops
+/// `DATABASE_URL` can never masquerade as green-by-skip.
+const REQUIRE_DB_MARKER: &str = "NEXUM_REQUIRE_DB";
+
+/// Whether the CI require-marker demands a live database.
+///
+/// True only when `NEXUM_REQUIRE_DB` is present and non-empty. Local developers
+/// who leave it unset get the graceful-skip behaviour; CI sets it so the gated
+/// tests can never silently no-op.
+fn db_is_required() -> bool {
+    std::env::var(REQUIRE_DB_MARKER)
+        .map(|v| !v.is_empty())
+        .unwrap_or(false)
+}
+
+/// Pure decision for the loud-skip guard, factored out so it can be unit-tested
+/// without mutating process-wide environment variables.
+///
+/// Given the (optional) `DATABASE_URL` value and whether the require-marker is
+/// set, returns the connection URL to use, or an error string when the marker
+/// demands a database that is absent. `Ok(None)` means "skip gracefully".
+///
+/// - marker unset, no URL  → `Ok(None)`        (graceful local-dev skip)
+/// - URL present           → `Ok(Some(url))`   (run against the database)
+/// - marker set, no URL    → `Err(_)`          (loud failure — caller panics)
+fn resolve_db_url(database_url: Option<&str>, require_db: bool) -> Result<Option<String>, String> {
+    match database_url {
+        Some(url) if !url.is_empty() => Ok(Some(url.to_string())),
+        _ if require_db => Err(format!(
+            "{REQUIRE_DB_MARKER} is set but DATABASE_URL is absent: the required \
+             embedder job must run nexum integration tests against a live database. \
+             Refusing to skip silently — provision DATABASE_URL or unset {REQUIRE_DB_MARKER}."
+        )),
+        _ => Ok(None),
+    }
+}
+
 /// Connect to the database at `DATABASE_URL`, or return `None` to skip.
+///
+/// Loud-skip, never silent-skip: when the [`REQUIRE_DB_MARKER`] require-marker
+/// is set but `DATABASE_URL` is absent, this **panics** so the suite fails
+/// loudly in CI. With the marker unset (local dev), a missing `DATABASE_URL`
+/// returns `None` and the caller skips gracefully via its
+/// `match … None => return` arm.
 async fn maybe_pool() -> Option<PgPool> {
-    let url = std::env::var("DATABASE_URL").ok()?;
+    let database_url = std::env::var("DATABASE_URL").ok();
+    let url = match resolve_db_url(database_url.as_deref(), db_is_required()) {
+        Ok(Some(url)) => url,
+        Ok(None) => return None,
+        Err(msg) => panic!("{msg}"),
+    };
     let pool = sqlx::postgres::PgPoolOptions::new()
         .max_connections(5)
         .connect(&url)
@@ -1156,4 +1207,81 @@ async fn cleanup_ingest(pool: &PgPool, doc_id: uuid::Uuid) {
         .execute(pool)
         .await
         .ok();
+}
+
+// ── Loud-skip guard tests (issue #761) ─────────────────────────────────────────
+//
+// These prove the require-marker semantics without touching a live database.
+// `resolve_db_url` is the pure core of `maybe_pool()`: testing it directly
+// avoids mutating process-wide `DATABASE_URL` / `NEXUM_REQUIRE_DB`, which would
+// race with the DB-gated tests under parallel execution.
+
+/// Marker set + DATABASE_URL absent → the guard MUST fail loudly (no skip).
+///
+/// This is the acceptance-criterion test named in issue #761. It asserts the
+/// require-marker path produces an error (which `maybe_pool()` turns into a
+/// panic / non-zero exit) instead of a silent `None`-return.
+#[test]
+fn maybe_pool_panics_when_required() {
+    let outcome = resolve_db_url(None, /* require_db = */ true);
+    assert!(
+        outcome.is_err(),
+        "with the require-marker set and DATABASE_URL absent, the guard must fail \
+         loudly (Err → panic), not skip silently: {outcome:?}"
+    );
+    // An empty DATABASE_URL must be treated as absent too.
+    assert!(
+        resolve_db_url(Some(""), true).is_err(),
+        "an empty DATABASE_URL must also fail loudly under the require-marker"
+    );
+}
+
+/// Marker unset + DATABASE_URL absent → graceful skip (`Ok(None)`), so local
+/// `cargo test -p nexum` with no database exits 0.
+#[test]
+fn maybe_pool_skips_when_not_required() {
+    assert_eq!(
+        resolve_db_url(None, /* require_db = */ false),
+        Ok(None),
+        "with the require-marker unset, a missing DATABASE_URL must skip gracefully"
+    );
+    assert_eq!(
+        resolve_db_url(Some(""), false),
+        Ok(None),
+        "an empty DATABASE_URL with the marker unset must also skip gracefully"
+    );
+}
+
+/// A present DATABASE_URL is used regardless of the marker.
+#[test]
+fn maybe_pool_uses_url_when_present() {
+    let url = "postgres://example/db";
+    assert_eq!(
+        resolve_db_url(Some(url), true),
+        Ok(Some(url.to_string())),
+        "a present DATABASE_URL must be used under the require-marker"
+    );
+    assert_eq!(
+        resolve_db_url(Some(url), false),
+        Ok(Some(url.to_string())),
+        "a present DATABASE_URL must be used without the require-marker"
+    );
+}
+
+/// `db_is_required()` reads the marker from the real environment. Sanity-check
+/// that an empty/unset marker is not "required" — defends the local-dev default.
+/// (Run single-threaded in CI; locally the marker is unset.)
+#[test]
+fn db_is_required_reflects_marker() {
+    // The marker is the env var the required embedder job exports.
+    match std::env::var(REQUIRE_DB_MARKER) {
+        Ok(v) if !v.is_empty() => assert!(
+            db_is_required(),
+            "{REQUIRE_DB_MARKER}={v:?} must make the database required"
+        ),
+        _ => assert!(
+            !db_is_required(),
+            "an unset/empty {REQUIRE_DB_MARKER} must NOT require a database"
+        ),
+    }
 }
