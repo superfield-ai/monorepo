@@ -17,7 +17,12 @@ on:
       turn_budget:
         description: "Max gardening turns before giving up"
         required: false
-        default: "60"
+        # The live observer breaks and writes result.json once the gardening
+        # loop reaches this many cursor advances (or acceptance). The free Big
+        # Pickle model is slow, so keep the default modest enough that a
+        # budget-exhaust run still finishes — and emits result.json — well
+        # inside the job wall (raise via dispatch input for a longer sweep).
+        default: "30"
 
 concurrency:
   group: eval-todo-app-${{ github.ref }}
@@ -27,7 +32,13 @@ jobs:
   eval-todo-app:
     name: todo-app scenario (live, keyless Big Pickle via opencode)
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 40
+    # The keyless free Big Pickle model is slow and the self-hosted runner is
+    # queue-saturated. The live observer (`sf-eval`) terminates deterministically
+    # once the gardening loop reaches the turn budget or acceptance, then writes
+    # result.json, so this wall is a backstop, not the normal exit. 40m proved
+    # too tight (the budget run was killed mid-flight before result.json), so
+    # give the live loop real headroom.
+    timeout-minutes: 75
     # The self-hosted runner forbids container-less jobs. Run inside the shared
     # CI image; the Postgres service is then reachable at host `postgres`.
     container:
