@@ -405,6 +405,12 @@ jobs:
     permissions:
       contents: read
       pull-requests: read
+      # Required to `docker pull` the private GHCR `ci-runner` image below. An
+      # explicit permissions block NARROWS the job token and drops the
+      # repo-default `packages: read`, so the container step 403s before any
+      # gate step runs unless we grant it back (the sibling rust-test-seam job
+      # pulls the same image only because it declares no permissions block).
+      packages: read
     container:
       # ci-runner ships python3 + curl (the gate + self-test + the PR-files
       # fetch are pure python3/bash; no Rust toolchain needed here).
