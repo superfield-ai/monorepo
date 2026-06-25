@@ -1,11 +1,12 @@
 # cargo-nextest configuration — pinned by dev-scout #771 for the
 # coverage-enforcement phase (downstream features #764, #765, #766).
 #
-# STATUS: SCOUT SKELETON. This file pins the nextest invocation/config seam so
-# the three phase features land sequentially without colliding on it. It does
-# NOT make any nextest job a required context (that is #764) and it does NOT
-# add the coverage-delta gate (#766). It only fixes the contract so those
-# features agree on HOW nextest runs.
+# STATUS: ACTIVE. This file pins the nextest invocation/config seam the three
+# phase features land on. As of #764 the `[profile.ci]` below is selected by a
+# REQUIRED context: rust.yml's `rust-test` job runs
+# `cargo nextest run --workspace --profile ci --no-tests=fail` and is registered
+# in main's required branch-protection contexts (the general enforcement that
+# "exit 0 != tested" for Rust). #766 still owns the coverage-delta gate.
 #
 # Canonical docs: docs/prd.md, docs/adr-schema-boundary.md
 # Scout findings:  docs/scout/coverage-enforcement-rust-test-substrate-seams.md
