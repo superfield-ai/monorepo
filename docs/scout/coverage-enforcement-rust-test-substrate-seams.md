@@ -6,11 +6,11 @@
 **Canonical docs:** `docs/prd.md`, `docs/adr-schema-boundary.md`, `docs/adr-embedding-model.md`
 **Downstream issues:**
 
-| Issue | Feature                                                                                   | What this scout pins for it                                                                                                |
-| ----- | ----------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| #765  | Shared pgvector DB + governed-weights fixture so DB-gated Rust tests execute              | The `provision-test-substrate` composite-action interface + the EXACT reuse path from the merged #760 artifacts.           |
-| #764  | Required `cargo nextest run --workspace` with `no-tests-collected=fail`                   | The nextest invocation + `.config/nextest.toml` `[profile.ci]` + which job becomes the required context.                   |
-| #766  | Coverage-delta gate — touching a package requires >0 of its tests to run                  | The per-PACKAGE executed-test count source (nextest libtest-json) + the `coverage-truth.toml` package map.                 |
+| Issue | Feature                                                                      | What this scout pins for it                                                                                      |
+| ----- | ---------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| #765  | Shared pgvector DB + governed-weights fixture so DB-gated Rust tests execute | The `provision-test-substrate` composite-action interface + the EXACT reuse path from the merged #760 artifacts. |
+| #764  | Required `cargo nextest run --workspace` with `no-tests-collected=fail`      | The nextest invocation + `.config/nextest.toml` `[profile.ci]` + which job becomes the required context.         |
+| #766  | Coverage-delta gate — touching a package requires >0 of its tests to run     | The per-PACKAGE executed-test count source (nextest libtest-json) + the `coverage-truth.toml` package map.       |
 
 This is a **stub-only / documentation** pass. It introduces **no** change to
 runtime behaviour and makes **nothing** a required context. The artifacts shipped
@@ -44,7 +44,7 @@ tests, so an empty/mis-filtered run can never pass green.
 
 > In the pinned toolchain **cargo-nextest 0.9.85**, `--no-tests=fail` is the
 > **default** (verified: `cargo nextest run --help` → `--no-tests=<ACTION>
-> [default: fail]`). #764 MUST still pass it **explicitly on the command line**
+[default: fail]`). #764 MUST still pass it **explicitly on the command line**
 > so (a) the enforcement is visible in the workflow and (b) it survives a future
 > nextest default change. `--no-tests` has **no `[profile]` equivalent** in this
 > version, so it lives on the command line, not in `.config/nextest.toml`.
@@ -175,8 +175,9 @@ the named DB-gated crates flip `0 → >0` and #765 updates their rows.
 
 #766's AC requires `scripts/check-coverage-delta.sh` to exit non-zero for a
 synthetic PR touching package X with a zero executed-X count, and zero for a
->0 count. Feed it a synthetic changed-file list + a synthetic per-package
-count report (the §3.1 map shape) — no live CI needed.
+
+> 0 count. Feed it a synthetic changed-file list + a synthetic per-package
+> count report (the §3.1 map shape) — no live CI needed.
 
 ---
 
@@ -186,11 +187,11 @@ All three features edit `rust.yml`. The scout pins a single `rust-test-seam`
 job (added by this scout) as the shared anchor so the edits are **additive and
 sequential**, not overlapping:
 
-| Order | Issue | Edit to `rust.yml` (and friends)                                                                                                                                                                                                                                            |
-| ----- | ----- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Order | Issue | Edit to `rust.yml` (and friends)                                                                                                                                                                                                                                                                                                                 |
+| ----- | ----- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | 1     | #765  | On `rust-test-seam`: add the `services: postgres (pgvector/pgvector:pg16)` block + `DATABASE_URL` env (mirror `embedder-coverage.yml`); flip the substrate step `mode: stub → provision` and pass `database-url`; fill `provision-test-substrate/action.yml` WIRE-HERE steps. Update the `coverage-truth.toml` rows for the now-executed crates. |
-| 2     | #764  | On `rust-test-seam`: widen the trivial step from `-p sf-auth` to `--workspace --include-ignored`; rename the job so its context is stable; register that context in `main`'s branch protection; add the empty-filter self-check (§1.4). The `[profile.ci]` is already in `.config/nextest.toml`. |
-| 3     | #766  | Add a `coverage-delta` step/job consuming the §3.1 per-package JSON (already emitted by `rust-test-seam`) + `coverage-truth.toml`; ship `scripts/check-coverage-delta.sh` + its self-test; register the gate context.                                                       |
+| 2     | #764  | On `rust-test-seam`: widen the trivial step from `-p sf-auth` to `--workspace --include-ignored`; rename the job so its context is stable; register that context in `main`'s branch protection; add the empty-filter self-check (§1.4). The `[profile.ci]` is already in `.config/nextest.toml`.                                                 |
+| 3     | #766  | Add a `coverage-delta` step/job consuming the §3.1 per-package JSON (already emitted by `rust-test-seam`) + `coverage-truth.toml`; ship `scripts/check-coverage-delta.sh` + its self-test; register the gate context.                                                                                                                            |
 
 Because #765 only ADDS the service block + flips the action mode, #764 only
 WIDENS the run + registers a context, and #766 only ADDS a downstream
