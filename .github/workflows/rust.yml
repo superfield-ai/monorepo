@@ -146,8 +146,37 @@ jobs:
       # clean tree with >0 tests collected; nextest's own "Summary" line in the
       # log reports the executed count (AC: a reported test count > 0). If zero
       # tests were somehow collected, --no-tests=fail makes THIS step red.
+      # `--message-format libtest-json` makes nextest emit per-test NDJSON on
+      # stdout (its human progress + Summary line stay on stderr, still visible
+      # in the log). We `tee` that NDJSON to a file so the next step can derive
+      # the per-package executed-test map that issue #766's coverage-delta gate
+      # consumes — WITHOUT weakening the required assertion: the run still
+      # executes the hermetic suite, `--no-tests=fail` still hard-fails a
+      # zero-collection run, and `pipefail` propagates a test failure through the
+      # `tee`. The experimental format is opt-in via the env var below.
       - name: "Workspace nextest run (--no-tests=fail, >0 tests, exit 0) [AC1]"
-        run: cargo nextest run --workspace --profile ci --no-tests=fail
+        env:
+          NEXTEST_EXPERIMENTAL_LIBTEST_JSON: "1"
+        run: |
+          set -euo pipefail
+          cargo nextest run --workspace --profile ci --no-tests=fail \
+            --message-format libtest-json | tee nextest-hermetic.jsonl
+
+      # ── Per-package executed-count source for #766 (hermetic half) ──────────
+      # Publish the raw libtest-json NDJSON as an artifact. The coverage-delta
+      # gate job (which runs in the ci-runner image with python3) derives the
+      # {pkg: executed-count} map from it — the SAME derivation the seam job uses
+      # (each per-test "ok"/"failed" event names the test "<pkg>::<binary>$...";
+      # the owning package is the prefix before "::"). We deliberately do NOT
+      # parse it here: the `rust:latest` container has no python3, and uploading
+      # the raw NDJSON keeps this required job free of extra tool dependencies.
+      - name: "Upload hermetic nextest NDJSON (per-package source) [#766]"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-nextest-hermetic-jsonl
+          path: nextest-hermetic.jsonl
+          if-no-files-found: error
 
       # ── AC2: the self-check proving --no-tests=fail is active ───────────────
       # Constrain the run to a filter that matches NOTHING. With --no-tests=fail
@@ -317,6 +346,12 @@ jobs:
           print("per-package executed-test counts (for #766 coverage-delta):")
           for pkg, n in sorted(executed.items()):
               print(f"  {pkg}: {n}")
+          # Persist the DB-gated half of the per-package map BEFORE the loud-fail
+          # check below, so the coverage-delta gate (#766) still has these counts
+          # even on a run that goes red for a different reason. The gate merges
+          # this with the hermetic map from the `rust-test` job.
+          with open("rust-pkg-counts-seam.json", "w") as out:
+              json.dump(dict(executed), out)
           # LOUD fail: every named crate must have executed >0 DB-gated tests, so
           # a green compile that executed 0 for any crate cannot masquerade as
           # tested (exit 0 != tested).
@@ -324,3 +359,172 @@ jobs:
           if missing:
               sys.exit(f"FAIL: 0 tests executed for {missing} — exit 0 != tested")
           PY
+
+      # Publish the DB-gated per-package map for the coverage-delta gate (#766).
+      # `if: always()` so the artifact exists even when the loud-fail check above
+      # trips: the JSON is written before that exit.
+      - name: "Upload seam per-package counts [#766]"
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: rust-pkg-counts-seam
+          path: rust-pkg-counts-seam.json
+          if-no-files-found: warn
+
+  # ── REQUIRED COVERAGE-DELTA GATE (issue #766) ───────────────────────────────
+  # Enforces invariant 2 ("exit 0 != tested") at PACKAGE granularity: if this
+  # PR modifies a Rust package, at least one of that package's tests must have
+  # EXECUTED in CI. The gate merges the per-package executed-count maps the two
+  # nextest jobs above publish — the hermetic `rust-test` map (every crate with
+  # non-#[ignore]d tests) UNION the DB-gated `rust-test-seam` map (the
+  # #[ignore]d corpus) — so a package whose tests ran in EITHER job counts as
+  # executed. It then maps this PR's changed paths to owning packages and fails
+  # if any touched package's merged count is 0.
+  #
+  # REQUIRED-CONTEXT SATISFIABILITY (blocker #753): the job `name:` below is a
+  # required branch-protection context, so it must be satisfiable on every
+  # mergeable PR shape. Two guarantees keep it from deadlocking unrelated PRs:
+  #   1. The gate is a NO-OP PASS when the diff touches no Rust package — TS-only
+  #      / workflow-only PRs go green (check-coverage-delta.sh exits 0).
+  #   2. Draft-gated + the rust.yml `paths-ignore: ["**.md","**.txt"]` trigger
+  #      mirror the other required heavy Rust jobs, so the context reports on
+  #      every code/workflow PR (pure docs-only PRs stay in the existing #753
+  #      envelope, no worse than the other required contexts).
+  coverage-delta:
+    # The required context name. Keep STABLE: registered verbatim in main's
+    # required_status_checks; renaming silently drops the protection.
+    name: Rust coverage-delta (touched package ran >0 tests)
+    # Draft-gated like the other system-correctness jobs (skipped required check
+    # counts as success; re-runs for real on `ready_for_review`).
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    # Consumes both nextest jobs' per-package count artifacts, so it runs after
+    # them. Both are draft-gated identically, so on a ready PR all three run.
+    needs: [rust-test, rust-test-seam]
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: read
+    container:
+      # ci-runner ships python3 + curl (the gate + self-test + the PR-files
+      # fetch are pure python3/bash; no Rust toolchain needed here).
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI_CLASS: system-correctness
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download hermetic nextest NDJSON
+        uses: actions/download-artifact@v4
+        with:
+          name: rust-nextest-hermetic-jsonl
+          path: counts-hermetic
+
+      - name: Download seam per-package counts
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: rust-pkg-counts-seam
+          path: counts-seam
+
+      # ── Self-test the gate ON EVERY PR (issue #766 test plan) ───────────────
+      # Feeds check-coverage-delta.sh synthetic inputs and asserts zero-run
+      # blocks / >0-run passes / no-rust no-ops. Runs unconditionally here so the
+      # gate proves itself in CI (loud-skip-never-silent-skip): a regression or a
+      # missing python3 fails THIS step.
+      - name: "Self-test the coverage-delta gate [#766 test plan]"
+        run: bash scripts/check-coverage-delta.selftest.sh
+
+      # ── Merge the two per-package count maps into one report ────────────────
+      - name: Merge per-package executed-count reports
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json, collections, os
+          merged = collections.Counter()
+
+          # Hermetic half: parse the raw libtest-json NDJSON from the rust-test
+          # job (each "ok"/"failed" test event names "<pkg>::<binary>$...").
+          jsonl = "counts-hermetic/nextest-hermetic.jsonl"
+          if os.path.exists(jsonl):
+              with open(jsonl) as fh:
+                  for line in fh:
+                      line = line.strip()
+                      if not line.startswith("{"):
+                          continue
+                      try:
+                          ev = json.loads(line)
+                      except json.JSONDecodeError:
+                          continue
+                      if ev.get("type") == "test" and ev.get("event") in ("ok", "failed"):
+                          pkg = ev.get("name", "").split("::", 1)[0]
+                          if pkg:
+                              merged[pkg] += 1
+          else:
+              print(f"note: {jsonl} absent — treating hermetic half as empty")
+
+          # DB-gated half: the seam job already reduced its run to a JSON map.
+          seam = "counts-seam/rust-pkg-counts-seam.json"
+          if os.path.exists(seam):
+              with open(seam) as fh:
+                  for pkg, n in json.load(fh).items():
+                      merged[pkg] += int(n)
+          else:
+              print(f"note: {seam} absent — treating DB-gated half as empty")
+
+          with open("rust-pkg-counts.json", "w") as out:
+              json.dump(dict(merged), out)
+          print("merged per-package executed counts:", dict(merged))
+          PY
+
+      # ── Compute the PR's changed files (the diff this gate maps to packages) ─
+      # On non-PR events (push/dispatch) there is no PR diff, so the list is
+      # empty and the gate is a no-op pass — required contexts are evaluated on
+      # PRs anyway.
+      - name: Compute changed files (PR diff)
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          EVENT_NAME: ${{ github.event_name }}
+        run: |
+          set -euo pipefail
+          : > changed-files.txt
+          if [ "$EVENT_NAME" != "pull_request" ] || [ -z "${PR_NUMBER:-}" ]; then
+            echo "non-PR event ($EVENT_NAME): empty changed-file list (gate no-ops)."
+            exit 0
+          fi
+          python3 - <<'PY'
+          import json, os, urllib.request
+          repo = os.environ["REPO"]; pr = os.environ["PR_NUMBER"]; tok = os.environ["GH_TOKEN"]
+          names, page = [], 1
+          while True:
+              url = f"https://api.github.com/repos/{repo}/pulls/{pr}/files?per_page=100&page={page}"
+              req = urllib.request.Request(url, headers={
+                  "Authorization": f"Bearer {tok}",
+                  "Accept": "application/vnd.github+json",
+                  "User-Agent": "coverage-delta-gate",
+              })
+              with urllib.request.urlopen(req) as resp:
+                  batch = json.load(resp)
+              if not batch:
+                  break
+              names.extend(f["filename"] for f in batch)
+              if len(batch) < 100:
+                  break
+              page += 1
+          with open("changed-files.txt", "w") as out:
+              out.write("\n".join(names) + ("\n" if names else ""))
+          print(f"PR #{pr} changed {len(names)} file(s).")
+          PY
+
+      # ── The gate itself (issue #766 acceptance criteria) ────────────────────
+      - name: "Coverage-delta gate — touched packages ran >0 tests [#766]"
+        run: |
+          bash scripts/check-coverage-delta.sh \
+            --changed-files changed-files.txt \
+            --counts rust-pkg-counts.json \
+            --workspace-root "$GITHUB_WORKSPACE"
