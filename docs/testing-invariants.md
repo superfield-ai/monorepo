@@ -1,68 +1,64 @@
-<!--
-DEV-SCOUT SKELETON (issue #772). Section headers + TODO placeholders only — no
-prose. The four-invariant prose is filled by feature issue #768; the
-subsystem-test-job-presence guardrail is feature issue #767. Do NOT write the
-invariant prose in the scout pass.
-
-═══ SCOUT NOTES: doc-conformance assertion insertion points (pinned for #768) ═══
-
-The Doc Conformance workflow (.github/workflows/doc-conformance.yml, job
-`doc-conformance`) runs scripts/check-doc-conformance.sh on every PR. That
-script is the EXACT place feature #768 must add assertions that this file keeps
-its four invariants — follow the existing pattern in that script:
-
-  * Add a new `--- docs/testing-invariants.md ---` assertion block alongside the
-    existing `--- docs/architecture.md ---` block.
-  * Declare the path once near the top:  TESTING_INV="docs/testing-invariants.md"
-  * Use the existing helpers `assert_match "<desc>" "<regex>" "$TESTING_INV"`
-    (and `assert_absent` for anti-drift) — one assertion per invariant, e.g. one
-    that the loud-skip section names #[ignore]/t.Skip()/skipif, one that the
-    exit-0≠tested section names --no-tests=fail, one that the runtime-behaviour
-    section forbids "doc-grep is coverage", one that the required-checks section
-    names a per-language test-executing job. Each must FAIL LOUDLY if the
-    invariant's key phrase regresses (matches the script's "reverted correction
-    => red" contract).
-
-Two complementary gates already cover this file and need no new wiring:
-  * Prettier: the doc-conformance job runs `bunx prettier --check` on the Sharp
-    doc set; this file is verified by `bunx prettier --check docs/testing-invariants.md`
-    (issue #772 AC + test plan). Feature #768 should extend the doc-conformance
-    job's prettier step glob to include docs/testing-invariants.md so formatting
-    is enforced in CI too.
-
-Cross-seam: scripts/check-test-job-presence.sh (stub, this same scout) is where
-the subsystem-test-job-presence guardrail (#767) enforces invariant 4; it cites
-coverage-truth.toml + scripts/check-coverage-truth.sh as the unit→test-job
-mapping source. Keep invariant 4's prose here consistent with that guardrail.
--->
-
 # Executed-Coverage Testing Invariants
 
-<!-- TODO(#768): one-paragraph intro — why a green CI signal means "nobody
-objected," not "the code ran." Cite the incident and _shared/test-coverage-policy.md. -->
+A green CI signal means "nobody objected," not "the code ran." A governed
+subsystem (an in-process embedding model, fixed by an Accepted ADR) once merged
+**green** with **zero executed CI coverage** — it only broke when the first job
+to actually _use_ it failed at runtime. Every gate trusted the green signal as
+proof of "tested," but nothing verified the code had ever executed, and the
+tests were written to **skip silently (green)** when their dependencies (a DB,
+model weights) were absent instead of **failing loudly (red)**. The four
+invariants below exist so that incident cannot recur. They are the canonical
+policy recorded in `_shared/test-coverage-policy.md` and enforced across the
+loop's gates; this document and `.agents/agent-warnings.md` make them permanent
+in-repo, guarded by the `Doc conformance` job.
 
 ## 1. Loud-skip, never silent-skip
 
-<!-- TODO(#768): prose — a test needing an external resource (DB, model weights,
-network) must FAIL in CI when the resource is absent, not skip. Name the silent-
-skip antipatterns (#[ignore], t.Skip(), @Disabled, skipif(...), fixtures
-returning None/nil). -->
+A test that needs an external resource (a DB, model weights, network, an API
+key) must **fail in CI when the resource is absent**, not skip. A test that
+self-disables — `#[ignore]`, `t.Skip()`, `@Disabled`, `skipif(not os.getenv(...))`,
+or an early `return`/`None`/`nil` from a fixture when the resource is missing —
+produces a false green: it is counted as coverage but never runs.
 
 ## 2. Exit 0 ≠ tested
 
-<!-- TODO(#768): prose — require evidence the diff was EXECUTED (>0 tests ran);
-make "no tests collected" red (--no-tests=fail, --passWithNoTests=false,
---strict-markers). Cite the coverage-delta gate (scripts/check-coverage-delta.sh). -->
+A command that passes when **zero tests ran**, or when every test
+skipped/ignored, proves nothing was exercised. Require evidence the diff was
+_executed_ — **>0 tests collected and run**. Pair this with a runner convention
+that makes "no tests collected" red:
+
+- Rust: `cargo nextest run --no-tests=fail` (or assert a nonzero test count)
+- JS/TS: `vitest --passWithNoTests=false`, `jest --passWithNoTests=false`
+- Python: `pytest --strict-markers` and fail on `collected 0 items`
+- Go: `go test ./...` over packages that actually contain `_test.go`
+
+The coverage-delta gate (`scripts/check-coverage-delta.sh`) enforces this per
+package: touching a package's code requires >0 of that package's tests to run.
 
 ## 3. Runtime behaviour needs an executed-in-CI assertion
 
-<!-- TODO(#768): prose — doc-grep, lint, type-check, and compile are NOT coverage
-for a model/endpoint/migration/job. Runtime behaviour needs a test that actually
-runs in CI. -->
+Doc-grep, lint, type-check, format, and compile are **not** coverage for runtime
+behaviour (a model, an endpoint, a migration, a background job). At least one
+check must _execute the behaviour and assert on it_, in a CI job that actually
+runs on the PR.
 
 ## 4. Required checks must cover the languages present
 
-<!-- TODO(#768): prose — every language present has a TEST-EXECUTING job in the
-required branch-protection contexts, not just a build job. Cross-reference the
-subsystem-test-job-presence guardrail (scripts/check-test-job-presence.sh, #767)
-and the coverage-truth manifest. -->
+If a repo has Rust (or Go, or any compiled/tested language), a
+**test-executing** job for that language must be in the required
+branch-protection contexts — not just a build/compile job. "Compiles but never
+runs tests" is a coverage hole. The subsystem-test-job-presence guardrail
+(`scripts/check-test-job-presence.sh`, issue #767) enforces this seam, using
+`coverage-truth.toml` and `scripts/check-coverage-truth.sh` as the
+unit-to-test-job mapping source.
+
+## The decisive question
+
+For any test claimed as coverage, ask:
+
+> **Would this test still execute and assert in a clean CI runner that has no
+> DB, no model weights, no network, and no cached credentials?**
+
+If the honest answer is "no — it would skip or no-op," it is not coverage. It is
+a silent skip, and it must be made to fail loudly or have its resource wired
+into CI.

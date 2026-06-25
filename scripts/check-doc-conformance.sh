@@ -24,6 +24,8 @@ ARCH="docs/architecture.md"
 SF_LOOP_LIB="crates/sf-loop/src/lib.rs"
 SF_PROJECT="crates/sf-serve/src/routes/project.rs"
 AGENT_ENSURE=".agents/agent-ensure-feature.md"
+TESTING_INV="docs/testing-invariants.md"
+AGENT_WARN=".agents/agent-warnings.md"
 
 fail=0
 
@@ -165,6 +167,57 @@ assert_absent "agent-ensure-feature.md has no manual nexum embedder verify" \
 assert_match "agent-ensure-feature.md points at the CI-backed embedder job" \
   "nexum embedder coverage|cargo test -p nexum --test integration -- --include-ignored" \
   "$AGENT_ENSURE"
+
+# --- docs/testing-invariants.md + .agents/agent-warnings.md (issue #768) -----
+
+# The four executed-coverage testing invariants must be recorded — in full and
+# by name — in BOTH the durable doc and the agent-warnings nag list. Each pair
+# of assertions fails LOUDLY if an invariant's heading or its decisive key
+# phrase is removed from either file, so the policy cannot silently rot.
+# (Canonical wording: _shared/test-coverage-policy.md; CLAUDE.md "Test-coverage
+# invariants".)
+
+# Invariant 1 — Loud-skip, never silent-skip (names the silent-skip antipatterns).
+assert_match "INV1 loud-skip-never-silent-skip named (testing-invariants)" \
+  "loud-skip, never silent-skip" "$TESTING_INV"
+assert_match "INV1 loud-skip-never-silent-skip named (agent-warnings)" \
+  "loud-skip, never silent-skip" "$AGENT_WARN"
+assert_match "INV1 names the silent-skip antipattern t.Skip() (testing-invariants)" \
+  "t\.Skip\(\)" "$TESTING_INV"
+assert_match "INV1 names the silent-skip antipattern t.Skip() (agent-warnings)" \
+  "t\.Skip\(\)" "$AGENT_WARN"
+
+# Invariant 2 — Exit 0 ≠ tested (names the no-tests-collected-is-red convention).
+assert_match "INV2 exit-0-not-tested named (testing-invariants)" \
+  "exit 0 ≠ tested" "$TESTING_INV"
+assert_match "INV2 exit-0-not-tested named (agent-warnings)" \
+  "exit 0 ≠ tested" "$AGENT_WARN"
+assert_match "INV2 names --no-tests=fail (testing-invariants)" \
+  "no-tests=fail" "$TESTING_INV"
+assert_match "INV2 names --no-tests=fail (agent-warnings)" \
+  "no-tests=fail" "$AGENT_WARN"
+
+# Invariant 3 — Runtime behaviour needs an executed-in-CI assertion (doc-grep is
+# NOT coverage).
+assert_match "INV3 runtime-behaviour-needs-executed-assertion named (testing-invariants)" \
+  "runtime behaviour needs an executed-in-CI assertion" "$TESTING_INV"
+assert_match "INV3 runtime-behaviour-needs-executed-assertion named (agent-warnings)" \
+  "runtime behaviour needs an executed-in-CI assertion" "$AGENT_WARN"
+assert_match "INV3 states doc-grep/lint/compile are not coverage (testing-invariants)" \
+  "are \*\*not\*\* coverage" "$TESTING_INV"
+assert_match "INV3 states doc-grep/lint/compile are not coverage (agent-warnings)" \
+  "are \*\*not\*\* coverage" "$AGENT_WARN"
+
+# Invariant 4 — Required checks must cover the languages present (a per-language
+# test-executing job in the required contexts).
+assert_match "INV4 required-checks-cover-languages named (testing-invariants)" \
+  "required checks must cover the languages present" "$TESTING_INV"
+assert_match "INV4 required-checks-cover-languages named (agent-warnings)" \
+  "required checks must cover the languages present" "$AGENT_WARN"
+assert_match "INV4 names a per-language test-executing job (testing-invariants)" \
+  "test-executing.*job" "$TESTING_INV"
+assert_match "INV4 names a per-language test-executing job (agent-warnings)" \
+  "test-executing.*job" "$AGENT_WARN"
 
 # ----------------------------------------------------------------------------
 
