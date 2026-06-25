@@ -135,43 +135,32 @@ jobs:
         with:
           mode: stub
 
-      # ── Trivial nextest run over one DB-free crate (AC + test plan) ──────────
+      # ── Trivial nextest run over one DB-free crate + the per-package count ──
+      #    source #766 consumes (one coherent step). ────────────────────────────
       # sf-auth's non-ignored unit tests need NO DATABASE_URL (the DB-gated ones
-      # are #[ignore]d and excluded by default). Asserts exit 0 AND that >0 tests
-      # executed, so a "no tests collected" run can never pass green — the
-      # LOUD-fail thesis. --no-tests=fail is passed EXPLICITLY (it is also the
-      # 0.9.85 default) so the enforcement is visible and survives a default
-      # change. #764 widens `-p sf-auth` to `--workspace`.
-      - name: Trivial nextest run (cargo nextest run -p sf-auth, >0 tests)
-        run: |
-          set -euo pipefail
-          set -o pipefail
-          cargo nextest run -p sf-auth --profile ci --no-tests=fail \
-            2>&1 | tee nextest-run.log
-          # nextest's summary line: "Summary [   0.123s] N tests run: ..."
-          ran="$(grep -oE 'Summary \[[^]]*\] [0-9]+ tests? run' nextest-run.log \
-            | grep -oE '[0-9]+ tests? run' | grep -oE '[0-9]+' | head -1 || true)"
-          echo "sf-auth tests executed: ${ran:-0}"
-          if [ -z "${ran:-}" ] || [ "${ran}" -le 0 ]; then
-            echo "FAIL: 0 sf-auth tests executed — exit 0 != tested" >&2
-            exit 1
-          fi
-
-      # ── Per-package executed-count source for #766 (pinned JSON contract) ────
-      # #766's coverage-delta gate needs per-PACKAGE executed counts. Source:
-      # nextest libtest-json events. Each per-test "ok"/"failed" event names the
-      # test "<pkg>::<binary>$<path>"; the owning package is the prefix before
-      # "::". This step PROVES the extraction works and prints the per-package
-      # map #766 consumes. Demonstration only — not a gate in this scout.
-      - name: Per-package executed-count source (pin for #766)
+      # are #[ignore]d and excluded by default), so this stays green with no DB.
+      # --no-tests=fail is passed EXPLICITLY (it is also the 0.9.85 default) so a
+      # zero-collection run hard-fails (the LOUD-fail thesis); #764 widens
+      # `-p sf-auth` to `--workspace`.
+      #
+      # We derive the executed count from nextest's libtest-json output, NOT from
+      # the human "Summary" line: that line embeds ANSI colour codes (CARGO_TERM
+      # _COLOR) that defeat a brittle regex. The JSON is the SAME per-package
+      # source #766's coverage-delta gate reads: each per-test "ok"/"failed"
+      # event names the test "<pkg>::<binary>$<path>"; the owning package is the
+      # prefix before "::". This step both ASSERTS >0 executed (AC + test plan)
+      # and PRINTS the per-package map #766 will consume.
+      - name: "Trivial nextest run + per-package count source (sf-auth, >0 tests; pins #766)"
         env:
           NEXTEST_EXPERIMENTAL_LIBTEST_JSON: "1"
         run: |
           set -euo pipefail
+          # Run for real (exit code propagates: a test failure or zero-collection
+          # under --no-tests=fail fails the step), capturing libtest-json NDJSON.
           cargo nextest run -p sf-auth --profile ci --no-tests=fail \
-            --message-format libtest-json 2>/dev/null > nextest.jsonl || true
+            --message-format libtest-json 2>/dev/null | tee nextest.jsonl
           python3 - <<'PY'
-          import json, collections
+          import json, collections, sys
           executed = collections.Counter()
           with open("nextest.jsonl") as fh:
               for line in fh:
@@ -189,6 +178,8 @@ jobs:
           print("per-package executed-test counts (for #766 coverage-delta):")
           for pkg, n in sorted(executed.items()):
               print(f"  {pkg}: {n}")
-          if not executed:
-              raise SystemExit("FAIL: extracted zero per-package counts from nextest JSON")
+          total = sum(executed.values())
+          # LOUD fail: a green compile that executed 0 tests must not pass.
+          if total <= 0:
+              sys.exit("FAIL: 0 tests executed — exit 0 != tested")
           PY
