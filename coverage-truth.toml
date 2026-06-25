@@ -45,8 +45,11 @@
 # migrated_in_ci — true only for the migration paths ci-migrate.yml lists:
 #   packages/db, crates/sf-db, crates/sf-auth, crates/nexum, crates/sharp.
 # tests_executed_in_ci:
-#   * NO workflow runs `cargo test`/`cargo nextest` — rust.yml only builds. So
-#     EVERY crate is 0 today.
+#   * rust.yml only builds. The one workflow that RUNS a crate's tests is
+#     embedder-coverage.yml (issue #760): it executes the nexum embedder for
+#     real (pgvector + governed weights + `cargo test -p nexum ...
+#     --include-ignored`), so crates/nexum is >0. Every OTHER crate has no
+#     cargo-test job -> 0.
 #   * Packages are executed only via the test-unit/test-integration globs
 #     `packages/*/tests/unit` and `packages/*/tests/integration` (and the
 #     paths-gated test-e2e for packages/core). A package is >0 iff it has at
@@ -68,7 +71,8 @@ schema_version = 1
 generated_by = "scripts/check-coverage-truth.sh"
 
 # ── crates/* (13) ─────────────────────────────────────────────────────────────
-# No `cargo test` job exists, so every crate is tests_executed_in_ci = 0.
+# Only crates/nexum is executed in CI (embedder-coverage.yml, issue #760); every
+# other crate has no cargo-test job, so it is tests_executed_in_ci = 0.
 
 [[unit]]
 path = "crates/fastenv"
@@ -83,8 +87,9 @@ path = "crates/nexum"
 kind = "crate"
 compiled_in_ci = true
 migrated_in_ci = true
-tests_executed_in_ci = 0
-note = "embedder gap: nexum/tests/integration.rs is DATABASE_URL-gated and silently skips; no cargo-test job runs it. This 0 is the regression guard until the embedding-coverage-proof phase. ci-migrate.yml applies crates/nexum/migrations/**."
+tests_executed_in_ci = 11
+executed_by = "embedder-coverage.yml"
+note = "embedder gap CLOSED (issue #760): embedder-coverage.yml stands up pgvector + DATABASE_URL + governed weights (rev c9745ed) offline and runs `cargo test -p nexum --test integration --include-ignored` plus the embed.rs ignored unit tests for real (11 integration tests collected; embed_returns_governed_dimension asserts a 384-dim L2 vector; the ingest->embed->store->semantic-search round-trip returns a positive score). The count is a FLOOR (>0); the check does not pin the exact live count. ci-migrate.yml applies crates/nexum/migrations/**."
 
 [[unit]]
 path = "crates/sf-auth"

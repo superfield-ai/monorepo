@@ -1,27 +1,40 @@
 name: Embedder coverage (pgvector + governed weights)
 
-# SCOUT STUB (issue #770) for the embedding-coverage-proof phase. Pins the
-# pgvector + DATABASE_URL provisioning and the governed-weights restore seam the
-# required embedder job (#760) will fill in. See
-# docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md §2.
+# Required real-embedder job (issue #760) for the embedding-coverage-proof
+# phase, built on the #770 scout stub. It is the non-negotiable proof of the
+# initiative: the governed embedder (ADR all-MiniLM-L6-v2, rev c9745ed, 384-dim)
+# merged green with ZERO executed CI coverage because nexum integration tests
+# silently skip without DATABASE_URL and embed.rs unit tests are all #[ignore].
+# This job stands up pgvector Postgres, exports DATABASE_URL, makes the governed
+# weights present OFFLINE, and runs the nexum integration suite + the embed.rs
+# ignored unit tests FOR REAL — turning "green" into "actually executed and
+# asserted". See docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md.
 #
-# CLASS = heavy: it provisions resources (pgvector + model weights) and is
-# destined to run the real embedder, which the taxonomy classes as a sweep, not
-# a PR gate. Per the taxonomy, `heavy` carries NO `pull_request` trigger (so it
-# never gates a PR and never fires on a commit) and MUST run in at least one
-# sweep context — here a nightly `schedule`, which on this scout stub is a cheap,
-# honest probe that pgvector provisioning still connects (the scout AC).
-# `workflow_dispatch` adds manual on-demand runs. #760 promotes the actual test
-# run to a required context via its OWN feature-correctness/system-correctness
-# job; it does not make THIS file a gate.
+# CLASS = system-correctness: it is an integration / cross-component job (the
+# ingest -> embed -> store -> pgvector semantic-search round-trip), so per the
+# taxonomy it is deferred until a PR is ready for review (skips drafts via the
+# `ready_for_review` type + the draft==false guard) and runs on push to the
+# default branch. It is registered as a REQUIRED branch-protection context for
+# PRs to main (the job name below is the context).
 env:
-  CI_CLASS: heavy
+  CI_CLASS: system-correctness
 
 on:
+  push:
+    branches: [main]
+    # Code check: a docs-only change cannot affect the embedder, so bypass it.
+    paths-ignore: ["**.md", "**.txt"]
+  pull_request:
+    branches: [main]
+    # system-correctness defers to ready-for-review: `ready_for_review` is in
+    # the type list and the per-job `if` guard skips while the PR is a draft.
+    types: [opened, synchronize, reopened, ready_for_review]
+    # Code check: docs-only PRs bypass it (the docs bypass).
+    paths-ignore: ["**.md", "**.txt"]
   workflow_dispatch: {}
   schedule:
-    # Nightly sweep (03:17 UTC). Satisfies the heavy sweep-context rule and
-    # gives the pgvector connect probe a recurring smoke run.
+    # Nightly sweep (03:17 UTC): a recurring real-embedder run independent of PR
+    # traffic, so a weights/pgvector regression surfaces even on quiet days.
     - cron: "17 3 * * *"
 
 concurrency:
@@ -30,9 +43,12 @@ concurrency:
 
 jobs:
   embedder-coverage:
-    name: nexum embedder coverage (stub probe)
+    name: nexum embedder coverage (pgvector + governed weights)
+    # Skip while the PR is a draft; still run on push / schedule / dispatch
+    # (those events have no pull_request payload, so draft is null -> not true).
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
     runs-on: [self-hosted, Linux, X64]
-    timeout-minutes: 30
+    timeout-minutes: 45
     # Container-less jobs are forbidden on the self-hosted runner; run inside the
     # shared CI image so the Postgres service is reachable at host `postgres`.
     container:
@@ -57,36 +73,120 @@ jobs:
     env:
       # Host is the service name `postgres` because the job runs in a container.
       DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
+      # Arm #761's loud guard if it has landed: maybe_pool() must hard-fail (not
+      # silently skip) when DATABASE_URL is absent under this marker. Harmless
+      # before #761 lands. The integration suite executes regardless because
+      # DATABASE_URL is set above.
+      NEXUM_REQUIRE_DB: "1"
+      CARGO_TERM_COLOR: always
+      RUST_BACKTRACE: "1"
     steps:
       - uses: actions/checkout@v4
         with:
           submodules: recursive
           token: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
 
-      # ── pgvector connect probe (scout AC: psql/sqlx ping exits 0) ───────────
-      - name: Ping pgvector Postgres
+      # ── pgvector connect probe (scout AC: the DB the suite uses is reachable)
+      # The ci-runner image does NOT ship the libpq client tools (no pg_isready
+      # / psql), so probe the same TCP host:port the integration suite connects
+      # to with bash's /dev/tcp. The service-level `pg_isready` health-check (in
+      # the service `options` above) already gates job start on DB readiness;
+      # this step is a portable, in-container reachability assertion on the
+      # exact DATABASE_URL host. `bun packages/db/migrate.ts up` below is the
+      # full connect-and-write proof.
+      - name: Probe pgvector Postgres reachability
         run: |
           set -euo pipefail
-          # pg_isready ships with the pg client tools in the ci-runner image and
-          # exercises the same DATABASE_URL host/port the integration suite uses.
-          pg_isready -d "${DATABASE_URL}"
+          # Derive host:port from DATABASE_URL (postgres://user:pass@host:port/db).
+          hostport="${DATABASE_URL#*@}"
+          hostport="${hostport%%/*}"
+          host="${hostport%%:*}"
+          port="${hostport##*:}"
+          echo "Probing ${host}:${port} (from DATABASE_URL) ..."
+          for i in $(seq 1 30); do
+            if (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; then
+              echo "pgvector reachable at ${host}:${port} after ${i}s"; exit 0
+            fi
+            sleep 1
+          done
+          echo "FAIL: ${host}:${port} not reachable from the job container" >&2
+          exit 1
 
-      # ── SCOUT-STUB SEAMS for #760 (filled in by the feature) ───────────────
-      # 1. Apply the nexum migration set (shared migrator applies
-      #    public → auth → nexum → sharp in order):
-      #      - run: bun install --frozen-lockfile
-      #      - run: bun packages/db/migrate.ts up
-      # 2. Make the governed weights present offline (composite action stub):
-      #      - uses: ./.github/actions/governed-embed-weights
-      # 3. Run the embedder tests for real, loud on no-tests and on absent deps:
-      #      - run: cargo test -p nexum --test integration --include-ignored
-      #      - run: cargo test -p nexum embed:: --include-ignored
-      #    (#761 arms the require-marker so a missing DB/weights fails loudly.)
-      - name: Embedder coverage seam (stub)
+      - name: Install stable Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install C toolchain (required by Rust build scripts)
+        # The ci-runner image ships python3 + curl but no C compiler; cargo's
+        # build scripts need a linker (`cc`). Mirrors eval-todo-app.yml.
+        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libssl-dev
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # ── Apply the nexum migration set (shared migrator: public -> auth ->
+      #    nexum -> sharp). This creates blocks.embedding vector(384) etc. ──────
+      - name: Install bun deps
+        run: bun install --frozen-lockfile
+
+      - name: Apply migrations (migrate up)
+        run: bun packages/db/migrate.ts up
+
+      # ── Make the governed weights present OFFLINE (Mechanism A) ─────────────
+      # Restores the hf-hub cache tree keyed on models/embedding.lock, or on a
+      # miss does ONE online Embedder::new() populate, then asserts the exact
+      # refs/<rev> + snapshots/<full-sha>/ layout exists. Exports HF_HOME so the
+      # test steps below resolve weights cache-first with NO huggingface.co
+      # egress. A missing tree fails LOUDLY here (never silently skipped).
+      - name: Provision governed embed weights (offline)
+        uses: ./.github/actions/governed-embed-weights
+
+      # ── Run the embedder for real: nexum integration suite ─────────────────
+      # DATABASE_URL is set, so maybe_pool() returns Some and the suite EXECUTES
+      # (it would otherwise silently skip). --include-ignored opts the gated
+      # tests in. We capture the test summary and FAIL LOUDLY if 0 tests ran, so
+      # a "no tests collected" run can never masquerade as green (the whole
+      # point of this job: prove tests_executed_in_ci > 0).
+      - name: Run nexum integration suite (--include-ignored)
         run: |
           set -euo pipefail
-          echo "[scout-stub] #760 fills in: migrate up → restore governed weights"
-          echo "[scout-stub]   (uses: ./.github/actions/governed-embed-weights) →"
-          echo "[scout-stub]   cargo test -p nexum --test integration --include-ignored"
-          echo "[scout-stub]   + the embed.rs #[ignore] tests, asserting a 384-dim vector."
-          echo "[scout-stub] See docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md §3."
+          set -o pipefail
+          # libtest prints "running N tests"; assert N > 0 and propagate failure.
+          cargo test -p nexum --test integration -- --include-ignored --test-threads=1 \
+            2>&1 | tee integration-test.log
+          ran="$(grep -oE 'running [0-9]+ tests?' integration-test.log | grep -oE '[0-9]+' | head -1 || true)"
+          echo "nexum integration tests executed: ${ran:-0}"
+          if [ -z "${ran:-}" ] || [ "${ran}" -le 0 ]; then
+            echo "FAIL: 0 nexum integration tests executed — embedder coverage NOT proven" >&2
+            exit 1
+          fi
+
+      # ── Run the embed.rs ignored unit tests (governed-dimension assertions) ─
+      # These are #[ignore]d in src/embed.rs; --include-ignored runs them with
+      # the weights resolved offline. embed_returns_governed_dimension asserts a
+      # 384-dim vector. Same >0-executed loud guard.
+      - name: Run embed.rs governed-dimension unit tests (--include-ignored)
+        run: |
+          set -euo pipefail
+          set -o pipefail
+          cargo test -p nexum --lib embed::tests:: -- --include-ignored --test-threads=1 \
+            2>&1 | tee embed-unit-test.log
+          ran="$(grep -oE 'running [0-9]+ tests?' embed-unit-test.log | grep -oE '[0-9]+' | head -1 || true)"
+          echo "embed.rs unit tests executed: ${ran:-0}"
+          if [ -z "${ran:-}" ] || [ "${ran}" -le 0 ]; then
+            echo "FAIL: 0 embed.rs unit tests executed — governed-dimension proof missing" >&2
+            exit 1
+          fi
+
+      # ── Coverage-truth: nexum is now executed in CI; assert the manifest
+      #    records it as tests_executed_in_ci > 0 (issue #760 AC). ─────────────
+      - name: Verify coverage-truth records nexum embedder as executed
+        run: scripts/check-coverage-truth.sh

@@ -111,41 +111,43 @@ async fn insert_link(pool: &PgPool, src: Uuid, dst: Uuid, workspace_id: Uuid, la
 }
 
 /// Insert an entity into the `nexum.entities` table.
+///
+/// `nexum.entities` has no `workspace_id` column (workspace_id threading was
+/// deferred — see migrations/0001_nexum_schema.sql §9), so the parameter is
+/// accepted for call-site symmetry but not bound. The production
+/// `causal_chain.rs` queries likewise select only `id, type, properties`.
 async fn insert_entity(
     pool: &PgPool,
-    workspace_id: Uuid,
+    _workspace_id: Uuid,
     entity_type: &str,
     props: serde_json::Value,
 ) -> Uuid {
-    sqlx::query_scalar(
-        "INSERT INTO nexum.entities (workspace_id, type, properties) VALUES ($1, $2, $3) RETURNING id",
-    )
-    .bind(workspace_id)
-    .bind(entity_type)
-    .bind(props)
-    .fetch_one(pool)
-    .await
-    .expect("entity insert failed")
+    sqlx::query_scalar("INSERT INTO nexum.entities (type, properties) VALUES ($1, $2) RETURNING id")
+        .bind(entity_type)
+        .bind(props)
+        .fetch_one(pool)
+        .await
+        .expect("entity insert failed")
 }
 
 /// Insert a relation into the `nexum.relations` table.
+///
+/// `nexum.relations` has no `workspace_id` column (see `insert_entity`); the
+/// parameter is accepted for symmetry but not bound.
 async fn insert_relation(
     pool: &PgPool,
-    workspace_id: Uuid,
+    _workspace_id: Uuid,
     source_id: Uuid,
     target_id: Uuid,
     rel_type: &str,
 ) {
-    sqlx::query(
-        "INSERT INTO nexum.relations (workspace_id, source_id, target_id, type) VALUES ($1, $2, $3, $4)",
-    )
-    .bind(workspace_id)
-    .bind(source_id)
-    .bind(target_id)
-    .bind(rel_type)
-    .execute(pool)
-    .await
-    .expect("relation insert failed");
+    sqlx::query("INSERT INTO nexum.relations (source_id, target_id, type) VALUES ($1, $2, $3)")
+        .bind(source_id)
+        .bind(target_id)
+        .bind(rel_type)
+        .execute(pool)
+        .await
+        .expect("relation insert failed");
 }
 
 // ── Cleanup helpers ───────────────────────────────────────────────────────────
@@ -936,8 +938,9 @@ async fn ingest_blocks_have_384_dim_embeddings() {
     // pgvector provides vector_dims() to get the dimension of a vector column.
     // Fallback: count comma-separated elements in the text representation.
     let block_dims: Vec<i64> = sqlx::query_scalar(
+        // vector_dims() returns int4; cast to int8 so it decodes into i64.
         r#"
-        SELECT vector_dims(embedding)
+        SELECT vector_dims(embedding)::int8
         FROM nexum.blocks b
         JOIN nexum.version_blocks vb ON vb.block_id = b.id
         WHERE vb.version_id = $1

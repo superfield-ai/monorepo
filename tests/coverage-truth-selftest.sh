@@ -84,9 +84,13 @@ reject_case "removed-row" "$T1"
 
 # ── Tamper 2: falsify nexum tests_executed_in_ci (0 -> 5; breaks the guard) ───
 T2="$TMPDIR/falsified-nexum.toml"
+# nexum is now tests_executed_in_ci > 0 (embedder-coverage.yml runs it for real,
+# issue #760). The regression to guard against is dropping it back to the
+# zero-executed gap. Falsify the count to 0 and assert the check rejects it
+# (both the under-claim reality cross-check and the explicit nexum >0 guard).
 awk '
   /^path = "crates\/nexum"/ { innexum=1 }
-  innexum && /^tests_executed_in_ci = 0/ { sub(/= 0/, "= 5"); innexum=0 }
+  innexum && /^tests_executed_in_ci = / { sub(/= [0-9]+/, "= 0"); innexum=0 }
   { print }
 ' "$MANIFEST" > "$T2"
 reject_case "falsified-nexum-count" "$T2"
