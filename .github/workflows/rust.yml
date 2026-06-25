@@ -70,33 +70,50 @@ jobs:
       - name: Format check
         run: cargo fmt --all --check
 
-  # ── SCOUT SEAM (dev-scout #771, coverage-enforcement phase) ─────────────────
-  # This job PINS the shared Rust-test seam the three phase features all edit, so
-  # they land sequentially WITHOUT colliding on rust.yml:
-  #   #765 — fills in the provision-test-substrate composite action (pgvector +
-  #          DATABASE_URL + migrations + governed weights) and declares the
-  #          pgvector `services:` block + container image ON THIS JOB.
-  #   #764 — promotes the trivial `cargo nextest run -p sf-auth` below to a
-  #          `cargo nextest run --workspace --profile ci --no-tests=fail` and
-  #          REGISTERS this job's name as a required branch-protection context.
+  # ── SHARED RUST-TEST SEAM (dev-scout #771, coverage-enforcement phase) ──────
+  # This job is the shared Rust-test seam the three phase features land on:
+  #   #765 (THIS PR) — fills in the provision-test-substrate composite action
+  #          (pgvector + DATABASE_URL + migrations + governed weights), declares
+  #          the pgvector `services:` block + container image ON THIS JOB, and
+  #          runs the DB-gated tests in the named crates so they EXECUTE.
+  #   #764 — widens the consuming nextest run to `--workspace` and REGISTERS this
+  #          job's name as a required branch-protection context.
   #   #766 — consumes the per-package executed-count JSON emitted below in its
   #          coverage-delta gate.
   #
-  # It is DELIBERATELY NOT a required context (that promotion is #764), runs only
-  # a single DB-free crate (sf-auth's non-ignored unit tests), and references
-  # the provision-test-substrate skeleton in `stub` mode so it stays green with
-  # no DB. Scout findings: docs/scout/coverage-enforcement-rust-test-substrate-seams.md
+  # It is DELIBERATELY NOT yet a required context (that promotion is #764).
+  # Scout findings: docs/scout/coverage-enforcement-rust-test-substrate-seams.md
   rust-test-seam:
     name: Rust test seam (scout #771, not required)
     runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 45
     container:
-      # ci-runner image (python3 + curl); cargo-nextest is installed below.
-      # #765 adds the pgvector `services:` block here (a GitHub service cannot
-      # live in a composite action; it must be declared on the job).
+      # ci-runner image (python3 + curl + bun); cargo-nextest is installed below.
+      # The pgvector `services:` block lives here because a GitHub service cannot
+      # be declared inside a composite action — only on the job (issue #765).
       image: ghcr.io/superfield-ai/ci-runner:latest
+    services:
+      postgres:
+        # pgvector/pgvector:pg16 ships the `vector` extension the nexum schema
+        # migration requires (blocks.embedding vector(384)).
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: superfield
+          POSTGRES_PASSWORD: superfield
+          POSTGRES_DB: superfield
+        options: >-
+          --health-cmd "pg_isready -U superfield -d superfield"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
     defaults:
       run:
         shell: bash
+    env:
+      # Host is the service name `postgres` because the job runs in a container.
+      # The provision-test-substrate action probes + migrates this URL, and the
+      # DB-gated tests read it to take their executing (non-skip) branch.
+      DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
     steps:
       - uses: actions/checkout@v4
 
@@ -125,42 +142,57 @@ jobs:
       - name: "cargo nextest --version (AC: resolves, exit 0)"
         run: cargo nextest --version
 
-      # ── Reusable substrate seam (stub mode = no-op; #765 fills it in) ────────
+      # ── Reusable substrate seam (provision mode — issue #765) ───────────────
       # Referenced here so `grep -rn 'provision-test-substrate' .github/workflows/`
-      # returns a hit (scout AC). In stub mode it provisions nothing and exits 0,
-      # so this seam job stays green without a DB. #765 flips it to `provision`
-      # and passes the job-level pgvector DATABASE_URL in.
-      - name: Provision test substrate (stub seam — provision-test-substrate)
+      # returns a hit (scout AC). In provision mode it probes the pgvector
+      # service above, applies the full migration set, and provisions the
+      # governed weights offline, so the DB-gated tests below EXECUTE instead of
+      # silently skipping. A probe/migration failure aborts the job (loud-skip).
+      - name: Provision test substrate (pgvector + migrations + weights)
         uses: ./.github/actions/provision-test-substrate
         with:
-          mode: stub
+          mode: provision
+          database-url: ${{ env.DATABASE_URL }}
 
-      # ── Trivial nextest run over one DB-free crate + the per-package count ──
+      # ── DB-gated nextest run over the named crates + the per-package count ──
       #    source #766 consumes (one coherent step). ────────────────────────────
-      # sf-auth's non-ignored unit tests need NO DATABASE_URL (the DB-gated ones
-      # are #[ignore]d and excluded by default), so this stays green with no DB.
-      # --no-tests=fail is passed EXPLICITLY (it is also the 0.9.85 default) so a
-      # zero-collection run hard-fails (the LOUD-fail thesis); #764 widens
-      # `-p sf-auth` to `--workspace`.
+      # With the substrate active (DATABASE_URL set, migrations applied), the
+      # previously-#[ignore]d DB-gated tests in sf-db / sf-serve / sharp /
+      # superfield / sf-loop EXECUTE under `--run-ignored all`. We select a
+      # STABLE, purely-DB subset per crate with a filterset: a sizeable fraction
+      # of the broader #[ignore]d corpus needs resources this fixture does NOT
+      # provide (live rust-analyzer, the tsserver bun-bridge), or asserts
+      # not-yet-implemented schema/behaviour (workspace_id NOT-NULL/FK back-fill,
+      # multi-statement-prepared bugs) — those are tracked as their own follow-up
+      # issues, NOT silently greened here. --test-threads=1 mirrors
+      # embedder-coverage.yml: these integration tests share schema tables and
+      # are not all workspace-isolated, so serial execution is deterministic.
+      # --no-tests=fail is passed EXPLICITLY (also the 0.9.85 default) so a
+      # zero-collection / mis-filtered run hard-fails (the LOUD-fail thesis).
       #
       # We derive the executed count from nextest's libtest-json output, NOT from
       # the human "Summary" line: that line embeds ANSI colour codes (CARGO_TERM
       # _COLOR) that defeat a brittle regex. The JSON is the SAME per-package
       # source #766's coverage-delta gate reads: each per-test "ok"/"failed"
       # event names the test "<pkg>::<binary>$<path>"; the owning package is the
-      # prefix before "::". This step both ASSERTS >0 executed (AC + test plan)
-      # and PRINTS the per-package map #766 will consume.
-      - name: "Trivial nextest run + per-package count source (sf-auth, >0 tests; pins #766)"
+      # prefix before "::". This step ASSERTS >0 executed FOR EACH named crate
+      # (AC + test plan) and PRINTS the per-package map #766 will consume.
+      - name: "DB-gated nextest run + per-package count source (5 crates, >0 each; pins #766)"
         env:
           NEXTEST_EXPERIMENTAL_LIBTEST_JSON: "1"
         run: |
           set -euo pipefail
+          # Per-crate stable, purely-DB selection (verified to pass against a
+          # freshly migrated pgvector DB). Keep all `-p` flags on the same line
+          # as `cargo nextest run` so check-coverage-truth.sh can parse the
+          # executed crates from this invocation.
+          FILTER='(package(sf-db) & (binary(provision_migrate_integration) | binary(rls_workspace_isolation_integration))) | (package(superfield) & binary(daemon_loop_integration)) | (package(sf-serve) & test(/tests::integration::/)) | (package(sharp) & (test(db_round_trip_snapshot_build_materialize_is_identity) | test(episode_open_append_finish_query) | test(init_add_commit_roundtrip) | test(merge_flow_onboard_workspace_is_idempotent))) | (package(sf-loop) & (test(cursor_persists_after_step_commit) | test(loop_resumes_from_cursor_after_restart) | test(project_graph_derive_writes_nodes)))'
           # Run for real (exit code propagates: a test failure or zero-collection
           # under --no-tests=fail fails the step), capturing libtest-json NDJSON.
-          cargo nextest run -p sf-auth --profile ci --no-tests=fail \
-            --message-format libtest-json 2>/dev/null | tee nextest.jsonl
+          cargo nextest run -p sf-db -p sf-serve -p sharp -p superfield -p sf-loop --profile ci --run-ignored all --no-tests=fail --test-threads=1 -E "$FILTER" --message-format libtest-json 2>/dev/null | tee nextest.jsonl
           python3 - <<'PY'
           import json, collections, sys
+          REQUIRED = ["sf-db", "sf-serve", "sharp", "superfield", "sf-loop"]
           executed = collections.Counter()
           with open("nextest.jsonl") as fh:
               for line in fh:
@@ -178,8 +210,10 @@ jobs:
           print("per-package executed-test counts (for #766 coverage-delta):")
           for pkg, n in sorted(executed.items()):
               print(f"  {pkg}: {n}")
-          total = sum(executed.values())
-          # LOUD fail: a green compile that executed 0 tests must not pass.
-          if total <= 0:
-              sys.exit("FAIL: 0 tests executed — exit 0 != tested")
+          # LOUD fail: every named crate must have executed >0 DB-gated tests, so
+          # a green compile that executed 0 for any crate cannot masquerade as
+          # tested (exit 0 != tested).
+          missing = [c for c in REQUIRED if executed.get(c, 0) <= 0]
+          if missing:
+              sys.exit(f"FAIL: 0 tests executed for {missing} — exit 0 != tested")
           PY

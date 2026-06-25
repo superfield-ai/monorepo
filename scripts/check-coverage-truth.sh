@@ -25,10 +25,11 @@
 #          applies (parsed from .github/workflows/ci-migrate.yml paths).
 #        - tests_executed_in_ci truthiness: 0 iff no CI job executes a suite for
 #          this unit, >0 iff one does. A crate is >0 iff embedder-coverage.yml
-#          runs it (`cargo test -p <crate>`, parsed from the workflow); every
-#          other crate has no cargo-test job -> 0. Packages are >0 iff they have
-#          *.test.ts under tests/unit or tests/integration (the test-unit /
-#          test-integration globs).
+#          (`cargo test -p <crate>`) OR rust.yml's DB-gated nextest job
+#          (`cargo nextest run -p <crate>`, issue #765) runs it — both parsed
+#          from the workflows; every other crate has no test job -> 0. Packages
+#          are >0 iff they have *.test.ts under tests/unit or tests/integration
+#          (the test-unit / test-integration globs).
 #   5. crates/nexum is recorded tests_executed_in_ci > 0 AND embedder-coverage
 #      .yml actually executes it (explicit assertion — the gap is now closed).
 #
@@ -157,24 +158,54 @@ if os.path.isfile(migrate_yml):
 else:
     err(".github/workflows/ci-migrate.yml not found; cannot derive migrated_in_ci")
 
-# crate-execution reality: the embedder-coverage job (issue #760) is the one
-# workflow that actually RUNS a crate's tests (the real-embedder proof). Derive
-# which crates it executes by scanning its `cargo test -p <crate>` invocations,
+# crate-execution reality: two workflows actually RUN a crate's tests (the rest
+# only build). Derive which crates they execute by scanning their invocations,
 # so the manifest's tests_executed_in_ci for crates is checked against the
-# workflow, not a hardcoded "every crate is 0". Any crate NOT named here still
-# has no executing job -> reality 0 (the regression guard for the rest).
-embedder_yml = os.path.join(ROOT, ".github/workflows/embedder-coverage.yml")
+# workflows, not a hardcoded "every crate is 0". Any crate NOT named by either
+# job still has no executing job -> reality 0 (the regression guard for the rest).
+#   1. embedder-coverage.yml (issue #760): the real-embedder proof, scanned for
+#      `cargo test -p <crate>`.
+#   2. rust.yml (issue #765): the rust-test job stands up pgvector + migrations +
+#      governed weights via the provision-test-substrate action and runs the
+#      DB-gated tests in the named crates under `cargo nextest run -p <crate>`.
 crate_executes_paths = set()
+
+
+def _record_crate_executes(crate):
+    candidate = f"crates/{crate}"
+    if os.path.isdir(os.path.join(ROOT, candidate)):
+        crate_executes_paths.add(candidate)
+
+
+embedder_yml = os.path.join(ROOT, ".github/workflows/embedder-coverage.yml")
 if os.path.isfile(embedder_yml):
     with open(embedder_yml, "r", encoding="utf-8") as fh:
         embedder_text = fh.read()
     # Match `cargo test -p <crate>` (the crate package name maps 1:1 to its
     # crates/<crate> directory for the workspace crates this job runs).
     for m in re.finditer(r"cargo test\s+-p\s+([A-Za-z0-9_-]+)", embedder_text):
-        crate = m.group(1)
-        candidate = f"crates/{crate}"
-        if os.path.isdir(os.path.join(ROOT, candidate)):
-            crate_executes_paths.add(candidate)
+        _record_crate_executes(m.group(1))
+
+# rust.yml: the DB-gated `cargo nextest run -p <crate> ...` invocation. The job
+# provisions a real pgvector DB, so the `-p` crates on that command EXECUTE a
+# DB-gated suite (the substrate-fixture seam, issue #765). Parse every `-p
+# <crate>` token that appears on a line invoking `cargo nextest run` — the
+# workflow keeps all `-p` flags on that same line for exactly this reason. (We
+# scope to nextest-run lines so `cargo build --workspace` / `cargo run --bin`
+# are not mistaken for test execution.)
+rust_yml = os.path.join(ROOT, ".github/workflows/rust.yml")
+if os.path.isfile(rust_yml):
+    with open(rust_yml, "r", encoding="utf-8") as fh:
+        for line in fh:
+            # Skip YAML/shell comment lines so a commented-out or illustrative
+            # invocation (e.g. a `#764 — ... cargo nextest run -p sf-auth ...`
+            # note) is NOT mistaken for a real executing command.
+            if line.lstrip().startswith("#"):
+                continue
+            if "cargo nextest run" not in line:
+                continue
+            for m in re.finditer(r"-p\s+([A-Za-z0-9_-]+)", line):
+                _record_crate_executes(m.group(1))
 
 
 def package_executes(path):
@@ -276,10 +307,10 @@ for idx, row in enumerate(units):
 
     # tests_executed_in_ci truthiness reality.
     if top == "crates":
-        # A crate executes iff a CI workflow runs its tests. The only such
-        # workflow is embedder-coverage.yml (issue #760), whose `cargo test -p
-        # <crate>` invocations are parsed above. Every other crate has no
-        # executing job -> 0 (the regression guard for the rest).
+        # A crate executes iff a CI workflow runs its tests. Two workflows do:
+        # embedder-coverage.yml (issue #760) and rust.yml's DB-gated nextest job
+        # (issue #765), whose invocations are parsed above. Every other crate has
+        # no executing job -> 0 (the regression guard for the rest).
         real_executes = path in crate_executes_paths
     else:
         real_executes = package_executes(path)

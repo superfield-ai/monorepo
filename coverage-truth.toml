@@ -45,11 +45,16 @@
 # migrated_in_ci — true only for the migration paths ci-migrate.yml lists:
 #   packages/db, crates/sf-db, crates/sf-auth, crates/nexum, crates/sharp.
 # tests_executed_in_ci:
-#   * rust.yml only builds. The one workflow that RUNS a crate's tests is
-#     embedder-coverage.yml (issue #760): it executes the nexum embedder for
-#     real (pgvector + governed weights + `cargo test -p nexum ...
-#     --include-ignored`), so crates/nexum is >0. Every OTHER crate has no
-#     cargo-test job -> 0.
+#   * Two workflows RUN a crate's tests (the rest only build):
+#     - embedder-coverage.yml (issue #760): executes the nexum embedder for real
+#       (pgvector + governed weights + `cargo test -p nexum ... --include-ignored`),
+#       so crates/nexum is >0.
+#     - rust.yml's rust-test job (issue #765): the provision-test-substrate
+#       action stands up pgvector + the full migration set + governed weights,
+#       then `cargo nextest run -p sf-db -p sf-serve -p sharp -p superfield
+#       -p sf-loop --run-ignored all` executes a STABLE, purely-DB subset of the
+#       previously-#[ignore]d tests in those crates, so each is >0.
+#     Every OTHER crate has no test job -> 0.
 #   * Packages are executed only via the test-unit/test-integration globs
 #     `packages/*/tests/unit` and `packages/*/tests/integration` (and the
 #     paths-gated test-e2e for packages/core). A package is >0 iff it has at
@@ -71,8 +76,10 @@ schema_version = 1
 generated_by = "scripts/check-coverage-truth.sh"
 
 # ── crates/* (13) ─────────────────────────────────────────────────────────────
-# Only crates/nexum is executed in CI (embedder-coverage.yml, issue #760); every
-# other crate has no cargo-test job, so it is tests_executed_in_ci = 0.
+# Executed in CI: crates/nexum (embedder-coverage.yml, issue #760) and
+# crates/{sf-db,sf-serve,sharp,superfield,sf-loop} (rust.yml's DB-gated nextest
+# job, issue #765). Every other crate has no test job, so it is
+# tests_executed_in_ci = 0.
 
 [[unit]]
 path = "crates/fastenv"
@@ -120,8 +127,9 @@ path = "crates/sf-db"
 kind = "crate"
 compiled_in_ci = true
 migrated_in_ci = true
-tests_executed_in_ci = 0
-note = "rust.yml builds but never runs crate tests. ci-migrate.yml applies crates/sf-db/migrations/**."
+tests_executed_in_ci = 7
+executed_by = "rust.yml"
+note = "DB-gated execution wired (issue #765): rust.yml's rust-test job provisions pgvector + migrations + governed weights and runs `cargo nextest run -p sf-db ... --run-ignored all` over a stable purely-DB subset (provision_migrate_integration + rls_workspace_isolation_integration binaries, 7 tests). The count is a FLOOR (>0); the broader #[ignore]d corpus (workspace_id NOT-NULL/FK back-fill assertions, backup_integration) fails against the current schema and is tracked separately. ci-migrate.yml applies crates/sf-db/migrations/**."
 
 [[unit]]
 path = "crates/sf-deploy"
@@ -144,8 +152,9 @@ path = "crates/sf-loop"
 kind = "crate"
 compiled_in_ci = true
 migrated_in_ci = false
-tests_executed_in_ci = 0
-note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+tests_executed_in_ci = 3
+executed_by = "rust.yml"
+note = "DB-gated execution wired (issue #765): rust.yml's rust-test job runs `cargo nextest run -p sf-loop ... --run-ignored all` over a stable purely-DB subset (cursor persist/resume + project_graph_derive_writes_nodes, 3 tests). FLOOR (>0); the page-revision step writers that lack a seeded workspaces row fail and are tracked separately."
 
 [[unit]]
 path = "crates/sf-notify"
@@ -160,24 +169,27 @@ path = "crates/sf-serve"
 kind = "crate"
 compiled_in_ci = true
 migrated_in_ci = false
-tests_executed_in_ci = 0
-note = "rust.yml builds but never runs crate tests; no cargo-test job exists."
+tests_executed_in_ci = 8
+executed_by = "rust.yml"
+note = "DB-gated execution wired (issue #765): rust.yml's rust-test job runs `cargo nextest run -p sf-serve ... --run-ignored all` over the tests::integration::* auth/RLS end-to-end suite (8 tests: authenticated request sets workspace context, cross-workspace access denied, role-gated routes). FLOOR (>0); route-handler #[ignore]d tests needing extra fixtures are tracked separately."
 
 [[unit]]
 path = "crates/sharp"
 kind = "crate"
 compiled_in_ci = true
 migrated_in_ci = true
-tests_executed_in_ci = 0
-note = "rust.yml builds but never runs crate tests. ci-migrate.yml applies crates/sharp/migrations/**."
+tests_executed_in_ci = 4
+executed_by = "rust.yml"
+note = "DB-gated execution wired (issue #765): rust.yml's rust-test job runs `cargo nextest run -p sharp ... --run-ignored all` over a stable purely-DB subset (db_round_trip snapshot/materialize, episode open/append/finish/query, init/add/commit roundtrip, merge_flow onboard idempotent — 4 tests). FLOOR (>0); tests needing live rust-analyzer / the tsserver bun-bridge, or asserting not-yet-implemented schema, are excluded and tracked separately. ci-migrate.yml applies crates/sharp/migrations/**."
 
 [[unit]]
 path = "crates/superfield"
 kind = "crate"
 compiled_in_ci = true
 migrated_in_ci = false
-tests_executed_in_ci = 0
-note = "rust.yml builds + `cargo run --bin superfield -- noop` smoke; no crate tests are executed."
+tests_executed_in_ci = 21
+executed_by = "rust.yml"
+note = "DB-gated execution wired (issue #765): besides the `cargo run --bin superfield -- noop` build smoke, rust.yml's rust-test job runs `cargo nextest run -p superfield ... --run-ignored all` over the daemon_loop_integration binary (21 tests: boot installs real loop handle, loop publishes cost/slots/lanes/ci events, shutdown drains loop, resume from persisted cursor). FLOOR (>0)."
 
 # ── packages/* (9) ────────────────────────────────────────────────────────────
 # Executed via test-unit.yml (packages/*/tests/unit) and test-integration.yml

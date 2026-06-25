@@ -4,14 +4,17 @@
 # tests across crates (sf-db, sf-serve, sharp, superfield, sf-loop, nexum)
 # instead of silently skipping them.
 #
-# STATUS: SCOUT SKELETON (dev-scout #771). This action is a COMPILE-SAFE,
-# NO-OP-BY-DEFAULT seam. It exists so the three coverage-enforcement features
-# (#765 fills it in, #764 consumes it, #766 reads its output) agree on the
-# interface up front and do not collide editing rust.yml. It changes NO runtime
-# behaviour: with `mode: stub` (the default) every provisioning step is a
-# documented echo, the action exits 0, and it exports nothing required. The
-# REAL provisioning is issue #765 — it must factor the ALREADY-MERGED
-# mechanisms below into the steps marked `# [#765] WIRE HERE`.
+# STATUS: PROVISION PATH WIRED (issue #765, on the dev-scout #771 skeleton).
+# With `mode: provision` this action probes the job-level pgvector service,
+# applies the FULL migration set, and makes the governed embed weights present
+# OFFLINE — so the DB-gated Rust tests in sf-db / sf-serve / sharp / superfield /
+# sf-loop EXECUTE under nextest instead of silently skipping. `mode: stub` (the
+# default) remains a COMPILE-SAFE, NO-OP seam: every provisioning step is a
+# documented echo, the action exits 0, and it exports nothing required, so
+# callers that have not yet stood up a DB stay green. The three
+# coverage-enforcement features still agree on this interface: #765 fills it in
+# (here), #764 widens the consuming nextest run + marks it required, and #766
+# reads the per-package executed-count JSON the rust-test job emits.
 #
 # ── REUSE PATH (do NOT reinvent — both pieces are merged on main) ─────────────
 #   1. Governed weights (OFFLINE): the merged composite action
@@ -50,8 +53,8 @@ inputs:
   mode:
     description: >-
       "stub" (default) — no-op documented echoes, exit 0, changes nothing.
-      "provision" — issue #765's real path (probe + migrate + weights). Left
-      unimplemented in this scout so nothing becomes load-bearing yet.
+      "provision" — the real path (issue #765): probe the pgvector service,
+      apply the full migration set, and provision the governed weights offline.
     required: false
     default: "stub"
   database-url:
@@ -80,51 +83,75 @@ runs:
       shell: bash
       run: |
         set -euo pipefail
-        echo "provision-test-substrate: mode=${{ inputs.mode }} (scout skeleton)"
+        echo "provision-test-substrate: mode=${{ inputs.mode }}"
         if [ "${{ inputs.mode }}" != "provision" ]; then
-          echo "STUB MODE: no provisioning performed. Issue #765 implements the"
-          echo "WIRE-HERE steps. Nothing here is required or load-bearing yet."
+          echo "STUB MODE: no provisioning performed (no-op seam, exit 0)."
+        else
+          echo "PROVISION MODE: probe pgvector -> migrate -> governed weights."
+          if [ -z "${{ inputs.database-url }}" ]; then
+            echo "FAIL: mode=provision requires a non-empty database-url input" >&2
+            echo "      (the rust-test job declares the pgvector services: block" >&2
+            echo "       and passes its DATABASE_URL in)." >&2
+            exit 1
+          fi
         fi
 
-    # ── [#765] WIRE HERE — pgvector reachability probe ────────────────────────
-    # Copy the /dev/tcp probe from embedder-coverage.yml (the ci-runner image
-    # ships no libpq/pg_isready). Derive host:port from `database-url`. LOUD
-    # fail (exit 1) if unreachable — never silent-skip.
-    - name: Probe pgvector reachability ([#765] wire here)
+    # ── pgvector reachability probe (loud-fail, never silent-skip) ────────────
+    # The ci-runner image ships no libpq client (no pg_isready/psql), so probe
+    # the same TCP host:port the suite connects to with bash's /dev/tcp, derived
+    # from `database-url`. The job-level `pg_isready` service health-check
+    # already gates job start; this is a portable in-container assertion. A
+    # FAILURE here aborts (exit 1) — a green test run must never mask an absent
+    # DB (the loud-skip thesis). Mirrors embedder-coverage.yml.
+    - name: Probe pgvector reachability
       if: inputs.mode == 'provision'
       shell: bash
+      env:
+        SUBSTRATE_DATABASE_URL: ${{ inputs.database-url }}
       run: |
         set -euo pipefail
-        echo "[#765] TODO: port the /dev/tcp reachability probe from"
-        echo "        .github/workflows/embedder-coverage.yml against:"
-        echo "        DATABASE_URL=${{ inputs.database-url }}"
-        echo "FAIL LOUDLY if unreachable (exit 1). Do NOT swallow the error."
-        exit 1   # scout guard: the provision path is intentionally not wired.
+        # Derive host:port from postgres://user:pass@host:port/db.
+        hostport="${SUBSTRATE_DATABASE_URL#*@}"
+        hostport="${hostport%%/*}"
+        host="${hostport%%:*}"
+        port="${hostport##*:}"
+        echo "Probing ${host}:${port} (from database-url) ..."
+        for i in $(seq 1 30); do
+          if (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; then
+            echo "pgvector reachable at ${host}:${port} after ${i}s"; exit 0
+          fi
+          sleep 1
+        done
+        echo "FAIL: ${host}:${port} not reachable from the job container" >&2
+        exit 1
 
-    # ── [#765] WIRE HERE — apply the full migration set ───────────────────────
+    # ── Apply the full migration set with the unified bun migrator ────────────
     # `bun install --frozen-lockfile` then `bun packages/db/migrate.ts up`
-    # (public -> auth -> nexum -> sharp -> orchestrator). This is the SAME
-    # migrator the daemon's crates/sf-db/src/migrate.rs mirrors.
-    - name: Apply migrations ([#765] wire here)
+    # applies public -> auth -> nexum -> sharp -> orchestrator (the SAME migrator
+    # crates/sf-db/src/migrate.rs mirrors), creating the schema the DB-gated
+    # tests assert against (workspaces, nexum.*, auth.*, sharp.*, orchestrator.*,
+    # blocks.embedding vector(384)). A migration failure aborts the job.
+    - name: Install bun deps
       if: inputs.mode == 'provision'
       shell: bash
-      run: |
-        set -euo pipefail
-        echo "[#765] TODO: bun install --frozen-lockfile && bun packages/db/migrate.ts up"
+      run: bun install --frozen-lockfile
 
-    # ── [#765] WIRE HERE — governed weights, OFFLINE (reuse #760's action) ────
-    # This is the merged composite action; just call it. It restores/populates
-    # the hf-hub cache keyed on models/embedding.lock and PROVES offline
-    # resolution. Uncomment in #765:
-    #   - uses: ./.github/actions/governed-embed-weights
-    #     with: { hf-home: "${{ inputs.hf-home }}" }
-    - name: Provision governed weights ([#765] wire here — uses ./.github/actions/governed-embed-weights)
+    - name: Apply migrations (migrate up)
       if: inputs.mode == 'provision'
       shell: bash
-      run: |
-        set -euo pipefail
-        echo "[#765] TODO: uses: ./.github/actions/governed-embed-weights (merged in #760)"
-        echo "        Do NOT re-implement the curl/refs/snapshots cache dance."
+      env:
+        DATABASE_URL: ${{ inputs.database-url }}
+      run: bun packages/db/migrate.ts up
+
+    # ── Make the governed weights present OFFLINE (reuse #760's action) ───────
+    # The merged composite action restores/populates the hf-hub cache keyed on
+    # models/embedding.lock and PROVES offline resolution, exporting HF_HOME for
+    # the test steps. We do NOT re-implement the curl/refs/snapshots dance.
+    - name: Provision governed embed weights (offline)
+      if: inputs.mode == 'provision'
+      uses: ./.github/actions/governed-embed-weights
+      with:
+        hf-home: ${{ inputs.hf-home }}
 
     - name: Report substrate outputs
       id: report
