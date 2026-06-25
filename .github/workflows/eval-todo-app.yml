@@ -88,6 +88,23 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-cargo-
 
+      # ── Make the governed embed weights present OFFLINE (Mechanism A) ───────
+      # The garden Seed step below (`cargo run --bin superfield -- garden`)
+      # constructs Embedder::new(), which resolves the all-MiniLM-L6-v2 weights
+      # cache-first then falls through to a network download() on a miss. On a
+      # no-egress runner that download produces `RelativeUrlWithoutBase` — the
+      # Seed failure this issue (#762) fixes. This shared composite action
+      # (#760) restores the hf-hub cache tree keyed on models/embedding.lock, or
+      # on a miss does ONE online curl-based populate, then asserts the exact
+      # refs/<rev> + snapshots/<full-sha>/ layout exists (failing LOUDLY if not)
+      # and runs the offline-resolution probe. It exports HF_HOME to $GITHUB_ENV
+      # so the Seed step below resolves the weights cache-HIT branch with zero
+      # huggingface.co egress. Runs before the build/boot/Seed steps. The C
+      # toolchain (above) and Cargo cache (above) are already in place, which
+      # the action's offline probe (cargo test -p nexum) needs.
+      - name: Provision governed embed weights (offline)
+        uses: ./.github/actions/governed-embed-weights
+
       - name: Install the keyless opencode CLI
         run: |
           set -euo pipefail
