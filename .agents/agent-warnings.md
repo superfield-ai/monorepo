@@ -159,3 +159,40 @@ green job as proof the diff ran.
 4. **Required checks must cover the languages present.** Every language present
    has a **test-executing** job in the required branch-protection contexts, not
    just a build job (`scripts/check-test-job-presence.sh`, #767).
+
+## Curated nextest filterset hides a real DB-test failure class (#765/#764/#789)
+
+The shared `provision-test-substrate` fixture (#765, PR #782) makes DB-gated
+Rust tests EXECUTE, but `rust.yml`'s `rust-test-seam` runs a CURATED, purely-DB
+nextest filterset (sf-db / sf-serve / sharp / superfield / sf-loop, asserting
+`>0` each) — see the `cargo nextest run -p …` step near `rust.yml:~325`. A
+sizeable fraction of the `#[ignore]`d DB-test corpus is EXCLUDED, and NOT
+because it lacks a substrate: those tests FAIL against a correct one.
+
+- **The three excluded, failing-against-correct-substrate classes:**
+  1. tests asserting not-yet-implemented schema — the `workspace_id`
+     NOT-NULL/FK back-fill (the appliance migration only self-ensures a
+     _nullable_ `workspace_id` column; see `crates/sf-db/src/migrate.rs` and
+     `crates/sharp/migrations/0009`);
+  2. a `sharp` multi-statement-prepared bug;
+  3. `sf-loop` page-revision writers that need a seeded `public.workspaces` row.
+     Tracked in #764. The exclusion is invisible behind a green nextest signal, so
+     it can calcify. Do NOT silently green these by widening the filterset before
+     the underlying schema/bugs land (loud-skip, never silent-skip).
+- **Re-inclusion conditions (un-curate the filterset when each lands):**
+  - when the `workspace_id` NOT-NULL/FK back-fill schema lands → add the
+    workspace_id-schema tests back to the seam filterset and assert `>0`;
+  - when the `sharp` multi-statement-prepared bug is fixed → add those `sharp`
+    tests back and assert `>0`;
+  - when `sf-loop` page-revision writers seed a `public.workspaces` row → add
+    those `sf-loop` tests back and assert `>0`.
+    A future PR that lands any of these is EXPECTED to expand the
+    `rust-test-seam` filterset (mirror this note at the `rust.yml` filterset site).
+- **`check-coverage-truth.sh` `--workspace` over-claim risk:** the validator
+  derives crate execution from `rust.yml`'s literal `cargo nextest run -p <crate>`
+  invocation. Widening the seam to `cargo nextest run --workspace` bypasses the
+  per-crate `-p` parser and would silently turn the five `>0` coverage-truth
+  rows into over-claims. The parser MUST be updated in lockstep with any
+  `--workspace` move; `tests/coverage-truth-selftest.sh` feeds a synthetic
+  `--workspace` rust.yml (via `RUST_YML_OVERRIDE`) and fails LOUDLY if the five
+  crates are still credited as executed-by-name without per-crate evidence.

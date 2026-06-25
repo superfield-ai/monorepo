@@ -121,10 +121,57 @@ for f in "$T1" "$T2" "$T3" "$T4"; do
   fi
 done
 
+# ── #789: a `--workspace`-widened seam must NOT over-claim per-crate coverage ─
+# check-coverage-truth.sh credits a crate as executed only when rust.yml names
+# it with a literal `cargo nextest run -p <crate>`. If the rust-test-seam is
+# ever widened to `cargo nextest run --workspace` (dropping the per-crate `-p`
+# flags), the parser loses its per-crate evidence and MUST reject the five `>0`
+# rows as over-claims rather than silently keeping them green. These cases feed
+# the validator a SYNTHETIC rust.yml via RUST_YML_OVERRIDE (the real manifest is
+# untouched) and assert the loud-fail. The five crates are the ones rust.yml's
+# seam names today; nexum stays credited via embedder-coverage.yml (read from
+# the real repo), so a failure here is attributable to the seam widening alone.
+SEAM_CRATES="-p sf-db -p sf-serve -p sharp -p superfield -p sf-loop"
+
+# Control: a synthetic rust.yml that keeps the per-crate `-p` invocation must
+# still PASS — proving the override mechanism itself does not change the verdict
+# and isolating the `--workspace` case below as the only changed variable.
+SYNTH_PINNED="$TMPDIR/rust-pinned.yml"
+{
+  echo "jobs:"
+  echo "  rust-test-seam:"
+  echo "    steps:"
+  echo "      - run: |"
+  echo "          cargo nextest run $SEAM_CRATES --profile ci --run-ignored all --no-tests=fail -E \"\$FILTER\""
+} > "$SYNTH_PINNED"
+if RUST_YML_OVERRIDE="$SYNTH_PINNED" bash "$CHECK" "$MANIFEST" >/dev/null 2>&1; then
+  echo "ok    [workspace-overclaim:control] per-crate -p seam still passes via override"
+else
+  echo "FAIL  [workspace-overclaim:control] per-crate -p seam should pass but FAILED" >&2
+  fail=1
+fi
+
+# The guard: a `--workspace` seam (no per-crate `-p`) must be REJECTED, because
+# the five `>0` rows now lack per-crate execution evidence (over-claim).
+SYNTH_WORKSPACE="$TMPDIR/rust-workspace.yml"
+{
+  echo "jobs:"
+  echo "  rust-test-seam:"
+  echo "    steps:"
+  echo "      - run: |"
+  echo "          cargo nextest run --workspace --profile ci --run-ignored all --no-tests=fail -E \"\$FILTER\""
+} > "$SYNTH_WORKSPACE"
+if RUST_YML_OVERRIDE="$SYNTH_WORKSPACE" bash "$CHECK" "$MANIFEST" >/dev/null 2>&1; then
+  echo "FAIL  [workspace-overclaim] --workspace seam over-claims the 5 crates but check PASSED (silent over-claim — the parser must be updated in lockstep)" >&2
+  fail=1
+else
+  echo "ok    [workspace-overclaim] --workspace seam rejected — no per-crate -p evidence, the 5 >0 rows are flagged as over-claims"
+fi
+
 if [ "$fail" -ne 0 ]; then
   echo "SELFTEST FAIL  one or more expectations were not met" >&2
   exit 1
 fi
 
-echo "SELFTEST PASS  real manifest passes; all 4 tampers rejected."
+echo "SELFTEST PASS  real manifest passes; all 4 tampers rejected; --workspace over-claim guard holds."
 exit 0
