@@ -19,10 +19,11 @@ on:
         required: false
         # The live observer breaks and writes result.json once the gardening
         # loop reaches this many cursor advances (or acceptance). The free Big
-        # Pickle model is slow, so keep the default modest enough that a
-        # budget-exhaust run still finishes — and emits result.json — well
-        # inside the job wall (raise via dispatch input for a longer sweep).
-        default: "30"
+        # Pickle model is slow on the saturated self-hosted runner — a 30-turn
+        # budget run did not finish a single pass inside the job wall — so keep
+        # the default small enough that a budget-exhaust run reliably emits
+        # result.json. Raise via the dispatch input for a longer scoring sweep.
+        default: "8"
 
 concurrency:
   group: eval-todo-app-${{ github.ref }}
