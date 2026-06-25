@@ -270,12 +270,53 @@ impl Embedder {
 mod tests {
     use super::*;
 
+    /// CI require-marker (issue #761). The required embedder job
+    /// (`.github/workflows/embedder-coverage.yml`) exports `NEXUM_REQUIRE_DB=1`
+    /// and runs these `#[ignore]`d tests via `--include-ignored` with the
+    /// governed weights pre-populated offline. When the marker is set, a missing
+    /// or unloadable model is a LOUD failure (panic / non-zero exit) — it must
+    /// never fall through to a silent HuggingFace `download()`
+    /// (`RelativeUrlWithoutBase`) that could masquerade as green-by-skip.
+    const REQUIRE_DB_MARKER: &str = "NEXUM_REQUIRE_DB";
+
+    /// Whether the CI require-marker demands the governed weights be present.
+    fn weights_required() -> bool {
+        std::env::var(REQUIRE_DB_MARKER)
+            .map(|v| !v.is_empty())
+            .unwrap_or(false)
+    }
+
+    /// Construct an [`Embedder`], failing LOUDLY under the require-marker.
+    ///
+    /// Under `NEXUM_REQUIRE_DB`, a load failure (e.g. weights absent → a
+    /// network fall-through error) panics with an explicit message so CI fails
+    /// non-zero instead of silently skipping. Without the marker the same
+    /// `.expect` still panics, so local `--include-ignored` runs behave as
+    /// before.
+    fn require_embedder() -> Embedder {
+        match Embedder::new() {
+            Ok(embedder) => embedder,
+            Err(err) if weights_required() => panic!(
+                "{REQUIRE_DB_MARKER} is set but the governed embedding weights could not \
+                 be loaded ({err}): the required embedder job must resolve the pinned \
+                 weights offline. Refusing to skip silently — provision the governed \
+                 weights cache or unset {REQUIRE_DB_MARKER}."
+            ),
+            Err(err) => panic!("Embedder::new should succeed: {err}"),
+        }
+    }
+
     /// Verify that [`GOVERNED_DIM`] matches what the governed model actually
     /// produces.  This test downloads model weights on first run (~80 MB).
+    ///
+    /// `#[ignore]`d so the default `cargo test` skips it locally; the required
+    /// embedder job opts it in via `--include-ignored` with the weights
+    /// pre-populated offline. Under `NEXUM_REQUIRE_DB` it fails loudly when the
+    /// weights are absent (see [`require_embedder`]).
     #[test]
     #[ignore = "downloads model weights from HuggingFace Hub"]
     fn embed_returns_governed_dimension() {
-        let embedder = Embedder::new().expect("Embedder::new should succeed");
+        let embedder = require_embedder();
         let vec = embedder
             .embed_one("The quick brown fox jumps over the lazy dog.")
             .expect("embed_one should succeed");
@@ -293,7 +334,7 @@ mod tests {
     #[test]
     #[ignore = "downloads model weights from HuggingFace Hub"]
     fn embed_is_deterministic() {
-        let embedder = Embedder::new().expect("Embedder::new should succeed");
+        let embedder = require_embedder();
         let text = "Superfield semantic search";
 
         let first = embedder
@@ -314,7 +355,7 @@ mod tests {
     #[test]
     #[ignore = "downloads model weights from HuggingFace Hub"]
     fn embed_batch_returns_correct_count() {
-        let embedder = Embedder::new().expect("Embedder::new should succeed");
+        let embedder = require_embedder();
         let texts = ["hello world", "goodbye world", "semantic search"];
         let results = embedder
             .embed_batch(&texts)
