@@ -86,34 +86,30 @@ Where the result lands: the job bind-mounts the workspace, so
 `evals/results/todo-app/<workspace-id>/result.json` (gitignored). The same file
 is also collected by the artifact step into your `--artifact-server-path`.
 
-### Limitation: blocked at the first JavaScript action
+### Limitation: blocked at the first JavaScript action (an upstream `act` gap)
 
 Today `act` runs this workflow only **up to the first JavaScript action**, not
-end to end. The job is pinned to `container: ghcr.io/superfield-ai/ci-runner:latest`,
-and that image has no `node`. GitHub Actions injects a node runtime into
-container jobs automatically; `act` does **not**
-([nektos/act#107](https://github.com/nektos/act/issues/107)). So the workflow's
-JS actions (`actions/cache@v4`, `actions/upload-artifact@v4`, `hashFiles`) fail
-with `exec: "node": not found` (exit code `127`) at the first cache step
-(`Cache Cargo registry + build`). `--container-options`
-can't fix it either — its node bind-mount only reaches runner/service
-containers, not a job's YAML-pinned `container:`.
+end to end — at the `Cache Cargo registry + build` step (`actions/cache@v4`) it
+fails with `exec: "node": not found` (exit `127`). This is **not** a defect in
+the `ci-runner` image: `node` for JS actions is supplied by the *runner agent*
+at runtime (GitHub mounts it into the `container:` job), and `act` does not
+perform that mount — it expects `node` on the image PATH instead. A probe under
+act 0.2.89 confirmed `--container-options` cannot work around it (the node
+bind-mount never reaches a YAML-pinned `container:`). The image deliberately
+omits `node` and must keep doing so. The full mechanism, the two-environment
+topology, the `actions/checkout` `docker cp` special-case, and the probe
+evidence are documented canonically in
+[`docs/testing.md`](../docs/testing.md) → **"Running CI workflows locally with
+`act`"**. Upstream gap:
+[nektos/act#107](https://github.com/nektos/act/issues/107) (see also
+[#810](https://github.com/superfield-ai/monorepo/issues/810)).
 
-What `act` **does** validate locally today, before that point:
+What `act` **does** validate locally today, before that boundary:
 
 - the `self-hosted` / `Linux` / `X64` runner-label → image mapping from `.actrc`,
 - the `ci-runner` job container,
 - the `pgvector` Postgres service container,
 - checkout, the rustup toolchain install, and the apt C-toolchain step.
-
-(`actions/checkout@v4` is itself a JS action but still succeeds: `act`
-substitutes it with a `docker cp` of the local working tree rather than running
-its node entrypoint, so the boundary lands at the first JS action `act`
-actually executes via `node` — `hashFiles` / `actions/cache@v4`.)
-
-Full end-to-end local execution is blocked until `node` is added to the
-`ci-runner` image (built in a separate repo) — tracked in
-[#810](https://github.com/superfield-ai/monorepo/issues/810).
 
 > **Caveat:** act's `-n` dry-run can't preview this workflow — it panics on jobs
 > with service containers (the `pgvector` Postgres service here). Use `act -l` to

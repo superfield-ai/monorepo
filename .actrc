@@ -10,8 +10,15 @@
 # Only repo-wide-correct defaults belong here. Run-specific flags
 # (--pull=false, --artifact-server-path) stay on the command line.
 #
-# Prereq/limitation: the ci-runner image has no `node`, so act stops at the
-# first JS action (actions/cache, upload-artifact). Tracked in #810.
+# Limitation (act node-injection gap, not an image defect): GitHub's runner
+# agent mounts `node` into a `container:` job at runtime (externals at /__e);
+# act does not, and instead expects `node` on the image PATH. ci-runner
+# correctly omits `node`, so under act every JS action (actions/cache,
+# upload-artifact, hashFiles) stops at `exec: "node": not found`. A probe
+# confirmed `--container-options` does NOT reach a YAML-pinned `container:`,
+# so it can't inject node either. Upstream gap: nektos/act#107. Full mechanism
+# + topology in docs/testing.md ("Running CI workflows locally with act").
+# Do NOT add node to the ci-runner image (shared by ~16 workflows).
 -P self-hosted=ghcr.io/superfield-ai/ci-runner:latest
 -P Linux=ghcr.io/superfield-ai/ci-runner:latest
 -P X64=ghcr.io/superfield-ai/ci-runner:latest

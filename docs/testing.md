@@ -247,6 +247,102 @@ bun run test:integration
 SUPERFIELD_LIVE_AGENTS=1 bun --bun vitest run packages/*/tests/live
 ```
 
+## Running CI workflows locally with `act`
+
+Many of our workflows pin a job `container:` to the shared CI image
+`ghcr.io/superfield-ai/ci-runner:latest` (e.g.
+[`.github/workflows/eval-todo-app.yml`](../.github/workflows/eval-todo-app.yml)).
+We run them locally with [`act`](https://github.com/nektos/act) so a local run
+executes the **unmodified** workflow YAML in the same container CI uses — no
+duplicate, drift-prone local script. The repo-root
+[`.actrc`](../.actrc) maps the `self-hosted` / `Linux` / `X64` runner labels to
+that image.
+
+### How `node` gets into a container job (mechanism)
+
+JavaScript GitHub Actions (`actions/cache`, `actions/upload-artifact`,
+`hashFiles`, …) run under a `node` binary. **That binary comes from the runner
+agent, not from the image and not from the host:**
+
+- **GitHub (canonical).** The `actions/runner` agent ships its own Node runtimes
+  in its install tree (`externals/node20/`, …). When a job declares
+  `container:`, the agent starts that container with the externals dir
+  bind-mounted **read-only at `/__e`** and invokes JS actions by **absolute
+  path**: `/__e/node20/bin/node /__w/_actions/<owner>/<repo>/<ref>/dist/index.js`.
+  `node` is *mounted at runtime, never installed in the image*, so any
+  glibc-compatible image runs JS actions fine. The only constraint is glibc
+  compatibility (the mounted node is glibc-linked); `ci-runner` is debian/glibc,
+  so it satisfies it. This is identical on hosted and self-hosted runners,
+  because `node` travels with the runner software. **This is why `ci-runner`
+  correctly omits `node` — and must keep omitting it.**
+
+- **`act` (by convention).** `act` is not the `actions/runner` agent; it is an
+  ordinary host process driving the Docker daemon. It does **not** perform the
+  `/__e` externals mount. By convention it assumes `node` is already on the
+  image's `PATH` and runs `node …` via PATH lookup — which is why its default
+  images (`catthehacker/ubuntu:act-*`) bundle `node`. A custom pinned
+  `container:` like `ci-runner` has no `node` on `PATH`, so the lookup fails with
+  `exec: "node": executable file not found in $PATH` (exit 127). The contracts
+  are inverted: GitHub = "node comes from the agent"; act = "node comes from the
+  image". Tracked upstream as
+  [nektos/act#107](https://github.com/nektos/act/issues/107).
+
+### Two-environment topology
+
+For a job that pins `container:` there are **two** execution environments, not
+three:
+
+- **The host** — where the `act` process and the Docker daemon live. `act` plays
+  the runner-agent role here; it has no job environment of its own.
+- **The `ci-runner` job container** — where every `run:` step and every JS action
+  executes. `node` must be present *inside this container*; GitHub mounts it
+  there, `act` does not.
+
+A service like `pgvector` runs as a **sibling** container on the same Docker
+network — it is not a nesting layer.
+
+### The `actions/checkout` special-case (and the failure boundary)
+
+`actions/checkout` is itself a JS action but still succeeds under `act` without
+`node`: `act` short-circuits it with a `docker cp` of the local working tree
+instead of running its node entrypoint. The failure therefore lands not at
+checkout but at the **first JS action `act` actually executes via `node`** —
+`hashFiles` / `actions/cache@v4` (in `eval-todo-app.yml`, the
+`Cache Cargo registry + build` step).
+
+### Current status: the node-injection gap is an upstream `act` limitation
+
+A probe under **act 0.2.89** (a throwaway workflow pinned to
+`container: ghcr.io/superfield-ai/ci-runner:latest`, whose only step is
+`actions/cache@v4`) settled the open question:
+
+- **Without any mount** → `exec: "node": executable file not found in $PATH`
+  (exit 127) at the cache step. Expected.
+- **With `--container-options "-v <glibc-node>:/usr/local/bin/node:ro"`**
+  (mounting a host glibc node onto `PATH`, *not* GitHub's `/__e`) → **identical
+  failure**. A follow-up `run:` step confirmed `/usr/local/bin/node` is *absent
+  inside the job container*: `--container-options` does **not** reach a job's
+  YAML-pinned `container:` in this `act` version. The mount target was correct
+  (on `PATH`); the option simply never applies to the pinned container.
+
+So mirroring GitHub's mount mechanism via the documented `act` flags is **not
+possible today** — this is the upstream gap in
+[nektos/act#107](https://github.com/nektos/act/issues/107), not a defect in the
+`ci-runner` image. **Do not add `node` to the `ci-runner` image** (it is shared
+by ~16 workflows and the design deliberately omits it) and **do not overwrite
+the local `:latest` tag** (the self-hosted runner uses it).
+
+What `act` **does** validate locally today, before the boundary: the runner-label
+→ image mapping from `.actrc`, the `ci-runner` job container, the `pgvector`
+service container, `actions/checkout`, and any `run:` steps up to the first
+real JS action (e.g. the rustup/apt toolchain steps). To run JS actions locally
+you would need a patched `act` or a local image that bundles `node` on `PATH`
+(never the production `ci-runner`).
+
+> **Dry-run caveat:** `act -n` cannot preview a workflow with service containers
+> — it panics on the `pgvector` service. Use `act -l` to validate parsing, and a
+> real run to execute.
+
 ## What we explicitly do NOT test
 
 - **Real merges to real branches.** All git operations in tests use the
