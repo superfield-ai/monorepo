@@ -86,6 +86,29 @@ Where the result lands: the job bind-mounts the workspace, so
 `evals/results/todo-app/<workspace-id>/result.json` (gitignored). The same file
 is also collected by the artifact step into your `--artifact-server-path`.
 
+### Limitation: blocked at the first JavaScript action
+
+Today `act` runs this workflow only **up to the first JavaScript action**, not
+end to end. The job is pinned to `container: ghcr.io/superfield-ai/ci-runner:latest`,
+and that image has no `node`. GitHub Actions injects a node runtime into
+container jobs automatically; `act` does **not**
+([nektos/act#107](https://github.com/nektos/act/issues/107)). So the workflow's
+JS actions (`actions/cache@v4`, `actions/upload-artifact@v4`, `hashFiles`) fail
+with `exec: "node": not found` at the first cache step. `--container-options`
+can't fix it either — its node bind-mount only reaches runner/service
+containers, not a job's YAML-pinned `container:`.
+
+What `act` **does** validate locally today, before that point:
+
+- the `self-hosted` / `Linux` / `X64` runner-label → image mapping from `.actrc`,
+- the `ci-runner` job container,
+- the `pgvector` Postgres service container,
+- checkout, the rustup toolchain install, and the apt C-toolchain step.
+
+Full end-to-end local execution is blocked until `node` is added to the
+`ci-runner` image (built in a separate repo) — tracked in
+[#810](https://github.com/superfield-ai/monorepo/issues/810).
+
 > **Caveat:** act's `-n` dry-run can't preview this workflow — it panics on jobs
 > with service containers (the `pgvector` Postgres service here). Use `act -l` to
 > validate parsing instead, and a real run to execute it.

@@ -9,6 +9,9 @@
 #
 # Only repo-wide-correct defaults belong here. Run-specific flags
 # (--pull=false, --artifact-server-path) stay on the command line.
+#
+# Prereq/limitation: the ci-runner image has no `node`, so act stops at the
+# first JS action (actions/cache, upload-artifact). Tracked in #810.
 -P self-hosted=ghcr.io/superfield-ai/ci-runner:latest
 -P Linux=ghcr.io/superfield-ai/ci-runner:latest
 -P X64=ghcr.io/superfield-ai/ci-runner:latest
