@@ -1,8 +1,9 @@
 # Runner: live (Tier 2)
 
 > The engine that drives any scenario through the **real** appliance and a real
-> model, counting turns. This is the e2e-equivalent runner. Spec only — code
-> lands later in `crates/sf-eval`.
+> model, counting turns. This is the e2e-equivalent runner, implemented in
+> `crates/sf-eval` (binary + grader library, CI-wired via
+> `.github/workflows/eval-todo-app.yml`).
 
 ## What it does
 
