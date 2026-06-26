@@ -27,6 +27,8 @@ tokio.workspace = true
 uuid.workspace = true
 libc.workspace = true
 thiserror = { workspace = true }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

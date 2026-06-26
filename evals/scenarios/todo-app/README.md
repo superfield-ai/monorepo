@@ -32,7 +32,21 @@ the intent and the acceptance bar.
 
 ## Output
 
-The runner writes `evals/results/todo-app/<workspace-id>/` containing
-`result.json` (turns, per-rung pass/fail, elapsed), the derived
-`project-graph.md`, and a Studio screenshot. See the
-[`live` runner](../../runners/live.md) for the result shape.
+The runner writes `evals/results/todo-app/<workspace-id>/` containing:
+
+- `result.json` — turns, per-rung pass/fail, deterministic floor, elapsed.
+- `project-graph.md` — the derived project graph the rung-1 grader reads
+  (refreshed every poll; an explicit marker when no graph has been derived yet).
+- `candidate-<seq>.json` — the rung-2 `merge_result` evidence (the merge
+  summary: repo, merged files, compile gate), one per compiling candidate.
+  Legitimately **absent** when the loop produced no compiling candidate.
+- `turns.json` — the agent's per-turn `page_revisions` (each gardening step's
+  produced content + provenance), so turns are inspectable.
+
+The CI workflow uploads `_logs/` next to these — the captured `appliance.log`
+(with `RUST_LOG`-raised gardening-loop + LLM-call traces), `opencode-server.log`,
+and `scenario.log` — and retains the whole `evals/results/todo-app/**` tree for
+30 days. A Studio screenshot is **not yet produced** (the browser-smoke step is a
+follow-up; `browser_smoke` reports `skipped`), but would upload under this same
+prefix once wired. See the [`live` runner](../../runners/live.md) for the result
+shape.

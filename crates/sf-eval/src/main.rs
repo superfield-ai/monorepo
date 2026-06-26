@@ -362,6 +362,18 @@ async fn main() {
     )
     .await;
 
+    // Persist the agent's work products next to result.json so a run is
+    // auditable even when the live loop never converges (or the floor fails):
+    // the derived project graph the rung-1 grader reads, the rung-2 candidate
+    // evidence, and the per-turn page-revision records. Written here (up front)
+    // so even the loud floor-failure exit below still leaves them on disk for
+    // the workflow's always() upload.
+    let out_dir = run_dir(&args.results_root, &scenario, args.workspace_id);
+    let floor_graph = project_graph_markdown(&pool).await;
+    write_project_graph(&out_dir, &floor_graph);
+    export_candidate_evidence(&pool, &out_dir).await;
+    dump_turns(&pool, &out_dir, args.workspace_id).await;
+
     // Loud-skip discipline: a failed deterministic floor is a real broken
     // resource (no seed, no embedded blocks, or the governed embedder can't
     // retrieve) — fail the job. The artifact recording the failure is already on
@@ -388,6 +400,9 @@ async fn main() {
         }
 
         let graph_md = project_graph_markdown(&pool).await;
+        // Refresh the persisted graph each poll so the artifact tracks the latest
+        // derived state even if the process is later stopped at the deadline.
+        write_project_graph(&out_dir, &graph_md);
         acceptance.project_graph = project_graph_pass(&graph_md, TODO_VERBS);
         acceptance.compiling_candidate = compiling_candidate_pass(count_merge_results(&pool).await);
 
@@ -428,6 +443,13 @@ async fn main() {
         tokio::time::sleep(args.poll_interval).await;
     }
 
+    // Final pass: re-export the work products so the artifact reflects the end
+    // state (a candidate that landed on the last turn, the final graph + turns).
+    let final_graph = project_graph_markdown(&pool).await;
+    write_project_graph(&out_dir, &final_graph);
+    export_candidate_evidence(&pool, &out_dir).await;
+    dump_turns(&pool, &out_dir, args.workspace_id).await;
+
     println!("{}", last.to_json());
     let path = RunResult::result_path(
         &args.results_root,
@@ -441,4 +463,167 @@ fn write_result(result: &RunResult, results_root: &Path) -> PathBuf {
     result
         .write_under(results_root)
         .expect("write result.json under results root")
+}
+
+/// The directory a run's artifacts live in — `result.json` plus the persisted
+/// work products this module writes next to it.
+fn run_dir(results_root: &Path, scenario: &str, workspace_id: Uuid) -> PathBuf {
+    results_root.join(scenario).join(workspace_id.to_string())
+}
+
+/// Persist the **derived project graph** the grader reads as `project-graph.md`
+/// next to `result.json` (the README promises this file).
+///
+/// `graph_md` is the exact markdown [`project_graph_markdown`] hands the
+/// `project_graph_pass` grader, so the artifact records the precise input the
+/// rung-1 verdict was computed from. When the loop has derived no nodes yet the
+/// file is written with an explicit marker — never silently absent, so a reader
+/// can tell "no graph yet" from "harness forgot to write it".
+fn write_project_graph(dir: &Path, graph_md: &str) {
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        eprintln!("sf-eval: cannot create results dir for project-graph.md: {e}");
+        return;
+    }
+    let body = if graph_md.trim().is_empty() {
+        "# Derived project graph\n\n<!-- no project graph derived yet: the gardening \
+         loop has produced no project_nodes for this workspace -->\n"
+            .to_string()
+    } else {
+        format!("# Derived project graph\n\n{graph_md}\n")
+    };
+    if let Err(e) = std::fs::write(dir.join("project-graph.md"), body) {
+        eprintln!("sf-eval: failed to write project-graph.md: {e}");
+    }
+}
+
+/// Write one `merge_result` payload as `candidate-<seq>.json`, plus a
+/// `candidate-<seq>.diff` when the payload carries a raw `diff`/`patch` string.
+fn write_candidate(dir: &Path, seq: i64, payload: &serde_json::Value, found: &mut usize) {
+    let json_path = dir.join(format!("candidate-{seq}.json"));
+    let pretty = serde_json::to_string_pretty(payload).unwrap_or_else(|_| payload.to_string());
+    if let Err(e) = std::fs::write(&json_path, pretty) {
+        eprintln!("sf-eval: failed to write {}: {e}", json_path.display());
+        return;
+    }
+    *found += 1;
+    for key in ["diff", "patch"] {
+        if let Some(text) = payload.get(key).and_then(|v| v.as_str()) {
+            let diff_path = dir.join(format!("candidate-{seq}.diff"));
+            if let Err(e) = std::fs::write(&diff_path, text) {
+                eprintln!("sf-eval: failed to write {}: {e}", diff_path.display());
+            }
+            break;
+        }
+    }
+}
+
+/// Export the rung-2 candidate evidence — the `merge_result` records the
+/// `compiling_candidate` grader counts — from both Sharp episode models.
+///
+/// The episode stores the merge **summary** (repo, merged_files, compile_gate),
+/// not the raw source diff (the candidate's files live in the appliance
+/// workspace, not the episode), so this dumps that JSON; a `diff`/`patch` string
+/// field, if a future producer adds one, is additionally surfaced as a `.diff`.
+/// When no `merge_result` exists the absence is **legitimate** (the stochastic
+/// loop may never reach a compiling candidate) and is logged loudly rather than
+/// fabricated.
+async fn export_candidate_evidence(pool: &sqlx::PgPool, dir: &Path) {
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        eprintln!("sf-eval: cannot create results dir for candidate evidence: {e}");
+        return;
+    }
+    let mut found = 0usize;
+
+    let events: Vec<(i64, serde_json::Value)> = sqlx::query_as(
+        "SELECT seq, payload FROM sharp.episode_events \
+         WHERE event_type = 'merge_result' ORDER BY seq",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    for (seq, payload) in &events {
+        write_candidate(dir, *seq, payload, &mut found);
+    }
+
+    let typed: Vec<(i64, Option<serde_json::Value>)> = sqlx::query_as(
+        "SELECT seq, inline FROM sharp.episode_typed_artifacts \
+         WHERE kind = 'merge_result' ORDER BY seq",
+    )
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+    for (seq, inline) in &typed {
+        if let Some(payload) = inline {
+            write_candidate(dir, *seq, payload, &mut found);
+        }
+    }
+
+    if found == 0 {
+        eprintln!(
+            "sf-eval: no compiling-candidate (merge_result) evidence to export — \
+             legitimately absent (loop produced no compiling candidate)"
+        );
+    } else {
+        eprintln!(
+            "sf-eval: exported {found} candidate-evidence file(s) to {}",
+            dir.display()
+        );
+    }
+}
+
+/// Dump the agent's per-turn records (`nexum.page_revisions`) for the workspace
+/// to `turns.json`, so each gardening step's produced content + provenance is
+/// inspectable in the uploaded artifact.
+///
+/// `ingested_at` is rendered to text in SQL to avoid a timestamp dependency. The
+/// raw prompt/response the model exchanged is not in this table (see
+/// `appliance.log` + `RUST_LOG` for that); these are the persisted step outputs.
+async fn dump_turns(pool: &sqlx::PgPool, dir: &Path, workspace_id: Uuid) {
+    if let Err(e) = std::fs::create_dir_all(dir) {
+        eprintln!("sf-eval: cannot create results dir for turns.json: {e}");
+        return;
+    }
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT page_name, provenance, content, ingested_at::text \
+         FROM nexum.page_revisions WHERE workspace_id = $1 ORDER BY ingested_at",
+    )
+    .bind(workspace_id)
+    .fetch_all(pool)
+    .await
+    .unwrap_or_default();
+
+    let turns: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|(page_name, provenance, content, ingested_at)| {
+            serde_json::json!({
+                "page_name": page_name,
+                "provenance": provenance,
+                "ingested_at": ingested_at,
+                "content_len": content.len(),
+                "content": content,
+            })
+        })
+        .collect();
+    let doc = serde_json::json!({
+        "workspace_id": workspace_id.to_string(),
+        "turn_count": turns.len(),
+        "turns": turns,
+    });
+    let path = dir.join("turns.json");
+    match serde_json::to_string_pretty(&doc) {
+        Ok(s) => {
+            if let Err(e) = std::fs::write(&path, s) {
+                eprintln!("sf-eval: failed to write turns.json: {e}");
+                return;
+            }
+        }
+        Err(e) => {
+            eprintln!("sf-eval: failed to serialize turns.json: {e}");
+            return;
+        }
+    }
+    eprintln!(
+        "sf-eval: dumped {} per-turn page_revision record(s) to turns.json",
+        turns.len()
+    );
 }

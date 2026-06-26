@@ -196,12 +196,37 @@ async fn main() {
     }
 }
 
+/// Install the process-wide tracing subscriber for the serving daemon.
+///
+/// The gardening loop and its LLM agent executor (`sf_loop`) emit their
+/// per-step and per-LLM-call activity through the `tracing` facade. Without a
+/// subscriber installed those events are silently dropped — which is why the
+/// appliance log previously showed nothing of the live model I/O. This installs
+/// an `RUST_LOG`-driven (`EnvFilter`) `fmt` subscriber that writes to stderr (so
+/// CI's `>appliance.log 2>&1` redirect captures it). The default when `RUST_LOG`
+/// is unset keeps the loop engine + agent at `debug` and quiets the noisy
+/// transport crates, matching what the eval workflow sets explicitly.
+///
+/// `try_init` is used so a second call (or a test that already installed a
+/// subscriber) is a no-op rather than a panic.
+fn init_tracing() {
+    use tracing_subscriber::EnvFilter;
+    let filter = EnvFilter::try_from_default_env()
+        .unwrap_or_else(|_| EnvFilter::new("info,sf_loop=debug,sqlx=warn,hyper=warn,reqwest=warn"));
+    let _ = tracing_subscriber::fmt()
+        .with_env_filter(filter)
+        .with_writer(std::io::stderr)
+        .try_init();
+}
+
 /// Parse `serve` subcommand flags and start the HTTP server.
 ///
 /// Recognised flags:
 /// - `--bind <addr>` — override the default bind address (`0.0.0.0:7000`).
 /// - `--session-ttl <secs>` — override the default session TTL (86 400 s).
 async fn run_serve(args: &[String]) {
+    init_tracing();
+
     let mut bind_addr: std::net::SocketAddr = "0.0.0.0:7000".parse().expect("static addr");
     let mut session_ttl: Option<i64> = None;
 
@@ -403,6 +428,8 @@ fn run_deploy(args: &[String]) {
 /// preserve that ordering; the loop handle is installed in `AppState` via
 /// [`sf_serve::AppState::with_loop_handle`].
 async fn run_as_daemon() {
+    init_tracing();
+
     use sf_cli::daemon::{
         daemon_log_path, daemon_state_dir, remove_daemon_json, send_startup_result, socket_path,
         write_daemon_json, DaemonJson, StartupResult,
