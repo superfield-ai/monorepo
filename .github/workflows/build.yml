@@ -99,3 +99,13 @@ jobs:
         run: scripts/check-test-job-presence.sh
       - name: Self-test the test-job-presence guardrail
         run: tests/test-job-presence-selftest.sh
+      # Required-status-bypass mechanism (issue #788): assert the
+      # required-status-contexts.txt <-> workflow mapping is in lockstep and the
+      # docs-only / workflow-only / code skip decision is correct. Runs in this
+      # existing required job so the bypass logic is covered on every code PR
+      # (the self-test needs PyYAML; the CI image ships it, else the reporter
+      # workflow installs it the same way).
+      - name: Validate the required-status-bypass mapping
+        run: python3 scripts/skipped-required-contexts.py --validate
+      - name: Self-test the required-status-bypass decision
+        run: tests/skipped-required-contexts-selftest.sh
