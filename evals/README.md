@@ -106,6 +106,11 @@ What `act` **does** validate locally today, before that point:
 - the `pgvector` Postgres service container,
 - checkout, the rustup toolchain install, and the apt C-toolchain step.
 
+(`actions/checkout@v4` is itself a JS action but still succeeds: `act`
+substitutes it with a `docker cp` of the local working tree rather than running
+its node entrypoint, so the boundary lands at the first JS action `act`
+actually executes via `node` — `hashFiles` / `actions/cache@v4`.)
+
 Full end-to-end local execution is blocked until `node` is added to the
 `ci-runner` image (built in a separate repo) — tracked in
 [#810](https://github.com/superfield-ai/monorepo/issues/810).
