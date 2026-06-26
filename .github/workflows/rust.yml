@@ -11,8 +11,12 @@ name: Rust
 # PRs. So this trigger now mirrors the OTHER required heavy Rust job
 # (embedder-coverage.yml): `paths-ignore` for pure docs/text only, so the
 # required Rust test context reports on every code/workflow PR. (Pure docs-only
-# PRs remain governed by blocker #753, same as the existing six required
-# contexts; this change does not make that envelope worse.)
+# PRs — paths-ignored here — are made satisfiable by the always-on
+# required-status-bypass.yml reporter (#788, which resolved blocker #753): it
+# posts skipped-success for the required Rust contexts that did not trigger, so
+# docs-only PRs are no longer deadlocked. The canonical required set is the
+# contexts listed in scripts/required-status-contexts.txt (10 today), the
+# in-repo mirror of main's branch protection.)
 on:
   push:
     branches: [main]
@@ -399,8 +403,10 @@ jobs:
   #      / workflow-only PRs go green (check-coverage-delta.sh exits 0).
   #   2. Draft-gated + the rust.yml `paths-ignore: ["**.md","**.txt"]` trigger
   #      mirror the other required heavy Rust jobs, so the context reports on
-  #      every code/workflow PR (pure docs-only PRs stay in the existing #753
-  #      envelope, no worse than the other required contexts).
+  #      every code/workflow PR (pure docs-only PRs, paths-ignored here, are made
+  #      satisfiable by the always-on required-status-bypass.yml reporter (#788,
+  #      which resolved blocker #753), same as the other contexts in
+  #      scripts/required-status-contexts.txt).
   coverage-delta:
     # The required context name. Keep STABLE: registered verbatim in main's
     # required_status_checks; renaming silently drops the protection.
