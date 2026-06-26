@@ -320,15 +320,15 @@ If `tiers` or `jobs` is absent, built-in defaults apply. Partial overrides are n
 
 ## Relationship to existing code
 
-| Concept in this spec         | Current location in code                                                                 |
-| ---------------------------- | ---------------------------------------------------------------------------------------- |
-| `AgentBackend`, `ModelTier`  | `packages/core/agent.ts`                                                                 |
-| `MODEL_TIER_MAPPING`         | `packages/core/agent.ts:26`                                                              |
-| `filterAvailableBackends`    | `packages/core/agent.ts:214` — login check only; no retry window yet                     |
-| `waitForAvailableBackend`    | `packages/core/agent.ts:424` — polls every 60s                                           |
-| `callWithBackendPriority`    | `packages/core/agent.ts:342` — iterates backends                                         |
-| Job type → backend mapping   | **not yet implemented** — all jobs use the same `["claude","codex","opencode"]` default  |
-| Availability window tracking | **not yet implemented** — rate-limit handling exits immediately; no per-backend cooldown |
-| App-wide tier config         | **not yet implemented** — tier resolution is hardcoded in `MODEL_TIER_MAPPING`           |
+| Concept in this spec         | Current location in code                                                                                                                                                                     |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `AgentBackend`, `ModelTier`  | `packages/core/agent.ts`                                                                                                                                                                     |
+| `MODEL_TIER_MAPPING`         | `packages/core/agent.ts:26`                                                                                                                                                                  |
+| `filterAvailableBackends`    | `packages/core/agent.ts:214` — login check only; no retry window yet                                                                                                                         |
+| `waitForAvailableBackend`    | `packages/core/agent.ts:424` — polls every 60s                                                                                                                                               |
+| `callWithBackendPriority`    | `packages/core/agent.ts:342` — iterates backends                                                                                                                                             |
+| Job type → backend mapping   | `packages/core/job-registry.ts` — `resolveJobCandidates(jobType)` maps each `JobType` to its preferred + failover candidate list; `agent.ts:149` calls it with `opts.jobType ?? "dev"`       |
+| Availability window tracking | `packages/core/backend-availability.ts` — `BackendAvailabilityStore` tracks per-backend rate-limit cooldown windows; consulted via `availabilityStore.isAvailable` when filtering candidates |
+| App-wide tier config         | `packages/core/job-registry.ts` — `DEFAULT_TIER_TABLE`/`TierTable` resolve abstract tiers to candidates, with per-job and per-tier override merging in `resolveJobCandidates`                |
 
-This spec defines the target behaviour. Implementation will extend `AgentOpts` with a `jobType` field, introduce a per-process `BackendAvailabilityStore`, and add a `JobRegistry` that maps job types to their preferred + failover candidate lists.
+This spec's target behaviour is implemented: `AgentOpts` carries a `jobType` field (`agent.ts:73`), a per-process `BackendAvailabilityStore` (`backend-availability.ts`) tracks cooldown windows, and a `JobRegistry` (`job-registry.ts`) maps job types to their preferred + failover candidate lists.
