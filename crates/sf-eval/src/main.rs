@@ -22,14 +22,30 @@
 //! appliance's Postgres.
 
 use std::path::{Path, PathBuf};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
-use sf_eval::{compiling_candidate_pass, evaluate_run, project_graph_pass, Acceptance, RunResult};
+use nexum::embed::Embedder;
+use nexum::{semantic_search, SemanticOptions};
+use sf_eval::{
+    compiling_candidate_pass, evaluate_run, project_graph_pass, Acceptance, DeterministicRungs,
+    RunResult,
+};
 use sf_loop::load_cursor;
 use uuid::Uuid;
 
 /// The expected verbs the `todo-app` project-graph grader checks for.
 const TODO_VERBS: &[&str] = &["add", "list", "complete"];
+
+/// The query the deterministic semantic-search probe runs against the seeded,
+/// embedded corpus. It mentions the todo verbs so a healthy governed embedder
+/// retrieves the seed block; an empty result means embedding coverage is broken.
+const SEMANTIC_PROBE_QUERY: &str = "add, list, and complete tasks in a todo app";
+
+/// Default wall-clock budget the observer gives the live loop before it stops and
+/// emits the result it has. A backstop well under the CI job wall so the runner
+/// always exits cleanly (and uploads `result.json`) rather than being killed
+/// mid-flight (issue #780). Override with `SF_EVAL_DEADLINE_SECS`.
+const DEFAULT_DEADLINE_SECS: u64 = 1800;
 
 struct Args {
     scenario_dir: PathBuf,
@@ -153,6 +169,124 @@ async fn page_revision_count(pool: &sqlx::PgPool, workspace_id: Uuid) -> u32 {
     count.max(0) as u32
 }
 
+/// The `seed` corpus id for a workspace, if the intent was seeded.
+async fn seed_corpus_id(pool: &sqlx::PgPool, workspace_id: Uuid) -> Option<Uuid> {
+    sqlx::query_scalar(
+        "SELECT id FROM nexum.corpora WHERE name = 'seed' AND workspace_id = $1 LIMIT 1",
+    )
+    .bind(workspace_id)
+    .fetch_optional(pool)
+    .await
+    .ok()
+    .flatten()
+}
+
+/// Count embedded blocks ingested into a corpus (the `ingest` rung's evidence).
+async fn embedded_block_count(pool: &sqlx::PgPool, workspace_id: Uuid, corpus_id: Uuid) -> i64 {
+    sqlx::query_scalar(
+        "SELECT COUNT(*) FROM nexum.blocks b \
+         JOIN nexum.documents d ON d.id = b.doc_id \
+         WHERE d.workspace_id = $1 AND d.corpus_id = $2 AND b.embedding IS NOT NULL",
+    )
+    .bind(workspace_id)
+    .bind(corpus_id)
+    .fetch_one(pool)
+    .await
+    .unwrap_or(0)
+}
+
+/// Compute the deterministic rungs — the artifact's floor that does **not**
+/// depend on the live-LLM loop converging (issue #780).
+///
+/// 1. `seed` — the seed corpus exists (the appliance's Seed step ran).
+/// 2. `ingest` — at least one embedded block was ingested into it.
+/// 3. `semantic_search` — the governed embedder retrieves a seeded block for a
+///    todo-shaped query, proving end-to-end embedding coverage.
+///
+/// Each rung is gated on the previous one's evidence, so a downstream `false`
+/// pinpoints where the offline pipeline actually broke.
+async fn compute_deterministic_rungs(
+    pool: &sqlx::PgPool,
+    workspace_id: Uuid,
+) -> DeterministicRungs {
+    let mut rungs = DeterministicRungs::default();
+
+    let Some(corpus_id) = seed_corpus_id(pool, workspace_id).await else {
+        eprintln!("sf-eval: deterministic seed rung FAILED — no 'seed' corpus for workspace");
+        return rungs;
+    };
+    rungs.seed = true;
+
+    let embedded = embedded_block_count(pool, workspace_id, corpus_id).await;
+    if embedded < 1 {
+        eprintln!("sf-eval: deterministic ingest rung FAILED — no embedded blocks in seed corpus");
+        return rungs;
+    }
+    rungs.ingest = true;
+
+    // The semantic-search probe constructs the governed Embedder (offline,
+    // cache-resolved in CI) and runs a real ANN query. A retrieval miss or an
+    // embedder-init failure means embedding coverage is broken — record `false`
+    // (the caller fails loudly), never silently skip.
+    match Embedder::new() {
+        Ok(embedder) => {
+            let opts = SemanticOptions {
+                workspace_id,
+                corpus_id,
+                query_text: SEMANTIC_PROBE_QUERY.to_string(),
+                limit: 5,
+            };
+            match semantic_search(pool, &embedder, opts).await {
+                Ok(hits) if !hits.is_empty() => rungs.semantic_search = true,
+                Ok(_) => eprintln!(
+                    "sf-eval: deterministic semantic_search rung FAILED — probe retrieved no blocks"
+                ),
+                Err(e) => eprintln!("sf-eval: semantic_search probe errored: {e}"),
+            }
+        }
+        Err(e) => {
+            eprintln!("sf-eval: governed Embedder init FAILED (weights missing offline?): {e}")
+        }
+    }
+
+    rungs
+}
+
+/// Build a [`RunResult`] from the current observed state and write it to
+/// `result.json`, returning the result so the caller can re-stamp/print it.
+///
+/// Called repeatedly: once up front (deterministic floor only) and again on every
+/// poll, so the artifact on disk always reflects the latest state — even if the
+/// process is later killed by the job wall.
+#[allow(clippy::too_many_arguments)]
+async fn flush_result(
+    pool: &sqlx::PgPool,
+    results_root: &Path,
+    scenario: &str,
+    workspace_id: Uuid,
+    observations: &[String],
+    turn_budget: u32,
+    acceptance: Acceptance,
+    deterministic: DeterministicRungs,
+    elapsed: Duration,
+    browser_smoke: &str,
+) -> RunResult {
+    let page_revisions = page_revision_count(pool, workspace_id).await;
+    let mut result = evaluate_run(
+        scenario.to_string(),
+        workspace_id.to_string(),
+        observations,
+        turn_budget,
+        page_revisions,
+        acceptance,
+        browser_smoke.to_string(),
+    );
+    result.deterministic = deterministic;
+    result.elapsed_seconds = elapsed.as_secs();
+    write_result(&result, results_root);
+    result
+}
+
 #[tokio::main]
 async fn main() {
     let args = parse_args();
@@ -179,19 +313,75 @@ async fn main() {
         .await
         .expect("connect to DATABASE_URL");
 
-    eprintln!(
-        "sf-eval: observing scenario {scenario} (workspace {}, turn budget {})",
-        args.workspace_id, args.turn_budget
+    let deadline = Duration::from_secs(
+        std::env::var("SF_EVAL_DEADLINE_SECS")
+            .ok()
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(DEFAULT_DEADLINE_SECS),
     );
 
-    // Poll the cursor, accumulating the observed step-name sequence, until the
-    // gating rungs pass or the turn budget is exhausted.
-    let mut observations: Vec<String> = Vec::new();
+    eprintln!(
+        "sf-eval: observing scenario {scenario} (workspace {}, turn budget {}, deadline {}s)",
+        args.workspace_id,
+        args.turn_budget,
+        deadline.as_secs()
+    );
+
+    let start = Instant::now();
+    // The browser smoke is driven outside this binary (Playwright); record it as
+    // skipped here unless a verdict was supplied via the environment.
+    let browser_smoke = std::env::var("SF_EVAL_BROWSER_SMOKE").unwrap_or_else(|_| "skipped".into());
+
+    // ── Deterministic floor ─────────────────────────────────────────────────
+    // Compute the rungs that do NOT depend on the live-LLM loop (seed + ingest +
+    // semantic-search), then flush result.json immediately. From here on the
+    // artifact exists on disk and records real, executed rung verdicts — so even
+    // a live loop that never converges (or a wall-killed process) still yields a
+    // meaningful, parseable result (issue #780, AC2/AC3).
+    let deterministic = compute_deterministic_rungs(&pool, args.workspace_id).await;
+    eprintln!(
+        "sf-eval: deterministic rungs: seed={} ingest={} semantic_search={}",
+        deterministic.seed, deterministic.ingest, deterministic.semantic_search
+    );
+
     let mut acceptance = Acceptance {
         project_graph: false,
         compiling_candidate: false,
     };
+    let mut last = flush_result(
+        &pool,
+        &args.results_root,
+        &scenario,
+        args.workspace_id,
+        &[],
+        args.turn_budget,
+        acceptance,
+        deterministic,
+        start.elapsed(),
+        &browser_smoke,
+    )
+    .await;
 
+    // Loud-skip discipline: a failed deterministic floor is a real broken
+    // resource (no seed, no embedded blocks, or the governed embedder can't
+    // retrieve) — fail the job. The artifact recording the failure is already on
+    // disk for the workflow's always() upload step; do NOT proceed to fake a
+    // green live run on top of a broken floor.
+    if !deterministic.all_pass() {
+        println!("{}", last.to_json());
+        eprintln!(
+            "sf-eval: deterministic floor FAILED (seed={} ingest={} semantic_search={}) — failing loudly",
+            deterministic.seed, deterministic.ingest, deterministic.semantic_search
+        );
+        std::process::exit(1);
+    }
+
+    // ── Live loop observation ───────────────────────────────────────────────
+    // Poll the cursor, grading each poll, re-flushing result.json so the latest
+    // state is always durable. Stop on acceptance, turn-budget exhaustion, or the
+    // wall-clock deadline (whichever first) — the deadline guarantees a clean
+    // exit and upload well before the CI job wall, instead of being killed.
+    let mut observations: Vec<String> = Vec::new();
     loop {
         if let Ok(Some(step)) = load_cursor(&pool, args.workspace_id).await {
             observations.push(step);
@@ -201,6 +391,21 @@ async fn main() {
         acceptance.project_graph = project_graph_pass(&graph_md, TODO_VERBS);
         acceptance.compiling_candidate = compiling_candidate_pass(count_merge_results(&pool).await);
 
+        let elapsed = start.elapsed();
+        last = flush_result(
+            &pool,
+            &args.results_root,
+            &scenario,
+            args.workspace_id,
+            &observations,
+            args.turn_budget,
+            acceptance,
+            deterministic,
+            elapsed,
+            &browser_smoke,
+        )
+        .await;
+
         let turns = sf_eval::count_turns(&observations);
         if acceptance.accepted() {
             eprintln!("sf-eval: accepted after {turns} turns");
@@ -208,31 +413,27 @@ async fn main() {
         }
         if turns >= args.turn_budget {
             eprintln!(
-                "sf-eval: turn budget {} exhausted (not accepted)",
+                "sf-eval: turn budget {} exhausted (not accepted); deterministic floor already emitted",
                 args.turn_budget
+            );
+            break;
+        }
+        if elapsed >= deadline {
+            eprintln!(
+                "sf-eval: wall-clock deadline {}s reached (not accepted); deterministic floor already emitted",
+                deadline.as_secs()
             );
             break;
         }
         tokio::time::sleep(args.poll_interval).await;
     }
 
-    let page_revisions = page_revision_count(&pool, args.workspace_id).await;
-    // The browser smoke is driven outside this binary (Playwright); record it as
-    // skipped here unless a verdict was supplied via the environment.
-    let browser_smoke = std::env::var("SF_EVAL_BROWSER_SMOKE").unwrap_or_else(|_| "skipped".into());
-
-    let result = evaluate_run(
-        scenario,
-        args.workspace_id.to_string(),
-        &observations,
-        args.turn_budget,
-        page_revisions,
-        acceptance,
-        browser_smoke,
+    println!("{}", last.to_json());
+    let path = RunResult::result_path(
+        &args.results_root,
+        &scenario,
+        &args.workspace_id.to_string(),
     );
-
-    let path = write_result(&result, &args.results_root);
-    println!("{}", result.to_json());
     eprintln!("sf-eval: wrote {}", path.display());
 }
 

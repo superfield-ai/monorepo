@@ -17,12 +17,14 @@ on:
       turn_budget:
         description: "Max gardening turns before giving up"
         required: false
-        # The live observer breaks and writes result.json once the gardening
-        # loop reaches this many cursor advances (or acceptance). The free Big
-        # Pickle model is slow on the saturated self-hosted runner — a 30-turn
-        # budget run did not finish a single pass inside the job wall — so keep
-        # the default small enough that a budget-exhaust run reliably emits
-        # result.json. Raise via the dispatch input for a longer scoring sweep.
+        # The live observer flushes result.json with the DETERMINISTIC rungs
+        # (seed + ingest + semantic-search) up front, then observes the live loop
+        # under this turn budget AND a wall-clock deadline (SF_EVAL_DEADLINE_SECS
+        # below). Artifact emission no longer depends on the live loop converging
+        # within the cap (issue #780), so this budget only bounds how many live
+        # turns are scored. The free Big Pickle model is slow on the saturated
+        # self-hosted runner; keep the default small. Raise it for a longer
+        # scoring sweep.
         default: "8"
 
 concurrency:
@@ -34,11 +36,11 @@ jobs:
     name: todo-app scenario (live, keyless Big Pickle via opencode)
     runs-on: [self-hosted, Linux, X64]
     # The keyless free Big Pickle model is slow and the self-hosted runner is
-    # queue-saturated. The live observer (`sf-eval`) terminates deterministically
-    # once the gardening loop reaches the turn budget or acceptance, then writes
-    # result.json, so this wall is a backstop, not the normal exit. 40m proved
-    # too tight (the budget run was killed mid-flight before result.json), so
-    # give the live loop real headroom.
+    # queue-saturated. The live observer (`sf-eval`) flushes result.json with the
+    # deterministic rungs up front and then stops on its own wall-clock deadline
+    # (SF_EVAL_DEADLINE_SECS) — well inside this job wall — so the artifact is
+    # produced regardless of whether the live loop converges. This wall is a hard
+    # backstop, not the normal exit (issue #780).
     timeout-minutes: 75
     # The self-hosted runner forbids container-less jobs. Run inside the shared
     # CI image; the Postgres service is then reachable at host `postgres`.
@@ -72,6 +74,12 @@ jobs:
       # Host is the service name `postgres` because the job runs in a container.
       DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
       TURN_BUDGET: ${{ github.event.inputs.turn_budget || '60' }}
+      # Wall-clock backstop for the live observer. result.json (with the
+      # deterministic rungs) is flushed within seconds of the observer starting;
+      # this only bounds how long it then waits for live-LLM turns before
+      # stopping cleanly and letting the upload step run — well under the 75-min
+      # job wall so the artifact is never lost to a mid-flight kill (issue #780).
+      SF_EVAL_DEADLINE_SECS: "1200"
       # A fixed, valid UUID so the seed, the loop, and the observer share one
       # workspace.
       WORKSPACE_ID: 00000000-0000-4000-8000-000000000748
@@ -197,9 +205,14 @@ jobs:
       - name: Run the todo-app scenario (live runner, keyless)
         run: |
           set -euo pipefail
-          # The live runner observes the running loop via DATABASE_URL: it polls
-          # the gardening cursor, grades each poll, and writes
-          # evals/results/todo-app/<workspace-id>/result.json.
+          # The live runner observes the running loop via DATABASE_URL. It first
+          # computes the deterministic rungs (seed + ingest + semantic-search)
+          # and flushes evals/results/todo-app/<workspace-id>/result.json, then
+          # polls the gardening cursor — re-flushing each poll — until acceptance,
+          # the turn budget, or SF_EVAL_DEADLINE_SECS. So result.json is uploaded
+          # regardless of whether the live-LLM loop converges (issue #780). A
+          # broken deterministic floor (missing seed/embeds, embedder can't
+          # retrieve) exits non-zero — loud, never a fake green.
           cargo run -p sf-eval --bin sf-eval -- \
             run \
             --scenario evals/scenarios/todo-app \
