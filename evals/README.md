@@ -44,7 +44,51 @@ evals/
     live.md                   ← Tier 2: live run, counts turns
     replay.md                 ← Tier 1: replay an episode trace
   results/                    ← run outputs (gitignored)
+
+../.actrc                     ← act runner-label → ci-runner image mappings
+../.github/workflows/eval-todo-app.yml  ← the eval workflow (single source of truth)
 ```
+
+## Running an eval locally
+
+The eval CI workflow has **one source of truth**:
+[`.github/workflows/eval-todo-app.yml`](../.github/workflows/eval-todo-app.yml).
+We run it locally with [`act`](https://github.com/nektos/act), which executes
+that workflow **unmodified, in containers** — so a local run is the same run CI
+performs, with no duplicate local script to drift out of sync and no pollution
+of your dev environment (toolchain, Postgres, opencode all live in the
+container).
+
+Canonical command (run from the repo root):
+
+```
+act -W .github/workflows/eval-todo-app.yml workflow_dispatch \
+  --input turn_budget=8 \
+  --pull=false \
+  --artifact-server-path /tmp/act-artifacts
+```
+
+The repo-root [`.actrc`](../.actrc) supplies the `-P` runner-label mappings
+(`self-hosted`, `Linux`, `X64` → `ghcr.io/superfield-ai/ci-runner:latest`)
+automatically, so the self-hosted job schedules against the local CI image.
+`--pull=false` reuses that image from your local Docker without ghcr auth, and
+`--artifact-server-path` is where `act` writes the uploaded artifact.
+
+Prereqs:
+
+- **Docker** running.
+- The `ghcr.io/superfield-ai/ci-runner:latest` image present locally (so
+  `--pull=false` works without ghcr authentication).
+- `act` on your `PATH`.
+
+Where the result lands: the job bind-mounts the workspace, so
+`result.json` appears on the host at
+`evals/results/todo-app/<workspace-id>/result.json` (gitignored). The same file
+is also collected by the artifact step into your `--artifact-server-path`.
+
+> **Caveat:** act's `-n` dry-run can't preview this workflow — it panics on jobs
+> with service containers (the `pgvector` Postgres service here). Use `act -l` to
+> validate parsing instead, and a real run to execute it.
 
 ## Why scenario-first (not `tier1/`, `tier2/`)
 

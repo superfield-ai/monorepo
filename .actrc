@@ -1,0 +1,14 @@
+# act (nektos/act) runner-label → image mappings for this repo.
+#
+# Our CI jobs run on a self-hosted runner declared as
+# `runs-on: [self-hosted, Linux, X64]` inside the shared CI container
+# `ghcr.io/superfield-ai/ci-runner:latest`. act needs each of those labels
+# mapped to a local image so it schedules the job against the same container CI
+# uses — making a local `act` run execute the *unmodified* workflow YAML in the
+# same environment as CI. See evals/README.md ("Running an eval locally").
+#
+# Only repo-wide-correct defaults belong here. Run-specific flags
+# (--pull=false, --artifact-server-path) stay on the command line.
+-P self-hosted=ghcr.io/superfield-ai/ci-runner:latest
+-P Linux=ghcr.io/superfield-ai/ci-runner:latest
+-P X64=ghcr.io/superfield-ai/ci-runner:latest
