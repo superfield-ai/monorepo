@@ -38,6 +38,27 @@ integration tests) or clippy `-D warnings` fails on dead_code in the test binary
 DB provisioning, so DB-gated integration tests must be `#[ignore]`d (matching the
 `sf-loop` cursor tests) and the suite must pass clippy + fmt.
 
+**SUPERSEDED by #782/#783/#787:** `rust.yml` now runs Rust tests in CI, and
+DB-gated integration tests must **EXECUTE and fail loudly**, NOT be `#[ignore]`d
+to go green. Two new jobs make the old "no `cargo test`, so `#[ignore]` it"
+guidance false and harmful:
+
+- a REQUIRED `rust-test` job, check-run **"Rust workspace tests (nextest,
+  no-tests=fail)"**, running `cargo nextest run --workspace --no-tests=fail`
+  (exit 0 with zero tests collected is red); and
+- a DB-provisioning `rust-test-seam` job (the `provision-test-substrate` path:
+  pgvector + migrations + governed weights, #765/#782) so DB-gated tests run
+  against a real substrate.
+
+`#[ignore]`-ing a DB-gated test to pass CI is now exactly the silent-skip
+anti-pattern banned by invariant 1 ("loud-skip, never silent-skip") of the four
+executed-coverage invariants entry below (#787). The seam runs a CURATED,
+purely-DB nextest filterset, not the whole `#[ignore]`d corpus — see the
+"Curated nextest filterset hides a real DB-test failure class (#765/#764/#789)"
+entry below for which classes are still excluded (and why) and the re-inclusion
+conditions. Bottom line: write DB-gated tests so they execute and fail when the
+DB/weights are absent; do not reach for `#[ignore]`.
+
 ## `STEP_ORDER` has SEVEN gardening steps, not six (issue #672)
 
 `crates/sf-loop/src/steps/mod.rs`: issue #672 added
