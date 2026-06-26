@@ -94,7 +94,8 @@ and that image has no `node`. GitHub Actions injects a node runtime into
 container jobs automatically; `act` does **not**
 ([nektos/act#107](https://github.com/nektos/act/issues/107)). So the workflow's
 JS actions (`actions/cache@v4`, `actions/upload-artifact@v4`, `hashFiles`) fail
-with `exec: "node": not found` at the first cache step. `--container-options`
+with `exec: "node": not found` (exit code `127`) at the first cache step
+(`Cache Cargo registry + build`). `--container-options`
 can't fix it either — its node bind-mount only reaches runner/service
 containers, not a job's YAML-pinned `container:`.
 
@@ -104,6 +105,11 @@ What `act` **does** validate locally today, before that point:
 - the `ci-runner` job container,
 - the `pgvector` Postgres service container,
 - checkout, the rustup toolchain install, and the apt C-toolchain step.
+
+(`actions/checkout@v4` is itself a JS action but still succeeds: `act`
+substitutes it with a `docker cp` of the local working tree rather than running
+its node entrypoint, so the boundary lands at the first JS action `act`
+actually executes via `node` — `hashFiles` / `actions/cache@v4`.)
 
 Full end-to-end local execution is blocked until `node` is added to the
 `ci-runner` image (built in a separate repo) — tracked in
