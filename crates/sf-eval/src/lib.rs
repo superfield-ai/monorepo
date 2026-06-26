@@ -26,5 +26,5 @@ pub mod result;
 pub mod runner;
 
 pub use graders::{compiling_candidate_pass, project_graph_pass};
-pub use result::{Acceptance, RunResult};
+pub use result::{Acceptance, DeterministicRungs, RunResult};
 pub use runner::{count_turns, evaluate_run};

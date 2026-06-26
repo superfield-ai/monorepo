@@ -15,7 +15,7 @@
 //!   a [`RunResult`] (`accepted`, `turns_to_acceptable`), ready to emit as
 //!   `result.json`.
 
-use crate::result::{Acceptance, RunResult};
+use crate::result::{Acceptance, DeterministicRungs, RunResult};
 
 /// Count completed gardening turns from an observed cursor-name sequence.
 ///
@@ -54,6 +54,10 @@ pub fn count_turns<S: AsRef<str>>(cursor_observations: &[S]) -> u32 {
 /// The `browser_smoke` leg is observed, not gating (see the scenario's
 /// `acceptance.md`), so it is recorded on the result but excluded from
 /// `accepted`.
+///
+/// The deterministic floor (`deterministic`) and `elapsed_seconds` are folded in
+/// by the caller after this returns (the live observer computes them up front and
+/// re-stamps the elapsed clock on each flush), so they default here.
 #[allow(clippy::too_many_arguments)]
 pub fn evaluate_run<S: AsRef<str>>(
     scenario: impl Into<String>,
@@ -75,6 +79,8 @@ pub fn evaluate_run<S: AsRef<str>>(
         turn_budget,
         page_revisions,
         rungs: acceptance,
+        deterministic: DeterministicRungs::default(),
+        elapsed_seconds: 0,
         browser_smoke: browser_smoke.into(),
     }
 }

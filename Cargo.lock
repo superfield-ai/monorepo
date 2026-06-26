@@ -3530,6 +3530,7 @@ dependencies = [
 name = "sf-eval"
 version = "0.1.0"
 dependencies = [
+ "nexum",
  "serde",
  "serde_json",
  "sf-db",

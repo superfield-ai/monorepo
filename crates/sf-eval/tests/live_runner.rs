@@ -4,7 +4,10 @@
 //! and per-rung pass/fail for a seeded run, driven from a fixture
 //! `gardening_cursor` sequence (no live model or database).
 
-use sf_eval::{compiling_candidate_pass, evaluate_run, project_graph_pass, Acceptance, RunResult};
+use sf_eval::{
+    compiling_candidate_pass, evaluate_run, project_graph_pass, Acceptance, DeterministicRungs,
+    RunResult,
+};
 use sf_loop::STEP_ORDER;
 
 /// A fixture `orchestrator.gardening_cursor` observation sequence for a seeded
@@ -38,7 +41,7 @@ fn live_runner_emits_result_json_with_turns() {
         compiling_candidate: compiling_candidate_pass(1),
     };
 
-    let result = evaluate_run(
+    let mut result = evaluate_run(
         "todo-app",
         workspace_id,
         &cursor_seq,
@@ -47,6 +50,15 @@ fn live_runner_emits_result_json_with_turns() {
         acceptance,
         /* browser_smoke */ "pass",
     );
+    // The live observer folds the deterministic floor + elapsed clock onto the
+    // result before emitting it (issue #780); emulate that here so the artifact
+    // shape is exercised end to end.
+    result.deterministic = DeterministicRungs {
+        seed: true,
+        ingest: true,
+        semantic_search: true,
+    };
+    result.elapsed_seconds = 920;
 
     // The result carries the headline turn metric and per-rung pass/fail.
     assert!(result.accepted, "both gating rungs passed");
@@ -73,7 +85,14 @@ fn live_runner_emits_result_json_with_turns() {
     assert_eq!(parsed["rungs"]["compiling_candidate"], true);
     assert_eq!(parsed["browser_smoke"], "pass");
 
+    // The deterministic floor + elapsed clock are part of the emitted artifact.
+    assert_eq!(parsed["deterministic"]["seed"], true);
+    assert_eq!(parsed["deterministic"]["ingest"], true);
+    assert_eq!(parsed["deterministic"]["semantic_search"], true);
+    assert_eq!(parsed["elapsed_seconds"], 920);
+
     // Round-trips through the typed struct too.
     let typed: RunResult = serde_json::from_str(&written).expect("typed parse");
     assert_eq!(typed.turns_to_acceptable, Some(STEP_ORDER.len() as u32));
+    assert!(typed.deterministic.all_pass());
 }

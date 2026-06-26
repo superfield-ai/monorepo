@@ -12,11 +12,20 @@ Scenario-agnostic. Given a scenario dir, it:
    `project_nodes` for the workspace id).
 2. **Seed** — `superfield garden <scenario>/seed/*.md --workspace-id <id>`.
 3. **Boot** — `superfield serve` (auto-starts the gardening loop).
-4. **Poll & count turns** — poll `orchestrator.gardening_cursor`; increment the
-   turn count each time the step advances; run the scenario's graders each poll.
-5. **Stop** — on acceptance (all gating rungs pass) or when `TURN_BUDGET` is
-   exhausted.
-6. **Emit** — write `result.json` under `results/<scenario>/<workspace-id>/`.
+4. **Deterministic floor** — before observing any live turn, compute the rungs
+   that do not depend on the live-LLM loop converging — `seed` (the seed corpus
+   exists), `ingest` (embedded blocks were ingested), and `semantic_search` (the
+   governed embedder retrieves a seeded block) — and flush `result.json`. A
+   failed floor is a real broken resource: the runner records it and exits
+   non-zero (loud), never a fake green.
+5. **Poll & count turns** — poll `orchestrator.gardening_cursor`; increment the
+   turn count each time the step advances; run the scenario's graders each poll;
+   re-flush `result.json` each poll so the latest state is always durable.
+6. **Stop** — on acceptance (all gating rungs pass), when `TURN_BUDGET` is
+   exhausted, or when the wall-clock deadline (`SF_EVAL_DEADLINE_SECS`) is hit.
+7. **Emit** — `result.json` under `results/<scenario>/<workspace-id>/` is written
+   incrementally from step 4 on, so the artifact exists (with real, executed rung
+   verdicts) even if the live loop never converges within the CI job wall.
 
 ## Turn = one completed gardening step
 
@@ -37,9 +46,15 @@ by the `nexum.page_revisions` row count.
   "elapsed_seconds": 920,
   "page_revisions": 6,
   "rungs": { "project_graph": true, "compiling_candidate": true },
+  "deterministic": { "seed": true, "ingest": true, "semantic_search": true },
   "browser_smoke": "pass"
 }
 ```
+
+`rungs` are the live (gating) acceptance bar; `deterministic` is the offline
+floor (seed/ingest/semantic-search) emitted up front. `accepted` depends only on
+`rungs`; a budget- or deadline-stopped run still carries a passing `deterministic`
+floor so the artifact stays meaningful (issue #780).
 
 ## Knobs
 
