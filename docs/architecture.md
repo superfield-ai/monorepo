@@ -279,11 +279,11 @@ Rejected alternatives:
 
 Every vector column across all stores must match the governed standard. Current inventory:
 
-| Component | Schema  | Table    | Column           | Declared dimension | Status                                                           |
-| --------- | ------- | -------- | ---------------- | ------------------ | ---------------------------------------------------------------- |
-| Nexum     | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live                              |
-| Nexum     | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — stub; edge_embedding population not yet implemented |
-| Sharp     | `sharp` | —        | —                | —                  | No vector columns yet; pgvector not installed                    |
+| Component | Schema  | Table    | Column           | Declared dimension | Status                                                                                           |
+| --------- | ------- | -------- | ---------------- | ------------------ | ------------------------------------------------------------------------------------------------ |
+| Nexum     | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live                                                              |
+| Nexum     | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — populated by `ai_link.rs` (`embed_edge` + INSERT); ANN search over it in `query.rs` |
+| Sharp     | `sharp` | —        | —                | —                  | No vector columns yet; pgvector not installed                                                    |
 
 When Sharp or any future component adds a vector column it **must** declare `vector(384)` and reference this section.
 
