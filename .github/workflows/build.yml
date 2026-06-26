@@ -114,3 +114,4 @@ jobs:
         run: python3 scripts/skipped-required-contexts.py --validate
       - name: Self-test the required-status-bypass decision
         run: tests/skipped-required-contexts-selftest.sh
+# 790 workflow-only fixture v2: prove Coverage-truth satisfiable on workflow-only PRs
