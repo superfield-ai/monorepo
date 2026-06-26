@@ -52,6 +52,10 @@ permissions:
   contents: read
   statuses: write
   pull-requests: read
+  # Required to pull the private GHCR ci-runner image for the job `container:`.
+  # An explicit permissions block narrows the token and drops the default
+  # packages:read, which makes `docker pull ghcr.io/...` return 403 Forbidden.
+  packages: read
 
 concurrency:
   group: required-status-bypass-${{ github.ref }}
