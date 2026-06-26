@@ -25,6 +25,7 @@
 #   embedder-coverage.yml:embedder-coverage -> nexum embedder coverage (...)
 #   rust.yml:rust-test                   -> Rust workspace tests (nextest, no-tests=fail)
 #   rust.yml:coverage-delta              -> Rust coverage-delta (touched package ran >0 tests)
+#   build.yml:coverage-truth             -> Coverage truth
 
 Typecheck
 Lint
@@ -35,3 +36,4 @@ Compile and build container image
 nexum embedder coverage (pgvector + governed weights)
 Rust workspace tests (nextest, no-tests=fail)
 Rust coverage-delta (touched package ran >0 tests)
+Coverage truth
