@@ -156,6 +156,15 @@ impl LlmAgentExecutor {
     async fn run_opencode_server(&self, req: &AgentRequest) -> Result<AgentResponse, AgentError> {
         let base = self.endpoint.trim_end_matches('/');
 
+        tracing::debug!(
+            target: "sf_loop::agent",
+            model = %self.model,
+            endpoint = %base,
+            system_len = req.system.len(),
+            user_len = req.user.len(),
+            "opencode-server: sending prompt"
+        );
+
         // 1. Open a session. `directory` scopes the session to a working dir.
         let session: serde_json::Value = self
             .client
@@ -204,6 +213,15 @@ impl LlmAgentExecutor {
             .ok_or_else(|| AgentError::Parse("opencode message had no text part".to_string()))?;
         let (input_tokens, output_tokens) = self.provider.parse_opencode_usage(&json);
 
+        tracing::info!(
+            target: "sf_loop::agent",
+            model = %self.model,
+            content_len = content.len(),
+            input_tokens,
+            output_tokens,
+            "opencode-server: received assistant response"
+        );
+
         Ok(AgentResponse {
             content,
             provenance: format!("opencode-server:{}", self.model),
@@ -233,6 +251,16 @@ impl AgentExecutor for LlmAgentExecutor {
             if self.provider.is_keyless() {
                 return self.run_opencode_server(&req).await;
             }
+
+            tracing::debug!(
+                target: "sf_loop::agent",
+                provider = self.provider.as_str(),
+                model = %self.model,
+                endpoint = %self.endpoint,
+                system_len = req.system.len(),
+                user_len = req.user.len(),
+                "llm: sending prompt"
+            );
 
             // Build the provider-specific request body (Anthropic Messages vs.
             // OpenAI-compatible chat completions).
@@ -276,6 +304,17 @@ impl AgentExecutor for LlmAgentExecutor {
             // (issue #712).
             let (input_tokens, output_tokens) = self.provider.parse_usage(&json);
             let cost_usd = cost_from_usage(input_tokens, output_tokens);
+
+            tracing::info!(
+                target: "sf_loop::agent",
+                provider = self.provider.as_str(),
+                model = %self.model,
+                content_len = content.len(),
+                input_tokens,
+                output_tokens,
+                cost_usd,
+                "llm: received assistant response"
+            );
 
             Ok(AgentResponse {
                 content,

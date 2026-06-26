@@ -27,6 +27,14 @@ Scenario-agnostic. Given a scenario dir, it:
 7. **Emit** — `result.json` under `results/<scenario>/<workspace-id>/` is written
    incrementally from step 4 on, so the artifact exists (with real, executed rung
    verdicts) even if the live loop never converges within the CI job wall.
+   Alongside it the runner persists the agent's **work products** next to
+   `result.json`, also incrementally: `project-graph.md` (the exact markdown the
+   rung-1 grader reads, refreshed each poll; an explicit marker when no graph is
+   derived yet), `candidate-<seq>.json` (the rung-2 `merge_result` evidence — the
+   merge summary; legitimately absent when no compiling candidate exists), and
+   `turns.json` (the per-turn `page_revisions` content + provenance). The CI
+   workflow captures the process logs under `_logs/` (appliance, opencode server,
+   scenario observer) and uploads the whole `results/todo-app/**` tree.
 
 ## Turn = one completed gardening step
 

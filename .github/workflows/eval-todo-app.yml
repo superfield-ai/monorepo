@@ -87,6 +87,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Prepare the eval results + log directory
+        # Every process log (appliance, opencode server, scenario) and the
+        # harness work products are written under the results tree so the single
+        # `evals/results/todo-app/**` upload retains them all. Create the `_logs`
+        # dir up front so the boot/server steps can redirect into it.
+        run: mkdir -p evals/results/todo-app/_logs
+
       - name: Install stable toolchain
         uses: dtolnay/rust-toolchain@stable
 
@@ -141,7 +148,8 @@ jobs:
           # /session/{id}/message) that the loop's keyless executor drives. A
           # fresh install reaches the free Big Pickle model with no API key and
           # no login — no credential is configured here.
-          nohup opencode serve --port 4096 >opencode-serve.log 2>&1 &
+          nohup opencode serve --port 4096 \
+            >evals/results/todo-app/_logs/opencode-server.log 2>&1 &
           echo "OPENCODE_PID=$!" >> "$GITHUB_ENV"
           for i in $(seq 1 30); do
             if curl -fsS "http://127.0.0.1:4096/api/health" >/dev/null 2>&1; then
@@ -183,7 +191,17 @@ jobs:
           # DATABASE_URL it uses the no-op provisioner, runs migrations, then
           # serves and starts the gardening loop. SF_NO_DAEMON keeps it in the
           # foreground so we can background it here and capture its log.
-          SF_START_DAEMON=1 cargo run --bin superfield -- serve >appliance.log 2>&1 &
+          #
+          # RUST_LOG raises the appliance's verbosity so the gardening loop's
+          # per-turn activity is actually recorded: `superfield serve` installs an
+          # env-filtered tracing subscriber, so `sf_loop` (the loop engine + the
+          # LLM agent executor in `sf_loop::agent`) emits per-step + per-LLM-call
+          # lines at debug, while the noisy transport crates stay at warn. Without
+          # this, the loop's `tracing::info!`/`debug!` events have no subscriber
+          # and are dropped — appliance.log would show nothing of the live LLM I/O.
+          export RUST_LOG="info,sf_loop=debug,sf_serve=info,nexum=info,sqlx=warn,hyper=warn,hyper_util=warn,reqwest=warn,h2=warn"
+          SF_START_DAEMON=1 cargo run --bin superfield -- serve \
+            >evals/results/todo-app/_logs/appliance.log 2>&1 &
           echo "APPLIANCE_PID=$!" >> "$GITHUB_ENV"
           # Wait for the HTTP layer to bind (boot migrates first, so this also
           # gates on a migrated DB).
@@ -213,11 +231,16 @@ jobs:
           # regardless of whether the live-LLM loop converges (issue #780). A
           # broken deterministic floor (missing seed/embeds, embedder can't
           # retrieve) exits non-zero — loud, never a fake green.
+          # tee the observer's stdout+stderr to scenario.log so the deterministic
+          # rung verdicts and the per-poll observer trace are retained in the
+          # uploaded results tree, not just the (truncated) live CI log. pipefail
+          # keeps the runner's exit status authoritative through the pipe.
           cargo run -p sf-eval --bin sf-eval -- \
             run \
             --scenario evals/scenarios/todo-app \
             --turn-budget "${TURN_BUDGET}" \
-            --workspace-id "${WORKSPACE_ID}"
+            --workspace-id "${WORKSPACE_ID}" \
+            2>&1 | tee evals/results/todo-app/_logs/scenario.log
 
       - name: Stop the appliance and the opencode server
         if: always()
@@ -225,14 +248,24 @@ jobs:
           if [ -n "${APPLIANCE_PID:-}" ]; then kill "${APPLIANCE_PID}" 2>/dev/null || true; fi
           if [ -n "${OPENCODE_PID:-}" ]; then kill "${OPENCODE_PID}" 2>/dev/null || true; fi
           echo "--- appliance.log (tail) ---"
-          tail -n 100 appliance.log 2>/dev/null || true
-          echo "--- opencode-serve.log (tail) ---"
-          tail -n 40 opencode-serve.log 2>/dev/null || true
+          tail -n 100 evals/results/todo-app/_logs/appliance.log 2>/dev/null || true
+          echo "--- opencode-server.log (tail) ---"
+          tail -n 40 evals/results/todo-app/_logs/opencode-server.log 2>/dev/null || true
 
-      - name: Upload result.json
+      - name: Upload the eval results tree (result.json + work products + logs)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: eval-todo-app-result-${{ github.run_id }}
-          path: evals/results/todo-app/**/result.json
+          # Upload the WHOLE results tree, not just result.json: the persisted
+          # work products (project-graph.md, candidate-*.{json,diff}, turns.json
+          # written by sf-eval) and the captured process logs under `_logs/`
+          # (appliance.log, opencode-server.log, scenario.log) all live under
+          # this prefix, so a run is auditable after the fact. `if: always()`
+          # plus the runner's incremental result.json flush keep the artifact on
+          # a deadline/timeout/failure too (issue #780). A screenshot, once a
+          # browser-smoke step produces one here, would upload under this prefix
+          # with no further change.
+          path: evals/results/todo-app/**
           if-no-files-found: warn
+          retention-days: 30
