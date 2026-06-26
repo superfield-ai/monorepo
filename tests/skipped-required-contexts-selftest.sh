@@ -80,8 +80,11 @@ assert_set "pure .md diff -> all required contexts reported" \
 # 2) Workflow-only diff: the build family ignores `.github/workflows/**` (so its
 #    contexts are reported), but the Rust/embedder family ignores only md/txt and
 #    therefore RUNS on a workflow change (so its contexts are NOT reported).
+#    'Coverage truth' lives in build.yml (same path-ignore), so it is part of the
+#    build family reported here (issue #790).
 WF_EXPECTED="$(printf '%s\n' \
   'Compile and build container image' \
+  'Coverage truth' \
   'Format' \
   'Integration (API) tests' \
   'Lint' \
