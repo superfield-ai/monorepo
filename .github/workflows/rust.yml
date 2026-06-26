@@ -299,8 +299,19 @@ jobs:
       # of the broader #[ignore]d corpus needs resources this fixture does NOT
       # provide (live rust-analyzer, the tsserver bun-bridge), or asserts
       # not-yet-implemented schema/behaviour (workspace_id NOT-NULL/FK back-fill,
-      # multi-statement-prepared bugs) — those are tracked as their own follow-up
-      # issues, NOT silently greened here. --test-threads=1 mirrors
+      # multi-statement-prepared bugs) — those are EXCLUDED (tracked in #764,
+      # recorded durably in .agents/agent-warnings.md "Curated nextest filterset
+      # hides a real DB-test failure class"), NOT silently greened here. They
+      # FAIL against a correct substrate, so re-include them — expand this
+      # filterset and assert >0 — only when their fix lands: (1) the workspace_id
+      # NOT-NULL/FK back-fill schema, (2) the sharp multi-statement-prepared bug,
+      # (3) sf-loop page-revision writers seeding a public.workspaces row. See
+      # agent-warnings.md for the per-class re-inclusion conditions (#789).
+      # NOTE: keep the per-crate `-p` flags below — widening to
+      # `cargo nextest run --workspace` would bypass check-coverage-truth.sh's
+      # `-p` parser and silently over-claim the five >0 coverage-truth rows;
+      # update that parser in lockstep with any --workspace move (#789).
+      # --test-threads=1 mirrors
       # embedder-coverage.yml: these integration tests share schema tables and
       # are not all workspace-isolated, so serial execution is deterministic.
       # --no-tests=fail is passed EXPLICITLY (also the 0.9.85 default) so a

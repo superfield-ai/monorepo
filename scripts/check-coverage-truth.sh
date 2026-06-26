@@ -73,7 +73,12 @@ fi
 # tomllib is stdlib on Python >= 3.11; tomli is the importable backport for
 # older Pythons. The validator hard-fails if neither is importable — a missing
 # parser must NOT silently pass (that would defeat the whole point).
-ROOT="$ROOT" MANIFEST="$MANIFEST" python3 - <<'PY'
+# RUST_YML_OVERRIDE lets the self-test (tests/coverage-truth-selftest.sh) point
+# the crate-execution parser at a SYNTHETIC rust.yml so it can prove that a
+# `--workspace`-widened seam (no per-crate `-p <crate>`) is NOT credited as
+# per-crate execution — i.e. the over-claim is rejected loudly (issue #789).
+# Empty/unset means use the repo's real .github/workflows/rust.yml.
+ROOT="$ROOT" MANIFEST="$MANIFEST" RUST_YML_OVERRIDE="${RUST_YML_OVERRIDE:-}" python3 - <<'PY'
 import os
 import re
 import sys
@@ -193,7 +198,15 @@ if os.path.isfile(embedder_yml):
 # workflow keeps all `-p` flags on that same line for exactly this reason. (We
 # scope to nextest-run lines so `cargo build --workspace` / `cargo run --bin`
 # are not mistaken for test execution.)
-rust_yml = os.path.join(ROOT, ".github/workflows/rust.yml")
+# RUST_YML_OVERRIDE (issue #789): when set, parse this file instead of the
+# repo's rust.yml. The self-test uses it to feed a `--workspace`-widened seam
+# and assert the five `-p`-named crates are NOT credited without per-crate
+# evidence. Unset/empty → the real workflow. This does NOT widen what counts as
+# execution: a crate is still only "executed" when a literal `cargo nextest run
+# -p <crate>` (or embedder-coverage's `cargo test -p <crate>`) names it.
+rust_yml = os.environ.get("RUST_YML_OVERRIDE") or os.path.join(
+    ROOT, ".github/workflows/rust.yml"
+)
 if os.path.isfile(rust_yml):
     with open(rust_yml, "r", encoding="utf-8") as fh:
         for line in fh:

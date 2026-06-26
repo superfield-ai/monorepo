@@ -219,6 +219,20 @@ assert_match "INV4 names a per-language test-executing job (testing-invariants)"
 assert_match "INV4 names a per-language test-executing job (agent-warnings)" \
   "test-executing.*job" "$AGENT_WARN"
 
+# --- Curated rust-test-seam filterset exclusion + --workspace over-claim (#789)
+# The stranded knowledge-capture (#789) must stay durable in the agent-warnings
+# nag list, so the curated-filterset exclusion and the check-coverage-truth.sh
+# `--workspace` over-claim risk cannot silently rot back to ephemeral local
+# state. Each assertion fails LOUDLY if its decisive phrase is removed.
+assert_match "curated nextest filterset exclusion named (agent-warnings)" \
+  "Curated nextest filterset hides a real DB-test failure class" "$AGENT_WARN"
+assert_match "curated filterset names the workspace_id schema gap (agent-warnings)" \
+  "workspace_id.*NOT-NULL/FK back-fill" "$AGENT_WARN"
+assert_match "curated filterset documents re-inclusion conditions (agent-warnings)" \
+  "Re-inclusion conditions" "$AGENT_WARN"
+assert_match "check-coverage-truth.sh --workspace over-claim risk named (agent-warnings)" \
+  "check-coverage-truth.sh.*over-claim risk" "$AGENT_WARN"
+
 # ----------------------------------------------------------------------------
 
 if [ "$fail" -ne 0 ]; then
