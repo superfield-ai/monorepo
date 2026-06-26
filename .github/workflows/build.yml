@@ -91,9 +91,14 @@ jobs:
         run: tests/coverage-truth-selftest.sh
       # Subsystem-test-job-presence guardrail (issue #767): every executed
       # subsystem must run in a REQUIRED status context and each language present
-      # must have a required executing job. Runs in this existing required job so
-      # it is satisfiable on every PR shape (no new required context — blocker
-      # #753); the self-test proves it actually rejects a missing/non-required
+      # must have a required executing job. This "Coverage truth" job is ITSELF a
+      # required status context (issue #790) — it is listed in main's
+      # required_status_checks and scripts/required-status-contexts.txt — so the
+      # guardrail actually gates merges. It stays satisfiable on every PR shape
+      # because build.yml path-ignores docs/** and .github/workflows/**, and the
+      # always-on required-status-bypass reporter (issue #788) posts a skipped
+      # success for "Coverage truth" on docs-only and workflow-only PRs (no #753
+      # deadlock). The self-test proves it actually rejects a missing/non-required
       # job (loud, never silently skipped).
       - name: Assert every subsystem has a required executing test job
         run: scripts/check-test-job-presence.sh
