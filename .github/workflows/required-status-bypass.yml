@@ -1,0 +1,150 @@
+name: Required status bypass
+
+# =============================================================================
+# Required status bypass (issue #788) — makes main's strict required status
+# contexts SATISFIABLE on non-code PRs (docs-only, and workflow-only) WITHOUT an
+# admin override (blocker #753).
+#
+# THE PROBLEM
+#   main requires N strict status contexts (scripts/required-status-contexts.txt
+#   mirrors the live set). EVERY producing workflow path-ignores non-code changes
+#   (the build family ignores `**/*.md`, `docs/**`, `blueprint`,
+#   `.github/workflows/**`; the Rust/embedder family ignores `**.md`, `**.txt`).
+#   A pure docs-only PR therefore triggers NONE of those workflows, so none of
+#   the required contexts ever report and strict branch protection leaves the PR
+#   permanently BLOCKED ("base branch policy prohibits the merge"). The loop has
+#   no admin override, so docs-only PRs (scout docs, architecture corrections,
+#   plan absorption) deadlock.
+#
+# THE FIX (approach (b) from the issue)
+#   This workflow has NO paths filter, so it runs on EVERY PR. For each required
+#   context whose producing workflow is SKIPPED for the PR's changed files (the
+#   real job is NOT running), it posts a `success` commit status with that
+#   context name on the PR head SHA. Branch protection accepts that status, so a
+#   non-code PR reaches a non-BLOCKED state. On any PR that touches a real code
+#   file, the relevant workflows run and this workflow posts NOTHING for them, so
+#   the real required jobs still gate the PR (no silent no-op, no masking — see
+#   scripts/skipped-required-contexts.py for the safety argument).
+#
+# LIST-DRIVEN / EXTENSIBLE (issue #790)
+#   The required set is read from scripts/required-status-contexts.txt and each
+#   name is matched to the workflow job whose `name:` equals it; that workflow's
+#   own `paths`/`paths-ignore` decides skip vs run. Registering a NEW required
+#   context (e.g. #790's "Coverage truth") is a ONE-LINE append to
+#   required-status-contexts.txt — no change here. The new context becomes
+#   docs/workflow-only satisfiable iff its producing workflow path-ignores those
+#   shapes (the "Coverage truth" job lives in build.yml, which ignores both docs
+#   and `.github/workflows/**`).
+#
+# CI_CLASS = ignore: this is non-test plumbing (it posts statuses, asserts no
+#   product behaviour), so the CI taxonomy exempts it from the draft/r4r/docs-only
+#   gating matrix. It MUST run on every PR shape (no paths filter) by design, and
+#   it is intentionally NOT a required branch-protection context.
+env:
+  CI_CLASS: ignore
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+
+permissions:
+  contents: read
+  statuses: write
+  pull-requests: read
+  # Required to pull the private GHCR ci-runner image for the job `container:`.
+  # An explicit permissions block narrows the token and drops the default
+  # packages:read, which makes `docker pull ghcr.io/...` return 403 Forbidden.
+  packages: read
+
+concurrency:
+  group: required-status-bypass-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  report-skipped-required-contexts:
+    name: Report skipped required contexts
+    runs-on: [self-hosted, Linux, X64]
+    # The self-hosted runner forbids container-less jobs, so run inside the
+    # shared CI image like every other job on this runner.
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ github.token }}
+      API_URL: ${{ github.api_url }}
+      REPO: ${{ github.repository }}
+      PR_NUMBER: ${{ github.event.pull_request.number }}
+      HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Ensure a YAML parser is available
+        run: |
+          set -euo pipefail
+          if python3 -c 'import yaml' 2>/dev/null; then
+            echo "PyYAML available"
+          else
+            python3 -m pip install --quiet pyyaml \
+              || pip3 install --quiet pyyaml \
+              || pip install --quiet pyyaml
+          fi
+
+      - name: Validate required-contexts <-> workflow mapping
+        # Loud guard: if a required context in required-status-contexts.txt does
+        # not map to exactly one workflow job with a pull_request trigger, fail
+        # here rather than silently skipping the bypass for it.
+        run: python3 scripts/skipped-required-contexts.py --validate
+
+      - name: Collect changed files
+        run: |
+          set -euo pipefail
+          : > changed_files.txt
+          page=1
+          while : ; do
+            resp="$(curl -sS \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${API_URL}/repos/${REPO}/pulls/${PR_NUMBER}/files?per_page=100&page=${page}")"
+            # One-line Python keeps this inside the YAML block scalar. A non-list
+            # (e.g. an API error object) trips the assert -> non-zero -> set -e aborts.
+            page_files="$(printf '%s' "$resp" | python3 -c "import sys,json; d=json.load(sys.stdin); assert isinstance(d,list), d; print('\n'.join(x['filename'] for x in d))")"
+            if [ -n "$page_files" ]; then
+              printf '%s\n' "$page_files" >> changed_files.txt
+            fi
+            n="$(printf '%s' "$page_files" | grep -c . || true)"
+            if [ "$n" -lt 100 ]; then
+              break
+            fi
+            page=$((page + 1))
+          done
+          echo "Changed files:"
+          cat changed_files.txt
+
+      - name: Compute and post skipped-success statuses
+        run: |
+          set -euo pipefail
+          CHANGED_FILES="$(cat changed_files.txt)" \
+            python3 scripts/skipped-required-contexts.py > contexts_to_mark.txt
+          if [ ! -s contexts_to_mark.txt ]; then
+            echo "No required contexts are skipped for this diff; the real jobs gate this PR."
+            exit 0
+          fi
+          echo "Marking these required contexts success (their producing workflow does not run for this diff):"
+          cat contexts_to_mark.txt
+          while IFS= read -r ctx; do
+            [ -z "$ctx" ] && continue
+            body="$(python3 -c "import json,sys; print(json.dumps({'state':'success','context':sys.argv[1],'description':'Skipped: producing workflow path-ignored for this non-code diff (issue #788).'}))" "$ctx")"
+            echo "  -> $ctx"
+            curl -sS -X POST \
+              -H "Authorization: Bearer ${GH_TOKEN}" \
+              -H "Accept: application/vnd.github+json" \
+              -H "X-GitHub-Api-Version: 2022-11-28" \
+              "${API_URL}/repos/${REPO}/statuses/${HEAD_SHA}" \
+              -d "$body" \
+              -o /dev/null -w "     HTTP %{http_code}\n"
+          done < contexts_to_mark.txt
