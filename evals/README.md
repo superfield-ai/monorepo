@@ -43,6 +43,8 @@ evals/
   runners/                    ← the engines (specs now, code later)
     live.md                   ← Tier 2: live run, counts turns
     replay.md                 ← Tier 1: replay an episode trace
+  scripts/
+    run-local-act.sh          ← run the unmodified CI workflow locally via act
   results/                    ← run outputs (gitignored)
 
 ../.actrc                     ← act runner-label → ci-runner image mappings
@@ -62,58 +64,52 @@ container).
 Canonical command (run from the repo root):
 
 ```
-act -W .github/workflows/eval-todo-app.yml workflow_dispatch \
-  --input turn_budget=8 \
-  --pull=false \
-  --artifact-server-path /tmp/act-artifacts
+evals/scripts/run-local-act.sh -- --input turn_budget=8
 ```
+
+[`evals/scripts/run-local-act.sh`](scripts/run-local-act.sh) runs the
+**unmodified** workflow under stock `act` and supplies `node` to the pinned
+`ci-runner` job container at runtime — the way GitHub's runner agent does —
+without modifying the production image or overwriting the local `:latest` tag.
+It downloads a glibc node20 to a cache dir on first use (never vendored into the
+repo), starts a background node-injection watcher, and invokes `act` with
+`--pull=false` and an artifact dir. Arguments after `--` pass straight to `act`.
 
 The repo-root [`.actrc`](../.actrc) supplies the `-P` runner-label mappings
 (`self-hosted`, `Linux`, `X64` → `ghcr.io/superfield-ai/ci-runner:latest`)
 automatically, so the self-hosted job schedules against the local CI image.
-`--pull=false` reuses that image from your local Docker without ghcr auth, and
-`--artifact-server-path` is where `act` writes the uploaded artifact.
 
 Prereqs:
 
 - **Docker** running.
 - The `ghcr.io/superfield-ai/ci-runner:latest` image present locally (so
   `--pull=false` works without ghcr authentication).
-- `act` on your `PATH`.
+- `act` on your `PATH`; `curl` + `tar` (for the one-time node download).
 
 Where the result lands: the job bind-mounts the workspace, so
 `result.json` appears on the host at
 `evals/results/todo-app/<workspace-id>/result.json` (gitignored). The same file
-is also collected by the artifact step into your `--artifact-server-path`.
+is also collected by the artifact step into the helper's artifact dir.
 
-### Limitation: blocked at the first JavaScript action (an upstream `act` gap)
+### Why the helper (and not bare `act`)?
 
-Today `act` runs this workflow only **up to the first JavaScript action**, not
-end to end — at the `Cache Cargo registry + build` step (`actions/cache@v4`) it
-fails with `exec: "node": not found` (exit `127`). This is **not** a defect in
-the `ci-runner` image: `node` for JS actions is supplied by the *runner agent*
-at runtime (GitHub mounts it into the `container:` job), and `act` does not
-perform that mount — it expects `node` on the image PATH instead. A probe under
-act 0.2.89 confirmed `--container-options` cannot work around it (the node
-bind-mount never reaches a YAML-pinned `container:`). The image deliberately
-omits `node` and must keep doing so. The full mechanism, the two-environment
-topology, the `actions/checkout` `docker cp` special-case, and the probe
-evidence are documented canonically in
-[`docs/testing.md`](../docs/testing.md) → **"Running CI workflows locally with
-`act`"**. Upstream gap:
+Bare `act` stops at the first JavaScript action (`Cache Cargo registry + build`,
+`actions/cache@v4`) with `exec: "node": not found` (exit `127`). This is **not**
+a defect in the `ci-runner` image: `node` for JS actions is supplied by the
+*runner agent* at runtime (GitHub bind-mounts it into the `container:` job at
+`/__e`), and `act` does neither that mount nor honour `--container-options` for a
+pinned `container:`. The image correctly omits `node`, and the helper restores
+the missing runtime injection. The full mechanism, the two-environment topology,
+the `actions/checkout` `docker cp` special-case, the three working approaches
+(watcher / runner.server / patched-act), and the ruled-out dead ends are
+documented canonically in [`docs/testing.md`](../docs/testing.md) → **"Running
+CI workflows locally with `act`"**. Upstream gap:
 [nektos/act#107](https://github.com/nektos/act/issues/107) (see also
 [#810](https://github.com/superfield-ai/monorepo/issues/810)).
 
-What `act` **does** validate locally today, before that boundary:
-
-- the `self-hosted` / `Linux` / `X64` runner-label → image mapping from `.actrc`,
-- the `ci-runner` job container,
-- the `pgvector` Postgres service container,
-- checkout, the rustup toolchain install, and the apt C-toolchain step.
-
 > **Caveat:** act's `-n` dry-run can't preview this workflow — it panics on jobs
 > with service containers (the `pgvector` Postgres service here). Use `act -l` to
-> validate parsing instead, and a real run to execute it.
+> validate parsing instead, and the helper above for a real run.
 
 ## Why scenario-first (not `tier1/`, `tier2/`)
 
