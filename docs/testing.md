@@ -285,7 +285,7 @@ agent, not from the image and not from the host:**
   `container:`, the agent starts that container with the externals dir
   bind-mounted **read-only at `/__e`** and invokes JS actions by **absolute
   path**: `/__e/node20/bin/node /__w/_actions/<owner>/<repo>/<ref>/dist/index.js`.
-  `node` is *mounted at runtime, never installed in the image*, so any
+  `node` is _mounted at runtime, never installed in the image_, so any
   glibc-compatible image runs JS actions fine. The only constraint is glibc
   compatibility (the mounted node is glibc-linked); `ci-runner` is debian/glibc,
   so it satisfies it. This is identical on hosted and self-hosted runners,
@@ -316,7 +316,7 @@ three:
 - **The host** — where the `act` process and the Docker daemon live. `act` plays
   the runner-agent role here; it has no job environment of its own.
 - **The `ci-runner` job container** — where every `run:` step and every JS action
-  executes. `node` must be present *inside this container*; GitHub mounts it
+  executes. `node` must be present _inside this container_; GitHub mounts it
   there, `act` does not.
 
 A service like `pgvector` runs as a **sibling** container on the same Docker
@@ -339,7 +339,7 @@ pinned to `container: ci-runner` with a single `actions/cache@v4` step fails
 `--container-options "-v <glibc-node>:/usr/local/bin/node:ro"` — a follow-up
 `run:` step proved the mount never lands inside the pinned container (matching
 `options()` discarding `--container-options` above). Three approaches do work,
-each mirroring GitHub's *mechanism* (provide node at runtime) rather than baking
+each mirroring GitHub's _mechanism_ (provide node at runtime) rather than baking
 node into an image:
 
 - **(A) `docker cp` node-injection watcher — the documented default.** Stock act
@@ -376,7 +376,7 @@ node into an image:
 - `--container-options` bind-mount — discarded for pinned-container jobs (above).
 - Toolcache / externals pre-seed via host mounts — same reason; never reaches the
   pinned container.
-- Baking node into a **separate** local image tag — can't run the *unmodified*
+- Baking node into a **separate** local image tag — can't run the _unmodified_
   workflow (it pins `:latest`) without overwriting `:latest`, which the
   self-hosted runner uses. (A throwaway `ci-runner:act-node` tag exists only as a
   local experiment; it is **not** a recommended path.)

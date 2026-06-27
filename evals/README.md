@@ -96,7 +96,7 @@ is also collected by the artifact step into the helper's artifact dir.
 Bare `act` stops at the first JavaScript action (`Cache Cargo registry + build`,
 `actions/cache@v4`) with `exec: "node": not found` (exit `127`). This is **not**
 a defect in the `ci-runner` image: `node` for JS actions is supplied by the
-*runner agent* at runtime (GitHub bind-mounts it into the `container:` job at
+_runner agent_ at runtime (GitHub bind-mounts it into the `container:` job at
 `/__e`), and `act` does neither that mount nor honour `--container-options` for a
 pinned `container:`. The image correctly omits `node`, and the helper restores
 the missing runtime injection. The full mechanism, the two-environment topology,
