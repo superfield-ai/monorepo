@@ -10,8 +10,18 @@
 # Only repo-wide-correct defaults belong here. Run-specific flags
 # (--pull=false, --artifact-server-path) stay on the command line.
 #
-# Prereq/limitation: the ci-runner image has no `node`, so act stops at the
-# first JS action (actions/cache, upload-artifact). Tracked in #810.
+# Node-injection note (act gap, NOT an image defect): GitHub's runner agent
+# mounts `node` into a `container:` job at runtime (externals at /__e); stock
+# act does not, and `--container-options` is discarded for a YAML-pinned
+# `container:` (RunContext.options(), run_context.go:783). ci-runner correctly
+# omits `node`, so bare `act` stops at the first JS action with
+# `exec: "node": not found`. To run a container-job workflow end to end, use
+# evals/scripts/run-local-act.sh (downloads a glibc node20 and injects it into
+# the job container at startup) — image unchanged, local `:latest` untouched.
+# Full mechanism + the three working approaches: docs/testing.md ("Running CI
+# workflows locally with act"). Upstream gap: nektos/act#107.
+# Do NOT add node to the ci-runner image (shared by ~16 workflows); do NOT
+# overwrite the local `:latest` tag (the self-hosted runner uses it).
 -P self-hosted=ghcr.io/superfield-ai/ci-runner:latest
 -P Linux=ghcr.io/superfield-ai/ci-runner:latest
 -P X64=ghcr.io/superfield-ai/ci-runner:latest
