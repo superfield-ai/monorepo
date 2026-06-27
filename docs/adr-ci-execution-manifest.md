@@ -81,10 +81,10 @@ also carries GitHub-specific surface — marketplace actions, contexts,
 Rejected. It loses the three things the gate depends on:
 
 - **Determinism / assertiveness** — a gate must return the same verdict for the
-  same inputs. An agent improvising bash each run cannot *be* the enforcement
+  same inputs. An agent improvising bash each run cannot _be_ the enforcement
   boundary; "green = nobody objected, not the code ran" only gets worse.
 - **Auditability** — the four test-coverage invariants are static checks against
-  a *persisted* artifact. You cannot grade a script that evaporated after it ran.
+  a _persisted_ artifact. You cannot grade a script that evaporated after it ran.
 - **Local/CI parity** — nothing guarantees two improvised runs match.
 
 **3. GHA YAML as source of truth + ACT for local runs.**
@@ -112,7 +112,7 @@ YAML emitted as a generated adapter only if the project keeps pushing to GitHub.
 
 This revises the current operating principle "run CI YAML unmodified via ACT,
 never a parallel local script." That principle is **correct while GitHub is the
-source of truth** — emulation is the only way to get parity *there*. This ADR
+source of truth** — emulation is the only way to get parity _there_. This ADR
 moves the source of truth one layer down (manifest + FastENV) so parity becomes
 structural. The "no duplicate scripts" instinct is preserved: there is still one
 artifact, the manifest — not ACT reproducing GitHub alongside a hand-written
