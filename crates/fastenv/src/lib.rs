@@ -10,6 +10,16 @@
 pub mod bench;
 pub mod boundary;
 pub mod build_base;
+// ci_executor / ci_gate / ci_import — CI job-manifest decoupling seams
+// (dev-scout stubs, issue #821; canonical docs/adr-ci-execution-manifest.md).
+// Each is a compile-safe, no-op boundary owning a DISJOINT file so the three
+// downstream features land in parallel against the stable `manifest` schema:
+//   ci_executor — run the job graph (real impl #822)
+//   ci_import   — round-trip GHA YAML <-> manifest (real impl #823)
+//   ci_gate     — enforce the four invariants + ci-taxonomy (real impl #824)
+pub mod ci_executor;
+pub mod ci_gate;
+pub mod ci_import;
 pub mod container_runtime;
 // deployment — deployment-tier runtime seam (dev-scout stub, issue #663).
 // Compile-safe, no-op supervisor for long-lived workloads; real impl is #662.
@@ -27,6 +37,9 @@ pub mod guest_ebpf;
 pub mod guest_harness;
 pub mod host_control_plane;
 pub mod host_ebpf;
+// manifest — the versioned, substrate-agnostic CI job-manifest schema
+// (issue #821). The foundational contract the three seams above consume.
+pub mod manifest;
 pub mod mount_path;
 pub mod privileged_harness;
 pub mod quota;
