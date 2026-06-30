@@ -14,7 +14,14 @@
         },
         {
           "program": "cargo",
-          "args": ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+          "args": [
+            "clippy",
+            "--workspace",
+            "--all-targets",
+            "--",
+            "-D",
+            "warnings"
+          ]
         },
         {
           "program": "cargo",
@@ -36,7 +43,14 @@
       "commands": [
         {
           "program": "cargo",
-          "args": ["nextest", "run", "--workspace", "--profile", "ci", "--no-tests=fail"]
+          "args": [
+            "nextest",
+            "run",
+            "--workspace",
+            "--profile",
+            "ci",
+            "--no-tests=fail"
+          ]
         }
       ],
       "test_contract": {
@@ -56,8 +70,17 @@
       "commands": [
         {
           "program": "cargo",
-          "args": ["nextest", "run", "--workspace", "--run-ignored", "all", "--no-tests=fail"],
-          "env": { "DATABASE_URL": "postgres://superfield:superfield@postgres:5432/superfield" }
+          "args": [
+            "nextest",
+            "run",
+            "--workspace",
+            "--run-ignored",
+            "all",
+            "--no-tests=fail"
+          ],
+          "env": {
+            "DATABASE_URL": "postgres://superfield:superfield@postgres:5432/superfield"
+          }
         }
       ],
       "test_contract": {
