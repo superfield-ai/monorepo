@@ -1,0 +1,73 @@
+name: Manifest gate
+
+# Static CI-manifest gate (issue #824). Runs `fastenv lint-manifest` against the
+# committed CI manifest to enforce the four executed-coverage invariants
+# (docs/testing-invariants.md) and the ci-taxonomy job-class rules, REJECTING a
+# manifest that would produce a false green BEFORE it ever runs. The gate
+# inspects the typed TestContract/gate fields; it does NOT execute the manifest
+# (that is the executor seam, issue #822).
+#
+# CI_CLASS = feature-correctness: the job executes the gate BINARY and asserts on
+# its verdict, and is hermetic (no DB / network / model weights). Per the CI
+# taxonomy a feature-correctness job runs on draft AND ready-for-review PRs and
+# is bypassed on docs-only diffs (paths-ignore below) — so there is no draft
+# guard. The job `name:` is the registered required-status context (mirrored in
+# scripts/required-status-contexts.txt); keep it STABLE.
+
+env:
+  CI_CLASS: feature-correctness
+  CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["**.md", "**.txt"]
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths-ignore: ["**.md", "**.txt"]
+  # Nightly full sweep (feature-correctness): re-lint the committed manifest on
+  # main so drift is caught even when no PR touches it.
+  schedule:
+    - cron: "0 7 * * *"
+  workflow_dispatch: {}
+
+concurrency:
+  group: manifest-lint-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  manifest-lint:
+    # The required-context name. Keep STABLE: it is registered verbatim in main's
+    # required_status_checks (mirrored in scripts/required-status-contexts.txt),
+    # so renaming it silently drops the protection.
+    name: Manifest gate (lint-manifest)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 20
+    container:
+      image: rust:latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      # Execute the gate binary on the REAL committed manifest. A false-green
+      # manifest (silent-skip, exit-0!=tested, missing runtime assertion, an
+      # uncovered language, or a misclassified hygiene job) makes the gate exit
+      # non-zero and this required check go red.
+      - name: "Manifest gate — lint the committed CI manifest [#824]"
+        run: cargo run --bin fastenv -- lint-manifest crates/fastenv/docs/examples/monorepo-ci.manifest.json

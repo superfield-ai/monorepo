@@ -227,6 +227,18 @@ enum Commands {
         #[arg(long)]
         output: Option<PathBuf>,
     },
+    /// Statically validate a CI manifest against the four executed-coverage
+    /// invariants (docs/testing-invariants.md) and the ci-taxonomy job-class
+    /// rules, rejecting any manifest that would produce a false green BEFORE it
+    /// runs. Does NOT execute the manifest — it inspects the typed TestContract
+    /// / gate fields. Exits non-zero (loud red) if any violation is found.
+    ///
+    /// Canonical docs: docs/adr-ci-execution-manifest.md (the gate is the
+    /// enforcement boundary), crate::ci_gate (the gate itself).
+    LintManifest {
+        /// Path to the CiManifest JSON file to validate.
+        manifest: PathBuf,
+    },
 }
 
 fn init_tracing() {
@@ -415,6 +427,42 @@ fn main() -> Result<()> {
         Commands::EmitGha { manifest, output } => {
             ci_import::run_emit_gha(&manifest, output.as_deref())?;
         }
+        Commands::LintManifest { manifest } => {
+            // Static manifest gate (issue #824): parse the CiManifest and run
+            // the real validator in crate::ci_gate. Violations print to stderr
+            // and exit non-zero (loud red) so a false-green manifest is rejected
+            // BEFORE it runs; a clean manifest prints OK and exits 0.
+            let raw = std::fs::read_to_string(&manifest)
+                .with_context(|| format!("read manifest: {}", manifest.display()))?;
+            let parsed: fastenv::manifest::CiManifest = serde_json::from_str(&raw)
+                .with_context(|| format!("parse CiManifest: {}", manifest.display()))?;
+
+            match fastenv::ci_gate::run_lint(&parsed) {
+                Ok(()) => {
+                    println!(
+                        "OK: manifest '{}' ({}) passes the ci-taxonomy + test-coverage gate",
+                        manifest.display(),
+                        parsed.name
+                    );
+                }
+                Err(violations) => {
+                    eprintln!(
+                        "REJECTED: manifest '{}' has {} gate violation(s):",
+                        manifest.display(),
+                        violations.len()
+                    );
+                    for v in &violations {
+                        let scope = if v.job_id.is_empty() {
+                            "<manifest>".to_string()
+                        } else {
+                            v.job_id.clone()
+                        };
+                        eprintln!("  [{:?}] {}: {}", v.rule, scope, v.message);
+                    }
+                    std::process::exit(1);
+                }
+            }
+        }
     }
 
     Ok(())
@@ -456,6 +504,9 @@ mod tests {
             // GHA backward-compat adapter subcommands (issue #823).
             "import-workflow",
             "emit-gha",
+            // Static manifest gate (issue #824): validates a CiManifest against
+            // the four executed-coverage invariants + ci-taxonomy class rules.
+            "lint-manifest",
         ];
         for name in &expected {
             assert!(
