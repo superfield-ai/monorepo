@@ -47,6 +47,10 @@ pub enum CommandBoundary {
     /// (deployment::ManifestSupervisor). Scout stub for issue #663; the real
     /// long-lived workload supervision is built in issue #662.
     DeploymentTier,
+    /// Routed through the CI-tier manifest executor
+    /// (ci_executor::run_manifest). Issue #822: FastENV runs the CI job graph
+    /// natively, not via a hosted-runner emulator.
+    CiTier,
 }
 
 /// Full parity table for the supported command set.
@@ -133,6 +137,12 @@ pub fn command_parity_table() -> Vec<CommandParityEntry> {
             boundary: CommandBoundary::DeploymentTier,
             deprecated: false,
             note: "Deployment-tier entrypoint (issue #662): drives deployment::FastenvSupervisor from a FastenvManifest, starting/health-checking/stopping long-lived app+Postgres workloads without kubectl/docker.",
+        },
+        CommandParityEntry {
+            command: "run-manifest",
+            boundary: CommandBoundary::CiTier,
+            deprecated: false,
+            note: "CI-tier entrypoint (issue #822): ci_executor::run_manifest executes a CiManifest job graph natively on the FastENV substrate (topo-ordered jobs in disposable fork workspaces, loud TestContract enforcement) — not a hosted-runner emulator.",
         },
     ]
 }
@@ -221,8 +231,19 @@ mod tests {
         // than the workspace GuestRuntime. Scout stub for issue #663.
         let deployment_tier_commands: HashSet<&str> = ["up"].iter().copied().collect();
 
+        // Commands that route through the CI-tier manifest executor seam rather
+        // than the workspace GuestRuntime. Issue #822.
+        let ci_tier_commands: HashSet<&str> = ["run-manifest"].iter().copied().collect();
+
         for entry in &non_deprecated {
-            if deployment_tier_commands.contains(entry.command) {
+            if ci_tier_commands.contains(entry.command) {
+                assert_eq!(
+                    entry.boundary,
+                    CommandBoundary::CiTier,
+                    "command '{}' must route through the CiTier boundary",
+                    entry.command
+                );
+            } else if deployment_tier_commands.contains(entry.command) {
                 assert_eq!(
                     entry.boundary,
                     CommandBoundary::DeploymentTier,
@@ -425,6 +446,9 @@ mod tests {
             // and routed through the DeploymentTier boundary; supervision is a
             // no-op until issue #662.
             "up",
+            // CI-tier manifest executor entrypoint (issue #822). Non-deprecated
+            // and routed through the CiTier boundary.
+            "run-manifest",
         ]
         .iter()
         .copied()
