@@ -187,6 +187,23 @@ enum Commands {
         #[arg(long, default_value_t = 120)]
         health_timeout_secs: u64,
     },
+    /// Execute a CI job-manifest natively on the FastENV substrate (issue #822).
+    ///
+    /// Runs the manifest's jobs in dependency order, each inside its own fork
+    /// workspace that is discarded after the job (no host-disk accumulation),
+    /// enforcing the per-job `TestContract` loudly. This is FastENV running the
+    /// manifest itself — NOT an ACT-style GitHub-runner emulator.
+    RunManifest {
+        /// Path to the CiManifest JSON file describing the job graph.
+        #[arg(long)]
+        manifest: PathBuf,
+        /// Base snapshot key every job forks its workspace from.
+        #[arg(long)]
+        base: String,
+        /// Path to the crun binary.
+        #[arg(long, default_value = "/usr/bin/crun")]
+        crun_path: String,
+    },
 }
 
 fn init_tracing() {
@@ -351,6 +368,24 @@ fn main() -> Result<()> {
                 );
             }
         }
+        Commands::RunManifest {
+            manifest,
+            base,
+            crun_path,
+        } => {
+            // CI-tier 'run-manifest' (issue #822): FastENV executes the manifest
+            // job graph natively — no hosted-runner emulation. Delegates directly
+            // to the executor (mirrors how `Up` calls `deployment::` directly).
+            let report =
+                fastenv::ci_executor::run_manifest(&manifest, &cli.root, &base, &crun_path)?;
+            tracing::info!(
+                command = "run-manifest",
+                manifest = %manifest.display(),
+                executed_jobs = report.executed_jobs.len(),
+                bytes_reclaimed = report.bytes_reclaimed,
+                "ci-tier 'run-manifest' executed the job graph"
+            );
+        }
     }
 
     Ok(())
@@ -387,6 +422,8 @@ mod tests {
             // Deployment-tier entrypoint (scout stub, issue #663). The seam is
             // present and parses args, but supervision is a no-op until #662.
             "up",
+            // CI-tier manifest executor (issue #822).
+            "run-manifest",
         ];
         for name in &expected {
             assert!(
@@ -445,6 +482,33 @@ mod tests {
                 assert_eq!(health_timeout_secs, 30);
             }
             _ => panic!("expected Commands::Up variant"),
+        }
+    }
+
+    #[test]
+    fn run_manifest_subcommand_parses_args() {
+        // The CI-tier executor entrypoint must parse --manifest/--base into the
+        // RunManifest variant, with crun_path defaulting to /usr/bin/crun.
+        let cli = Cli::try_parse_from([
+            "fastenv",
+            "run-manifest",
+            "--manifest",
+            "/tmp/ci.json",
+            "--base",
+            "ubuntu-22",
+        ])
+        .expect("run-manifest should parse with --manifest and --base");
+        match cli.command {
+            Commands::RunManifest {
+                manifest,
+                base,
+                crun_path,
+            } => {
+                assert_eq!(manifest, PathBuf::from("/tmp/ci.json"));
+                assert_eq!(base, "ubuntu-22");
+                assert_eq!(crun_path, "/usr/bin/crun");
+            }
+            _ => panic!("expected Commands::RunManifest variant"),
         }
     }
 }
