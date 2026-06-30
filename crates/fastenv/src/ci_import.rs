@@ -13,11 +13,13 @@
 //
 //   - `import`: parse a GitHub Actions workflow YAML into a substrate-agnostic
 //     `CiManifest`. Substrate-only concepts the schema deliberately has no home
-//     for (`on`, `runs-on`, `container`, `defaults`, `concurrency`,
-//     `permissions`) are dropped — they don't change WHAT runs. Every construct
-//     that DOES carry "what-runs"/expansion semantics (marketplace `uses:`,
-//     `strategy.matrix`, reusable-workflow `uses:`, `if:`, `with:`, `services:`,
-//     `${{ }}` contexts, scripted multi-command `run:`) FAILS LOUDLY naming the
+//     for (`on`, `runs-on`, `container`, `concurrency`, `permissions`) are
+//     dropped — they don't change WHAT runs. Every construct that DOES carry
+//     "what-runs"/expansion semantics (marketplace `uses:`, `strategy.matrix`,
+//     reusable-workflow `uses:`, `if:`, `with:`, `services:`, `${{ }}` contexts,
+//     scripted multi-command `run:`, and the execution-affecting keys
+//     `working-directory`/`shell`/`continue-on-error` plus
+//     `defaults.run.{shell,working-directory}`) FAILS LOUDLY naming the
 //     construct — never silently dropped (testing-invariant 1).
 //   - `emit`: generate a GHA workflow YAML FROM a `CiManifest`, re-attaching a
 //     concrete substrate (a fixed `runs-on` and `on: [push, pull_request]`), so
@@ -79,10 +81,12 @@ pub struct DefaultGithubActionsAdapter;
 
 // ---------------------------------------------------------------------------
 // Import-side serde shapes. No `deny_unknown_fields`: substrate-only keys we
-// deliberately drop (`on`, `runs-on`, `container`, `defaults`, `concurrency`,
-// `permissions`, step `id`/`shell`/…) are silently ignored — they carry no
-// "what runs" semantics. Constructs that DO carry semantics are captured into
-// explicit fields below so `import` can reject them loudly.
+// deliberately drop (`on`, `runs-on`, `container`, `concurrency`,
+// `permissions`, step `id`/`name`/…) are silently ignored — they carry no
+// "what runs" semantics. Constructs that DO carry semantics — including the
+// execution-affecting `working-directory`/`shell`/`continue-on-error` keys and
+// `defaults.run.{shell,working-directory}` — are captured into explicit fields
+// below so `import` can reject them loudly.
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
@@ -109,6 +113,12 @@ struct GhaJobIn {
     r#if: Option<serde_yaml::Value>,
     services: Option<serde_yaml::Value>,
     with: Option<serde_yaml::Value>,
+    // Execution-affecting captures the manifest cannot represent. `defaults`
+    // is substrate-only EXCEPT `defaults.run.{shell,working-directory}`, which
+    // change the interpreter / cwd of every step — see `defaults_alters_run`.
+    #[serde(rename = "continue-on-error")]
+    continue_on_error: Option<serde_yaml::Value>,
+    defaults: Option<serde_yaml::Value>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -121,6 +131,14 @@ struct GhaStepIn {
     with: Option<serde_yaml::Value>,
     #[serde(default)]
     env: BTreeMap<String, serde_yaml::Value>,
+    // Execution-affecting captures the manifest cannot represent: `working-directory`
+    // changes WHERE the command runs, `shell` changes the interpreter, and
+    // `continue-on-error` changes pass/fail semantics. All fail loud (never dropped).
+    #[serde(rename = "working-directory")]
+    working_directory: Option<serde_yaml::Value>,
+    shell: Option<serde_yaml::Value>,
+    #[serde(rename = "continue-on-error")]
+    continue_on_error: Option<serde_yaml::Value>,
 }
 
 /// GHA `needs:` is either a single id or a sequence of ids.
@@ -205,6 +223,17 @@ fn env_value_to_string(key: &str, value: &serde_yaml::Value, location: &str) -> 
     Ok(s)
 }
 
+/// Whether a job-level `defaults:` block alters execution. `defaults.run.shell`
+/// changes the interpreter and `defaults.run.working-directory` changes the cwd
+/// of every step — both are "what-runs" semantics the manifest cannot represent,
+/// so they must fail loud. Any other `defaults` content is substrate-only.
+fn defaults_alters_run(defaults: &serde_yaml::Value) -> bool {
+    defaults
+        .get("run")
+        .map(|run| run.get("shell").is_some() || run.get("working-directory").is_some())
+        .unwrap_or(false)
+}
+
 /// Conservative shell-word splitter. A `run:` line is mapped to argv only when
 /// it is a single simple command. ANY shell metacharacter (pipelines, logical
 /// operators, redirection, command/var substitution, quoting, globbing,
@@ -277,6 +306,21 @@ impl GithubActionsAdapter for DefaultGithubActionsAdapter {
             if job.with.is_some() {
                 bail!("unsupported GHA construct: `with:` inputs in {loc}");
             }
+            if job.continue_on_error.is_some() {
+                bail!(
+                    "unsupported GHA construct: job-level `continue-on-error:` in {loc}; \
+                     it changes pass/fail semantics the manifest cannot represent"
+                );
+            }
+            if let Some(defaults) = &job.defaults {
+                if defaults_alters_run(defaults) {
+                    bail!(
+                        "unsupported GHA construct: `defaults.run.{{shell,working-directory}}` in \
+                         {loc}; they change the interpreter / working directory of every step, \
+                         which the manifest cannot represent"
+                    );
+                }
+            }
 
             let mut job_env = workflow_env.clone();
             for (k, v) in &job.env {
@@ -302,6 +346,24 @@ impl GithubActionsAdapter for DefaultGithubActionsAdapter {
                 }
                 if step.with.is_some() {
                     bail!("unsupported GHA construct: step-level `with:` inputs ({sloc})");
+                }
+                if step.working_directory.is_some() {
+                    bail!(
+                        "unsupported GHA construct: step-level `working-directory:` ({sloc}); \
+                         it changes WHERE the command runs, which the manifest cannot represent"
+                    );
+                }
+                if step.shell.is_some() {
+                    bail!(
+                        "unsupported GHA construct: step-level `shell:` ({sloc}); it changes the \
+                         command interpreter, which the manifest cannot represent"
+                    );
+                }
+                if step.continue_on_error.is_some() {
+                    bail!(
+                        "unsupported GHA construct: step-level `continue-on-error:` ({sloc}); \
+                         it changes pass/fail semantics the manifest cannot represent"
+                    );
                 }
 
                 let run = step.run.with_context(|| {
@@ -460,5 +522,71 @@ mod tests {
     fn env_value_rejects_expression_context() {
         let v = serde_yaml::Value::String("${{ secrets.TOKEN }}".to_string());
         assert!(env_value_to_string("TOKEN", &v, "t").is_err());
+    }
+
+    /// Build a one-job, one-step workflow injecting `step_extra` into the step
+    /// mapping (e.g. `"working-directory: subdir"`).
+    fn workflow_with_step_extra(step_extra: &str) -> String {
+        format!(
+            "name: wf\njobs:\n  build:\n    steps:\n      - run: cargo build\n        {step_extra}\n"
+        )
+    }
+
+    fn assert_unsupported(err: anyhow::Error) {
+        let msg = err.to_string();
+        assert!(
+            msg.contains("unsupported GHA construct"),
+            "expected a loud 'unsupported GHA construct' error, got: {msg}"
+        );
+    }
+
+    #[test]
+    fn import_rejects_step_working_directory() {
+        let yaml = workflow_with_step_extra("working-directory: subdir");
+        let err = DefaultGithubActionsAdapter.import(&yaml).unwrap_err();
+        assert_unsupported(err);
+    }
+
+    #[test]
+    fn import_rejects_step_shell() {
+        let yaml = workflow_with_step_extra("shell: bash");
+        let err = DefaultGithubActionsAdapter.import(&yaml).unwrap_err();
+        assert_unsupported(err);
+    }
+
+    #[test]
+    fn import_rejects_step_continue_on_error() {
+        let yaml = workflow_with_step_extra("continue-on-error: true");
+        let err = DefaultGithubActionsAdapter.import(&yaml).unwrap_err();
+        assert_unsupported(err);
+    }
+
+    #[test]
+    fn import_rejects_job_continue_on_error() {
+        let yaml = "name: wf\njobs:\n  build:\n    continue-on-error: true\n    steps:\n      - run: cargo build\n";
+        let err = DefaultGithubActionsAdapter.import(yaml).unwrap_err();
+        assert_unsupported(err);
+    }
+
+    #[test]
+    fn import_rejects_job_defaults_run_shell() {
+        let yaml = "name: wf\njobs:\n  build:\n    defaults:\n      run:\n        shell: bash\n    steps:\n      - run: cargo build\n";
+        let err = DefaultGithubActionsAdapter.import(yaml).unwrap_err();
+        assert_unsupported(err);
+    }
+
+    #[test]
+    fn import_rejects_job_defaults_run_working_directory() {
+        let yaml = "name: wf\njobs:\n  build:\n    defaults:\n      run:\n        working-directory: subdir\n    steps:\n      - run: cargo build\n";
+        let err = DefaultGithubActionsAdapter.import(yaml).unwrap_err();
+        assert_unsupported(err);
+    }
+
+    #[test]
+    fn import_accepts_simple_workflow_without_execution_keys() {
+        let yaml = "name: wf\njobs:\n  build:\n    steps:\n      - run: cargo build\n";
+        let manifest = DefaultGithubActionsAdapter.import(yaml).unwrap();
+        assert_eq!(manifest.jobs.len(), 1);
+        assert_eq!(manifest.jobs[0].commands.len(), 1);
     }
 }
