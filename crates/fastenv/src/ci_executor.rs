@@ -17,8 +17,13 @@
 //      (no host-disk accumulation — the ACT non-goal);
 //   3. enforces the `TestContract` loudly: a non-zero command exit fails the
 //      graph (this is how `--no-tests=fail` / a missing `FailLoud` resource
-//      propagates, never silently skipped), and a reported executed-test count
-//      below `min_executed_tests` (or zero when `zero_tests_is_failure`) bails.
+//      propagates, never silently skipped); a reported executed-test count
+//      below `min_executed_tests` (or zero when `zero_tests_is_failure`) bails;
+//      AND — critically for the production path — a contract that demands a
+//      count (`min_executed_tests > 0` or `zero_tests_is_failure`) bails loudly
+//      when the substrate reports NO count, rather than passing on exit-0 alone
+//      (the "exit 0 != tested" silent green is forbidden even when the count
+//      runner is not yet wired).
 //
 // ACT-lessons NON-GOALS honoured by construction (these are acceptance
 // criteria): no hosted-runner emulation; no GHA marketplace-action / context /
@@ -289,25 +294,48 @@ impl<S: JobSubstrate, W: WorkspaceManager> FastenvCiExecutor<S, W> {
             }
         }
 
-        // Structural TestContract enforcement against any reported count.
+        // Structural TestContract enforcement.
+        //
+        // A contract that demands a numeric guarantee — `zero_tests_is_failure`
+        // (>0 tests must run) or `min_executed_tests > 0` — can only be honoured
+        // if the substrate actually reports an executed-test count. When the
+        // substrate cannot supply one (the real `ExecSubstrate` returns `None`
+        // today), a clean exit must NOT be read as satisfying that demand: that
+        // would be the exact "exit 0 != tested" silent green the policy forbids.
+        // So we bail loudly instead of returning `passed: true`.
         let contract = &job.test_contract;
-        if let Some(n) = executed_tests {
-            if n < contract.min_executed_tests {
+        let demands_count = contract.zero_tests_is_failure || contract.min_executed_tests > 0;
+        match executed_tests {
+            Some(n) => {
+                if n < contract.min_executed_tests {
+                    bail!(
+                        "ci-executor: job '{}' executed {} tests but min_executed_tests is {} — \
+                         failing loudly (exit 0 != tested)",
+                        job.id,
+                        n,
+                        contract.min_executed_tests
+                    );
+                }
+                if n == 0 && contract.zero_tests_is_failure {
+                    bail!(
+                        "ci-executor: job '{}' collected zero tests and zero_tests_is_failure \
+                         is set — failing loudly (never a silent green)",
+                        job.id
+                    );
+                }
+            }
+            None if demands_count => {
                 bail!(
-                    "ci-executor: job '{}' executed {} tests but min_executed_tests is {} — \
-                     failing loudly (exit 0 != tested)",
+                    "ci-executor: job '{}' has a TestContract requiring an executed-test count \
+                     (min_executed_tests={}, zero_tests_is_failure={}) but the substrate reported \
+                     no count — cannot verify executed test count, failing loudly instead of \
+                     passing on exit-0 alone (exit 0 != tested)",
                     job.id,
-                    n,
-                    contract.min_executed_tests
+                    contract.min_executed_tests,
+                    contract.zero_tests_is_failure
                 );
             }
-            if n == 0 && contract.zero_tests_is_failure {
-                bail!(
-                    "ci-executor: job '{}' collected zero tests and zero_tests_is_failure is set — \
-                     failing loudly (never a silent green)",
-                    job.id
-                );
-            }
+            None => {}
         }
 
         Ok(JobResult {
@@ -768,7 +796,9 @@ mod tests {
     #[test]
     fn no_act_leakage_surfaces() {
         let golden = golden_manifest();
-        let substrate = FakeSubstrate::new(0, None);
+        // Supply a count so the golden manifest's count-demanding rust suites
+        // satisfy their contract; this test only asserts no ACT surface leaks.
+        let substrate = FakeSubstrate::new(0, Some(5));
         let calls = Arc::clone(&substrate.calls);
         let report = run_with(&golden, substrate, FakeWorkspace::new(0)).unwrap();
         assert_eq!(report.executed_jobs.len(), 4);
@@ -882,37 +912,120 @@ mod tests {
 
     // ----- real, hermetic end-to-end ---------------------------------------
 
-    /// Drives the REAL `ExecSubstrate` -> `exec::run_exec` -> OCI config gen ->
-    /// CrunBackend create/start/delete pipeline with `crun_path=/bin/true`
-    /// (the boundary.rs hermetic pattern). Runs for real in CI; no root/crun.
-    #[test]
-    fn runs_sample_manifest_end_to_end() {
-        let root = TempDir::new().unwrap();
-        // Initialise the registry so forks can be inserted.
-        let _ = Registry::open(root.path()).unwrap();
-
-        let executor = FastenvCiExecutor {
-            root: root.path().to_path_buf(),
+    /// Build a real `ExecSubstrate` executor rooted in `root`, using the
+    /// boundary.rs hermetic pattern: `crun_path=/bin/true` drives the entire
+    /// `exec::run_exec` -> OCI config gen -> CrunBackend create/start/delete
+    /// pipeline for real in CI without root or a real crun.
+    fn real_executor(root: &Path) -> FastenvCiExecutor<ExecSubstrate, DirWorkspace> {
+        FastenvCiExecutor {
+            root: root.to_path_buf(),
             substrate: ExecSubstrate {
                 crun_path: "/bin/true".to_owned(),
                 network: GuestNetworkMode::Host,
             },
             workspace: DirWorkspace,
-        };
+        }
+    }
 
-        let report = executor.execute(&golden_manifest()).unwrap();
+    /// Drives the REAL `ExecSubstrate` end-to-end on a manifest whose jobs make
+    /// no numeric test-count demand (`min_executed_tests=0`,
+    /// `zero_tests_is_failure=false`). These jobs CAN pass on a clean exit
+    /// alone, so this proves the production pipeline actually runs commands,
+    /// orders them, and reclaims workspace bytes. Runs for real in CI; no root.
+    #[test]
+    fn runs_no_count_manifest_end_to_end() {
+        let root = TempDir::new().unwrap();
+        // Initialise the registry so forks can be inserted.
+        let _ = Registry::open(root.path()).unwrap();
 
-        assert_eq!(report.executed_jobs.len(), 4, "all four jobs must run");
-        assert_eq!(report.job_results.len(), 4);
+        // A "build" -> "doc" chain mirroring the golden manifest's no-count
+        // jobs (code-hygiene / doc-correctness style: nothing is asserted to be
+        // an executed test, so an exit-0 substrate legitimately satisfies them).
+        let m = manifest(
+            "no-count",
+            vec![
+                job(
+                    "build",
+                    &[],
+                    vec![cmd("/bin/true", &[]), cmd("/bin/true", &[])],
+                    hermetic_contract(),
+                ),
+                job(
+                    "doc",
+                    &["build"],
+                    vec![cmd("/bin/true", &[])],
+                    hermetic_contract(),
+                ),
+            ],
+        );
+
+        let report = real_executor(root.path()).execute(&m).unwrap();
+
+        assert_eq!(report.executed_jobs.len(), 2, "both jobs must run");
+        assert_eq!(report.job_results.len(), 2);
         for jr in &report.job_results {
             assert!(jr.passed, "job '{}' must pass", jr.id);
             assert_eq!(jr.exit_code, 0, "job '{}' must exit 0", jr.id);
             assert!(jr.commands_run > 0, "job '{}' must run >0 commands", jr.id);
+            assert_eq!(
+                jr.executed_tests, None,
+                "the real substrate reports no count today"
+            );
         }
-        // build precedes both rust suites in the executed order.
+        // build precedes doc in the executed order.
         let pos = |id: &str| report.executed_jobs.iter().position(|x| x == id).unwrap();
-        assert!(pos("build") < pos("rust-workspace-tests"));
-        assert!(pos("build") < pos("rust-db-tests"));
+        assert!(pos("build") < pos("doc"));
+    }
+
+    /// PRODUCTION-PATH contract enforcement: the golden manifest's
+    /// `rust-workspace-tests` job declares `min_executed_tests:1` +
+    /// `zero_tests_is_failure:true`, but the real `ExecSubstrate` reports NO
+    /// executed-test count. The executor must NOT pass it on exit-0 alone — it
+    /// must bail loudly that it cannot verify the count. This is the regression
+    /// guard for the "exit 0 != tested" silent green in the only production
+    /// substrate.
+    #[test]
+    fn real_substrate_count_demanding_job_fails_without_count() {
+        let root = TempDir::new().unwrap();
+        let _ = Registry::open(root.path()).unwrap();
+
+        // Run the count-demanding job in isolation (no `needs`) so it is the
+        // job under test rather than a downstream of `build`.
+        let contract = TestContract {
+            min_executed_tests: 1,
+            zero_tests_is_failure: true,
+            ..hermetic_contract()
+        };
+        let m = manifest(
+            "needs-count",
+            vec![job(
+                "rust-tests",
+                &[],
+                vec![cmd("/bin/true", &[])],
+                contract,
+            )],
+        );
+
+        let err = real_executor(root.path())
+            .execute(&m)
+            .expect_err("a count-demanding job must NOT pass when the substrate reports no count");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("cannot verify executed test count"),
+            "error must explain the missing count, got: {msg}"
+        );
+
+        // And the golden manifest itself fails loudly under the real substrate
+        // for the same reason — its rust suites demand a count it cannot get.
+        let golden_err = real_executor(root.path())
+            .execute(&golden_manifest())
+            .expect_err("golden manifest's count-demanding rust suites must fail under real exec");
+        assert!(
+            golden_err
+                .to_string()
+                .contains("cannot verify executed test count"),
+            "golden run must fail loudly on the missing count, got: {golden_err}"
+        );
     }
 
     #[test]
