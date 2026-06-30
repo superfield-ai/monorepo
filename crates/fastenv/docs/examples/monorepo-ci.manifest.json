@@ -1,0 +1,95 @@
+{
+  "manifest_version": "v1",
+  "name": "monorepo-ci",
+  "jobs": [
+    {
+      "id": "build",
+      "description": "Compile the workspace and run hygiene checks.",
+      "needs": [],
+      "commands": [
+        {
+          "program": "cargo",
+          "args": ["build", "--workspace", "--all-targets"],
+          "env": { "CARGO_TERM_COLOR": "always" }
+        },
+        {
+          "program": "cargo",
+          "args": ["clippy", "--workspace", "--all-targets", "--", "-D", "warnings"]
+        },
+        {
+          "program": "cargo",
+          "args": ["fmt", "--all", "--check"]
+        }
+      ],
+      "test_contract": {
+        "min_executed_tests": 0,
+        "zero_tests_is_failure": false,
+        "on_missing_resource": "fail_loud",
+        "asserts_runtime_behavior": false
+      },
+      "gate": { "class": "code-hygiene", "blocking": true }
+    },
+    {
+      "id": "rust-workspace-tests",
+      "description": "Run the hermetic Rust suite; zero collected tests is red.",
+      "needs": ["build"],
+      "commands": [
+        {
+          "program": "cargo",
+          "args": ["nextest", "run", "--workspace", "--profile", "ci", "--no-tests=fail"]
+        }
+      ],
+      "test_contract": {
+        "min_executed_tests": 1,
+        "zero_tests_is_failure": true,
+        "on_missing_resource": "fail_loud",
+        "required_resources": [],
+        "asserts_runtime_behavior": true,
+        "languages": ["rust"]
+      },
+      "gate": { "class": "system-correctness", "blocking": true }
+    },
+    {
+      "id": "rust-db-tests",
+      "description": "Run the Postgres-gated Rust suite; a missing DB fails loudly.",
+      "needs": ["build"],
+      "commands": [
+        {
+          "program": "cargo",
+          "args": ["nextest", "run", "--workspace", "--run-ignored", "all", "--no-tests=fail"],
+          "env": { "DATABASE_URL": "postgres://superfield:superfield@postgres:5432/superfield" }
+        }
+      ],
+      "test_contract": {
+        "min_executed_tests": 1,
+        "zero_tests_is_failure": true,
+        "on_missing_resource": "fail_loud",
+        "required_resources": [
+          { "kind": "database", "name": "DATABASE_URL" },
+          { "kind": "model_weights", "name": "nexum-weights" }
+        ],
+        "asserts_runtime_behavior": true,
+        "languages": ["rust"]
+      },
+      "gate": { "class": "system-correctness", "blocking": true }
+    },
+    {
+      "id": "doc-conformance",
+      "description": "Doc/text correctness checks.",
+      "needs": [],
+      "commands": [
+        {
+          "program": "bash",
+          "args": ["scripts/check-docs.sh"]
+        }
+      ],
+      "test_contract": {
+        "min_executed_tests": 0,
+        "zero_tests_is_failure": false,
+        "on_missing_resource": "fail_loud",
+        "asserts_runtime_behavior": false
+      },
+      "gate": { "class": "doc-correctness", "blocking": true }
+    }
+  ]
+}
