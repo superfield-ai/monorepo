@@ -190,7 +190,7 @@ compiled_in_ci = true
 migrated_in_ci = true
 tests_executed_in_ci = 4
 executed_by = "rust.yml"
-note = "DB-gated execution wired (issue #765): rust.yml's rust-test-seam job (issue #765, NOT a required context) runs `cargo nextest run -p sharp ... --run-ignored all` over a stable purely-DB subset (db_round_trip snapshot/materialize, episode open/append/finish/query, init/add/commit roundtrip, merge_flow onboard idempotent — 4 tests). FLOOR (>0); tests needing live rust-analyzer / the tsserver bun-bridge, or asserting not-yet-implemented schema, are excluded and tracked separately. ci-migrate.yml applies crates/sharp/migrations/**."
+note = "Two rust.yml jobs execute crates/sharp tests. (1) DB-gated (issue #765): the rust-test-seam job (NOT a required context) runs `cargo nextest run -p sharp ... --run-ignored all` over a stable purely-DB subset (db_round_trip snapshot/materialize, episode open/append/finish/query, init/add/commit roundtrip, merge_flow onboard idempotent — 4 tests, the FLOOR recorded here). (2) Compile-gate proofs (issue #834): the REQUIRED sharp-merge-guarantee job provisions rust-analyzer + cargo and runs `cargo nextest run -p sharp ... --run-ignored all` over the no-non-compiling-merge refusal proofs (non_compiling_merge_is_blocked, semantic_merge_refuses_non_compiling_output, self_hosting_gate_compile_gate_refuses_bad_merge) + the crates/sharp/tests/scenarios.rs corpus, asserting >0 executed. Tests needing the tsserver bun-bridge, or asserting not-yet-implemented schema, remain excluded and tracked separately. ci-migrate.yml applies crates/sharp/migrations/**."
 
 [[unit]]
 path = "crates/superfield"
