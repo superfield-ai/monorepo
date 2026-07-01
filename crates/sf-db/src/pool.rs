@@ -3,8 +3,10 @@
 //! All component crates call [`connect`] once at startup and retain the returned
 //! [`sqlx::PgPool`].  Per-request, callers use [`acquire_workspace`] to obtain a
 //! connection with the workspace (principal) context already set via
-//! `SET LOCAL app.current_principal_id = '<id>'` so that per-schema RLS policies
-//! can fire correctly.
+//! `SELECT set_config('app.current_principal_id', '<id>', true)` so that
+//! per-schema RLS policies can fire correctly. `set_config` is used instead of
+//! `SET LOCAL ... = $1` because Postgres's `SET` statement does not accept
+//! bind parameters for its value.
 //!
 //! See `docs/architecture.md` §RLS policies are scoped per schema.
 
@@ -42,13 +44,15 @@ pub async fn connect(cfg: &DbConfig) -> Result<PgPool, sqlx::Error> {
 /// After taking a connection from the pool, this function runs:
 ///
 /// ```sql
-/// SET LOCAL app.current_principal_id = '<principal_id>';
+/// SELECT set_config('app.current_principal_id', '<principal_id>', true);
 /// ```
 ///
 /// This makes the principal identity available to RLS policies via
 /// `current_setting('app.current_principal_id')` for the duration of the
-/// current transaction.  Callers must open a transaction before issuing
-/// data-modifying statements so that the `SET LOCAL` is scoped correctly.
+/// current transaction (the third `set_config` argument, `true`, scopes the
+/// setting to the transaction like `SET LOCAL` would).  Callers must open a
+/// transaction before issuing data-modifying statements so that the setting
+/// is scoped correctly.
 ///
 /// # Arguments
 ///
@@ -59,13 +63,13 @@ pub async fn connect(cfg: &DbConfig) -> Result<PgPool, sqlx::Error> {
 /// # Errors
 ///
 /// Returns [`PoolError::Sqlx`] if the pool is exhausted, the connection is
-/// broken, or the `SET LOCAL` statement fails.
+/// broken, or the `set_config` call fails.
 pub async fn acquire_workspace(
     pool: &PgPool,
     principal_id: &str,
 ) -> Result<PoolConnection<Postgres>, PoolError> {
     let mut conn = pool.acquire().await?;
-    sqlx::query("SET LOCAL app.current_principal_id = $1")
+    sqlx::query("SELECT set_config('app.current_principal_id', $1, true)")
         .bind(principal_id)
         .execute(&mut *conn)
         .await?;
@@ -78,8 +82,8 @@ pub async fn acquire_workspace(
 /// This is the preferred helper for issue #429-compliant callers.  It sets:
 ///
 /// ```sql
-/// SET LOCAL app.workspace_id      = '<workspace_id>';
-/// SET LOCAL app.current_principal_id = '<workspace_id>';
+/// SELECT set_config('app.workspace_id', '<workspace_id>', true);
+/// SELECT set_config('app.current_principal_id', '<workspace_id>', true);
 /// ```
 ///
 /// RLS policies authored by issue #430 will reference `app.workspace_id`.  The
@@ -94,18 +98,18 @@ pub async fn acquire_workspace(
 /// # Errors
 ///
 /// Returns [`PoolError::Sqlx`] if the pool is exhausted, the connection is
-/// broken, or either `SET LOCAL` statement fails.
+/// broken, or either `set_config` call fails.
 pub async fn acquire_with_workspace_id(
     pool: &PgPool,
     workspace_id: uuid::Uuid,
 ) -> Result<PoolConnection<Postgres>, PoolError> {
     let ws_str = workspace_id.to_string();
     let mut conn = pool.acquire().await?;
-    sqlx::query("SET LOCAL app.workspace_id = $1")
+    sqlx::query("SELECT set_config('app.workspace_id', $1, true)")
         .bind(&ws_str)
         .execute(&mut *conn)
         .await?;
-    sqlx::query("SET LOCAL app.current_principal_id = $1")
+    sqlx::query("SELECT set_config('app.current_principal_id', $1, true)")
         .bind(&ws_str)
         .execute(&mut *conn)
         .await?;
@@ -181,11 +185,11 @@ mod tests {
         let mut conn = pool.acquire().await.expect("acquire failed");
         let mut tx = conn.begin().await.expect("begin failed");
 
-        sqlx::query("SET LOCAL app.current_principal_id = $1")
+        sqlx::query("SELECT set_config('app.current_principal_id', $1, true)")
             .bind(principal_id)
             .execute(&mut *tx)
             .await
-            .expect("SET LOCAL failed");
+            .expect("set_config failed");
 
         let row: (String,) = sqlx::query_as("SELECT current_setting('app.current_principal_id')")
             .fetch_one(&mut *tx)
