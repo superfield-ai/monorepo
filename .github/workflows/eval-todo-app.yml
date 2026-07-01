@@ -213,13 +213,6 @@ jobs:
             sleep 10
           done
 
-      - name: Seed the todo-app intent
-        run: |
-          set -euo pipefail
-          cargo run --bin superfield -- garden \
-            evals/scenarios/todo-app/seed/*.md \
-            --workspace-id "${WORKSPACE_ID}"
-
       - name: Studio browser-smoke (capture + verdict)
         # Observed-not-gating browser leg for the todo-app eval (issue #815,
         # seams pinned by scout #829 in docs/scout/studio-browser-smoke-seams.md).
@@ -295,6 +288,13 @@ jobs:
 
           echo "browser-smoke PASS: captured $(wc -c <"${SHOT}") bytes to ${SHOT}"
           echo "SF_EVAL_BROWSER_SMOKE=pass" >> "$GITHUB_ENV"
+
+      - name: Seed the todo-app intent
+        run: |
+          set -euo pipefail
+          cargo run --bin superfield -- garden \
+            evals/scenarios/todo-app/seed/*.md \
+            --workspace-id "${WORKSPACE_ID}"
 
       - name: Run the todo-app scenario (live runner, keyless)
         run: |
