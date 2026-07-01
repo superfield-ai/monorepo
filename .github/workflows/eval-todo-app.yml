@@ -213,6 +213,82 @@ jobs:
             sleep 10
           done
 
+      - name: Studio browser-smoke (capture + verdict)
+        # Observed-not-gating browser leg for the todo-app eval (issue #815,
+        # seams pinned by scout #829 in docs/scout/studio-browser-smoke-seams.md).
+        # Drives the appliance's UNAUTHENTICATED render surface — GET / , the
+        # Studio placeholder page — with headless chromium and writes a
+        # screenshot under the run dir. /studio/* is auth-gated (401) and there
+        # is no built UI (no CONTROL_ASSETS_DIR set in this job), so GET / is the
+        # only reachable render surface during the eval. The screenshot lands
+        # under the existing `evals/results/todo-app/**` upload prefix (issue
+        # #814), so retention needs no further change.
+        #
+        # HONEST EXECUTION (test-coverage policy — loud, never silent). The
+        # `browser_smoke` verdict stamped into result.json is DRIVEN BY the
+        # actual capture, not hardcoded: it is `pass` ONLY when chromium is
+        # present, GET / answers 200, and a NON-EMPTY PNG lands on disk. Any of
+        # those failing records `fail` — never the pre-existing `skipped`
+        # (silent) and never a false `pass`. The leg is observed, not gating
+        # (evals/scenarios/todo-app/acceptance.md), so a `fail` verdict is
+        # surfaced loudly in result.json + the uploaded artifact rather than
+        # aborting the eval. The verdict propagates to the sf-eval observer via
+        # $GITHUB_ENV (read once at observer start — crates/sf-eval/src/main.rs),
+        # which is why this step runs BEFORE `Run the todo-app scenario`.
+        #
+        # chromium is installed at step time via apt (the ci-runner image ships
+        # only python3 + curl — no node/Playwright/chromium), mirroring the
+        # C-toolchain install step above. This uses chromium's OWN headless
+        # --screenshot CLI: no node, so issue #810's node-injection problem stays
+        # closed, and the ci-runner image build is untouched.
+        run: |
+          set -uo pipefail
+          SHOT_DIR="evals/results/todo-app/${WORKSPACE_ID}"
+          SHOT="${SHOT_DIR}/studio-smoke.png"
+          URL="http://127.0.0.1:7000/"
+          # The producer runs before sf-eval creates the run dir, so make it.
+          mkdir -p "${SHOT_DIR}"
+
+          # Any failure below records an executed `fail` verdict (loud, visible
+          # in result.json + the artifact) and returns cleanly — observed, not
+          # gating. It NEVER leaves the verdict at the silent default `skipped`.
+          fail() {
+            echo "browser-smoke FAILED: $1" >&2
+            echo "SF_EVAL_BROWSER_SMOKE=fail" >> "$GITHUB_ENV"
+            exit 0
+          }
+
+          # 1. Install chromium at step time. If apt cannot reach a chromium
+          #    package that is a real image/runner gap (file an image-change
+          #    request) — surfaced as a loud `fail`, never a silent skip.
+          apt-get update -y || fail "apt-get update failed (cannot install chromium)"
+          apt-get install -y --no-install-recommends chromium \
+            || apt-get install -y --no-install-recommends chromium-browser \
+            || fail "could not install chromium via apt (image/runner gap)"
+
+          # 2. Resolve the binary (Debian: `chromium`; some bases `chromium-browser`).
+          CHROMIUM=""
+          for c in chromium chromium-browser; do
+            if command -v "$c" >/dev/null 2>&1; then CHROMIUM="$c"; break; fi
+          done
+          [ -n "${CHROMIUM}" ] || fail "no chromium binary on PATH after install"
+          echo "using headless driver: $(command -v "${CHROMIUM}")"
+
+          # 3. Reachability gate: the render surface must answer 200 before capture.
+          curl -fsS "${URL}" >/dev/null || fail "GET ${URL} did not answer 200 (Studio surface unreachable)"
+
+          # 4. Headless capture. --no-sandbox is required in the unprivileged container.
+          "${CHROMIUM}" --headless=new --no-sandbox --disable-gpu \
+            --window-size=1280,800 \
+            --screenshot="${SHOT}" \
+            "${URL}" || fail "headless chromium screenshot capture errored"
+
+          # 5. Executed evidence: assert a NON-EMPTY PNG landed on disk.
+          test -s "${SHOT}" || fail "screenshot ${SHOT} missing or empty after capture"
+
+          echo "browser-smoke PASS: captured $(wc -c <"${SHOT}") bytes to ${SHOT}"
+          echo "SF_EVAL_BROWSER_SMOKE=pass" >> "$GITHUB_ENV"
+
       - name: Seed the todo-app intent
         run: |
           set -euo pipefail
