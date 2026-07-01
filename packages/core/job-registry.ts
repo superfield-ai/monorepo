@@ -24,7 +24,10 @@ export type JobType =
  * These are resolved against the app-wide tier priority table at runtime.
  */
 export type AbstractTierName =
-  "thinking-high" | "thinking-medium" | "thinking-low" | "coding-medium";
+  | "thinking-high"
+  | "thinking-medium"
+  | "thinking-low"
+  | "coding-medium";
 
 /** A concrete (backend, model) pair ready to be passed to the agent CLI. */
 export interface CandidateEntry {

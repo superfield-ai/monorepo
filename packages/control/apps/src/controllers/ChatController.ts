@@ -255,7 +255,11 @@ import { openWebSocket, type WebSocketHandle } from "../lib/net";
 import type { AppError } from "../lib/errors";
 
 export type ConnState =
-  "idle" | "connecting" | "open" | "reconnecting" | "failed";
+  | "idle"
+  | "connecting"
+  | "open"
+  | "reconnecting"
+  | "failed";
 
 export interface WsChatControllerState extends ChatControllerState {
   readonly connState: ConnState;

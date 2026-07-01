@@ -16,7 +16,12 @@ import { fetchJson } from "../lib/net";
 
 export type FeatureSource = "slot" | "db";
 export type FeatureStatus =
-  "active" | "draft" | "open" | "in_progress" | "blocked" | "done";
+  | "active"
+  | "draft"
+  | "open"
+  | "in_progress"
+  | "blocked"
+  | "done";
 
 export interface FeatureItem {
   issueNumber: number;

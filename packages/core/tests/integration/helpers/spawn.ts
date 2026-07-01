@@ -26,7 +26,10 @@ import { loadClaudeFixture } from "../../helpers/replay.ts";
  */
 
 export type DevLoopStage =
-  "develop" | "dev-scout" | "ci-failure" | "self-audit";
+  | "develop"
+  | "dev-scout"
+  | "ci-failure"
+  | "self-audit";
 
 export interface ScenarioStep {
   stage: DevLoopStage;

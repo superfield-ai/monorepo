@@ -9,9 +9,9 @@
 ## 1. Scope and pinned commit
 
 - Documentation-drift review across canonical docs, accepted ADRs, GitHub Plan #199, implementation, and source back-links
-- docs/ (prd, architecture, technical-requirements, milestone-1, ADRs, testing, testing-invariants, eval-design, runtime-agent-selection, control-template-integration, ux/studio-ux, scout/*, vision)
-- crates/sharp/docs/* and crates/fastenv/docs/*
-- coverage-truth.toml and .github/workflows/*
+- docs/ (prd, architecture, technical-requirements, milestone-1, ADRs, testing, testing-invariants, eval-design, runtime-agent-selection, control-template-integration, ux/studio-ux, scout/\*, vision)
+- crates/sharp/docs/_ and crates/fastenv/docs/_
+- coverage-truth.toml and .github/workflows/\*
 - README.md
 
 No production code, canonical documents, issues, or external state were modified. This artifact and its JSON twin are the only outputs.
@@ -46,8 +46,8 @@ Six concurrent read-only workers, each pinned to the same commit in a shared rev
 - **Requirement:** `README.md:11`
 - **Evidence:** `README.md:3`, `README.md:9-30`, `README.md:36-38`, `README.md:88-107`, `README.md:122-134`, `docs/technical-requirements.md:5`, `docs/architecture.md:5`, `docs/prd.md:3`
 - **Confidence:** high
-- **Impact:** The front-door README still presents the retired TypeScript/Bun/GitHub-App/k3s prototype as 'the current release' Agent IDE, contradicting the standing 'GitHub is never required' constraint (technical-requirements.md:5) and the appliance direction (prd.md, architecture.md). Its Structure section lists only packages/* (TS) and omits every crates/* Rust crate that now IS the product; it points at docs/product.md, a file prd.md:3 says it supersedes. Plan #199 tracks README fixes only for crates/fastenv/README.md and evals/README.md — the root README drift is untracked.
-- **Recommendation:** Rewrite README to describe the Rust appliance (single superfield binary, daemon + gardening loop, local Postgres, fastenv, crates/* layout); remove Bun/GitHub-App/k3s requirements or mark them retired; fix the dead docs/product.md link to docs/prd.md + docs/architecture.md.
+- **Impact:** The front-door README still presents the retired TypeScript/Bun/GitHub-App/k3s prototype as 'the current release' Agent IDE, contradicting the standing 'GitHub is never required' constraint (technical-requirements.md:5) and the appliance direction (prd.md, architecture.md). Its Structure section lists only packages/_ (TS) and omits every crates/_ Rust crate that now IS the product; it points at docs/product.md, a file prd.md:3 says it supersedes. Plan #199 tracks README fixes only for crates/fastenv/README.md and evals/README.md — the root README drift is untracked.
+- **Recommendation:** Rewrite README to describe the Rust appliance (single superfield binary, daemon + gardening loop, local Postgres, fastenv, crates/\* layout); remove Bun/GitHub-App/k3s requirements or mark them retired; fix the dead docs/product.md link to docs/prd.md + docs/architecture.md.
 
 ### review-docs-007 · HIGH · STALE · owner: architecture
 
@@ -56,8 +56,8 @@ Six concurrent read-only workers, each pinned to the same commit in a shared rev
 - **Requirement:** `crates/sharp/docs/postgres-storage-plugin.md:22`
 - **Evidence:** `crates/sharp/docs/postgres-storage-plugin.md:22`, `crates/sharp/docs/postgres-storage-plugin.md:174`, `crates/sharp/migrations/0001_sharp_vcs_schema.sql:1`
 - **Confidence:** high
-- **Impact:** postgres-storage-plugin.md names 'the shipped migrations under apps/server/migrations/<seq>__<name>.sql' as 'the executable source of truth for exact column types.' No apps/ directory exists anywhere in the repo; the authoritative migrations live under crates/sharp/migrations/ with a different scheme (000N_sharp_<name>.sql). A reader following the doc lands nowhere.
-- **Recommendation:** Repoint the schema source-of-truth reference to crates/sharp/migrations/ with the real 000N_sharp_<name>.sql naming.
+- **Impact:** postgres-storage-plugin.md names 'the shipped migrations under apps/server/migrations/<seq>\__<name>.sql' as 'the executable source of truth for exact column types.' No apps/ directory exists anywhere in the repo; the authoritative migrations live under crates/sharp/migrations/ with a different scheme (000N_sharp_<name>.sql). A reader following the doc lands nowhere.
+- **Recommendation:** Repoint the schema source-of-truth reference to crates/sharp/migrations/ with the real 000N*sharp*<name>.sql naming.
 
 ### review-docs-011 · HIGH · TEST_EXECUTION · owner: tests
 
@@ -108,7 +108,7 @@ Six concurrent read-only workers, each pinned to the same commit in a shared rev
 - **Requirement:** `docs/control-template-integration.md:1`
 - **Evidence:** `docs/control-template-integration.md:2`, `docs/control-template-integration.md:23`, `docs/control-template-integration.md:59`, `docs/control-template-integration.md:70`, `docs/control-template-integration.md:122`, `packages/cli/commands/control.ts:17`, `packages/cli/commands/control.ts:113`, `packages/cli/commands/control.ts:151`, `packages/control/package.json:2`, `packages/control-core/manifest-parser.ts:162`
 - **Confidence:** high
-- **Impact:** The entire doc specifies a Node/Bun @superfield/control studio server (src/config.ts, deploy.ts, agent.ts, claude-session.ts, design-mode-context.ts, helpers.ts) that no longer exists after the #452 cutover. packages/cli/commands/control.ts now builds the Vite UI and delegates ALL serving to the sf-serve Rust binary ('No Node/Bun backend process is started'). The --repo flag is now --path; controlCommand/_startControl is now _startSfServe; loadConfig()/discoverServicePort(...,'web') moved to control-core/manifest-parser.ts:162; the cli/packages/ path prefix predates the reorg. The §2 12-test plan targets a retired node:http/MSW surface.
+- **Impact:** The entire doc specifies a Node/Bun @superfield/control studio server (src/config.ts, deploy.ts, agent.ts, claude-session.ts, design-mode-context.ts, helpers.ts) that no longer exists after the #452 cutover. packages/cli/commands/control.ts now builds the Vite UI and delegates ALL serving to the sf-serve Rust binary ('No Node/Bun backend process is started'). The --repo flag is now --path; controlCommand/\_startControl is now \_startSfServe; loadConfig()/discoverServicePort(...,'web') moved to control-core/manifest-parser.ts:162; the cli/packages/ path prefix predates the reorg. The §2 12-test plan targets a retired node:http/MSW surface.
 - **Recommendation:** Rewrite or retire control-template-integration.md to describe the Rust sf-serve-served studio (crates/sf-serve) and superfield control --path -> sf-serve delegation, or mark it superseded by architecture.md; drop the cli/packages/ prefix and the Node-server test plan.
 
 ### review-docs-033 · HIGH · INCONSISTENT · owner: code
@@ -139,7 +139,7 @@ Six concurrent read-only workers, each pinned to the same commit in a shared rev
 - **Evidence:** `crates/fastenv/docs/ci-job-manifest-schema.md:14`, `crates/fastenv/src/ci_executor.rs:8`, `crates/fastenv/src/ci_import.rs:9`, `crates/fastenv/src/ci_gate.rs:9`, `crates/fastenv/src/main.rs:196`
 - **Related:** review-docs-014
 - **Confidence:** high
-- **Impact:** The schema doc still frames the executor/adapter/gate as unbuilt 'compile-safe stubs' owned by future issues #822/#823/#824, but all three shipped: FastenvCiExecutor (ci_executor.rs:8), DefaultGithubActionsAdapter (ci_import.rs:9), StaticManifestGate (ci_gate.rs:9), all CLI-exposed (main.rs run-manifest/import-workflow/emit-gha/lint-manifest) and unit-tested; Unimplemented* variants remain only as link stubs. A reader would think native execution / GHA round-trip / gate enforcement are not yet implemented.
+- **Impact:** The schema doc still frames the executor/adapter/gate as unbuilt 'compile-safe stubs' owned by future issues #822/#823/#824, but all three shipped: FastenvCiExecutor (ci_executor.rs:8), DefaultGithubActionsAdapter (ci_import.rs:9), StaticManifestGate (ci_gate.rs:9), all CLI-exposed (main.rs run-manifest/import-workflow/emit-gha/lint-manifest) and unit-tested; Unimplemented\* variants remain only as link stubs. A reader would think native execution / GHA round-trip / gate enforcement are not yet implemented.
 - **Recommendation:** State the three seams are implemented; drop the 'ship as compile-safe stubs / land in parallel' framing.
 
 ### review-docs-008 · MEDIUM · INCONSISTENT · owner: architecture
@@ -230,7 +230,7 @@ Six concurrent read-only workers, each pinned to the same commit in a shared rev
 - **Requirement:** `docs/testing-invariants.md:36`
 - **Evidence:** `docs/testing-invariants.md:36`, `scripts/check-coverage-delta.sh:122`, `scripts/check-coverage-delta.sh:131`, `scripts/check-coverage-delta.sh:159`, `.github/workflows/rust.yml:410`
 - **Confidence:** high
-- **Impact:** The invariant doc claims the coverage-delta gate makes 'touching a package's code require >0 of that package's tests to run.' The gate (check-coverage-delta.sh) is Rust-crates-only: owning_package() returns None for any path not under crates/ and the gate no-ops for TS packages (packages/_). coverage-truth.toml reserves 'package' for packages/_ and 'crate' for crates/*, so the doc's unqualified 'per package' reads as covering TS packages while no coverage-delta enforcement exists for them; a TS package can be modified with zero of its tests executing and no gate fires.
+- **Impact:** The invariant doc claims the coverage-delta gate makes 'touching a package's code require >0 of that package's tests to run.' The gate (check-coverage-delta.sh) is Rust-crates-only: owning*package() returns None for any path not under crates/ and the gate no-ops for TS packages (packages/*). coverage-truth.toml reserves 'package' for packages/\_ and 'crate' for crates/\*, so the doc's unqualified 'per package' reads as covering TS packages while no coverage-delta enforcement exists for them; a TS package can be modified with zero of its tests executing and no gate fires.
 - **Recommendation:** Reword testing-invariants.md:36 to scope the gate to Rust crates (as the script does), or extend check-coverage-delta.sh + wiring to enforce a per-package floor for TS packages.
 
 ### review-docs-032 · MEDIUM · INCONSISTENT · owner: tests
@@ -300,7 +300,7 @@ Six concurrent read-only workers, each pinned to the same commit in a shared rev
 - **Requirement:** `docs/adr-schema-boundary.md:123`
 - **Evidence:** `docs/adr-schema-boundary.md:99`, `docs/adr-schema-boundary.md:123`, `crates/sf-db/migrations/0001_workspaces.sql:1`, `crates/sf-db/migrations/0002_substrate_backups.sql:1`
 - **Confidence:** medium
-- **Impact:** The ADR's migration-naming rules require <NNNN>_<schema>_<description>.sql and that every component's 0001_* migration begin with CREATE SCHEMA IF NOT EXISTS <component>. sf-db's 0001_workspaces.sql instead creates the workspaces table in the shared public schema (no CREATE SCHEMA, no schema token in the filename), and the substrate schema is first created in 0002. This is a real, undocumented exception (workspace identity is deliberately cross-component/public) the ADR's rules do not carve out.
+- **Impact:** The ADR's migration-naming rules require <NNNN>_<schema>_<description>.sql and that every component's 0001\_\* migration begin with CREATE SCHEMA IF NOT EXISTS <component>. sf-db's 0001_workspaces.sql instead creates the workspaces table in the shared public schema (no CREATE SCHEMA, no schema token in the filename), and the substrate schema is first created in 0002. This is a real, undocumented exception (workspace identity is deliberately cross-component/public) the ADR's rules do not carve out.
 - **Recommendation:** Note the explicit public/workspaces exception in the ADR, or reconcile the sf-db migration filenames with the documented convention.
 
 ### review-docs-021 · LOW · UNRESOLVED_DECISION · owner: decision
@@ -370,7 +370,7 @@ Six concurrent read-only workers, each pinned to the same commit in a shared rev
 - **Requirement:** `docs/testing.md:111`
 - **Evidence:** `docs/testing.md:110`, `docs/testing.md:247`, `.github/workflows/embedder-coverage.yml:35`
 - **Confidence:** medium
-- **Impact:** testing.md states Layer 3 live smoke tests 'run nightly or manually before a release'. No workflow references SUPERFIELD_LIVE_AGENTS or packages/*/tests/live; the only scheduled workflows are manifest-lint, actionlint, and embedder-coverage (which runs the embedder, not the agent live suite). The documented 'nightly' cadence for the live vendor-CLI smoke suite is not backed by any scheduled CI job. The doc hedges 'or manually' and Layer 3 is by design outside PR CI, so this is a minor promise-vs-reality gap, not a coverage-honesty violation.
+- **Impact:** testing.md states Layer 3 live smoke tests 'run nightly or manually before a release'. No workflow references SUPERFIELD_LIVE_AGENTS or packages/\*/tests/live; the only scheduled workflows are manifest-lint, actionlint, and embedder-coverage (which runs the embedder, not the agent live suite). The documented 'nightly' cadence for the live vendor-CLI smoke suite is not backed by any scheduled CI job. The doc hedges 'or manually' and Layer 3 is by design outside PR CI, so this is a minor promise-vs-reality gap, not a coverage-honesty violation.
 - **Recommendation:** Add a nightly scheduled workflow that runs the live suite (with credentials), or soften testing.md to say the live suite runs manually before a release only.
 
 ### review-docs-034 · LOW · STALE · owner: architecture
@@ -424,7 +424,7 @@ All findings are documentation-or-comment drift except `review-docs-011`/`-012` 
 
 **Unreviewed surfaces:**
 
-- packages/* TypeScript internals beyond the doc-cited symbols (control apps component-level fidelity, api-server.ts /studio/run+/studio/reset, packages/git, packages/firecracker microVM boot honesty).
+- packages/\* TypeScript internals beyond the doc-cited symbols (control apps component-level fidelity, api-server.ts /studio/run+/studio/reset, packages/git, packages/firecracker microVM boot honesty).
 - FastENV design/aspirational docs (ocap-access-control-design, alternative-isolation-for-agents, cloud-kvm-nesting, quota-prerequisites) and scout/benchmark artifacts.
 - crates/sharp server-config.md / server-operations.md (describe an HTTP server the crate does not contain as a library).
 - crates/sf-auth RLS wiring, orchestrator/migrations content, and sf-deploy/sf-notify/sf-connector internal contracts beyond lib.rs headers.

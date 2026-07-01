@@ -78,7 +78,8 @@ export interface TickRepositoryResult {
     | { ok: true; issuesCreated: number[] }
     | { ok: false; error: string; issuesCreated: number[] };
   issueAudit:
-    { ok: true; nonConformant: number[] } | { ok: false; error: string };
+    | { ok: true; nonConformant: number[] }
+    | { ok: false; error: string };
   planCoverage:
     | {
         ok: true;
@@ -90,7 +91,8 @@ export interface TickRepositoryResult {
       }
     | { ok: false; error: string };
   blueprintConformance:
-    { ok: true; issuesWithViolations: number[] } | { ok: false; error: string };
+    | { ok: true; issuesWithViolations: number[] }
+    | { ok: false; error: string };
 }
 
 /** Injectable step functions — used in unit tests to avoid spawning the LLM. */
