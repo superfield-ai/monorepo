@@ -56,6 +56,11 @@ pub enum CommandBoundary {
     /// transform between GHA YAML and a CiManifest; it touches neither the
     /// workspace GuestRuntime nor any long-lived workload (issue #823).
     CiAdapter,
+    /// Routed through the static CI-manifest gate (crate::ci_gate). A pure
+    /// validation entrypoint that inspects a CiManifest and asserts the four
+    /// executed-coverage invariants + ci-taxonomy class rules (issue #824); it
+    /// touches neither the workspace engine nor a host VM.
+    ManifestGate,
 }
 
 /// Full parity table for the supported command set.
@@ -161,6 +166,12 @@ pub fn command_parity_table() -> Vec<CommandParityEntry> {
             deprecated: false,
             note: "GHA backward-compat (issue #823): ci_import::run_emit_gha — emits a generated GitHub Actions workflow YAML from a CiManifest (output, not source of truth).",
         },
+        CommandParityEntry {
+            command: "lint-manifest",
+            boundary: CommandBoundary::ManifestGate,
+            deprecated: false,
+            note: "Static manifest gate (issue #824): runs crate::ci_gate against a CiManifest to reject false-green manifests (silent-skip, exit-0!=tested, missing runtime assertion, uncovered language, misclassified job) before they run; no workspace engine or host VM involvement.",
+        },
     ]
 }
 
@@ -257,6 +268,9 @@ mod tests {
         let ci_adapter_commands: HashSet<&str> =
             ["import-workflow", "emit-gha"].iter().copied().collect();
 
+        // Commands that route through the static CI-manifest gate (issue #824).
+        let manifest_gate_commands: HashSet<&str> = ["lint-manifest"].iter().copied().collect();
+
         for entry in &non_deprecated {
             if ci_tier_commands.contains(entry.command) {
                 assert_eq!(
@@ -270,6 +284,13 @@ mod tests {
                     entry.boundary,
                     CommandBoundary::CiAdapter,
                     "command '{}' must route through the CiAdapter boundary",
+                    entry.command
+                );
+            } else if manifest_gate_commands.contains(entry.command) {
+                assert_eq!(
+                    entry.boundary,
+                    CommandBoundary::ManifestGate,
+                    "command '{}' must route through the ManifestGate boundary",
                     entry.command
                 );
             } else if deployment_tier_commands.contains(entry.command) {
@@ -482,6 +503,9 @@ mod tests {
             // through the CiAdapter boundary (host-side YAML <-> manifest).
             "import-workflow",
             "emit-gha",
+            // Static CI-manifest gate (issue #824). Routed through the
+            // ManifestGate boundary; validates a CiManifest, executes nothing.
+            "lint-manifest",
         ]
         .iter()
         .copied()

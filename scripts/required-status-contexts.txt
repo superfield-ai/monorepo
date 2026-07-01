@@ -26,6 +26,7 @@
 #   rust.yml:rust-test                   -> Rust workspace tests (nextest, no-tests=fail)
 #   rust.yml:coverage-delta              -> Rust coverage-delta (touched package ran >0 tests)
 #   build.yml:coverage-truth             -> Coverage truth
+#   manifest-lint.yml:manifest-lint      -> Manifest gate (lint-manifest)
 
 Typecheck
 Lint
@@ -37,3 +38,4 @@ nexum embedder coverage (pgvector + governed weights)
 Rust workspace tests (nextest, no-tests=fail)
 Rust coverage-delta (touched package ran >0 tests)
 Coverage truth
+Manifest gate (lint-manifest)
