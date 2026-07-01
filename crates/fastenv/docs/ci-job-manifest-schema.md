@@ -15,11 +15,11 @@ This module (issue #821) defines the schema. The three decoupling seams have
 all shipped and are exposed on the FastENV CLI (`crates/fastenv/src/main.rs`),
 each owning a **disjoint** file:
 
-| Seam            | File                 | Implementation                | Status | CLI              |
-| --------------- | -------------------- | ----------------------------- | ------ | ---------------- |
-| Executor        | `src/ci_executor.rs` | `FastenvCiExecutor`           | shipped (#822/#826) | `run-manifest`   |
+| Seam            | File                 | Implementation                | Status              | CLI                            |
+| --------------- | -------------------- | ----------------------------- | ------------------- | ------------------------------ |
+| Executor        | `src/ci_executor.rs` | `FastenvCiExecutor`           | shipped (#822/#826) | `run-manifest`                 |
 | GHA adapter     | `src/ci_import.rs`   | `DefaultGithubActionsAdapter` | shipped (#823/#827) | `import-workflow` / `emit-gha` |
-| Validation gate | `src/ci_gate.rs`     | `StaticManifestGate`          | shipped (#824/#828) | `lint-manifest`  |
+| Validation gate | `src/ci_gate.rs`     | `StaticManifestGate`          | shipped (#824/#828) | `lint-manifest`                |
 
 The `Unimplemented{Executor,GithubActionsAdapter,ManifestGate}` variants remain
 only as compile-safe link stubs alongside the real implementations.

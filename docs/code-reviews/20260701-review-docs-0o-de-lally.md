@@ -22,11 +22,11 @@ Documentation is broadly aligned with the appliance architecture, but 34 drift f
 
 ## 3. Severity / classification summary
 
-| Severity | Count |
-| --- | --- |
-| high | 8 |
-| medium | 12 |
-| low | 14 |
+| Severity  | Count  |
+| --------- | ------ |
+| high      | 8      |
+| medium    | 12     |
+| low       | 14     |
 | **total** | **34** |
 
 Classifications: GAP_DOC (2), GAP_IMPL (1), INCONSISTENT (9), MISSING_COMMENT (1), STALE (15), STALE_COMMENT (2), STALE_HEADER (1), TEST_EXECUTION (2), UNRESOLVED_DECISION (1).
@@ -230,7 +230,7 @@ Six concurrent read-only workers, each pinned to the same commit in a shared rev
 - **Requirement:** `docs/testing-invariants.md:36`
 - **Evidence:** `docs/testing-invariants.md:36`, `scripts/check-coverage-delta.sh:122`, `scripts/check-coverage-delta.sh:131`, `scripts/check-coverage-delta.sh:159`, `.github/workflows/rust.yml:410`
 - **Confidence:** high
-- **Impact:** The invariant doc claims the coverage-delta gate makes 'touching a package's code require >0 of that package's tests to run.' The gate (check-coverage-delta.sh) is Rust-crates-only: owning_package() returns None for any path not under crates/ and the gate no-ops for TS packages (packages/*). coverage-truth.toml reserves 'package' for packages/* and 'crate' for crates/*, so the doc's unqualified 'per package' reads as covering TS packages while no coverage-delta enforcement exists for them; a TS package can be modified with zero of its tests executing and no gate fires.
+- **Impact:** The invariant doc claims the coverage-delta gate makes 'touching a package's code require >0 of that package's tests to run.' The gate (check-coverage-delta.sh) is Rust-crates-only: owning_package() returns None for any path not under crates/ and the gate no-ops for TS packages (packages/_). coverage-truth.toml reserves 'package' for packages/_ and 'crate' for crates/*, so the doc's unqualified 'per package' reads as covering TS packages while no coverage-delta enforcement exists for them; a TS package can be modified with zero of its tests executing and no gate fires.
 - **Recommendation:** Reword testing-invariants.md:36 to scope the gate to Rust crates (as the script does), or extend check-coverage-delta.sh + wiring to enforce a per-package floor for TS packages.
 
 ### review-docs-032 · MEDIUM · INCONSISTENT · owner: tests
@@ -416,12 +416,14 @@ All findings are documentation-or-comment drift except `review-docs-011`/`-012` 
 ## 10. Limitations and unreviewed surfaces
 
 **Limitations:**
+
 - Read-only static review at commit 6d89f1a7 in worktree adhoc/20260701-130004-review-docs-drift; no builds, tests, or workflows were executed. 'Executed-in-CI' verdicts are inferred from workflow YAML + #[ignore] attributes + seam filtersets, not observed runs.
 - GitHub branch-protection required_status_checks could not be read; invariant-4 coverage was verified only against the in-repo mirror scripts/required-status-contexts.txt.
 - Plan #199 (~198k chars) was grep-sampled for the reviewed topics, not read in full.
 - Sharp conceptual/algebra docs (merge-conflict-taxonomy, semantic-patches, branch-semantics) and pure comparison essays were deprioritized and not line-mapped to code.
 
 **Unreviewed surfaces:**
+
 - packages/* TypeScript internals beyond the doc-cited symbols (control apps component-level fidelity, api-server.ts /studio/run+/studio/reset, packages/git, packages/firecracker microVM boot honesty).
 - FastENV design/aspirational docs (ocap-access-control-design, alternative-isolation-for-agents, cloud-kvm-nesting, quota-prerequisites) and scout/benchmark artifacts.
 - crates/sharp server-config.md / server-operations.md (describe an HTTP server the crate does not contain as a library).

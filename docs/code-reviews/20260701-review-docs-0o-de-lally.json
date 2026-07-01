@@ -109,9 +109,7 @@
       "impact": "The schema doc still frames the executor/adapter/gate as unbuilt 'compile-safe stubs' owned by future issues #822/#823/#824, but all three shipped: FastenvCiExecutor (ci_executor.rs:8), DefaultGithubActionsAdapter (ci_import.rs:9), StaticManifestGate (ci_gate.rs:9), all CLI-exposed (main.rs run-manifest/import-workflow/emit-gha/lint-manifest) and unit-tested; Unimplemented* variants remain only as link stubs. A reader would think native execution / GHA round-trip / gate enforcement are not yet implemented.",
       "recommendation": "State the three seams are implemented; drop the 'ship as compile-safe stubs / land in parallel' framing.",
       "owner": "architecture",
-      "related_findings": [
-        "review-docs-014"
-      ]
+      "related_findings": ["review-docs-014"]
     },
     {
       "id": "review-docs-006",
@@ -187,9 +185,7 @@
       "impact": "merge_flow.rs's 'Merge guarantee' doc-comment states the gate 'is exercised end-to-end on Superfield's own Rust source, proving the no-non-compiling-merge guarantee at production scale.' In practice the end-to-end tests are #[ignore]d and excluded from the CI seam filterset, so nothing exercises it in CI. The comment asserts a proof that does not run.",
       "recommendation": "Soften the comment to describe the guarantee as enforced-by-code with tests gated on cargo/rust-analyzer, or wire the end-to-end test into CI.",
       "owner": "code",
-      "related_findings": [
-        "review-docs-011"
-      ]
+      "related_findings": ["review-docs-011"]
     },
     {
       "id": "review-docs-010",
@@ -231,9 +227,7 @@
       "impact": "The self-hosting gate (#447) and the no-non-compiling-merge guarantee are not proven by any CI-executing test. The single non-#[ignore]d self-hosting test (self_hosting_gate_semantic_merge_on_sharp_source, integration.rs:1226) does NOT run the real pipeline: it hand-simulates rename propagation with theirs.replace('compute_value','calculate_result') (line 1278) and calls pure three_way_merge (1281) \u2014 never invoking semantic_merge_rust, rust-analyzer, cargo_check, or merge_flow. Every test that exercises the compile gate / production merge pipeline (1524, 1607, 1318, 843, 880) is #[ignore]d and excluded from the rust-test-seam filterset.",
       "recommendation": "Provision cargo (+ rust-analyzer) in a CI job and add merge_flow's compile-gate refusal tests to an executed --run-ignored filterset asserting >0 ran; the executed self-hosting test should call semantic_merge_rust / run_merge_flow instead of a hand-simulated string replace.",
       "owner": "tests",
-      "related_findings": [
-        "review-docs-009"
-      ]
+      "related_findings": ["review-docs-009"]
     },
     {
       "id": "review-docs-012",
@@ -295,9 +289,7 @@
       "impact": "The ADR is still marked Status: Proposed and frames its schema and GHA-adapter work as future 'separate work'/Follow-up, yet the whole decision shipped and merged (schema #821/#825, native executor #822/#826, GHA adapter #823/#827, taxonomy/coverage gate #824/#828). It is even cited by ci-job-manifest-schema.md:3 as the 'Canonical decision.' A 'Proposed' status invites re-litigation of a built, enforced design and reads the closed Follow-up as open.",
       "recommendation": "Flip Status to Accepted (record closing issues #821-#828) and rewrite the Follow-up/Negative bullets into past-tense Consequences pointing at crates/fastenv/src/{manifest,ci_executor,ci_import,ci_gate}.rs, manifest-lint.yml, and the committed example manifest.",
       "owner": "architecture",
-      "related_findings": [
-        "review-docs-005"
-      ]
+      "related_findings": ["review-docs-005"]
     },
     {
       "id": "review-docs-015",

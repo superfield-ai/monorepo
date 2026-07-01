@@ -7,11 +7,11 @@ keeps the codebase well-tested without paying that price on every commit.
 
 ## Three layers
 
-| Layer                               | Speed      | Determinism | Cost   | Coverage       | When it runs          |
-| ----------------------------------- | ---------- | ----------- | ------ | -------------- | --------------------- |
-| 1. Unit + injected fake             | ms         | total       | $0     | Per-function   | Every PR              |
-| 2. Integration with replay fixtures | sub-second | total       | $0     | Cross-module   | Every PR              |
-| 3. Live smoke against vendor CLI    | minutes    | low         | real $ | Contract drift | Manually pre-release  |
+| Layer                               | Speed      | Determinism | Cost   | Coverage       | When it runs         |
+| ----------------------------------- | ---------- | ----------- | ------ | -------------- | -------------------- |
+| 1. Unit + injected fake             | ms         | total       | $0     | Per-function   | Every PR             |
+| 2. Integration with replay fixtures | sub-second | total       | $0     | Cross-module   | Every PR             |
+| 3. Live smoke against vendor CLI    | minutes    | low         | real $ | Contract drift | Manually pre-release |
 
 ### Layer 1 — Unit tests with injected fake spawn
 
