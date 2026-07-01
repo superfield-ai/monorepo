@@ -380,6 +380,133 @@ mod integration {
         );
     }
 
+    /// Acceptance (issue #835): the reconciled Studio feature-update route.
+    ///
+    /// Drives the exact route+method+payload the control frontend
+    /// (`FeaturePaneController.patchFeature`) now issues —
+    /// `POST /studio/issues/update { id, title }` — end to end against the live
+    /// nexum project graph, proving client and server agree on a single
+    /// feature-update contract:
+    ///
+    /// 1. A write-capable session creates an Issue via `POST /studio/issues`.
+    /// 2. `POST /studio/issues/update { id, title }` returns `200 OK`.
+    /// 3. `GET /studio/issues` reads the node back with the updated
+    ///    title/content (the write went through the project graph).
+    /// 4. A read-only Viewer session is rejected with `403 Forbidden` by the
+    ///    `require_write` gate on the update route.
+    ///
+    /// LOUD by construction: this test is `#[ignore]`d (DB-gated) and executes
+    /// in the `rust-test-seam` CI job, which provisions `DATABASE_URL` +
+    /// migrations and runs it under `--run-ignored all`. If `DATABASE_URL` is
+    /// absent there, `make_test_router` yields `None` and this test PANICS —
+    /// never a silent skip / false green.
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with the nexum project-graph schema migrated"]
+    async fn studio_issue_update_route_writes_through_project_graph() {
+        let (router, store) = make_test_router().await.expect(
+            "DATABASE_URL must be set for the DB-gated studio update test \
+             (loud-skip: this test asserts the substrate, it must never no-op)",
+        );
+
+        // A write-capable session (Collaborator passes `require_write`).
+        let session = store
+            .issue(Uuid::new_v4(), Uuid::new_v4(), Role::Collaborator)
+            .await
+            .expect("session issue failed");
+        let token = session.token.to_string();
+
+        // 1. Create an Issue node through the studio API.
+        let unique = Uuid::new_v4();
+        let orig_title = format!("issue-835-orig-{unique}");
+        let create = Request::builder()
+            .method(Method::POST)
+            .uri("/studio/issues")
+            .header("x-session-token", &token)
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({ "title": orig_title }).to_string(),
+            ))
+            .unwrap();
+        let create_resp = router.clone().oneshot(create).await.unwrap();
+        assert_eq!(
+            create_resp.status(),
+            StatusCode::CREATED,
+            "POST /studio/issues must create the node"
+        );
+        let create_body = axum::body::to_bytes(create_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let created: Value = serde_json::from_slice(&create_body).unwrap();
+        let issue_id = created["issue_id"]
+            .as_str()
+            .expect("issue_id in create response")
+            .to_string();
+
+        // 2. Update it via the reconciled route+method+payload the frontend
+        //    issues: POST /studio/issues/update { id, title }.
+        let new_title = format!("issue-835-reconciled-{unique}");
+        let update = Request::builder()
+            .method(Method::POST)
+            .uri("/studio/issues/update")
+            .header("x-session-token", &token)
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({ "id": issue_id, "title": new_title }).to_string(),
+            ))
+            .unwrap();
+        let update_resp = router.clone().oneshot(update).await.unwrap();
+        assert_eq!(
+            update_resp.status(),
+            StatusCode::OK,
+            "POST /studio/issues/update must 2xx for a write-capable session"
+        );
+
+        // 3. Read the node back and assert the content changed.
+        let list = Request::builder()
+            .method(Method::GET)
+            .uri("/studio/issues?node_type=Issue")
+            .header("x-session-token", &token)
+            .body(Body::empty())
+            .unwrap();
+        let list_resp = router.clone().oneshot(list).await.unwrap();
+        assert_eq!(list_resp.status(), StatusCode::OK);
+        let list_body = axum::body::to_bytes(list_resp.into_body(), usize::MAX)
+            .await
+            .unwrap();
+        let listed: Value = serde_json::from_slice(&list_body).unwrap();
+        let nodes = listed["nodes"].as_array().expect("nodes array in list");
+        let found = nodes
+            .iter()
+            .find(|n| n["id"].as_str() == Some(issue_id.as_str()))
+            .expect("updated node must be present in GET /studio/issues");
+        assert_eq!(
+            found["title"].as_str(),
+            Some(new_title.as_str()),
+            "the node title/content must reflect the update written through the project graph"
+        );
+
+        // 4. `require_write`: a read-only Viewer is rejected on the update route.
+        let viewer = store
+            .issue(Uuid::new_v4(), Uuid::new_v4(), Role::Viewer)
+            .await
+            .expect("viewer session issue failed");
+        let denied = Request::builder()
+            .method(Method::POST)
+            .uri("/studio/issues/update")
+            .header("x-session-token", viewer.token.to_string())
+            .header("content-type", "application/json")
+            .body(Body::from(
+                serde_json::json!({ "id": issue_id, "title": "must-not-apply" }).to_string(),
+            ))
+            .unwrap();
+        let denied_resp = router.oneshot(denied).await.unwrap();
+        assert_eq!(
+            denied_resp.status(),
+            StatusCode::FORBIDDEN,
+            "a read-only Viewer must be forbidden by require_write on /studio/issues/update"
+        );
+    }
+
     /// Acceptance (issue #711): an Owner-only route (`POST /orchestrator/start`,
     /// gated by `require_owner`) returns 403 for a non-Owner role and is not
     /// blocked by the authorization gate for the Owner.

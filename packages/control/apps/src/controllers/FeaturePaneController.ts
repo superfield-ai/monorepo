@@ -7,8 +7,14 @@
  *
  * Three intent-based actions:
  *   createFeature(title)             → POST /studio/issues
- *   patchFeature(number, body)       → PATCH /studio/issues/:number
+ *   patchFeature(number, body)       → POST /studio/issues/update { id, title }
  *   steer(context, sessionId)        → POST /studio/steer
+ *
+ * The update path targets the single feature-update route the sf-serve studio
+ * router registers (`POST /studio/issues/update` with `{ id, state?, title? }`,
+ * see crates/sf-serve/src/routes/studio.rs). It carries the project-graph node
+ * id (a UUID) resolved from the loaded feature list, so client, server, and
+ * docs/ux/studio-ux.md all describe one route+method+payload (issue #835).
  */
 
 import type { SlotInfo } from "./OrchestratorController";
@@ -25,6 +31,12 @@ export type FeatureStatus =
 
 export interface FeatureItem {
   issueNumber: number;
+  /**
+   * Project-graph node id (a UUID) for the backing DB record, when one exists.
+   * Populated from `/studio/issues`; absent for active slots with no DB node.
+   * `patchFeature` requires it — the sf-serve update route keys on this id.
+   */
+  id?: string;
   title: string;
   body?: string;
   sessionId?: string;
@@ -132,21 +144,33 @@ export class FeaturePaneController {
   async patchFeature(issueNumber: number, body: string): Promise<void> {
     this.state = { ...this.state, error: null };
     this.notify();
+    // Resolve the project-graph node id from the loaded feature list. The
+    // sf-serve studio router registers exactly one feature-update route —
+    // `POST /studio/issues/update { id, state?, title? }` — keyed on the node
+    // UUID, so the frontend must send that id rather than the issue number.
+    const target = this.state.features.find(
+      (f) => f.issueNumber === issueNumber,
+    );
+    if (!target?.id) {
+      this.state = { ...this.state, error: "NO DB RECORD TO UPDATE" };
+      this.notify();
+      return;
+    }
     try {
-      const res = await fetch(`${this.issuesUrl}/${issueNumber}`, {
-        method: "PATCH",
+      const res = await fetch(`${this.issuesUrl}/update`, {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body }),
+        body: JSON.stringify({ id: target.id, title: body }),
       });
       if (!res.ok) {
         const json = (await res.json().catch(() => ({}))) as { error?: string };
-        this.state = { ...this.state, error: json.error ?? "PATCH FAILED" };
+        this.state = { ...this.state, error: json.error ?? "UPDATE FAILED" };
         this.notify();
         return;
       }
       await this.fetch();
     } catch {
-      this.state = { ...this.state, error: "PATCH REQUEST FAILED" };
+      this.state = { ...this.state, error: "UPDATE REQUEST FAILED" };
       this.notify();
     }
   }
@@ -236,6 +260,7 @@ export class FeaturePaneController {
         const db = dbMap.get(slot.issueNumber);
         return {
           issueNumber: slot.issueNumber,
+          id: db?.id,
           title: db?.title ?? `Issue #${slot.issueNumber}`,
           body: db?.body,
           sessionId: slot.sessionId,
@@ -252,6 +277,7 @@ export class FeaturePaneController {
         .filter((i) => i.status !== "done")
         .map((i) => ({
           issueNumber: i.number,
+          id: i.id,
           title: i.title,
           body: i.body,
           source: "db" as FeatureSource,
@@ -286,6 +312,8 @@ export class FeaturePaneController {
 
 interface DbIssue {
   number: number;
+  /** Project-graph node id (UUID) for this record, used by the update route. */
+  id?: string;
   title: string;
   body?: string;
   status: string;
