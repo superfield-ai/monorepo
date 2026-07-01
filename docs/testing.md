@@ -11,7 +11,7 @@ keeps the codebase well-tested without paying that price on every commit.
 | ----------------------------------- | ---------- | ----------- | ------ | -------------- | --------------------- |
 | 1. Unit + injected fake             | ms         | total       | $0     | Per-function   | Every PR              |
 | 2. Integration with replay fixtures | sub-second | total       | $0     | Cross-module   | Every PR              |
-| 3. Live smoke against vendor CLI    | minutes    | low         | real $ | Contract drift | Nightly / pre-release |
+| 3. Live smoke against vendor CLI    | minutes    | low         | real $ | Contract drift | Manually pre-release  |
 
 ### Layer 1 — Unit tests with injected fake spawn
 
@@ -110,8 +110,9 @@ the same for Codex JSONL streams. Refresh fixtures only when:
 ### Layer 3 — Live smoke tests behind `SUPERFIELD_LIVE_AGENTS=1`
 
 A handful of tests gated on the `SUPERFIELD_LIVE_AGENTS` env var actually
-spawn the real agent CLIs end-to-end. They never run in PR CI; they run
-nightly or manually before a release. By default the live smoke suite runs
+spawn the real agent CLIs end-to-end. They never run in PR CI; there is no
+nightly workflow that runs them, so today they run only manually before a
+release. By default the live smoke suite runs
 against all supported backends; set `SUPERFIELD_LIVE_AGENTS=claude` or
 `SUPERFIELD_LIVE_AGENTS=codex` to narrow it.
 
@@ -129,9 +130,16 @@ liveDescribe("runIssueAudit live smoke", () => {
 ```
 
 `liveDescribe()` and `liveIt()` call `describe.skip` / `it.skip` when the
-env var is unset, so the suite is silent on PR runs and verbose on nightly.
-The live suite exercises the same code path as production, just with a real
-vendor CLI behind the agent abstraction.
+env var is unset, so the suite is silent on PR runs and verbose only when the
+var is set for a manual pre-release run. The live suite exercises the same code
+path as production, just with a real vendor CLI behind the agent abstraction.
+
+This intentional skip is the **sole sanctioned exception** to invariant 1
+(loud-skip, never silent-skip) in
+[testing-invariants.md](testing-invariants.md): Layer 3 is a safety net that is
+**explicitly not counted as coverage** — everything it touches is already
+covered for real by Layers 1 and 2 on every PR — so it is allowed to `skip`
+rather than fail when `SUPERFIELD_LIVE_AGENTS` is unset.
 
 **What it catches:** prompt drift (the model can no longer follow our prompt),
 vendor CLI flag changes, contract violations between our expected JSON shape
@@ -239,13 +247,33 @@ Never edit fixture files by hand. They are ground truth from the real model.
 ## Running the suites
 
 ```bash
-# Layer 1 + 2 — what runs in CI
+# TypeScript, Layer 1 + 2 — what runs in CI
 bun run test:unit
 bun run test:integration
 
-# Layer 3 — manual / nightly
+# TypeScript, Layer 3 — manual, pre-release only
 SUPERFIELD_LIVE_AGENTS=1 bun --bun vitest run packages/*/tests/live
+
+# Rust crates (crates/*) — executed in CI by the `rust.yml` workspace-tests job
+cargo nextest run --workspace --no-tests=fail
 ```
+
+## Rust crates and executed-coverage enforcement
+
+The three-layer strategy above describes the TypeScript agent-runtime harness.
+The Rust crates under `crates/*` (e.g. `crates/fastenv`) are tested separately:
+`cargo nextest run --workspace --no-tests=fail` runs in the `rust.yml`
+workspace-tests job, and `--no-tests=fail` makes a run that collects zero tests
+red rather than a false green.
+
+Both stacks are governed by the repo's executed-coverage invariants — loud-skip
+over silent-skip, exit 0 ≠ tested, runtime behaviour needs an executed-in-CI
+assertion, and required checks must cover every language present. Those rules,
+plus the `coverage-truth.toml` unit-to-test-job mapping and the
+`scripts/check-coverage-delta.sh` gate (which enforces >0 executed tests per
+touched Rust crate), are documented in
+[testing-invariants.md](testing-invariants.md). Read that document before
+adding a test you intend to count as coverage.
 
 ## Running CI workflows locally with `act`
 

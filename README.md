@@ -6,26 +6,28 @@ Where a traditional IDE helps a human write code, Superfield runs a continuous a
 
 ---
 
-## Phase 1 — Agent Orchestration Platform
+## Phase 1 — The Appliance
 
-The current release gives you four integrated layers:
+Superfield ships as a self-contained **appliance**: a single `superfield` binary that a company installs on infrastructure it controls. It arrives working — no external toolchain, no cloud account, and **no GitHub** (see `docs/technical-requirements.md`). The binary is the Forge described in [`docs/prd.md`](docs/prd.md): the knowledge base, project management, and CI orchestration in one process, backed by one store.
 
-| Layer                 | What it does                                                                                                                                                                                                                      |
-| --------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Orchestration**     | Continuous dev loop: CI watchdog → issue audit → blueprint conformance → primary + speculative coding agents → doc sync                                                                                                           |
-| **Self-improvement**  | Agents learn from their own run history. The planning loop audits past turns, detects drift from the blueprint, and tightens the rules curriculum over time (inspired by [Honcho](https://honcho.dev))                            |
-| **Blueprint (brain)** | A bundled knowledge graph of architectural rules, security threats, and design antipatterns. Agents receive a narrow rule slice on turn 1; deeper principles layer in as context expands. Every PR is self-audited before opening |
-| **Deploy + Control**  | One-command k3s deployment across GCP / DigitalOcean / AWS / Vultr, plus a browser console for watching agents work, steering them mid-turn, and triaging deployments                                                             |
+| Layer                       | What it does                                                                                                                                                                                                                     |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Daemon**                  | The binary re-executes itself as a supervised daemon: it provisions and health-gates a local PostgreSQL, runs migrations, then binds the HTTP serving layer. Managed with `superfield status` / `logs` / `daemon stop`.        |
+| **Gardening loop**          | An autonomous `tokio` loop (`sf-loop`) that continuously researches, reconciles, and derives the company brain — strategy → PRD → technical → architecture → plan → project graph → code-change proposals — resuming from a durable cursor. |
+| **Company brain (Nexum)**   | One PostgreSQL store unifying the knowledge base, embeddings, project graph, and transactional record. Knowledge pages (`prd`, `architecture`, `plan`, `strategy`, `technical`, `project`) are read with `superfield page <name>`. |
+| **fastenv**                 | The appliance's own execution environment (`crates/fastenv`) for isolated workloads — no Kubernetes, Docker daemon, or k3s in the target state (`docs/prd.md` §9).                                                              |
+
+> **Retired prototype.** An earlier TypeScript/Bun orchestrator drove the loop over GitHub issues/PRs and deployed via k3s. It was scaffolding to prove the loop and is **not** part of the appliance; GitHub is never required. Its internals remain only in git history and the `packages/*` tree, and are not documented as appliance architecture (`docs/architecture.md`).
 
 ## Phase 2 — Self-Improving App Platforms _(R&D)_
 
-Phase 1 keeps Git and GitHub as the delivery plane. Phase 2 replaces them with infrastructure purpose-built for agent iteration speed:
+The retired prototype leaned on Git and GitHub as its delivery plane. Phase 2 is the R&D successor: it replaces that plane with infrastructure purpose-built for agent iteration speed (the appliance itself already requires no GitHub — see Phase 1):
 
 | Component   | Repo                                                            | Role                                                                                                       |
 | ----------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
 | **Sharp**   | [`superfield-ai/sharp`](https://github.com/superfield-ai/sharp) | Agent-native VCS, backwards-compatible with Git. Branching-free change tracking at sub-second cadence      |
 | **Nexum**   | [`superfield-ai/nexum`](https://github.com/superfield-ai/nexum) | Self-improving synthetic corpus — living curriculum that agents refine as they work, improving future runs |
-| **FastEnv** | _(in design)_                                                   | Ultrafast container forking for sub-second CI inner loops — a fresh isolated env per test run              |
+| **FastEnv** | _(in active development — `crates/fastenv`)_                    | Ultrafast container forking for sub-second CI inner loops — a fresh isolated env per test run              |
 
 **The end goal: self-improving app platforms** — applications that continuously audit and improve themselves, with Superfield as the safe, observable, reversible runtime for autonomous self-modification.
 
@@ -33,102 +35,97 @@ Phase 1 keeps Git and GitHub as the delivery plane. Phase 2 replaces them with i
 
 ## Requirements
 
-- [Bun](https://bun.sh) v1.3+
-- A GitHub App authorization for the target repo (orchestration commands)
-- SSH access to a provisioned VPS (ops commands)
+- A Linux host you control.
+- A Rust toolchain (see `rust-version` in `Cargo.toml`) to build the binary.
+- PostgreSQL — the daemon provisions and supervises a **local** instance automatically; set `DATABASE_URL` to point at an external/managed Postgres instead.
+
+No GitHub account, GitHub App, or network access to github.com is required (`docs/technical-requirements.md`).
 
 ## Install
 
-```bash
-bun install
-```
-
-Build and install the CLI binary into `~/.bun/bin`:
+Build the single `superfield` binary from the workspace:
 
 ```bash
-bun run local-install
+cargo build --release
 ```
 
-```bash
-export PATH="$HOME/.bun/bin:$PATH"
-```
+The binary lands at `target/release/superfield`.
 
 ---
 
-## Orchestration
+## Running the appliance
 
-GitOps autonomous development loop. Issues are the task queue; the GitHub Plan issue tracker is the planning source of truth; PRs are change proposals.
-
-```bash
-superfield github add           # authenticate, install GitHub App, register repo
-superfield github forget        # remove credentials and print the app uninstall link
-
-superfield start [slotCount]    # begin the continuous development loop (foreground)
-superfield plan                 # sync all open issues into the Plan tracking issue
-superfield feature "<desc>"     # ticket a new feature issue and update the Plan
-```
-
-Config is saved to `~/.superfield/config.yaml`.
-
----
-
-## Control Console
-
-Browser UI for iterative development, UX design, agent monitoring, and deployment health.
+Most commands auto-spawn the daemon on first use (which health-gates Postgres and starts the gardening loop). You can also drive it explicitly.
 
 ```bash
-superfield control [--port <n>] [--repo <path>] [--api-url <url>]
+superfield serve [--bind <addr>]   # start the HTTP serving layer (default 0.0.0.0:7000)
+superfield status                  # show daemon status (exits 1 if not running)
+superfield logs                    # tail the daemon log
+superfield daemon stop             # graceful shutdown (drains loop, stops Postgres)
 ```
 
-Opens at `http://127.0.0.1:7000`. Four panels: studio session (chat + iframe + fixtures), component preview, orchestrator dashboard, deployment health.
+The HTTP server binds only after the health gate passes (Postgres up, migrations applied). See `docs/milestone-1.md` and `docs/architecture.md` §Daemon Lifecycle.
 
----
-
-## Ops Commands
-
-One-shot, idempotent deployment lifecycle commands.
+## Knowledge base and project
 
 ```bash
-superfield init <env>          # provision host, register GitHub secrets, deploy
-superfield doctor <env>        # preflight: SSH, k3s, DB, secrets
-superfield deploy-env <env>    # rolling update: build → push → apply → health gate
-superfield rollback-env <env>  # roll back to the previous deployment
-superfield destroy <env>       # tear down (prod requires confirmation)
-superfield export-db <env>     # pg_dump for local postgres; snapshot for managed DB
+superfield garden <file...> [--workspace-id <uuid>]   # ingest markdown into the Nexum knowledge graph
+superfield page <name>                                # print a knowledge page as markdown
+                                                      # name: prd | architecture | plan | strategy | technical | project
 ```
 
-### Cloud providers
+## Repos, sessions, and episodes
 
-| Provider     | VM  | Managed DB |
-| ------------ | --- | ---------- |
-| GCP          | ✅  | AlloyDB    |
-| DigitalOcean | ✅  | Managed PG |
-| AWS          | ✅  | RDS        |
-| Vultr        | ✅  | —          |
+```bash
+superfield repo init <name>                     # create or get a Sharp repo
+superfield repo list                            # list all repos
+superfield session issue <ws-id> <uid> <role>   # issue a session token
+superfield episode open <repo-id> <title>       # open an agent episode
+superfield episode append <ep-id> <type> <json> # append an event to an episode
+superfield episode finish <ep-id>               # close an episode
+superfield episode list <repo-id>               # list episodes for a repo
+```
+
+## Deploy
+
+```bash
+superfield deploy validate <config-json>            # validate a target config (no I/O)
+superfield deploy ship <config-json> <path>         # ship a build to a target
+superfield deploy rollback <record-json>            # roll back to the prior version
+superfield deploy-env <config-json> <artifact-path> # deploy artifact via pluggable transport
+superfield rollback-env <record-json>               # roll back using a deployment record
+superfield doctor <config-json>                     # preflight validation on a target config
+```
 
 ---
 
 ## Development
 
 ```bash
-bun run typecheck
-bun --bun vitest run packages/*/tests/unit
-bun --bun vitest run packages/*/tests/integration
-bun run test
+cargo build
+cargo test
+cargo clippy --all-targets
 ```
 
 ## Structure
 
 ```
-packages/
-  cli/           Commands — all CLI entry points
-  core/          Dev loop, planning loop, doc loop, ops orchestration
-  control/       Control webapp (Bun HTTP server + React UI)
-  control-core/  Shared types and utilities for the control layer
-  db/            Embedded database schema and migrations
-  github/        Octokit wrapper (GitHub API client)
-  git/           isomorphic-git wrapper (no git binary required)
+crates/
+  superfield/    Single-binary entrypoint — CLI dispatch + daemon runtime
+  sf-cli/        CLI command parsing and dispatch (operator + agent + garden + page)
+  sf-serve/      HTTP serving layer and app state
+  sf-loop/       Autonomous gardening loop engine
+  sf-db/         Shared schema, migrations, page registry, and project graph
+  sf-auth/       Sessions, roles, and access control
+  nexum/         Knowledge graph — documents, blocks, embeddings, page revisions
+  sharp/         Agent-native VCS and semantic-merge gate
+  fastenv/       Appliance execution environment (workload isolation, no k3s)
+  sf-deploy/     Deploy target validation and transports
+  sf-connector/  Read connectors to external systems of record
+  sf-notify/     Notification delivery
+  sf-eval/       Evaluation harness
 docs/
-  product.md       Product requirements and vision
-  architecture.md  Technical design
+  prd.md            Canonical product requirements
+  technical-requirements.md  Required software, derived from the vision
+  architecture.md   Technical design of the appliance substrate
 ```

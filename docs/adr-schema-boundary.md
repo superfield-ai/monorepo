@@ -80,8 +80,10 @@ traversal on any stock Postgres 14+ instance with no extra binary or port.
 
 ## Schema namespace assignment
 
-Each component owns exactly one PostgreSQL schema. No component may create
-objects in another component's schema.
+Each component owns its PostgreSQL schema(s). No component may create objects in
+another component's schema. Most components own exactly one schema; `sf-db` owns
+the substrate and `forge` schemas plus the shared `public.workspaces` identity
+table (the documented cross-component exception below).
 
 | PostgreSQL schema | Owner component | Tables (current)                                                                                                                                                                                                                                                     |
 | ----------------- | --------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -90,6 +92,8 @@ objects in another component's schema.
 | `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations`                                                                                                                                                                                                                      |
 | `orchestrator`    | Orchestrator    | `gardening_cursor`                                                                                                                                                                                                                                                   |
 | `substrate`       | sf-db           | `backups`                                                                                                                                                                                                                                                            |
+| `forge`           | sf-db           | `changes`, `validation_runs`, `policies`                                                                                                                                                                                                                             |
+| `public`          | sf-db           | `workspaces` (cross-component identity table — see exception below)                                                                                                                                                                                                  |
 
 ---
 
@@ -132,7 +136,15 @@ Examples:
 4. **Sequence scope.** Sequence numbers are scoped per component directory, not
    globally. The migration runner tracks applied migrations per component using
    the `(component, sequence)` key.
-5. **Migration comment header.** Each file opens with a comment block:
+5. **`public`/`workspaces` exception (sf-db).** Workspace identity is
+   deliberately cross-component, so `crates/sf-db/migrations/0001_workspaces.sql`
+   creates `public.workspaces` in the shared `public` schema — it carries **no**
+   `CREATE SCHEMA` statement and **no** schema token in its filename, and is the
+   one sanctioned departure from rules 1 and the `<NNNN>_<schema>_<description>`
+   naming convention. sf-db's own `substrate` schema is first created later, in
+   `crates/sf-db/migrations/0002_substrate_backups.sql`. No other component may
+   place objects in `public`.
+6. **Migration comment header.** Each file opens with a comment block:
 
 ```sql
 -- Migration: <filename>
@@ -160,13 +172,25 @@ Examples:
 
 ### RLS
 
-Row-level security is not yet enabled on any schema (see §Current Gaps in
-`docs/architecture.md`). The namespaced schema topology is a prerequisite for
-correct RLS scoping:
+Workspace-isolation row-level security is **enforced** on both deployment
+tracks (see `docs/architecture.md` §Cross-component joins and RLS scoping). The
+namespaced schema topology is what makes correct RLS scoping possible:
 
-- `ENABLE ROW LEVEL SECURITY` is applied per table within a schema.
-- All schemas will reference `auth.sessions` for identity context via
-  `current_setting('app.current_principal_id')` when RLS is enabled.
+- `ENABLE` + `FORCE ROW LEVEL SECURITY` is applied per table within a schema,
+  with full CRUD policies across the `sharp`/`nexum`/`auth` workspace-keyed
+  tables.
+- The RLS session key is `app.workspace_id`: policies filter on
+  `workspace_id::text = current_setting('app.workspace_id', true)`, and the Rust
+  `sf_db::acquire_with_workspace_id` helper sets it via `SET LOCAL` before any
+  workspace-keyed table is touched. `app.current_principal_id` is the **legacy**
+  variable — `acquire_with_workspace_id` still sets it, but no policy reads it.
+  An unscoped connection sees no workspace rows (NULL → fail-closed); a
+  `superfield_admin` `BYPASSRLS` role lets migrations and background jobs bypass
+  the policies.
+- The two tracks mirror each other: the k3s/TS form lives in
+  `packages/db/migrations/0001_rls_workspace_isolation.sql`, and the appliance
+  form in `crates/sharp/migrations/0009_rls_workspace_isolation.sql` (applied
+  last so every schema exists first), each with a passing integration test.
 - The schema boundary means policies for `sharp` tables cannot interfere with
   `nexum` tables and vice versa.
 

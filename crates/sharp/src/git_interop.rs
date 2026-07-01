@@ -22,6 +22,8 @@
 //!
 //! Submodule recursion and Git LFS object fetch are explicit v1 punts.
 //!
+//! Canonical doc: `crates/sharp/docs/git-interop.md`.
+//!
 //! See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp)` and whitepaper §7.
 
 use crate::error::SharpError;

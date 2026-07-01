@@ -40,20 +40,27 @@ See also: `docs/architecture.md` §Daemon Lifecycle.
 
 ## §4.3 — Gardening command surface
 
-The `superfield garden` subcommand exposes the gardening loop to human operators and to the CLI auto-spawn path. It is distinct from the daemon's internal loop — the CLI `garden` command is the entry point for ad-hoc runs and for the auto-spawn sequence.
+The gardening loop is **not** driven by human-invoked run/step subcommands. The shipped `superfield garden` surface is a single ingest verb, and the run/step lifecycle lives entirely inside the daemon-supervised loop engine.
 
-**Subcommands:**
+**Seed ingestion — `garden <file...>`:**
 
-| Subcommand        | Description                                                                       |
-| ----------------- | --------------------------------------------------------------------------------- |
-| `garden run`      | Execute one gardening cycle (research → reconcile → commit cursor) and exit       |
-| `garden start`    | Ensure the daemon is running and the loop is active; idempotent                   |
-| `garden status`   | Print the current gardening cursor, last step timestamp, and loop health          |
-| `garden step <n>` | Force-advance the cursor by `n` steps without waiting for the normal loop cadence |
+```text
+superfield garden <file1> [file2...] [--workspace-id <uuid>]
+```
 
-The `garden run` path is the reference implementation for the loop step contract: it must succeed from a cold start (no prior cursor) and produce an observable change in the knowledge base (at minimum, one new document block or one updated link).
+`garden` reads one or more markdown files and ingests them into the Nexum knowledge graph as versioned documents (`garden_ingest` → `nexum.documents`/`blocks`, deduped by content hash). It is idempotent by canonical source path. This is how the company brain is seeded; it does not itself advance the gardening cursor. This matches `docs/architecture.md`, which documents `garden <file...>` as "Ingest markdown files into the Nexum knowledge graph."
 
-See also: `crates/sf-cli/src/garden.rs` for the CLI dispatch layer.
+**Run/step lifecycle — the daemon loop engine:**
+
+The research → reconcile → commit-cursor cycle is executed continuously by the `sf-loop` engine as a `tokio` task the daemon supervises (see §4.4). It resumes from its persisted cursor on daemon boot and advances on its own cadence — there is no per-step human command. Operators observe and control it through the daemon:
+
+- `superfield status` — daemon (and therefore loop) liveness.
+- `superfield logs` — tail the daemon log, including the loop's per-step activity.
+- `superfield daemon stop` — graceful shutdown that drains the current step and commits the cursor before Postgres stops.
+
+The loop-step contract (cold start with no prior cursor, at-least-once commit, observable knowledge-base change per step) is the responsibility of the loop engine, defined in §4.4.
+
+See also: `crates/sf-cli/src/garden.rs` for the `garden` ingest dispatch and `crates/sf-loop/src/lib.rs` for the loop engine.
 
 ---
 
@@ -93,9 +100,9 @@ The project graph (`crates/sf-db/src/project_graph.rs`) is the typed representat
 
 **Milestone 1 requirements for the project graph:**
 
-1. **Issue nodes** — every GitHub issue ingested by the daemon is represented as an `Issue` node in the graph, linked to its parent `Feature` (if any) and to its `AcceptanceCriteria` child nodes.
+1. **Feature and Issue nodes** — the appliance daemon does **not** ingest GitHub issues (GitHub is never required — `docs/technical-requirements.md`). The `ProjectGraphDerive` gardening step derives `Feature` and `Issue` nodes from the `plan`/`prd`/`strategy` knowledge pages (`docs/architecture.md`), writing them to `nexum.project_nodes` via `insert_feature`/`insert_issue`.
 
-2. **Acceptance criteria nodes** — each acceptance criterion checkbox from an issue body is parsed and stored as a typed `AcceptanceCriteria` node linked to its parent `Issue` node.
+2. **Acceptance criterion nodes** — each acceptance criterion is stored as a typed `AcceptanceCriterion` node linked to its parent `Feature` node via the `project:feature_has_acceptance_criterion` edge (`crates/sf-db/src/project_graph.rs`, `insert_acceptance_criterion`).
 
 3. **Test linkage** — test functions named in the source tree are linked to the acceptance criteria they verify, enabling the gardening loop to report coverage gaps.
 

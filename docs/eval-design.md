@@ -71,7 +71,7 @@ grader is itself sampled and thresholded (see Non-determinism).
 ### Tier 0 — Deterministic seam tests (have this today)
 
 `FixtureAgentExecutor` (`crates/sf-loop/src/agent.rs`) already lets us test loop
-plumbing without a model: stage ordering across the seven gardening steps,
+plumbing without a model: stage ordering across the nine gardening steps,
 `orchestrator.gardening_cursor` resume-after-crash, and the merge gates
 (`cargo_check`, `ast_equivalence`, `tier1` classification). This confirms the
 _plumbing_, not the _intelligence_. Runs on every PR.

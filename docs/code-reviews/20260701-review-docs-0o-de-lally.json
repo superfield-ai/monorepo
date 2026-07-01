@@ -1,0 +1,709 @@
+{
+  "schema_version": 1,
+  "review": "review-docs",
+  "repository": "https://github.com/superfield-ai/monorepo",
+  "branch": "main",
+  "commit": "6d89f1a724ccd7ec8fe4b07c5dcd5ae47deed88b",
+  "reviewed_at": "2026-07-01",
+  "scope": [
+    "Documentation-drift review across canonical docs, accepted ADRs, GitHub Plan #199, implementation, and source back-links",
+    "docs/ (prd, architecture, technical-requirements, milestone-1, ADRs, testing, testing-invariants, eval-design, runtime-agent-selection, control-template-integration, ux/studio-ux, scout/*, vision)",
+    "crates/sharp/docs/* and crates/fastenv/docs/*",
+    "coverage-truth.toml and .github/workflows/*",
+    "README.md"
+  ],
+  "verdict": "Documentation is broadly aligned with the appliance architecture, but 34 drift findings remain: 8 high (retired-prototype README, unreconciled ADR/RLS status, Sharp merge-guarantee tests that never execute in CI, retired Node/Bun control doc, unrouted studio endpoints), 12 medium, 14 low.",
+  "findings": [
+    {
+      "id": "review-docs-001",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": ".github/workflows/rust.yml:18",
+      "evidence": [
+        ".github/workflows/rust.yml:18",
+        "scripts/required-status-contexts.txt:31"
+      ],
+      "impact": "rust.yml header comment says the canonical required set is '10 today'; required-status-contexts.txt actually lists 11 required contexts (Typecheck, Lint, Format, Unit, Integration, Container build, embedder coverage, Rust workspace tests, coverage-delta, Coverage truth, Manifest gate). Off-by-one in a CI-doc comment.",
+      "recommendation": "Update the count to 11, or drop the hard-coded number and point at the file.",
+      "owner": "operations",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-002",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "high",
+      "confidence": "high",
+      "requirement": "README.md:11",
+      "evidence": [
+        "README.md:3",
+        "README.md:9-30",
+        "README.md:36-38",
+        "README.md:88-107",
+        "README.md:122-134",
+        "docs/technical-requirements.md:5",
+        "docs/architecture.md:5",
+        "docs/prd.md:3"
+      ],
+      "impact": "The front-door README still presents the retired TypeScript/Bun/GitHub-App/k3s prototype as 'the current release' Agent IDE, contradicting the standing 'GitHub is never required' constraint (technical-requirements.md:5) and the appliance direction (prd.md, architecture.md). Its Structure section lists only packages/* (TS) and omits every crates/* Rust crate that now IS the product; it points at docs/product.md, a file prd.md:3 says it supersedes. Plan #199 tracks README fixes only for crates/fastenv/README.md and evals/README.md \u2014 the root README drift is untracked.",
+      "recommendation": "Rewrite README to describe the Rust appliance (single superfield binary, daemon + gardening loop, local Postgres, fastenv, crates/* layout); remove Bun/GitHub-App/k3s requirements or mark them retired; fix the dead docs/product.md link to docs/prd.md + docs/architecture.md.",
+      "owner": "product",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-003",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": "coverage-truth.toml:52",
+      "evidence": [
+        "coverage-truth.toml:52",
+        "coverage-truth.toml:131",
+        "coverage-truth.toml:156",
+        "coverage-truth.toml:173",
+        ".github/workflows/rust.yml:98",
+        ".github/workflows/rust.yml:220",
+        ".github/workflows/rust.yml:343"
+      ],
+      "impact": "coverage-truth.toml's header and several crate-row notes attribute the DB-gated 'cargo nextest run -p sf-db -p sf-serve -p sharp -p superfield -p sf-loop --run-ignored all' execution to the rust-test job (issue #765). In reality rust-test is issue #764 (hermetic, no -p, no --run-ignored, rust.yml:98) and the DB-gated command lives in the separate rust-test-seam job (rust.yml:343, issue #765) which is explicitly NOT a required context (rust.yml:220). Enforcement is unaffected, but the manifest mis-identifies the executing job and hides that these counts come from a non-required job.",
+      "recommendation": "Correct the header (line 52) and the sf-db/sf-serve/sharp/superfield/sf-loop row notes to name rust-test-seam as the DB-gated executor.",
+      "owner": "tests",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-004",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": "coverage-truth.toml:89",
+      "evidence": [
+        "coverage-truth.toml:89",
+        "coverage-truth.toml:90",
+        ".github/workflows/rust.yml:161",
+        ".github/workflows/rust.yml:166",
+        "crates/fastenv/src/ci_executor.rs:936"
+      ],
+      "impact": "coverage-truth.toml records crates/fastenv tests_executed_in_ci=0 with the note 'rust.yml builds but never runs crate tests; no cargo-test job exists.' That note is factually stale: the required rust-test job runs `cargo nextest run --workspace --no-tests=fail` (rust.yml:166), which executes fastenv's ~300 non-#[ignore]d hermetic tests (319 test attrs, 17 ignored), including the native-execution end-to-end test ci_executor.rs:936. The manifest undercounts because check-coverage-truth.sh only credits `-p <crate>` lines and does not parse --workspace, so fastenv's real executed coverage is invisible and its note asserts a falsehood.",
+      "recommendation": "Correct the crates/fastenv row: it IS executed (via the required --workspace nextest run); update the note and, if per-crate crediting is desired, teach check-coverage-truth.sh to attribute --workspace execution or add an explicit -p fastenv line.",
+      "owner": "tests",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-005",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": "crates/fastenv/docs/ci-job-manifest-schema.md:14",
+      "evidence": [
+        "crates/fastenv/docs/ci-job-manifest-schema.md:14",
+        "crates/fastenv/src/ci_executor.rs:8",
+        "crates/fastenv/src/ci_import.rs:9",
+        "crates/fastenv/src/ci_gate.rs:9",
+        "crates/fastenv/src/main.rs:196"
+      ],
+      "impact": "The schema doc still frames the executor/adapter/gate as unbuilt 'compile-safe stubs' owned by future issues #822/#823/#824, but all three shipped: FastenvCiExecutor (ci_executor.rs:8), DefaultGithubActionsAdapter (ci_import.rs:9), StaticManifestGate (ci_gate.rs:9), all CLI-exposed (main.rs run-manifest/import-workflow/emit-gha/lint-manifest) and unit-tested; Unimplemented* variants remain only as link stubs. A reader would think native execution / GHA round-trip / gate enforcement are not yet implemented.",
+      "recommendation": "State the three seams are implemented; drop the 'ship as compile-safe stubs / land in parallel' framing.",
+      "owner": "architecture",
+      "related_findings": [
+        "review-docs-014"
+      ]
+    },
+    {
+      "id": "review-docs-006",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": "crates/fastenv/docs/implementation-plan.md:61",
+      "evidence": [
+        "crates/fastenv/docs/implementation-plan.md:61",
+        "crates/fastenv/docs/migration-note.md:1",
+        "crates/fastenv/docs/migration-note.md:86",
+        "crates/fastenv/src/boundary.rs:1",
+        "crates/fastenv/src/security_regression.rs:1",
+        "crates/fastenv/docs/architecture.md:416"
+      ],
+      "impact": "Every Phase 1-6 checklist item in the Project-VM implementation plan is an unchecked [ ], while the migration note ('the Rust implementation is now the canonical code path; the Go prototype is deprecated'), the parity harness, the shipped boundary/security-regression modules, and the removed Go tree show most of the cutover has landed. Readers cannot tell remaining work from completed work.",
+      "recommendation": "Check off the delivered Phase 1/4/5/6 items or add a status banner pointing at migration-note.md as the current-state source of truth.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-007",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "high",
+      "confidence": "high",
+      "requirement": "crates/sharp/docs/postgres-storage-plugin.md:22",
+      "evidence": [
+        "crates/sharp/docs/postgres-storage-plugin.md:22",
+        "crates/sharp/docs/postgres-storage-plugin.md:174",
+        "crates/sharp/migrations/0001_sharp_vcs_schema.sql:1"
+      ],
+      "impact": "postgres-storage-plugin.md names 'the shipped migrations under apps/server/migrations/<seq>__<name>.sql' as 'the executable source of truth for exact column types.' No apps/ directory exists anywhere in the repo; the authoritative migrations live under crates/sharp/migrations/ with a different scheme (000N_sharp_<name>.sql). A reader following the doc lands nowhere.",
+      "recommendation": "Repoint the schema source-of-truth reference to crates/sharp/migrations/ with the real 000N_sharp_<name>.sql naming.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-008",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "medium",
+      "confidence": "medium",
+      "requirement": "crates/sharp/docs/postgres-storage-plugin.md:33",
+      "evidence": [
+        "crates/sharp/docs/postgres-storage-plugin.md:37",
+        "crates/sharp/docs/postgres-storage-plugin.md:67",
+        "crates/sharp/docs/postgres-storage-plugin.md:75",
+        "crates/sharp/docs/postgres-storage-plugin.md:178",
+        "crates/sharp/migrations/0001_sharp_vcs_schema.sql:23",
+        "crates/sharp/migrations/0001_sharp_vcs_schema.sql:50",
+        "crates/sharp/migrations/0005_sharp_refs_model.sql:13"
+      ],
+      "impact": "The plugin doc describes a schema the authoritative crate does not match: objects.id documented bytea but shipped sha256 TEXT PK (and the shipped repo_id column is omitted); refs.target documented bytea but shipped target_sha TEXT hex; commit_metadata documented as a generic namespace/key/value annotation store but shipped as denormalized commit fields (parent_sha/message/author/authored_at) \u2014 same name, different meaning; the representations table and annotation-style commit_metadata are not implemented in any migration; and it references a 'postgres package' where the crate uses sqlx. Reads as describing the old TS-prototype server.",
+      "recommendation": "Reconcile with crates/sharp/migrations: fix id/target types to text-hex, mark representations/annotation-commit_metadata as not-yet-shipped, and replace 'postgres package' with sqlx.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-009",
+      "review": "review-docs",
+      "classification": "STALE_COMMENT",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": null,
+      "evidence": [
+        "crates/sharp/src/merge_flow.rs:18",
+        "crates/sharp/src/merge_flow.rs:19",
+        "crates/sharp/src/merge_flow.rs:20",
+        "crates/sharp/tests/integration.rs:1523"
+      ],
+      "impact": "merge_flow.rs's 'Merge guarantee' doc-comment states the gate 'is exercised end-to-end on Superfield's own Rust source, proving the no-non-compiling-merge guarantee at production scale.' In practice the end-to-end tests are #[ignore]d and excluded from the CI seam filterset, so nothing exercises it in CI. The comment asserts a proof that does not run.",
+      "recommendation": "Soften the comment to describe the guarantee as enforced-by-code with tests gated on cargo/rust-analyzer, or wire the end-to-end test into CI.",
+      "owner": "code",
+      "related_findings": [
+        "review-docs-011"
+      ]
+    },
+    {
+      "id": "review-docs-010",
+      "review": "review-docs",
+      "classification": "MISSING_COMMENT",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": null,
+      "evidence": [
+        "crates/sharp/src/projections.rs:1",
+        "crates/sharp/src/hooks.rs:14",
+        "crates/sharp/src/git_interop.rs:1",
+        "crates/sharp/src/episode.rs:6",
+        "crates/sharp/docs/projections.md:3",
+        "crates/sharp/docs/hooks-guide.md:9"
+      ],
+      "impact": "Back-link asymmetry across Sharp modules: several crates/sharp/docs files point at their implementing module, but the modules' header doc-comments cite only docs/architecture.md/whitepaper/engineering-plan, not their dedicated canonical doc (projections.rs<->projections.md, hooks.rs<->hooks.md/hooks-guide.md, git_interop.rs<->git-interop.md, episode.rs<->episodes.md). A maintainer editing the module is not routed to the descriptive doc that must stay in sync.",
+      "recommendation": "Add a one-line back-reference in each module header to its canonical crates/sharp/docs doc so the link is bidirectional. Cluster: projections/hooks/git_interop/episode modules.",
+      "owner": "code",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-011",
+      "review": "review-docs",
+      "classification": "TEST_EXECUTION",
+      "severity": "high",
+      "confidence": "high",
+      "requirement": "crates/sharp/src/merge_flow.rs:5",
+      "evidence": [
+        "crates/sharp/tests/integration.rs:1226",
+        "crates/sharp/tests/integration.rs:1278",
+        "crates/sharp/tests/integration.rs:1281",
+        "crates/sharp/tests/integration.rs:1523",
+        "crates/sharp/tests/integration.rs:1606",
+        "crates/sharp/tests/integration.rs:842",
+        "crates/sharp/tests/integration.rs:879",
+        "crates/sharp/tests/integration.rs:1317"
+      ],
+      "impact": "The self-hosting gate (#447) and the no-non-compiling-merge guarantee are not proven by any CI-executing test. The single non-#[ignore]d self-hosting test (self_hosting_gate_semantic_merge_on_sharp_source, integration.rs:1226) does NOT run the real pipeline: it hand-simulates rename propagation with theirs.replace('compute_value','calculate_result') (line 1278) and calls pure three_way_merge (1281) \u2014 never invoking semantic_merge_rust, rust-analyzer, cargo_check, or merge_flow. Every test that exercises the compile gate / production merge pipeline (1524, 1607, 1318, 843, 880) is #[ignore]d and excluded from the rust-test-seam filterset.",
+      "recommendation": "Provision cargo (+ rust-analyzer) in a CI job and add merge_flow's compile-gate refusal tests to an executed --run-ignored filterset asserting >0 ran; the executed self-hosting test should call semantic_merge_rust / run_merge_flow instead of a hand-simulated string replace.",
+      "owner": "tests",
+      "related_findings": [
+        "review-docs-009"
+      ]
+    },
+    {
+      "id": "review-docs-012",
+      "review": "review-docs",
+      "classification": "TEST_EXECUTION",
+      "severity": "high",
+      "confidence": "high",
+      "requirement": "crates/sharp/docs/test-plan.md:11",
+      "evidence": [
+        "crates/sharp/tests/scenarios.rs:412",
+        "crates/sharp/tests/scenarios.rs:413",
+        "crates/sharp/tests/scenarios.rs:426",
+        "crates/sharp/tests/scenarios.rs:437",
+        "crates/sharp/tests/scenarios.rs:438",
+        "crates/sharp/docs/test-plan.md:11",
+        ".github/workflows/rust.yml:343"
+      ],
+      "impact": "test-plan.md declares the differential harness 'the source of truth for Sharp is better than git on real code-change scenarios', but 11 of the 12 Rust scenarios (every rename/format/import/reorder case that exercises the semantic path via rust-analyzer + cargo check) are #[ignore]d. The only un-ignored scenario (delete_edit_delete_then_edit) is pure path-classification and never invokes the semantic engine; the rust-test-seam filterset selects no scenario tests. The central 'Sharp beats git' claim has no executed-in-CI assertion and the #[ignore]d tests silently skip when rust-analyzer/cargo are absent (loud-skip + executed-assertion invariants violated).",
+      "recommendation": "Add a CI job that provisions rust-analyzer + cargo and runs the scenario corpus with --run-ignored all --no-tests=fail asserting >0 semantic scenarios execute, or gate the tests so missing tooling fails loudly.",
+      "owner": "tests",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-013",
+      "review": "review-docs",
+      "classification": "STALE_COMMENT",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": null,
+      "evidence": [
+        "crates/superfield/src/main.rs:84",
+        "crates/sf-db/src/page_query.rs:54",
+        "crates/sf-db/src/page_query.rs:59",
+        "docs/architecture.md:787"
+      ],
+      "impact": "The `superfield page <name>` CLI usage/help text lists 'prd | architecture | plan | strategy | project' and omits `technical`, but `technical` is a real known page (KNOWN_PAGES, page_query.rs:59) and architecture.md:787 lists it in the page registry. A user reading --help won't learn the technical page is fetchable.",
+      "recommendation": "Add `technical` to the `page <name>` help text in crates/superfield/src/main.rs so CLI help matches KNOWN_PAGES and architecture.md.",
+      "owner": "code",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-014",
+      "review": "review-docs",
+      "classification": "STALE_HEADER",
+      "severity": "high",
+      "confidence": "high",
+      "requirement": "docs/adr-ci-execution-manifest.md:4",
+      "evidence": [
+        "docs/adr-ci-execution-manifest.md:4",
+        "docs/adr-ci-execution-manifest.md:126",
+        "docs/adr-ci-execution-manifest.md:128",
+        "crates/fastenv/src/manifest.rs:1",
+        "crates/fastenv/src/ci_executor.rs:462",
+        "crates/fastenv/src/ci_import.rs:1",
+        "crates/fastenv/src/ci_gate.rs:1",
+        ".github/workflows/manifest-lint.yml:73",
+        "crates/fastenv/docs/ci-job-manifest-schema.md:3"
+      ],
+      "impact": "The ADR is still marked Status: Proposed and frames its schema and GHA-adapter work as future 'separate work'/Follow-up, yet the whole decision shipped and merged (schema #821/#825, native executor #822/#826, GHA adapter #823/#827, taxonomy/coverage gate #824/#828). It is even cited by ci-job-manifest-schema.md:3 as the 'Canonical decision.' A 'Proposed' status invites re-litigation of a built, enforced design and reads the closed Follow-up as open.",
+      "recommendation": "Flip Status to Accepted (record closing issues #821-#828) and rewrite the Follow-up/Negative bullets into past-tense Consequences pointing at crates/fastenv/src/{manifest,ci_executor,ci_import,ci_gate}.rs, manifest-lint.yml, and the committed example manifest.",
+      "owner": "architecture",
+      "related_findings": [
+        "review-docs-005"
+      ]
+    },
+    {
+      "id": "review-docs-015",
+      "review": "review-docs",
+      "classification": "GAP_DOC",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": "docs/adr-schema-boundary.md:92",
+      "evidence": [
+        "docs/adr-schema-boundary.md:86",
+        "docs/adr-schema-boundary.md:92",
+        "crates/sf-db/migrations/0004_change_lifecycle.sql:33",
+        "crates/sf-db/migrations/0005_policy_engine.sql:40",
+        "crates/sf-db/migrations/0001_workspaces.sql:1",
+        "docs/architecture.md:90"
+      ],
+      "impact": "The ADR's authoritative schema-namespace-assignment table lists sf-db as owning only the substrate schema (backups). sf-db now also owns the entire forge schema (forge.changes, forge.validation_runs, forge.policies \u2014 the Change lifecycle and Policy engine behind PRD US4/US13) and the cross-component public.workspaces identity table. architecture.md:90 already records forge; the ADR namespace table is the stated ownership source of truth and is incomplete, so future components will miss two live schemas.",
+      "recommendation": "Add forge (owner sf-db: changes, validation_runs, policies) and the public.workspaces identity table to the ADR namespace table, mirroring architecture.md:90.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-016",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "low",
+      "confidence": "medium",
+      "requirement": "docs/adr-schema-boundary.md:123",
+      "evidence": [
+        "docs/adr-schema-boundary.md:99",
+        "docs/adr-schema-boundary.md:123",
+        "crates/sf-db/migrations/0001_workspaces.sql:1",
+        "crates/sf-db/migrations/0002_substrate_backups.sql:1"
+      ],
+      "impact": "The ADR's migration-naming rules require <NNNN>_<schema>_<description>.sql and that every component's 0001_* migration begin with CREATE SCHEMA IF NOT EXISTS <component>. sf-db's 0001_workspaces.sql instead creates the workspaces table in the shared public schema (no CREATE SCHEMA, no schema token in the filename), and the substrate schema is first created in 0002. This is a real, undocumented exception (workspace identity is deliberately cross-component/public) the ADR's rules do not carve out.",
+      "recommendation": "Note the explicit public/workspaces exception in the ADR, or reconcile the sf-db migration filenames with the documented convention.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-017",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "high",
+      "confidence": "high",
+      "requirement": "docs/adr-schema-boundary.md:163",
+      "evidence": [
+        "docs/adr-schema-boundary.md:163",
+        "packages/db/migrations/0001_rls_workspace_isolation.sql:5",
+        "crates/sharp/migrations/0009_rls_workspace_isolation.sql:1",
+        "crates/sf-db/tests/rls_workspace_isolation_integration.rs:1",
+        "docs/architecture.md:127"
+      ],
+      "impact": "The ADR's RLS section asserts 'Row-level security is not yet enabled on any schema', but workspace-isolation RLS is now implemented and enforced on both deployment tracks (ENABLE + FORCE ROW LEVEL SECURITY with CRUD policies across sharp/nexum/auth, a BYPASSRLS superfield_admin role, and a passing integration test). architecture.md:127 already documents RLS as live, so the ADR directly contradicts the canonical architecture doc and understates the security posture.",
+      "recommendation": "Update ADR RLS section to state RLS is enforced, cite the two migrations and the two-track mirroring already captured in architecture.md.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-018",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": "docs/adr-schema-boundary.md:169",
+      "evidence": [
+        "docs/adr-schema-boundary.md:169",
+        "crates/sharp/migrations/0009_rls_workspace_isolation.sql:146",
+        "crates/sharp/migrations/0009_rls_workspace_isolation.sql:30",
+        "crates/sf-db/src/lib.rs:15",
+        "docs/architecture.md:132"
+      ],
+      "impact": "The ADR states RLS identity context is carried via current_setting('app.current_principal_id'), but the actual policies key on app.workspace_id; app.current_principal_id is now the LEGACY variable (acquire_with_workspace_id sets both, policies read workspace_id). Anyone implementing a new schema's RLS from the ADR would key on the wrong session variable and get fail-open or empty results.",
+      "recommendation": "Change the ADR to specify app.workspace_id as the RLS session key (app.current_principal_id noted as legacy), matching migration 0009 and architecture.md:132.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-019",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": "docs/adr-schema-boundary.md:202",
+      "evidence": [
+        "docs/adr-schema-boundary.md:202",
+        "crates/sf-db/src/migrate.rs:111",
+        "crates/sf-db/src/migrate.rs:112",
+        "docs/architecture.md:134"
+      ],
+      "impact": "The ADR Consequences state the migration runner applies in order 'auth -> nexum -> sharp -> orchestrator', but the real COMPONENT_DIRS order is sf-db -> sf-auth -> nexum -> sharp -> orchestrator. The ADR omits sf-db entirely, yet sf-db runs FIRST and creates workspaces, threads workspace_id onto every component table, and creates the forge schema \u2014 prerequisites for later migrations. A reader relying on the ADR ordering would mis-sequence a new migration.",
+      "recommendation": "Correct the ADR ordering to sf-db -> sf-auth -> nexum -> sharp -> orchestrator, citing migrate.rs:111 COMPONENT_DIRS (already correct in architecture.md:134).",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-020",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "high",
+      "confidence": "high",
+      "requirement": "docs/control-template-integration.md:1",
+      "evidence": [
+        "docs/control-template-integration.md:2",
+        "docs/control-template-integration.md:23",
+        "docs/control-template-integration.md:59",
+        "docs/control-template-integration.md:70",
+        "docs/control-template-integration.md:122",
+        "packages/cli/commands/control.ts:17",
+        "packages/cli/commands/control.ts:113",
+        "packages/cli/commands/control.ts:151",
+        "packages/control/package.json:2",
+        "packages/control-core/manifest-parser.ts:162"
+      ],
+      "impact": "The entire doc specifies a Node/Bun @superfield/control studio server (src/config.ts, deploy.ts, agent.ts, claude-session.ts, design-mode-context.ts, helpers.ts) that no longer exists after the #452 cutover. packages/cli/commands/control.ts now builds the Vite UI and delegates ALL serving to the sf-serve Rust binary ('No Node/Bun backend process is started'). The --repo flag is now --path; controlCommand/_startControl is now _startSfServe; loadConfig()/discoverServicePort(...,'web') moved to control-core/manifest-parser.ts:162; the cli/packages/ path prefix predates the reorg. The \u00a72 12-test plan targets a retired node:http/MSW surface.",
+      "recommendation": "Rewrite or retire control-template-integration.md to describe the Rust sf-serve-served studio (crates/sf-serve) and superfield control --path -> sf-serve delegation, or mark it superseded by architecture.md; drop the cli/packages/ prefix and the Node-server test plan.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-021",
+      "review": "review-docs",
+      "classification": "UNRESOLVED_DECISION",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": "docs/control-template-integration.md:39",
+      "evidence": [
+        "docs/control-template-integration.md:50",
+        "docs/control-template-integration.md:62",
+        "packages/control-core/manifest-parser.ts:162"
+      ],
+      "impact": "The doc records 'Decision: Option A' \u2014 make Service lookup configurable via process.env.CONTROL_WEB_SERVICE_NAME ?? 'web' in config.ts, and to mention it in \u00a71.1 once implemented. CONTROL_WEB_SERVICE_NAME appears ONLY in this doc (grep across .ts/.rs/.md) and config.ts is retired, so the decision was never implemented and is now orphaned.",
+      "recommendation": "Drop the decision, or re-anchor it against the current manifest-parser.ts discovery path if configurable Service naming is still wanted.",
+      "owner": "decision",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-022",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": "docs/eval-design.md:77",
+      "evidence": [
+        "docs/eval-design.md:77",
+        "crates/sf-loop/src/lib.rs:9",
+        "crates/sf-loop/src/lib.rs:11",
+        "crates/sf-eval/tests/live_runner.rs:14"
+      ],
+      "impact": "eval-design.md Tier-0 says 'stage ordering across the seven gardening steps'. The loop actually runs NINE GardeningStep variants (lib.rs:9 'runs nine GardeningStep variants', enumerated 1-9; live_runner.rs:14 'one full nine-step pass'). IntentSpecInference, HolisticReconcile, ProjectGraphDerive, and CodeChangeProposal were added.",
+      "recommendation": "Change 'seven gardening steps' to 'nine gardening steps' in eval-design.md:77.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-023",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": "docs/milestone-1.md:47",
+      "evidence": [
+        "docs/milestone-1.md:47",
+        "crates/sf-cli/src/garden.rs:103",
+        "crates/superfield/src/main.rs:84",
+        "docs/architecture.md:744"
+      ],
+      "impact": "Milestone-1 \u00a74.3 specifies a `superfield garden` surface with four subcommands (garden run/start/status/step <n>) and calls garden run 'the reference implementation for the loop step contract.' None exist: garden is a single ingest verb (garden <file...> -> garden_ingest). The lifecycle \u00a74.3 attributes to these subcommands is driven by the daemon-supervised loop engine. This also contradicts the sibling canonical doc architecture.md:744, which documents garden <file...> as 'Ingest markdown files into the Nexum knowledge graph.'",
+      "recommendation": "Rewrite milestone-1.md \u00a74.3 to match the shipped surface (garden <file...> ingests; run/step lifecycle lives in the daemon loop engine and superfield daemon/status/logs) and reconcile with architecture.md:744.",
+      "owner": "product",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-024",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "medium",
+      "confidence": "medium",
+      "requirement": "docs/milestone-1.md:96",
+      "evidence": [
+        "docs/milestone-1.md:96",
+        "docs/milestone-1.md:98",
+        "docs/technical-requirements.md:5",
+        "docs/architecture.md:570",
+        "crates/sf-db/src/project_graph.rs:341"
+      ],
+      "impact": "Milestone-1 \u00a74.6 point 1 says 'every GitHub issue ingested by the daemon is represented as an Issue node,' framing the project graph as a GitHub-issue mirror. The appliance daemon does not ingest GitHub issues; ProjectGraphDerive derives Feature/Issue nodes from plan/prd/strategy knowledge pages (architecture.md:570), and 'GitHub is never required' (technical-requirements.md:5). \u00a74.6 point 2 also says each acceptance criterion is 'linked to its parent Issue node,' but the code links AcceptanceCriterion to a parent Feature (project:feature_has_acceptance_criterion, project_graph.rs:341).",
+      "recommendation": "Update \u00a74.6 point 1 to describe derivation from knowledge pages (not GitHub-issue ingestion) and correct point 2 so AcceptanceCriterion is a child of Feature, matching the code edges.",
+      "owner": "product",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-025",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": "docs/runtime-agent-selection.md:322",
+      "evidence": [
+        "docs/runtime-agent-selection.md:326",
+        "docs/runtime-agent-selection.md:327",
+        "docs/runtime-agent-selection.md:328",
+        "docs/runtime-agent-selection.md:329",
+        "packages/core/agent.ts:17",
+        "packages/core/agent.ts:153",
+        "packages/core/agent.ts:167",
+        "packages/core/agent.ts:271",
+        "packages/core/job-registry.ts:2"
+      ],
+      "impact": "The 'Relationship to existing code' table cites symbols/lines that no longer resolve: filterAvailableBackends @ agent.ts:214 ('login check only; no retry window yet') does not exist (replaced by inline availabilityStore.isAvailable) and its note contradicts the doc's own line 334; callWithBackendPriority @ agent.ts:342 is renamed callWithCandidatePriority (agent.ts:167); MODEL_TIER_MAPPING @ agent.ts:26 now lives in models.ts; waitForAvailableBackend @ agent.ts:424 is actually line 271. The target behavior itself is correctly implemented.",
+      "recommendation": "Refresh the reference table to callWithCandidatePriority (167), waitForAvailableBackend (271), models.ts for MODEL_TIER_MAPPING, and delete the stale filterAvailableBackends 'no retry window yet' row.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-026",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": "docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md:276",
+      "evidence": [
+        "docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md:281",
+        "docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md:283",
+        ".github/workflows/embedder-coverage.yml:163",
+        ".github/workflows/embedder-coverage.yml:180",
+        ".github/workflows/eval-todo-app.yml:132",
+        "crates/nexum/tests/integration.rs:47"
+      ],
+      "impact": "Dev-scout artifact for #760/#761/#762. Its \u00a75 table calls embedder-coverage.yml 'workflow_dispatch only; not a gate', the governed-embed-weights action 'not referenced by any workflow', and describes the maybe_pool() silent-skip as still present. All three landed: embedder-coverage.yml is now a gated job (push+PR+nightly, NEXUM_REQUIRE_DB=1) executing the #[ignore]d tests via --include-ignored; the action IS referenced by eval-todo-app.yml:132; integration.rs now has the loud NEXUM_REQUIRE_DB guard. Informational \u2014 point-in-time scout record now superseded.",
+      "recommendation": "Optionally annotate the scout note 'implemented in #760/#761/#762'; no CI-honesty gap (embedder tests are actually executed under --include-ignored with governed weights).",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-027",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": "docs/scout/sharp-object-algo-column-seams.md:37",
+      "evidence": [
+        "docs/scout/sharp-object-algo-column-seams.md:41",
+        "docs/scout/sharp-object-algo-column-seams.md:81",
+        "crates/sharp/migrations/0010_sharp_objects_algo.sql:17",
+        "crates/sharp/migrations/0010_sharp_objects_algo.sql:23",
+        "crates/sharp/src/object.rs:71",
+        "crates/sharp/src/object.rs:123"
+      ],
+      "impact": "Dev-scout artifact for #725. Its \u00a72 'current schema (as deployed)' shows sharp.objects with NO algo column and \u00a73a says the INSERTs 'omit algo; must add it.' #725 has landed: migration 0010_sharp_objects_algo.sql adds algo (with the recommended sha256 backfill) and object.rs store/store_canonical INSERTs now include algo (object.rs:71, :123). Cited object.rs lines also drifted (~+9). Informational \u2014 implemented as the scout designed.",
+      "recommendation": "Optionally mark the scout note 'implemented in #725 (migration 0010)'; dev-scout artifacts are point-in-time records.",
+      "owner": "architecture",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-028",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": "docs/testing-invariants.md:31",
+      "evidence": [
+        "docs/testing-invariants.md:31",
+        ".github/workflows/test-unit.yml:39",
+        ".github/workflows/test-integration.yml:38"
+      ],
+      "impact": "Invariant 2 prescribes the JS/TS runner convention `vitest --passWithNoTests=false` to make 'no tests collected' red. The actual TS jobs invoke `bun --bun vitest run packages/*/tests/unit` (test-unit.yml:39) and .../tests/integration (test-integration.yml:38) WITHOUT --passWithNoTests=false. Behavior likely holds via the vitest default, but the explicit convention the doc presents is not applied \u2014 unlike the Rust side, which passes --no-tests=fail explicitly so enforcement survives a default change.",
+      "recommendation": "Add --passWithNoTests=false to the two vitest invocations (matching the doc and the Rust rationale), or note in testing-invariants.md that the TS side relies on the vitest default.",
+      "owner": "tests",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-029",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "medium",
+      "confidence": "high",
+      "requirement": "docs/testing-invariants.md:36",
+      "evidence": [
+        "docs/testing-invariants.md:36",
+        "scripts/check-coverage-delta.sh:122",
+        "scripts/check-coverage-delta.sh:131",
+        "scripts/check-coverage-delta.sh:159",
+        ".github/workflows/rust.yml:410"
+      ],
+      "impact": "The invariant doc claims the coverage-delta gate makes 'touching a package's code require >0 of that package's tests to run.' The gate (check-coverage-delta.sh) is Rust-crates-only: owning_package() returns None for any path not under crates/ and the gate no-ops for TS packages (packages/*). coverage-truth.toml reserves 'package' for packages/* and 'crate' for crates/*, so the doc's unqualified 'per package' reads as covering TS packages while no coverage-delta enforcement exists for them; a TS package can be modified with zero of its tests executing and no gate fires.",
+      "recommendation": "Reword testing-invariants.md:36 to scope the gate to Rust crates (as the script does), or extend check-coverage-delta.sh + wiring to enforce a per-package floor for TS packages.",
+      "owner": "tests",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-030",
+      "review": "review-docs",
+      "classification": "GAP_DOC",
+      "severity": "low",
+      "confidence": "medium",
+      "requirement": "docs/testing.md:240",
+      "evidence": [
+        "docs/testing.md:1",
+        "docs/testing.md:240",
+        "docs/testing-invariants.md:1",
+        "scripts/check-doc-conformance.sh:171"
+      ],
+      "impact": "testing.md is titled 'Testing Framework' and presents itself as how the codebase is tested, but covers only the TypeScript agent-CLI three-layer strategy. It never mentions the Rust nextest suite, embedder-coverage, coverage-truth, the coverage-delta gate, or the four executed-coverage invariants \u2014 now the majority of required CI checks (7 of 11 required contexts are Rust/coverage jobs). Its 'Running the suites' section lists only bun run test:unit/test:integration, no cargo nextest. testing.md does not link testing-invariants.md, and check-doc-conformance.sh guards testing-invariants.md but never references testing.md, so testing.md can drift unchecked.",
+      "recommendation": "Add a Rust section (or a prominent cross-link to testing-invariants.md + coverage-truth.toml) to testing.md, include cargo nextest run --workspace in 'Running the suites', and consider a doc-conformance grep for testing.md.",
+      "owner": "tests",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-031",
+      "review": "review-docs",
+      "classification": "GAP_IMPL",
+      "severity": "low",
+      "confidence": "medium",
+      "requirement": "docs/testing.md:111",
+      "evidence": [
+        "docs/testing.md:110",
+        "docs/testing.md:247",
+        ".github/workflows/embedder-coverage.yml:35"
+      ],
+      "impact": "testing.md states Layer 3 live smoke tests 'run nightly or manually before a release'. No workflow references SUPERFIELD_LIVE_AGENTS or packages/*/tests/live; the only scheduled workflows are manifest-lint, actionlint, and embedder-coverage (which runs the embedder, not the agent live suite). The documented 'nightly' cadence for the live vendor-CLI smoke suite is not backed by any scheduled CI job. The doc hedges 'or manually' and Layer 3 is by design outside PR CI, so this is a minor promise-vs-reality gap, not a coverage-honesty violation.",
+      "recommendation": "Add a nightly scheduled workflow that runs the live suite (with credentials), or soften testing.md to say the live suite runs manually before a release only.",
+      "owner": "operations",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-032",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "medium",
+      "confidence": "medium",
+      "requirement": "docs/testing.md:131",
+      "evidence": [
+        "docs/testing.md:110",
+        "docs/testing.md:131",
+        "docs/testing-invariants.md:15",
+        "docs/testing-invariants.md:19"
+      ],
+      "impact": "testing.md Layer 3 documents and blesses liveDescribe/liveIt, which 'call describe.skip / it.skip when the env var is unset, so the suite is silent on PR runs' \u2014 precisely the silent-skip antipattern testing-invariants.md invariant 1 forbids. Neither canonical doc cross-references the other to scope the exception (live tests are intentionally NOT counted as coverage, so their silent skip is acceptable). A contributor can cite testing.md's sanctioned liveDescribe pattern to justify silently skipping a resource-gated test invariant 1 requires to fail loudly.",
+      "recommendation": "Cross-reference both docs: testing.md Layer 3 should note live tests are a safety net explicitly NOT counted as coverage, and testing-invariants.md should carve out the Layer-3 live suite as the sole sanctioned silent-skip.",
+      "owner": "tests",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-033",
+      "review": "review-docs",
+      "classification": "INCONSISTENT",
+      "severity": "high",
+      "confidence": "high",
+      "requirement": "docs/ux/studio-ux.md:251",
+      "evidence": [
+        "docs/ux/studio-ux.md:253",
+        "docs/ux/studio-ux.md:229",
+        "docs/ux/studio-ux.md:303",
+        "crates/sf-serve/src/routes/studio.rs:293",
+        "packages/control/apps/src/controllers/FeaturePaneController.ts:137",
+        "packages/control/apps/src/components/TurnTimeline.tsx:213"
+      ],
+      "impact": "studio-ux.md documents UPDATE as PATCH /studio/issues/:n and the SESSION LOG source as GET /studio/turns/:sessionId, and the frontend matches (FeaturePaneController PATCH, TurnTimeline turns). But the Rust sf-serve studio router \u2014 authoritative after the #452 cutover \u2014 registers ONLY POST /studio/issues, GET /studio/issues, POST /studio/issues/update, POST /studio/steer (studio.rs:293-299). There is NO PATCH route and NO /studio/turns route anywhere in crates/. So the documented UPDATE (PATCH) and SESSION LOG (turns) surfaces have no backing route on the Rust backend the UI is served by.",
+      "recommendation": "Reconcile the studio contract: add PATCH /studio/issues/:n and GET /studio/turns/:sessionId to sf-serve, or update studio-ux.md + frontend to POST /studio/issues/update and the actual turns source; confirm whether SESSION LOG is implemented server-side.",
+      "owner": "code",
+      "related_findings": []
+    },
+    {
+      "id": "review-docs-034",
+      "review": "review-docs",
+      "classification": "STALE",
+      "severity": "low",
+      "confidence": "high",
+      "requirement": "docs/ux/studio-ux.md:310",
+      "evidence": [
+        "docs/ux/studio-ux.md:310",
+        "crates/sf-serve/src/routes/studio.rs:107",
+        "crates/sf-serve/src/routes/studio.rs:293"
+      ],
+      "impact": "studio-ux.md states 'The embedded DB (packages/db) is the sole source of truth for title and body.' The Rust studio backend backs Issues/Features with nexum project-graph nodes (create_issue: 'create an Issue node and optional child Features'), not packages/db, after the cutover.",
+      "recommendation": "Update the Data Sources section to name the nexum project-graph nodes as the source of truth for studio issue/feature title+body.",
+      "owner": "architecture",
+      "related_findings": []
+    }
+  ],
+  "clean_areas": [
+    "architecture.md HTTP route table, Gardening Loop 9-step order, Single-Instance Schema Layout, Governed Embedding Standard (384-dim MiniLM), and Daemon Lifecycle map cleanly to sf-serve/sf-loop/sf-db.",
+    "adr-embedding-model.md governance constants are in force and identical across crates/nexum/src/embed.rs, models/embedding.lock, and packages/db/index.ts; the runtime claim is genuinely executed in CI by embedder-coverage.yml (pgvector + governed offline weights, --include-ignored, loud >0 guard).",
+    "adr-ci-execution-manifest.md native-execution claim IS executed in CI: crates/fastenv/src/ci_executor.rs end-to-end tests are non-#[ignore]d and run under the required cargo nextest run --workspace; manifest-lint.yml is a real required gate on the committed example manifest.",
+    "ci-job-manifest-schema.md field/enum contract matches crates/fastenv/src/manifest.rs exactly (deny_unknown_fields confirmed); the golden example round-trips.",
+    "check-coverage-truth.sh, check-test-job-presence.sh, and testing-invariants.md content-guards are genuinely wired as required jobs; rust-test enforces --no-tests=fail with an AC2 self-check.",
+    "Sharp tsserver bridge (#444), hooks system, and git_interop are implemented and consistent with their docs; client-architecture.md and whitepaper.md correctly hedge planned-vs-shipped.",
+    "AGE fold sub-decision holds (Apache AGE removed, recursive-CTE traversal in packages/db/nexum-graph.ts).",
+    "Studio browser-smoke follow-up (#815/#830/#832) landed as pinned: eval-todo-app.yml drives headless chromium against a real 200 and asserts a non-empty PNG (executed, not stubbed).",
+    "runtime-agent-selection.md and eval-design.md target behaviors are correctly implemented (only reference tables/counts drifted)."
+  ],
+  "unresolved_decisions": [
+    "review-docs-033: whether the studio SESSION LOG / issue-UPDATE contract should be fixed in the Rust sf-serve backend (add PATCH/turns routes) or in the doc+frontend (POST /studio/issues/update) is a product/architecture decision, not resolvable from code alone."
+  ],
+  "limitations": [
+    "Read-only static review at commit 6d89f1a7 in worktree adhoc/20260701-130004-review-docs-drift; no builds, tests, or workflows were executed. 'Executed-in-CI' verdicts are inferred from workflow YAML + #[ignore] attributes + seam filtersets, not observed runs.",
+    "GitHub branch-protection required_status_checks could not be read; invariant-4 coverage was verified only against the in-repo mirror scripts/required-status-contexts.txt.",
+    "Plan #199 (~198k chars) was grep-sampled for the reviewed topics, not read in full.",
+    "Sharp conceptual/algebra docs (merge-conflict-taxonomy, semantic-patches, branch-semantics) and pure comparison essays were deprioritized and not line-mapped to code."
+  ],
+  "unreviewed_surfaces": [
+    "packages/* TypeScript internals beyond the doc-cited symbols (control apps component-level fidelity, api-server.ts /studio/run+/studio/reset, packages/git, packages/firecracker microVM boot honesty).",
+    "FastENV design/aspirational docs (ocap-access-control-design, alternative-isolation-for-agents, cloud-kvm-nesting, quota-prerequisites) and scout/benchmark artifacts.",
+    "crates/sharp server-config.md / server-operations.md (describe an HTTP server the crate does not contain as a library).",
+    "crates/sf-auth RLS wiring, orchestrator/migrations content, and sf-deploy/sf-notify/sf-connector internal contracts beyond lib.rs headers.",
+    "docs/vision/unified-memory-layer.md and docs/studio-sessions/main/changes.md (aspirational/log prose with no falsifiable code claims)."
+  ]
+}
