@@ -275,6 +275,16 @@ without re-discovering them.
 
 ## 5. Scout deliverables in this PR (all compile-safe, behaviour-neutral)
 
+> **IMPLEMENTED in #760 / #761 / #762.** The seams pinned below have since
+> landed and this table is a point-in-time record. `embedder-coverage.yml` is
+> now a gated job (push + PR + nightly, `NEXUM_REQUIRE_DB=1`) that executes the
+> `#[ignore]`d embedder tests via `--include-ignored` with governed offline
+> weights; the `governed-embed-weights` action is referenced by both
+> `embedder-coverage.yml` and `eval-todo-app.yml`; and the `maybe_pool()`
+> silent-skip was replaced by the loud `NEXUM_REQUIRE_DB` guard in
+> `crates/nexum/tests/integration.rs`. The "not referenced / manual dispatch
+> only / silent-skip" statuses below no longer hold.
+
 | Path                                                                  | Purpose                                                                                                                               | Active?                              |
 | --------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
 | `docs/scout/embedding-coverage-offline-weights-and-pgvector-seams.md` | This note.                                                                                                                            | doc only                             |

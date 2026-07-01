@@ -20,6 +20,14 @@ self-disables — `#[ignore]`, `t.Skip()`, `@Disabled`, `skipif(not os.getenv(..
 or an early `return`/`None`/`nil` from a fixture when the resource is missing —
 produces a false green: it is counted as coverage but never runs.
 
+> **Sanctioned exception.** The Layer-3 live smoke suite described in
+> [testing.md](testing.md) (`liveDescribe`/`liveIt`, gated on
+> `SUPERFIELD_LIVE_AGENTS`) intentionally `describe.skip`s when the env var is
+> unset. This is permitted because that suite is a manual/pre-release safety
+> net that is **explicitly not counted as coverage** — the behaviours it
+> touches are already covered by Layers 1 and 2, which run for real on every
+> PR. It is the sole sanctioned skip; every other test must loud-skip.
+
 ## 2. Exit 0 ≠ tested
 
 A command that passes when **zero tests ran**, or when every test
@@ -32,8 +40,16 @@ that makes "no tests collected" red:
 - Python: `pytest --strict-markers` and fail on `collected 0 items`
 - Go: `go test ./...` over packages that actually contain `_test.go`
 
-The coverage-delta gate (`scripts/check-coverage-delta.sh`) enforces this per
-package: touching a package's code requires >0 of that package's tests to run.
+> **Current state (TS):** the vitest jobs
+> (`.github/workflows/test-unit.yml`, `test-integration.yml`) do **not** pass
+> `--passWithNoTests=false` explicitly; they rely on vitest's default, which
+> already fails a run that collects zero test files. The flag above documents
+> the intended guarantee, not a currently-passed argument.
+
+The coverage-delta gate (`scripts/check-coverage-delta.sh`) enforces this for
+each **Rust crate**: touching a `crates/<dir>` path requires >0 of that crate's
+tests to run. It maps only `crates/*` paths to Cargo packages; TS `packages/*`,
+docs, and workflow changes are not gated by this script.
 
 ## 3. Runtime behaviour needs an executed-in-CI assertion
 

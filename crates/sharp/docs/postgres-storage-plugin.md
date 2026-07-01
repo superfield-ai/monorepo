@@ -19,8 +19,8 @@
 > **No literal SQL DDL.** To keep `crates/sharp/docs/` free of SQL (enforced by
 > `scripts/check-sharp-doc-framing.sh`), the schema is given as field/relation
 > tables rather than `CREATE TABLE` statements. The shipped migrations under
-> `apps/server/migrations/` are the executable source of truth for exact column
-> types, constraints, and indexes.
+> `crates/sharp/migrations/000N_sharp_<name>.sql` are the executable source of
+> truth for exact column types, constraints, and indexes.
 
 ---
 
@@ -171,11 +171,13 @@ Index: `(repo_id, path)` — the hot analytics index.
 
 ## 5. Migrations and Conventions
 
-- Migration files live under `apps/server/migrations/<seq>__<name>.sql`, applied
-  in order at server startup and recorded in a `schema_migrations` relation.
-  They are never re-run and never edited after release.
-- No ORM: hand-written interfaces sit alongside the `postgres` package's query
-  calls, matching `superfield/template`'s raw-SQL convention.
+- Migration files live under `crates/sharp/migrations/000N_sharp_<name>.sql`,
+  applied in order by the runner (`crates/sf-db/src/migrate.rs`), which records
+  applied files and only runs pending ones. They are never re-run and never
+  edited after release; a later change ALTERs an earlier table from a new
+  migration file (e.g. `0005_sharp_refs_model.sql` and `0010_sharp_objects_algo.sql`).
+- No ORM: hand-written interfaces sit alongside `sqlx` query calls, matching
+  the crate's raw-SQL convention.
 - The read-only query passthrough endpoint (operator scope only; whitepaper §6.7,
   `engineering-plan.md` §10.2) is the operator escape hatch for ad-hoc analytics
   against these relations. It is deliberately kept out of the agent harness's

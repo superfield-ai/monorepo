@@ -23,6 +23,8 @@
 //!   ([`crate::semantic_merge::three_way_merge`]); `target_ref` is the base
 //!   (common-ancestor approximation for v1, a real LCA walk is a follow-up).
 //!
+//! Canonical doc: `crates/sharp/docs/projections.md`.
+//!
 //! See `docs/architecture.md §Sharp — Tier-1 Rust Semantic Merge § Components (crates/sharp)` and whitepaper §6.7.
 
 use std::collections::BTreeMap;

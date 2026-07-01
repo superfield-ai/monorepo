@@ -11,6 +11,8 @@
 //! The merge engine is decoupled from any specific toolchain — it only invokes
 //! whatever the user has dropped into `.sharp/hooks/`.
 //!
+//! Canonical docs: `crates/sharp/docs/hooks.md` and `crates/sharp/docs/hooks-guide.md`.
+//!
 //! §architecture.md — Sharp subsystem (pre-merge hooks)
 
 use crate::error::SharpError;

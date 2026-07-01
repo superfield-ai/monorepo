@@ -1,7 +1,8 @@
 # ADR: Substrate-Agnostic CI Job Manifest, Not an Embedded GitHub Actions Parser
 
 **Date:** 2026-06-27
-**Status:** Proposed
+**Accepted:** 2026-07-01 (closes #821–#828)
+**Status:** Accepted
 **Related:** `crates/fastenv`, `.github/workflows/`, `docs/testing-invariants.md`, `coverage-truth.toml`, the `ci-taxonomy-audit` gate, the `_shared/test-coverage-policy.md` invariants
 
 ---
@@ -120,10 +121,30 @@ local script.
 
 **Negative / cost**
 
-- The manifest schema and the FastENV executor must be designed and maintained.
-- A GHA-adapter generator must be built if the project keeps pushing to GitHub.
+- The manifest schema and the FastENV executor must be maintained as first-class
+  code (now shipped — see below).
+- A GHA-adapter generator has to be kept in sync with the manifest schema for as
+  long as the project keeps pushing to GitHub.
 
-**Follow-up**
+**Delivered (as of 2026-07-01, closing #821–#828)**
 
-- Design the minimal manifest schema against the existing
-  `.github/workflows/*.yml` and the FastENV interface (separate work).
+The whole decision has shipped and merged; nothing here is open follow-up:
+
+- **Manifest schema (#821/#825)** — the typed `v1` schema lives in
+  `crates/fastenv/src/manifest.rs` (documented in
+  `crates/fastenv/docs/ci-job-manifest-schema.md`), with a committed reference
+  manifest at `crates/fastenv/docs/examples/monorepo-ci.manifest.json`.
+- **Native executor (#822/#826)** — `FastenvCiExecutor` in
+  `crates/fastenv/src/ci_executor.rs` runs the job graph on FastENV, exposed as
+  the `run-manifest` CLI subcommand.
+- **GHA adapter (#823/#827)** — `DefaultGithubActionsAdapter` in
+  `crates/fastenv/src/ci_import.rs` round-trips `.github/workflows/*.yml` ↔
+  manifest, exposed as `import-workflow` / `emit-gha`.
+- **Validation gate (#824/#828)** — `StaticManifestGate` in
+  `crates/fastenv/src/ci_gate.rs` enforces the `ci-taxonomy-audit` rules plus the
+  four test-coverage invariants, exposed as `lint-manifest` and wired into
+  `.github/workflows/manifest-lint.yml`.
+
+The `Unimplemented*` variants (`UnimplementedExecutor`,
+`UnimplementedGithubActionsAdapter`, `UnimplementedManifestGate`) remain only as
+compile-safe link stubs alongside the real implementations.

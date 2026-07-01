@@ -6,6 +6,13 @@
 > - [docs/prd.md](docs/prd.md)
 > - [docs/architecture.md](docs/architecture.md)
 
+> **Status:** This document is the original phased plan, not a live progress
+> tracker. For the current shipped state — what has actually landed in the Rust
+> crate versus what remains — treat
+> [migration-note.md](migration-note.md) as the source of truth. The checkboxes
+> below are ticked only for items independently confirmed against the code;
+> unticked boxes are not a reliable signal that work is outstanding.
+
 ## Goal
 
 Refactor fastenv into a two-layer system:
@@ -63,7 +70,7 @@ These pieces are salvageable, but their ownership changes:
 Goal: freeze the current behavior with tests, then introduce explicit host and
 guest interfaces before deleting the old implicit ones.
 
-- [ ] Add a host/guest boundary layer in code and docs so the current
+- [x] Add a host/guest boundary layer in code and docs so the current
       workspace-engine logic can be called as a guest primitive.
       The explicit seam lives in `src/boundary.rs`.
 - [ ] Add a regression suite that records the current behavior of
@@ -111,7 +118,8 @@ covered by tests.
 - [ ] Remove host-mounted writable workspace code paths.
 - [ ] Remove CLI flags and config options that encode the old host snapshotter
       model.
-- [ ] Delete or archive the Go prototype after Rust parity is complete.
+- [x] Delete or archive the Go prototype after Rust parity is complete.
+      (No `*.go` files remain under `crates/fastenv`.)
 - [ ] Remove compatibility tests that only exist to protect legacy host
       behavior.
 
@@ -143,10 +151,14 @@ Goal: make the new architecture testable at the correct boundary layers.
 
 ### Security regression harness
 
-- [ ] Unauthorized file-write attempts outside the workspace are blocked.
+- [x] Unauthorized file-write attempts outside the workspace are blocked.
+      (Covered by `src/security_regression.rs`:
+      `fork_write_does_not_mutate_base_lower`.)
 - [ ] Unauthorized network egress attempts are blocked or logged according to
       policy.
-- [ ] Cross-agent contamination is prevented inside one project VM.
+- [x] Cross-agent contamination is prevented inside one project VM.
+      (Covered by `src/security_regression.rs`:
+      `fork_upper_layers_are_isolated_between_agents`.)
 - [ ] Host-level policy still holds when the guest workload is malicious.
 
 ### Benchmark harness
@@ -161,12 +173,15 @@ Goal: make the new architecture testable at the correct boundary layers.
 Goal: switch the canonical product path to the new architecture only after it
 is proven equivalent or better on the supported scenarios.
 
-- [ ] Confirm the new host/guest split covers the current supported command
-      set.
+- [x] Confirm the new host/guest split covers the current supported command
+      set. (The parity harness `src/parity_check.rs` asserts the command
+      parity table covers every CLI subcommand and routes supported commands
+      through the guest-runtime boundary.)
 - [ ] Confirm the new harnesses pass on the intended execution hardware.
 - [ ] Confirm the old implementation can be removed without losing supported
       behavior.
-- [ ] Publish the migration note for operators and contributors.
+- [x] Publish the migration note for operators and contributors.
+      (See [migration-note.md](migration-note.md).)
 
 ## Notes on Sequencing
 

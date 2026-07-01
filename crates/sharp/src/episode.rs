@@ -3,6 +3,8 @@
 //! An episode represents one agent editing session against a Sharp repo.
 //! Episodes live in the `sharp` schema alongside the VCS core tables.
 //!
+//! Canonical doc: `crates/sharp/docs/episodes.md`.
+//!
 //! See `docs/architecture.md §Single-Instance Database Schema Layout § Schema namespace assignment` and agent-warning:
 //!   "Sharp's episode schema goes in the `sharp` schema on the shared instance."
 

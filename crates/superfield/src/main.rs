@@ -79,7 +79,7 @@ Deploy-operator commands (backed by sf-deploy):
 
 Page commands (require running daemon):
   page <name>                         Print a knowledge-base page as markdown
-                                      name: prd | architecture | plan | strategy | project
+                                      name: prd | architecture | plan | strategy | technical | project
 
 Garden commands (seed document ingestion):
   garden <file1> [file2...] [--workspace-id <uuid>]

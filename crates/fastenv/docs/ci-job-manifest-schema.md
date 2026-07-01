@@ -11,15 +11,18 @@ means. FastENV executes it natively (the **substrate**); a gate validates it
 **downstream emitter**. The schema therefore contains **no** GitHub-substrate
 concepts — no `runs-on`, marketplace actions, `permissions:`, or contexts.
 
-This module (issue #821) defines only the schema. Three decoupling seams ship
-as compile-safe stubs so the downstream features can land in parallel against a
-stable contract, each owning a **disjoint** file:
+This module (issue #821) defines the schema. The three decoupling seams have
+all shipped and are exposed on the FastENV CLI (`crates/fastenv/src/main.rs`),
+each owning a **disjoint** file:
 
-| Seam            | File                 | Owner | Role                                            |
-| --------------- | -------------------- | ----- | ----------------------------------------------- |
-| Executor        | `src/ci_executor.rs` | #822  | run the job graph on FastENV                    |
-| GHA adapter     | `src/ci_import.rs`   | #823  | round-trip `.github/workflows/*.yml` ↔ manifest |
-| Validation gate | `src/ci_gate.rs`     | #824  | enforce the four invariants + ci-taxonomy       |
+| Seam            | File                 | Implementation                | Status              | CLI                            |
+| --------------- | -------------------- | ----------------------------- | ------------------- | ------------------------------ |
+| Executor        | `src/ci_executor.rs` | `FastenvCiExecutor`           | shipped (#822/#826) | `run-manifest`                 |
+| GHA adapter     | `src/ci_import.rs`   | `DefaultGithubActionsAdapter` | shipped (#823/#827) | `import-workflow` / `emit-gha` |
+| Validation gate | `src/ci_gate.rs`     | `StaticManifestGate`          | shipped (#824/#828) | `lint-manifest`                |
+
+The `Unimplemented{Executor,GithubActionsAdapter,ManifestGate}` variants remain
+only as compile-safe link stubs alongside the real implementations.
 
 ## Top level — `CiManifest`
 

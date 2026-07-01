@@ -248,10 +248,20 @@ change based on feature state:
              [              BUTTON LABEL             ]
 ```
 
-| Condition                        | Placeholder                | Button   | Action                           |
-| -------------------------------- | -------------------------- | -------- | -------------------------------- |
-| Feature selected, no session     | `Refine the feature spec…` | `UPDATE` | `PATCH /studio/issues/:n` (body) |
-| Feature selected, active session | `Steer the running agent…` | `STEER`  | `POST /studio/steer`             |
+| Condition                        | Placeholder                | Button   | Action                                       |
+| -------------------------------- | -------------------------- | -------- | -------------------------------------------- |
+| Feature selected, no session     | `Refine the feature spec…` | `UPDATE` | `POST /studio/issues/update` (state / title) |
+| Feature selected, active session | `Steer the running agent…` | `STEER`  | `POST /studio/steer`                         |
+
+> **NOTE (backend truth).** The `sf-serve` studio router
+> (`crates/sf-serve/src/routes/studio.rs`) registers exactly four write/read
+> routes: `POST` / `GET /studio/issues`, `POST /studio/issues/update`, and
+> `POST /studio/steer`. There is **no** `PATCH /studio/issues/:n` route. The
+> update handler takes a JSON body of `{ id, state?, title? }` and writes
+> through the nexum project graph; it does not accept a Markdown `body` field.
+> The studio frontend (`FeaturePaneController.ts`) still issues
+> `PATCH /studio/issues/:number` — a known frontend/backend mismatch tracked
+> for a separate fix, not a route that exists today.
 
 The textarea is `var(--bg-base)`, 1 px `var(--border-subtle)` border, font-mono, sm.
 The button is full-width beneath the textarea, `var(--accent-cyan)` border and text,

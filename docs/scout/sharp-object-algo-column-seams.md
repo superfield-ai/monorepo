@@ -36,6 +36,13 @@ id. The concrete Postgres realization (`crates/sharp/docs/postgres-storage-plugi
 
 ## 2. Current `sharp.objects` schema (as deployed)
 
+> **IMPLEMENTED in #725** (migration `0010_sharp_objects_algo.sql`, which adds
+> the `algo` column with the recommended `sha256` backfill; `object.rs`
+> `store`/`store_canonical` INSERTs now include `algo` — `object.rs:71`, `:123`).
+> The "as deployed" schema and §3 "INSERTs omit `algo`; must add it" notes below
+> are the point-in-time scout record and no longer reflect the current tree; the
+> cited `object.rs` line numbers have also drifted.
+
 From `crates/sharp/migrations/0001_sharp_vcs_schema.sql`:
 
 ```sql

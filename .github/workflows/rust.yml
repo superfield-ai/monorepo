@@ -15,7 +15,7 @@ name: Rust
 # required-status-bypass.yml reporter (#788, which resolved blocker #753): it
 # posts skipped-success for the required Rust contexts that did not trigger, so
 # docs-only PRs are no longer deadlocked. The canonical required set is the
-# contexts listed in scripts/required-status-contexts.txt (10 today), the
+# contexts listed in scripts/required-status-contexts.txt (11 today), the
 # in-repo mirror of main's branch protection.)
 on:
   push:
