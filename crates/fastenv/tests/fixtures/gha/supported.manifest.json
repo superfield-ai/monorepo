@@ -1,0 +1,56 @@
+{
+  "manifest_version": "v1",
+  "name": "demo-ci",
+  "jobs": [
+    {
+      "id": "build",
+      "needs": [],
+      "commands": [
+        {
+          "program": "cargo",
+          "args": [
+            "build",
+            "--workspace"
+          ],
+          "env": {
+            "CARGO_TERM_COLOR": "always"
+          }
+        }
+      ],
+      "test_contract": {
+        "min_executed_tests": 0,
+        "zero_tests_is_failure": false,
+        "on_missing_resource": "fail_loud",
+        "required_resources": [],
+        "asserts_runtime_behavior": false,
+        "languages": []
+      }
+    },
+    {
+      "id": "test",
+      "needs": [
+        "build"
+      ],
+      "commands": [
+        {
+          "program": "cargo",
+          "args": [
+            "nextest",
+            "run",
+            "--workspace",
+            "--no-tests=fail"
+          ],
+          "env": {}
+        }
+      ],
+      "test_contract": {
+        "min_executed_tests": 0,
+        "zero_tests_is_failure": false,
+        "on_missing_resource": "fail_loud",
+        "required_resources": [],
+        "asserts_runtime_behavior": false,
+        "languages": []
+      }
+    }
+  ]
+}

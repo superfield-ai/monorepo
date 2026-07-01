@@ -1,0 +1,17 @@
+name: demo-ci
+on:
+- push
+- pull_request
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - run: cargo build --workspace
+      env:
+        CARGO_TERM_COLOR: always
+  test:
+    runs-on: ubuntu-latest
+    needs:
+    - build
+    steps:
+    - run: cargo nextest run --workspace --no-tests=fail

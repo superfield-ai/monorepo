@@ -2,4 +2,8 @@ node_modules/
 dist/
 blueprint/
 packages/core/blueprint-data.generated.ts
+# Byte-exact golden fixtures for the GHA adapter (issue #823): the emit()
+# output is compared byte-for-byte against supported.yml, so prettier must not
+# reformat these or the golden round-trip test breaks.
+crates/fastenv/tests/fixtures/gha/
 ~/

@@ -51,6 +51,11 @@ pub enum CommandBoundary {
     /// (ci_executor::run_manifest). Issue #822: FastENV runs the CI job graph
     /// natively, not via a hosted-runner emulator.
     CiTier,
+    /// Routed through the CI-manifest GitHub Actions adapter
+    /// (ci_import::{run_import_workflow, run_emit_gha}). A pure host-side file
+    /// transform between GHA YAML and a CiManifest; it touches neither the
+    /// workspace GuestRuntime nor any long-lived workload (issue #823).
+    CiAdapter,
 }
 
 /// Full parity table for the supported command set.
@@ -144,6 +149,18 @@ pub fn command_parity_table() -> Vec<CommandParityEntry> {
             deprecated: false,
             note: "CI-tier entrypoint (issue #822): ci_executor::run_manifest executes a CiManifest job graph natively on the FastENV substrate (topo-ordered jobs in disposable fork workspaces, loud TestContract enforcement) — not a hosted-runner emulator.",
         },
+        CommandParityEntry {
+            command: "import-workflow",
+            boundary: CommandBoundary::CiAdapter,
+            deprecated: false,
+            note: "GHA backward-compat (issue #823): ci_import::run_import_workflow — imports a .github/workflows/*.yml into a CiManifest, failing loud on unsupported constructs.",
+        },
+        CommandParityEntry {
+            command: "emit-gha",
+            boundary: CommandBoundary::CiAdapter,
+            deprecated: false,
+            note: "GHA backward-compat (issue #823): ci_import::run_emit_gha — emits a generated GitHub Actions workflow YAML from a CiManifest (output, not source of truth).",
+        },
     ]
 }
 
@@ -235,12 +252,24 @@ mod tests {
         // than the workspace GuestRuntime. Issue #822.
         let ci_tier_commands: HashSet<&str> = ["run-manifest"].iter().copied().collect();
 
+        // Commands that route through the CI-manifest GHA adapter (issue #823):
+        // pure host-side YAML <-> manifest transforms, not workspace ops.
+        let ci_adapter_commands: HashSet<&str> =
+            ["import-workflow", "emit-gha"].iter().copied().collect();
+
         for entry in &non_deprecated {
             if ci_tier_commands.contains(entry.command) {
                 assert_eq!(
                     entry.boundary,
                     CommandBoundary::CiTier,
                     "command '{}' must route through the CiTier boundary",
+                    entry.command
+                );
+            } else if ci_adapter_commands.contains(entry.command) {
+                assert_eq!(
+                    entry.boundary,
+                    CommandBoundary::CiAdapter,
+                    "command '{}' must route through the CiAdapter boundary",
                     entry.command
                 );
             } else if deployment_tier_commands.contains(entry.command) {
@@ -449,6 +478,10 @@ mod tests {
             // CI-tier manifest executor entrypoint (issue #822). Non-deprecated
             // and routed through the CiTier boundary.
             "run-manifest",
+            // GHA backward-compat adapter subcommands (issue #823). Routed
+            // through the CiAdapter boundary (host-side YAML <-> manifest).
+            "import-workflow",
+            "emit-gha",
         ]
         .iter()
         .copied()

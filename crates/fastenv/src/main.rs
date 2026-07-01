@@ -10,7 +10,7 @@ pub mod parity_check;
 
 use anyhow::{Context, Result};
 use clap::{Parser, Subcommand};
-use fastenv::{bench, boundary, deployment, doctor, exec, gc, quota};
+use fastenv::{bench, boundary, ci_import, deployment, doctor, exec, gc, quota};
 use std::path::PathBuf;
 
 use boundary::{GuestRuntime, HostControlPlane, LocalHostControlPlane};
@@ -204,6 +204,29 @@ enum Commands {
         #[arg(long, default_value = "/usr/bin/crun")]
         crun_path: String,
     },
+    /// Import a GitHub Actions workflow YAML into a CiManifest (issue #823).
+    ///
+    /// Unsupported GHA constructs (marketplace `uses:`, `strategy.matrix`,
+    /// reusable workflows, `${{ }}` contexts, scripted `run:`) fail loudly,
+    /// naming the construct — they are never silently dropped.
+    ImportWorkflow {
+        /// Path to the `.github/workflows/*.yml` file to import.
+        workflow: PathBuf,
+        /// Write the manifest JSON here instead of stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
+    /// Emit a GitHub Actions workflow YAML from a CiManifest (issue #823).
+    ///
+    /// A downstream adapter at the GitHub boundary: an OUTPUT, not the source
+    /// of truth. Re-attaches a fixed substrate (`runs-on`, `on:`).
+    EmitGha {
+        /// Path to the CiManifest JSON file.
+        manifest: PathBuf,
+        /// Write the workflow YAML here instead of stdout.
+        #[arg(long)]
+        output: Option<PathBuf>,
+    },
 }
 
 fn init_tracing() {
@@ -386,6 +409,12 @@ fn main() -> Result<()> {
                 "ci-tier 'run-manifest' executed the job graph"
             );
         }
+        Commands::ImportWorkflow { workflow, output } => {
+            ci_import::run_import_workflow(&workflow, output.as_deref())?;
+        }
+        Commands::EmitGha { manifest, output } => {
+            ci_import::run_emit_gha(&manifest, output.as_deref())?;
+        }
     }
 
     Ok(())
@@ -424,6 +453,9 @@ mod tests {
             "up",
             // CI-tier manifest executor (issue #822).
             "run-manifest",
+            // GHA backward-compat adapter subcommands (issue #823).
+            "import-workflow",
+            "emit-gha",
         ];
         for name in &expected {
             assert!(
