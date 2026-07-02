@@ -1,3 +1,15 @@
+> **STATUS: SUPERSEDED (prototype-era)** — this document specifies the
+> backend/tier/failover selection implemented in the retired TypeScript
+> substrate (`packages/core`), which spawned vendor CLIs (`claude`, `codex`,
+> `opencode`) as subprocesses and read `~/.superfield/config.yaml`. It must
+> **not** be treated as appliance architecture: the appliance's LLM boundary is
+> the `AgentExecutor` trait in [`docs/architecture.md`](architecture.md)
+> (§AgentExecutor trait), configured via `SF_LLM_API_KEY` / `SF_LLM_ENDPOINT` /
+> `SF_LLM_MODEL` — a single endpoint with no CLI spawning, tier table, or
+> failover chain. An appliance LLM-boundary ADR (provider abstraction, budget
+> enforcement, failover) is planned; until it lands, nothing below governs new
+> work. The design is retained for historical context only.
+
 # Runtime Agent Selection
 
 How Superfield picks a backend and model for each inference request.

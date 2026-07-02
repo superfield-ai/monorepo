@@ -1,14 +1,16 @@
 # Superfield
 
-**Superfield is an Agent Integrated Development Environment (Agent IDE).**
+**Superfield is a software-factory appliance — the Forge of [`docs/prd.md`](docs/prd.md): a self-contained system a company installs on infrastructure it controls, where AI agents run a continuous autonomous loop — planning, coding, testing, reviewing, deploying.**
 
-Where a traditional IDE helps a human write code, Superfield runs a continuous autonomous loop — planning, coding, testing, reviewing, deploying — driven entirely by AI agents. The developer steers intent; agents do the work.
+It is built for companies with more than $10M in annual revenue that do not hire full-time engineers — a skeletal technical staff with a technical lead under whatever title (CIO, CTO, COO). The operational bar is IT-admin grade: administrable by the generalist who runs the company firewall and the Microsoft 365 tenant. Humans steer intent and approve **outcomes** — behavior demonstrations of completed changes, never code diffs; agents do the work.
+
+> **Terminology.** Earlier drafts called Superfield an "Agent IDE." That term is retired; this README uses the PRD's vocabulary — **Forge** (the appliance), **Studio** (the control panel). See the [Glossary](#glossary).
 
 ---
 
 ## Phase 1 — The Appliance
 
-Superfield ships as a self-contained **appliance**: a single `superfield` binary that a company installs on infrastructure it controls. It arrives working — no external toolchain, no cloud account, and **no GitHub** (see `docs/technical-requirements.md`). The binary is the Forge described in [`docs/prd.md`](docs/prd.md): the knowledge base, project management, and CI orchestration in one process, backed by one store.
+Superfield ships as a self-contained **appliance**: a single `superfield` binary that a company installs on infrastructure it controls — no cloud account and **no GitHub** (see `docs/technical-requirements.md`). The target install experience is an on-prem NAS/firewall appliance: a signed, checksummed release an IT generalist runs and administers through Studio. That installer is a **planned requirement, not yet shipped** — today the binary is built from source via the developer path below. The binary is the Forge described in [`docs/prd.md`](docs/prd.md): the knowledge base, project management, and CI orchestration in one process, backed by one store.
 
 | Layer                     | What it does                                                                                                                                                                                                                                |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -23,17 +25,31 @@ Superfield ships as a self-contained **appliance**: a single `superfield` binary
 
 The retired prototype leaned on Git and GitHub as its delivery plane. Phase 2 is the R&D successor: it replaces that plane with infrastructure purpose-built for agent iteration speed (the appliance itself already requires no GitHub — see Phase 1):
 
-| Component   | Repo                                                            | Role                                                                                                       |
-| ----------- | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------- |
-| **Sharp**   | [`superfield-ai/sharp`](https://github.com/superfield-ai/sharp) | Agent-native VCS, backwards-compatible with Git. Branching-free change tracking at sub-second cadence      |
-| **Nexum**   | [`superfield-ai/nexum`](https://github.com/superfield-ai/nexum) | Self-improving synthetic corpus — living curriculum that agents refine as they work, improving future runs |
-| **FastEnv** | _(in active development — `crates/fastenv`)_                    | Ultrafast container forking for sub-second CI inner loops — a fresh isolated env per test run              |
+| Component   | Repo                                                            | Role                                                                                                  |
+| ----------- | --------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| **Sharp**   | [`superfield-ai/sharp`](https://github.com/superfield-ai/sharp) | Agent-native VCS, backwards-compatible with Git. Branching-free change tracking at sub-second cadence |
+| **FastEnv** | _(in active development — `crates/fastenv`)_                    | Ultrafast container forking for sub-second CI inner loops — a fresh isolated env per test run         |
+
+> **Nexum** names exactly one thing: the company brain inside the appliance (see Phase 1 and the [Glossary](#glossary)). An earlier Phase-2 use of the name for an external synthetic-corpus repo is retired (2026-07-02): nothing learned inside a customer's brain leaves that customer's appliance — there is no cross-customer flywheel.
 
 **The end goal: self-improving app platforms** — applications that continuously audit and improve themselves, with Superfield as the safe, observable, reversible runtime for autonomous self-modification.
 
+## Glossary
+
+| Term                            | Meaning                                                                                                                                                                                                                                                   |
+| ------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **Forge / appliance / daemon**  | One thing: the installed `superfield` binary. "Forge" is the PRD's name for it, "appliance" its delivery form, the daemon its supervised runtime.                                                                                                          |
+| **Studio / control panel**      | One surface: the web control panel. The PRD says "control panel"; the routes say Studio. Its primary mode (decided 2026-07-02) is batch review of completed candidate outcomes, not a live steering cockpit.                                              |
+| **Nexum**                       | The company brain — the PostgreSQL knowledge store (`crates/nexum`): documents, embeddings, project graph, transactional record. Nexum has no other current meaning, and nothing in a customer's brain leaves that customer's appliance.                   |
+| **Gardening loop**              | The autonomous loop (`crates/sf-loop`) that derives and maintains the brain.                                                                                                                                                                               |
+| **Orchestrator**                | The `orchestrator` schema and routes (daemon control). The retired TypeScript orchestrator was the prototype; the root `orchestrator/` directory is a leftover from it.                                                                                    |
+| **Sharp**                       | The agent-native, Git-backwards-compatible VCS (`crates/sharp`). Continuous export — source as a plain git tree plus a portable brain schema — is a ratified product guarantee (2026-07-02).                                                               |
+
 ---
 
-## Requirements
+## Requirements (developer build)
+
+These are the requirements for **building from source — the developer path**, not the customer install story. Customers get a signed, checksummed release installable by an IT generalist; that installer is planned and does not exist yet.
 
 - A Linux host you control.
 - A Rust toolchain (see `rust-version` in `Cargo.toml`) to build the binary.
@@ -41,7 +57,7 @@ The retired prototype leaned on Git and GitHub as its delivery plane. Phase 2 is
 
 No GitHub account, GitHub App, or network access to github.com is required (`docs/technical-requirements.md`).
 
-## Install
+## Install (developer path)
 
 Build the single `superfield` binary from the workspace:
 
@@ -54,6 +70,8 @@ The binary lands at `target/release/superfield`.
 ---
 
 ## Running the appliance
+
+The CLI below is a **developer and agent surface**. Per the plan of record, customer administration — credentials, approvals, backup, restore, rollback — belongs in Studio at IT-admin grade; those Studio workflows are planned, not yet shipped.
 
 Most commands auto-spawn the daemon on first use (which health-gates Postgres and starts the gardening loop). You can also drive it explicitly.
 

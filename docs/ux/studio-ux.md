@@ -1,3 +1,14 @@
+> **STATUS: PARTIALLY SUPERSEDED (prototype-era)** — this spec was written
+> against the retired TypeScript/GitHub-synced prototype. Wherever this
+> document disagrees with the appliance, the route table in
+> [`docs/architecture.md`](../architecture.md) (§HTTP Routes) is
+> authoritative. In particular: GitHub sync (`POST /studio/sync/github`,
+> `GITHUB_TOKEN` + `GITHUB_REPO`, the sync-service and multi-repo language
+> below) is **not** part of the appliance, and the claims that the embedded
+> DB (`packages/db`) is the source of truth are prototype-era — Studio is
+> served by the `sf-serve` Rust binary over the Postgres substrate. See the
+> 2026-07-02 red-team concept review (finding R-26) and its remediation log.
+
 # Studio Tab — UX Design
 
 The Studio tab is the primary day-to-day surface for a Superfield operator. It gives a
@@ -28,6 +39,13 @@ target design.
    changes label and action depending on what state the feature is in:
    - No active session → UPDATE (edit the local spec)
    - Active session → STEER (send mid-turn context to the running agent)
+
+> **Decision update (2026-07-02).** The ratified product decision (red-team
+> concept review, finding R-10) makes **batch review of completed candidate
+> states** Studio's primary interaction mode. Live steering — the STEER flow
+> this document specifies as a primary intent mode — is an interim/degraded
+> mode for the pre-dark-factory period, not the primary surface. Future UX
+> revisions of this document follow that decision.
 
 ---
 
@@ -218,8 +236,10 @@ section headers (ALL-CAPS mono label + 1 px divider line), not by cards or boxes
 - When `body` is empty or absent: shows the prompt
   `"No description yet — add one using the form below. Use - [ ] item for tasks."` in
   `var(--fg-3)`, font-mono, xs. This is the only instruction copy in the panel.
-- Checkboxes are **not interactive** (read-only). Editing the body is done via the UPDATE
-  form below.
+- Checkboxes are **not interactive** (read-only). Note: the UPDATE form below writes
+  only `state` and `title` on the shipped route (see NOTE under Bottom Form) — there is
+  currently **no** write path for the Markdown `body`, so the empty-state prompt above
+  describes a prototype-era flow the appliance does not yet implement.
 
 Section label rename: **DESCRIPTION** (not SUBTASKS) — the section displays the full
 body including prose, not just task items. The task list is a subset of the body.
@@ -270,9 +290,11 @@ transparent background. Disabled + 40% opacity when input is empty.
 
 On Enter (no Shift): submit. Shift+Enter inserts newline.
 
-**UPDATE behaviour**: after a successful patch the section body re-renders from the
-updated DB record. No full page reload. If the updated body contains `- [ ]` items the
-DESCRIPTION section immediately shows them.
+**UPDATE behaviour**: after a successful `POST /studio/issues/update` the detail
+re-renders from the updated record. No full page reload. The route accepts
+`{ id, state?, title? }` only (see NOTE above) — it has no Markdown `body` field, so
+the DESCRIPTION task list cannot be edited through this form as currently shipped;
+`title` carries the new content.
 
 **STEER behaviour**: no visible confirmation — the form clears and focus returns to the
 textarea. The agent turn appears in SESSION LOG when the turn log polls next.
@@ -299,7 +321,9 @@ DETAIL VIEW (feature selected)
  ├─ press Escape / click ← BACK → LIST VIEW
  ├─ click different rail row    → DETAIL VIEW (new feature, no navigation)
  ├─ submit UPDATE form          → POST /studio/issues/update { id, title }
- │                               → on success: refetch, re-render DESCRIPTION
+ │                               → on success: refetch, re-render title/state
+ │                                 (no Markdown `body` write — see NOTE;
+ │                                 `PATCH /studio/issues/:n` does not exist)
  └─ submit STEER form           → POST /studio/steer { context, sessionId }
                                  → on success: clear form
 ```
@@ -389,15 +413,17 @@ The Studio tab is not intended for mobile use.
 ## Open Design Questions
 
 1. **Editable title.** Should the feature title be editable inline in the header? Current
-   design: title is set at creation only. Update: only the body
-   (`POST /studio/issues/update { id, title }`).
-   If title editing is needed, a small pencil icon next to the title in the header would
-   trigger an inline input.
+   design: title is set at creation; the update route carries new content in `title`
+   (`POST /studio/issues/update { id, state?, title? }`) and there is no Markdown `body`
+   update route (see NOTE under Bottom Form).
+   If inline title editing is needed, a small pencil icon next to the title in the header
+   would trigger an inline input.
 
 2. **Checkbox interactivity.** Should clicking `[ ]` in the DESCRIPTION section directly
-   patch the body? Current design: read-only. Patching requires the UPDATE form. This is
-   intentional to keep the edit surface explicit, but it could be added later with a
-   debounced patch on checkbox toggle.
+   patch the body? Current design: read-only — and no `body` write route exists today
+   (see NOTE under Bottom Form), so checkbox toggling would first require adding one.
+   Keeping the edit surface explicit is intentional; a debounced patch on checkbox
+   toggle could be added later alongside such a route.
 
 3. **GitHub sync indicator.** When `GITHUB_TOKEN` + `GITHUB_REPO` are set, should the
    rail header show a sync badge (e.g. `↻ synced 3m ago`)? Not in scope for this

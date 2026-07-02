@@ -10,6 +10,8 @@ The milestone is complete when a single binary (`superfield`) can be installed o
 
 The appliance runs entirely within a single host OS process group. All mandatory dependencies (Postgres, the gardening loop, the HTTP API) are managed in-process or via subprocesses under the daemon's supervision. No external orchestrator (Kubernetes, systemd, Docker Compose) is required at runtime.
 
+Postgres in particular is **not** a container: `LocalPostgresProvisioner` runs `initdb` into `~/.superfield/daemon/postgres` and starts the instance as a daemon-supervised subprocess via `pg_ctl` — no Docker, no root, no container runtime (see `docs/architecture.md` §Seam: PostgresProvisioner). The host prerequisite, stated once here: a Postgres server installation whose `initdb`/`pg_ctl` binaries are on `PATH` or in a Debian/Ubuntu versioned bin directory (`/usr/lib/postgresql/<ver>/bin`).
+
 ---
 
 ## §4.2 — Daemon startup handshake contract
@@ -23,7 +25,7 @@ The daemon startup handshake is the mechanism by which the CLI learns that the d
 1. CLI pre-binds a one-shot Unix stream socket (path from `SF_STARTUP_NOTIFY` or `~/.superfield/daemon/startup_notify.sock`) and begins listening.
 2. CLI spawns the daemon via re-exec, passing the socket path via `SF_STARTUP_NOTIFY`.
 3. Daemon runs the full health gate:
-   - Start Postgres container; poll `pg_isready` (max 60 s).
+   - Start the daemon-managed Postgres instance (a `LocalPostgresProvisioner` subprocess — see §4.1); poll `pg_isready` (max 60 s).
    - Run migration runner; apply all pending migrations from all component crates in dependency order.
    - Probe schema existence for all registered namespaces.
 4. On success: daemon writes `daemon.json` atomically, binds `superfield.sock`, then connects to the startup-notify socket and sends `StartupResult::Ok { version, addr }`.
@@ -32,7 +34,7 @@ The daemon startup handshake is the mechanism by which the CLI learns that the d
 
 The CLI blocks on the startup-notify socket for up to 30 seconds. Expiry returns an error to the user with a pointer to `daemon.log`.
 
-**`drain` precedes `stop`:** On graceful shutdown, the daemon calls `LoopHandle::drain()` (waits for the current gardening step to commit its cursor) before calling `PostgresProvisioner::stop()`. This ensures the knowledge-base state in Postgres is consistent when the container is stopped.
+**`drain` precedes `stop`:** On graceful shutdown, the daemon calls `LoopHandle::drain()` (waits for the current gardening step to commit its cursor) before calling `PostgresProvisioner::stop()`. This ensures the knowledge-base state in Postgres is consistent when the Postgres instance is stopped.
 
 See also: `docs/architecture.md` §Daemon Lifecycle.
 
@@ -86,11 +88,13 @@ See also: `crates/sf-loop/src/lib.rs` for the loop engine implementation.
 
 The HTTP API (`superfield serve`) must not accept external connections before the health gate passes. The serving layer binds the listener socket only after `StartupResult::Ok` has been sent over the startup-notify socket. This prevents race conditions where a client connects before migrations have run.
 
-The `/health` endpoint returns HTTP 200 only when:
+The `/health` endpoint itself is a bare, unauthenticated liveness probe — it returns `{"status":"ok"}` and performs no per-request checks (`docs/architecture.md` §HTTP Routes). The readiness guarantee lives in the boot gate, not in the endpoint: because the listener binds only after the health-gated boot completes, any reachable `/health` implies that at boot:
 
-- Postgres is accepting connections.
-- All migrations are applied (verified by querying `schema_migrations`).
-- The gardening loop task is running (i.e. `LoopHandle` is registered in `AppState`).
+- Postgres was accepting connections.
+- All migrations were applied (verified by querying `schema_migrations`).
+- The gardening loop task was running (i.e. `LoopHandle` registered in `AppState`).
+
+Monitoring that needs readiness semantics should treat listener reachability as the signal; the response body adds no further guarantee.
 
 ---
 
@@ -102,9 +106,9 @@ The project graph (`crates/sf-db/src/project_graph.rs`) is the typed representat
 
 1. **Feature and Issue nodes** — the appliance daemon does **not** ingest GitHub issues (GitHub is never required — `docs/technical-requirements.md`). The `ProjectGraphDerive` gardening step derives `Feature` and `Issue` nodes from the `plan`/`prd`/`strategy` knowledge pages (`docs/architecture.md`), writing them to `nexum.project_nodes` via `insert_feature`/`insert_issue`.
 
-2. **Acceptance criterion nodes** — each acceptance criterion is stored as a typed `AcceptanceCriterion` node linked to its parent `Feature` node via the `project:feature_has_acceptance_criterion` edge (`crates/sf-db/src/project_graph.rs`, `insert_acceptance_criterion`).
+2. **Acceptance criterion nodes** — *delivered as schema only.* The typed `AcceptanceCriterion` node and the `project:feature_has_acceptance_criterion` edge exist (`crates/sf-db/src/project_graph.rs`, `insert_acceptance_criterion`), but no acceptance-criteria data is attached to any Feature and nothing gates on it. Making criteria populated, executable, and gating is owned by `docs/eval-design.md` §"The missing primitive: executable acceptance criteria".
 
-3. **Test linkage** — test functions named in the source tree are linked to the acceptance criteria they verify, enabling the gardening loop to report coverage gaps.
+3. **Test linkage** — *deferred.* Linking test functions named in the source tree to the acceptance criteria they verify (enabling the gardening loop to report coverage gaps) depends on populated acceptance criteria and is deferred with them; ownership likewise sits with `docs/eval-design.md` §"The missing primitive".
 
 4. **Corpus access** — the project graph is queryable via the `nexum.corpus_access` table, which restricts graph traversal to the requesting principal's permitted corpora. No cross-tenant graph leakage is permitted.
 

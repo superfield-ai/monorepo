@@ -41,5 +41,17 @@ missing `apps/`+`src/` segments) and #23's schema half was already shipped.
 
 ## Gate
 
+> **STATUS: SUPERSEDED IN PART** — the `#[ignore]` rule below is retired. It
+> mandates the silent-skip pattern that
+> [`testing-invariants.md`](testing-invariants.md) (invariant 1: loud-skip,
+> never silent-skip) bans by name. The corrected rule: DB-gated and
+> rust-analyzer-gated tests must **fail loudly in CI when the resource is
+> absent**, not skip — CI provisions the resource in a dedicated lane instead
+> of staying green without it. `#[ignore]` is permitted only where the manifest
+> gate records the skip as a red-by-default exception. The
+> `cargo check --workspace` / `cargo test -p <crate>` cadence below still
+> stands; the sentence about `#[ignore]`'d tests is retained only as a record
+> of the locked 2026-06-07 decision and no longer governs new tests.
+
 Every batch: `cargo check --workspace` then `cargo test -p <crate>`. DB-gated and
 rust-analyzer-gated tests are `#[ignore]`'d so CI without Postgres/RA stays green.
