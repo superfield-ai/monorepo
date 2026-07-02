@@ -256,12 +256,13 @@ change based on feature state:
 > **NOTE (backend truth).** The `sf-serve` studio router
 > (`crates/sf-serve/src/routes/studio.rs`) registers exactly four write/read
 > routes: `POST` / `GET /studio/issues`, `POST /studio/issues/update`, and
-> `POST /studio/steer`. There is **no** `PATCH /studio/issues/:n` route. The
-> update handler takes a JSON body of `{ id, state?, title? }` and writes
-> through the nexum project graph; it does not accept a Markdown `body` field.
-> The studio frontend (`FeaturePaneController.ts`) still issues
-> `PATCH /studio/issues/:number` — a known frontend/backend mismatch tracked
-> for a separate fix, not a route that exists today.
+> `POST /studio/steer`. The update handler takes a JSON body of
+> `{ id, state?, title? }` (the `id` is the project-graph node UUID; `title`
+> carries the new content) and writes through the nexum project graph. The
+> studio frontend (`FeaturePaneController.ts`) issues exactly this
+> route+method+payload — `POST /studio/issues/update { id, title }`, resolving
+> the node id from the loaded feature list — so the control frontend and
+> sf-serve agree on a single feature-update contract (issue #835).
 
 The textarea is `var(--bg-base)`, 1 px `var(--border-subtle)` border, font-mono, sm.
 The button is full-width beneath the textarea, `var(--accent-cyan)` border and text,
@@ -297,7 +298,7 @@ LIST VIEW (no selection)
 DETAIL VIEW (feature selected)
  ├─ press Escape / click ← BACK → LIST VIEW
  ├─ click different rail row    → DETAIL VIEW (new feature, no navigation)
- ├─ submit UPDATE form          → PATCH /studio/issues/:n { body }
+ ├─ submit UPDATE form          → POST /studio/issues/update { id, title }
  │                               → on success: refetch, re-render DESCRIPTION
  └─ submit STEER form           → POST /studio/steer { context, sessionId }
                                  → on success: clear form
@@ -388,7 +389,8 @@ The Studio tab is not intended for mobile use.
 ## Open Design Questions
 
 1. **Editable title.** Should the feature title be editable inline in the header? Current
-   design: title is set at creation only. Update: only the body (`PATCH … { body }`).
+   design: title is set at creation only. Update: only the body
+   (`POST /studio/issues/update { id, title }`).
    If title editing is needed, a small pencil icon next to the title in the header would
    trigger an inline input.
 
