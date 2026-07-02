@@ -258,3 +258,19 @@ already in `rust-test-seam`'s `FILTER`, or extend the `FILTER` to include the
 crate's lib unit-test binary — a same-file unit test alone will not run in
 CI. `GET /api/me` (`crates/sf-serve/src/routes/api.rs`) still lacks a
 dedicated test.
+
+## Coverage warning — Sharp scenario-corpus floor assertion (2026-07-02, PR #837)
+
+Issue #834's new required `sharp-merge-guarantee` job proves the compile-gate
+refusal tests execute (asserts `>= 3`, one per named test) but its AC2 check
+over `crates/sharp/tests/scenarios.rs` only asserts `>= 1` scenario executed
+out of the corpus's actual 12 fixtures (`loader_finds_all_rust_scenarios`
+pins the count to 12). A regression that silently narrows execution to a
+single scenario (broken `--test` target, filter typo, renamed/deleted
+fixture) still reports a green required check — the "exit 0 ≠ tested"
+invariant is only weakly satisfied here.
+Risk for future planning: when asserting "> 0 executed" over a corpus of
+known size, require the assertion be pinned to the corpus's actual/expected
+count (or checked against the loader's own `scenarios.len()`), not a bare
+floor of 1 — a bare `>0`/`>=1` over a multi-item corpus lets most of the
+corpus silently stop running while CI stays green.
