@@ -137,9 +137,9 @@ path = "crates/sf-db"
 kind = "crate"
 compiled_in_ci = true
 migrated_in_ci = true
-tests_executed_in_ci = 7
+tests_executed_in_ci = 9
 executed_by = "rust.yml"
-note = "DB-gated execution wired (issue #765): rust.yml's rust-test-seam job (issue #765, NOT a required context) provisions pgvector + migrations + governed weights and runs `cargo nextest run -p sf-db ... --run-ignored all` over a stable purely-DB subset (provision_migrate_integration + rls_workspace_isolation_integration binaries, 7 tests). The count is a FLOOR (>0); the broader #[ignore]d corpus (workspace_id NOT-NULL/FK back-fill assertions, backup_integration) fails against the current schema and is tracked separately. ci-migrate.yml applies crates/sf-db/migrations/**."
+note = "DB-gated execution wired (issue #765, extended by #847): rust.yml's rust-test-seam job (issue #765, NOT a required context) provisions pgvector + migrations + governed weights and runs `cargo nextest run -p sf-db ... --run-ignored all` over a stable purely-DB subset (provision_migrate_integration + rls_workspace_isolation_integration binaries, 7 tests, PLUS pool::tests::pool_hands_out_working_connection and pool::tests::acquire_workspace_sets_principal_context selected by name from the sf-db lib unit-test binary, issue #847, 9 tests total). The count is a FLOOR (>0); the broader #[ignore]d corpus (workspace_id NOT-NULL/FK back-fill assertions, backup_integration) fails against the current schema and is tracked separately. ci-migrate.yml applies crates/sf-db/migrations/**."
 
 [[unit]]
 path = "crates/sf-deploy"
