@@ -2,11 +2,18 @@
  * E2E spec: Create-feature and update-feature flows.
  *
  * Covers the two write paths in the Studio tab feature rail:
- *   POST /studio/issues  (CREATE)
- *   PATCH /studio/issues/:n  (UPDATE)
+ *   POST /studio/issues         (CREATE)
+ *   POST /studio/issues/update  (UPDATE)
  *
  * All /studio/issues and /analytics/slots endpoints are stubbed with
  * page.route() — no real database or GitHub credentials required.
+ *
+ * The update path targets the single feature-update route the sf-serve
+ * studio router registers (`POST /studio/issues/update` with
+ * `{ id, state?, title? }`, see crates/sf-serve/src/routes/studio.rs). It is
+ * keyed on the project-graph node id (a UUID), not the issue number — see
+ * packages/control/apps/src/controllers/FeaturePaneController.ts
+ * `patchFeature()` (issue #835).
  *
  * Canonical docs:
  *   docs/product.md
@@ -20,6 +27,7 @@ import { test, expect } from "../fixtures";
 
 const EXISTING_ISSUE_NUMBER = 99;
 const NEW_ISSUE_NUMBER = 100;
+const EXISTING_ISSUE_ID = "11111111-1111-1111-1111-111111111111";
 
 // ── Route stubs ───────────────────────────────────────────────────────────────
 
@@ -31,6 +39,7 @@ async function stubNoSlots(
   page: import("@playwright/test").Page,
   dbIssues: Array<{
     number: number;
+    id?: string;
     title: string;
     body?: string;
     status: string;
@@ -68,7 +77,8 @@ async function stubNoSlots(
       });
     }
 
-    // Fall through — let per-test routes intercept POST / PATCH
+    // Fall through — let per-test routes intercept POST /studio/issues
+    // (CREATE) and POST /studio/issues/update (UPDATE).
     return route.fallback();
   });
 }
@@ -286,6 +296,7 @@ test.describe("UPDATE feature flow", () => {
     await stubNoSlots(page, [
       {
         number: EXISTING_ISSUE_NUMBER,
+        id: EXISTING_ISSUE_ID,
         title: "existing feature",
         body: "original body",
         status: "draft",
@@ -315,42 +326,43 @@ test.describe("UPDATE feature flow", () => {
     await expect(updateButton).toBeVisible();
   });
 
-  test("submitting UPDATE fires PATCH /studio/issues/:n with updated body", async ({
+  test("submitting UPDATE fires POST /studio/issues/update with the node id and title", async ({
     page,
   }) => {
     await stubNoSlots(page, [
       {
         number: EXISTING_ISSUE_NUMBER,
+        id: EXISTING_ISSUE_ID,
         title: "existing feature",
         body: "",
         status: "draft",
       },
     ]);
 
-    let capturedPatchBody: unknown = null;
+    let capturedUpdateBody: unknown = null;
 
-    // Intercept the PATCH
-    await page.route(
-      `**/studio/issues/${EXISTING_ISSUE_NUMBER}`,
-      async (route) => {
-        if (route.request().method() === "PATCH") {
-          capturedPatchBody = JSON.parse(
-            (await route.request().postData()) ?? "{}",
-          ) as unknown;
-          return route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              number: EXISTING_ISSUE_NUMBER,
-              title: "existing feature",
-              body: "updated body text",
-              status: "draft",
-            }),
-          });
-        }
-        return route.fallback();
-      },
-    );
+    // Intercept the reconciled update route (issue #835): the sf-serve studio
+    // router registers exactly one feature-update route,
+    // `POST /studio/issues/update { id, state?, title? }`, keyed on the
+    // project-graph node id rather than the issue number.
+    await page.route("**/studio/issues/update", async (route) => {
+      if (route.request().method() === "POST") {
+        capturedUpdateBody = JSON.parse(
+          (await route.request().postData()) ?? "{}",
+        ) as unknown;
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            number: EXISTING_ISSUE_NUMBER,
+            title: "existing feature",
+            body: "updated body text",
+            status: "draft",
+          }),
+        });
+      }
+      return route.fallback();
+    });
 
     await goToStudioFeatures(page);
 
@@ -373,24 +385,25 @@ test.describe("UPDATE feature flow", () => {
       .locator("button", { hasText: "UPDATE" });
     await updateButton.click();
 
-    // Wait for the PATCH to be fired
+    // Wait for the POST to be fired
     await page.waitForTimeout(500);
 
-    expect(capturedPatchBody).not.toBeNull();
-    const body = capturedPatchBody as { body?: string };
-    expect(body.body).toBe("updated body text");
+    expect(capturedUpdateBody).not.toBeNull();
+    const body = capturedUpdateBody as { id?: string; title?: string };
+    expect(body.id).toBe(EXISTING_ISSUE_ID);
+    expect(body.title).toBe("updated body text");
   });
 
   test("after UPDATE the DESCRIPTION section re-renders with the new body", async ({
     page,
   }) => {
     // Use a task-list body so the rendered DESCRIPTION changes visibly after
-    // patch — prose-only bodies render as "No checklist items" regardless of
-    // content, making old/new states indistinguishable.
+    // the update — prose-only bodies render as "No checklist items"
+    // regardless of content, making old/new states indistinguishable.
     const updatedBody = "- [ ] refreshed task item";
     const updatedBodyText = "refreshed task item";
 
-    // After the PATCH, the re-fetch returns the updated body.
+    // After the update, the re-fetch returns the updated body.
     let issueBody = "original body";
 
     await page.route("**/analytics/slots", (route) =>
@@ -405,14 +418,14 @@ test.describe("UPDATE feature flow", () => {
       const method = route.request().method();
       const url = route.request().url();
 
-      if (
-        method === "PATCH" &&
-        url.includes(`/studio/issues/${EXISTING_ISSUE_NUMBER}`)
-      ) {
+      // Reconciled update route (issue #835): `POST /studio/issues/update
+      // { id, title }`, keyed on the project-graph node id.
+      if (method === "POST" && url.endsWith("/studio/issues/update")) {
         const data = JSON.parse((await route.request().postData()) ?? "{}") as {
-          body?: string;
+          id?: string;
+          title?: string;
         };
-        issueBody = data.body ?? issueBody;
+        issueBody = data.title ?? issueBody;
         return route.fulfill({
           status: 200,
           contentType: "application/json",
@@ -433,6 +446,7 @@ test.describe("UPDATE feature flow", () => {
             issues: [
               {
                 number: EXISTING_ISSUE_NUMBER,
+                id: EXISTING_ISSUE_ID,
                 title: "existing feature",
                 body: issueBody,
                 status: "draft",
@@ -465,7 +479,7 @@ test.describe("UPDATE feature flow", () => {
       .locator("button", { hasText: "UPDATE" });
     await updateButton.click();
 
-    // After the PATCH + re-fetch, the DESCRIPTION section must show the new
+    // After the update + re-fetch, the DESCRIPTION section must show the new
     // body. The updated body contains a task-list item so the checklist renders
     // its text rather than the "No checklist items" prose placeholder.
     await expect(page.getByTestId("feature-detail")).toContainText(
@@ -480,32 +494,30 @@ test.describe("UPDATE feature flow", () => {
     await stubNoSlots(page, [
       {
         number: EXISTING_ISSUE_NUMBER,
+        id: EXISTING_ISSUE_ID,
         title: "existing feature",
         body: "",
         status: "draft",
       },
     ]);
 
-    let patchFired = false;
-    await page.route(
-      `**/studio/issues/${EXISTING_ISSUE_NUMBER}`,
-      async (route) => {
-        if (route.request().method() === "PATCH") {
-          patchFired = true;
-          return route.fulfill({
-            status: 200,
-            contentType: "application/json",
-            body: JSON.stringify({
-              number: EXISTING_ISSUE_NUMBER,
-              title: "existing feature",
-              body: "line one\n",
-              status: "draft",
-            }),
-          });
-        }
-        return route.fallback();
-      },
-    );
+    let updatePostFired = false;
+    await page.route("**/studio/issues/update", async (route) => {
+      if (route.request().method() === "POST") {
+        updatePostFired = true;
+        return route.fulfill({
+          status: 200,
+          contentType: "application/json",
+          body: JSON.stringify({
+            number: EXISTING_ISSUE_NUMBER,
+            title: "existing feature",
+            body: "line one\n",
+            status: "draft",
+          }),
+        });
+      }
+      return route.fallback();
+    });
 
     await goToStudioFeatures(page);
 
@@ -525,10 +537,10 @@ test.describe("UPDATE feature flow", () => {
     // Shift+Enter should insert a newline, not submit
     await updateTextarea.press("Shift+Enter");
 
-    // Give a moment to confirm no PATCH was fired
+    // Give a moment to confirm no update POST was fired
     await page.waitForTimeout(300);
 
-    expect(patchFired).toBe(false);
+    expect(updatePostFired).toBe(false);
 
     // The textarea value should contain a newline
     const textareaValue = await updateTextarea.inputValue();
