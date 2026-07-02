@@ -217,3 +217,44 @@ because it lacks a substrate: those tests FAIL against a correct one.
   `--workspace` move; `tests/coverage-truth-selftest.sh` feeds a synthetic
   `--workspace` rust.yml (via `RUST_YML_OVERRIDE`) and fails LOUDLY if the five
   crates are still credited as executed-by-name without per-crate evidence.
+
+## Coverage warning — `sf-db::acquire_workspace` / `acquire_with_workspace_id` (2026-07-02, PR #836)
+
+`crates/sf-db/src/pool.rs`'s `acquire_workspace`/`acquire_with_workspace_id`
+shipped with zero executed CI coverage of their actual SQL: they used `SET
+LOCAL app.current_principal_id = $1`, which is invalid Postgres (`SET` takes
+no bind parameters), so every authenticated DB-touching sf-serve route
+(`api::me`, `change`, `auditor`, `studio` x3, `ingest` x3) failed at runtime
+with a syntax error — a live bug, not a latent one. The green signal lied for
+two independent reasons, both durable failure classes:
+
+1. **Curated-filterset gap extends to lib unit tests, not just excluded
+   crates.** The existing "curated nextest filterset" entry above documents
+   crate/test classes the `rust-test-seam` `FILTER` excludes; this is a new
+   instance of the same class — the FILTER selects `sf-db` coverage only via
+   `binary(provision_migrate_integration) | binary(rls_workspace_isolation_integration)`,
+   two named `tests/*.rs` integration binaries. A `#[cfg(test)] mod tests`
+   block embedded in `src/pool.rs` compiles into the crate's own lib
+   unit-test binary, which that FILTER never selects — so `#[ignore]`d tests
+   living in `src/*.rs` (not `tests/*.rs`) are invisible to
+   `rust-test-seam` even under `--run-ignored all`, regardless of `-p sf-db`
+   being in scope.
+2. **Tests that share a function's name don't always call the function.**
+   `pool::tests::acquire_workspace_sets_principal_context` and
+   `pool::tests::pool_hands_out_working_connection` never call
+   `acquire_workspace()`/`acquire_with_workspace_id()` — they hand-roll the
+   equivalent SQL inline. This is still true after the fix. Likewise
+   sf-serve's `authenticated_request_succeeds_and_sets_workspace_context`
+   drives `GET /api/status`, whose handler never touches the DB; only
+   `GET /api/me` calls `acquire_workspace`, and it had no test at all until
+   PR #836's unrelated studio-route test incidentally exercised the same
+   pool function via `crates/sf-serve/src/routes/studio.rs`.
+
+Risk for future planning: do not treat a passing `#[ignore]`d test, or a test
+whose name references a function, as proof that function executes. When
+adding coverage for a `sf-db` pool/connection helper, either call the
+function under test directly and route it through a `tests/*.rs` binary
+already in `rust-test-seam`'s `FILTER`, or extend the `FILTER` to include the
+crate's lib unit-test binary — a same-file unit test alone will not run in
+CI. `GET /api/me` (`crates/sf-serve/src/routes/api.rs`) still lacks a
+dedicated test.
