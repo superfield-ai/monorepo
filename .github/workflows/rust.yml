@@ -386,6 +386,179 @@ jobs:
           path: rust-pkg-counts-seam.json
           if-no-files-found: warn
 
+  # ── REQUIRED SHARP MERGE-GUARANTEE PROVING RUN (issue #834) ─────────────────
+  # crates/sharp/src/merge_flow.rs advertises a "no-non-compiling-merge"
+  # guarantee: a merge whose output would not compile is REFUSED before it
+  # reaches storage. Every test that PROVES that refusal was `#[ignore]`d and
+  # excluded from CI — the hermetic `rust-test` job skips `#[ignore]`d tests and
+  # the DB-only `rust-test-seam` filterset explicitly excludes the
+  # rust-analyzer/cargo-dependent corpus — so a green Rust check proved the
+  # compile-gate NEVER executed (an executed-coverage-invariant / loud-skip
+  # violation). This job provisions the two resources those proofs need
+  # (rust-analyzer + cargo) and EXECUTES them under `--run-ignored all`, so the
+  # guarantee is proven by tests that actually run in a required check rather
+  # than only asserted in a doc comment.
+  #
+  # REQUIRED CONTEXT: the job `name:` below is registered in
+  # scripts/required-status-contexts.txt (the in-repo mirror of main's required
+  # branch-protection contexts). Draft-gated + the rust.yml
+  # `paths-ignore: ["**.md","**.txt"]` trigger mirror the other required heavy
+  # Rust jobs, so the context reports on every code/workflow PR (pure docs-only
+  # PRs, paths-ignored here, are made satisfiable by the always-on
+  # required-status-bypass.yml reporter, #788).
+  sharp-merge-guarantee:
+    # The required context name. Keep STABLE: it is registered verbatim in
+    # scripts/required-status-contexts.txt / main's required_status_checks, so
+    # renaming it silently drops the protection.
+    name: Sharp merge-guarantee (compile-gate refusal + scenarios)
+    # Draft-gated like the other test-execution jobs (a skipped required check
+    # counts as success; re-runs for real on `ready_for_review`).
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft == false
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 40
+    container:
+      # ci-runner ships python3 (used below to derive the executed count from
+      # nextest's libtest-json), curl, and bun. The Rust toolchain + C linker are
+      # installed below (same pattern as rust-test-seam). No `permissions:` block
+      # so the job keeps the repo-default `packages: read` needed to pull this
+      # private GHCR image.
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    defaults:
+      run:
+        shell: bash
+    env:
+      CI_CLASS: system-correctness
+    steps:
+      - uses: actions/checkout@v4
+
+      # rust-analyzer is provisioned as a rustup COMPONENT of the stable
+      # toolchain: `semantic_merge_rust` resolves it via PATH then
+      # `rustup which rust-analyzer` (crates/sharp/src/rust_analyzer_client.rs),
+      # so the component install is exactly the resource the refusal + scenario
+      # proofs need. The compile gate itself shells out to `cargo check`, which
+      # this toolchain provides.
+      - name: Install stable toolchain (+ rust-analyzer component)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rust-analyzer
+
+      - name: Install C toolchain (Rust build scripts + cargo check need a linker)
+        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libssl-dev
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Install cargo-nextest
+        uses: taiki-e/install-action@nextest
+
+      # ── LOUD provisioning check: rust-analyzer + cargo MUST resolve ─────────
+      # If the component is missing, the semantic-merge proof would silently take
+      # its "no rust-analyzer" path or error inconsistently. Fail HERE, loudly,
+      # so a missing resource can never masquerade as a passed guarantee (this is
+      # the loud-skip-never-silent-skip contract this issue is about).
+      - name: "Provisioning check: rust-analyzer + cargo resolve (loud)"
+        run: |
+          set -euo pipefail
+          cargo --version
+          cargo nextest --version
+          RA="$(rustup which rust-analyzer)"
+          echo "rust-analyzer resolved to: $RA"
+          "$RA" --version
+
+      # ── AC1: the compile-gate refusal proofs EXECUTE (>0 ran) ───────────────
+      # The three tests that prove a non-compiling merge is REFUSED are
+      # `#[ignore]`d (they need live cargo / rust-analyzer). `--run-ignored all`
+      # runs them; `--no-tests=fail` (also the 0.9.85 default, passed explicitly)
+      # hard-fails a zero-collection run. We derive the executed count from
+      # nextest's libtest-json NDJSON (the human "Summary" line embeds ANSI
+      # colour that defeats a regex) and ASSERT it is > 0, so a green compile can
+      # never masquerade as "the compile gate ran".
+      - name: "Compile-gate refusal proofs run (--run-ignored, >0 executed) [AC1]"
+        env:
+          NEXTEST_EXPERIMENTAL_LIBTEST_JSON: "1"
+        run: |
+          set -euo pipefail
+          FILTER='test(non_compiling_merge_is_blocked) | test(semantic_merge_refuses_non_compiling_output) | test(self_hosting_gate_compile_gate_refuses_bad_merge)'
+          cargo nextest run -p sharp --profile ci --run-ignored all --no-tests=fail \
+            -E "$FILTER" --message-format libtest-json 2>/dev/null | tee refusal.jsonl
+          python3 - refusal.jsonl 3 "compile-gate refusal proofs" <<'PY'
+          import json, sys
+          path, want_min, label = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+          ran = 0
+          with open(path) as fh:
+              for line in fh:
+                  line = line.strip()
+                  if not line.startswith("{"):
+                      continue
+                  try:
+                      ev = json.loads(line)
+                  except json.JSONDecodeError:
+                      continue
+                  if ev.get("type") == "test" and ev.get("event") in ("ok", "failed"):
+                      ran += 1
+          print(f"{label}: {ran} test(s) executed in CI")
+          if ran < want_min:
+              sys.exit(f"FAIL: expected >= {want_min} {label} to execute, got {ran} — exit 0 != tested")
+          PY
+
+      # ── AC2: the semantic scenario corpus EXECUTES (>0 ran) ─────────────────
+      # crates/sharp/tests/scenarios.rs walks the fixture corpus and asserts each
+      # merge's classified Outcome (incl. `clean_wrong` = the compile gate
+      # rejected a textual merge). Every scenario needs live rust-analyzer +
+      # cargo, so each is `#[ignore]`d; `--run-ignored all` runs the corpus. Same
+      # libtest-json >0 assertion as AC1.
+      - name: "Scenario corpus runs (--run-ignored, >0 executed) [AC2]"
+        env:
+          NEXTEST_EXPERIMENTAL_LIBTEST_JSON: "1"
+        run: |
+          set -euo pipefail
+          cargo nextest run -p sharp --profile ci --run-ignored all --no-tests=fail \
+            --test scenarios --message-format libtest-json 2>/dev/null | tee scenarios.jsonl
+          python3 - scenarios.jsonl 1 "sharp scenario corpus" <<'PY'
+          import json, sys
+          path, want_min, label = sys.argv[1], int(sys.argv[2]), sys.argv[3]
+          ran = 0
+          with open(path) as fh:
+              for line in fh:
+                  line = line.strip()
+                  if not line.startswith("{"):
+                      continue
+                  try:
+                      ev = json.loads(line)
+                  except json.JSONDecodeError:
+                      continue
+                  if ev.get("type") == "test" and ev.get("event") in ("ok", "failed"):
+                      ran += 1
+          print(f"{label}: {ran} scenario test(s) executed in CI")
+          if ran < want_min:
+              sys.exit(f"FAIL: expected >= {want_min} {label} to execute, got {ran} — exit 0 != tested")
+          PY
+
+      # ── Self-check: --no-tests=fail is active for THIS job ──────────────────
+      # Constrain the run to a filter that matches NOTHING. With --no-tests=fail
+      # nextest MUST exit non-zero on the empty collection; we invert the exit
+      # code so a zero-collection run that unexpectedly SUCCEEDS fails the job
+      # loudly. This proves the >0 assertions above cannot be a
+      # zero-tests-ran false green.
+      - name: "Self-check: zero-collection run must fail (--no-tests=fail proof)"
+        run: |
+          set -euo pipefail
+          NONE='test(/__sf_sharp_merge_guarantee_zero_collection_no_such_test__/)'
+          if cargo nextest run -p sharp --profile ci --run-ignored all --no-tests=fail -E "$NONE"; then
+            echo "FAIL: a zero-collection nextest run exited 0 — --no-tests=fail is NOT active; the >0 proofs above could be a false green." >&2
+            exit 1
+          fi
+          echo "OK: zero-collection run exited non-zero as required — --no-tests=fail is active."
+
   # ── REQUIRED COVERAGE-DELTA GATE (issue #766) ───────────────────────────────
   # Enforces invariant 2 ("exit 0 != tested") at PACKAGE granularity: if this
   # PR modifies a Rust package, at least one of that package's tests must have

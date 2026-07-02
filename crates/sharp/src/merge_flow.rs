@@ -16,9 +16,21 @@
 //! # Merge guarantee
 //!
 //! A merge that produces non-compiling output is **refused** before it
-//! reaches storage.  The gate is exercised end-to-end on Superfield's own
-//! Rust source, proving the no-non-compiling-merge guarantee at production
-//! scale.
+//! reaches storage: [`semantic_merge_rust`] runs a `cargo check` structural
+//! gate and returns [`SharpError::MergeRefused`] when the merged tree would not
+//! compile.
+//!
+//! This refusal is enforced by tests that **execute in CI**, not merely
+//! asserted here. The `sharp-merge-guarantee` job in
+//! `.github/workflows/rust.yml` (a required branch-protection context,
+//! issue #834) provisions rust-analyzer + cargo and runs the compile-gate
+//! refusal proofs — `non_compiling_merge_is_blocked`,
+//! `semantic_merge_refuses_non_compiling_output`,
+//! `self_hosting_gate_compile_gate_refuses_bad_merge` in
+//! `crates/sharp/tests/integration.rs` — plus the whole
+//! `crates/sharp/tests/scenarios.rs` semantic corpus under
+//! `--run-ignored all --no-tests=fail`, asserting a non-zero executed count. A
+//! green Rust check therefore means the refusal path actually ran.
 //!
 //! # Usage
 //!
