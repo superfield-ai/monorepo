@@ -37,6 +37,9 @@ eval ledger. The work is largely to _grade_ it, not to build new recording.
 Today `AcceptanceCriterion` exists as a node type in `nexum.project_nodes` but
 is **unused and non-gating** — there is no acceptance-criteria data attached to
 a Feature, and nothing checks it. This is the keystone of the whole design.
+This section owns that gap: `docs/milestone-1.md` §4.6 records the
+acceptance-criterion and test-linkage items as delivered-as-schema-only /
+deferred and points here.
 
 We make each acceptance criterion an _executable behavioral assertion_ attached
 to a Feature, one of:
@@ -62,7 +65,7 @@ process rather than the code.
 | ---- | ----------------------------------------- | ----------- | ------ | --------------------- |
 | 0    | Loop mechanics via injected fixtures      | total       | $0     | Every PR              |
 | 1    | A single step's output, replayed & graded | total\*     | ~$0    | Every PR              |
-| 2    | The whole loop, live, from seed intent    | low         | real $ | Nightly / pre-release |
+| 2    | The whole loop, live, from seed intent    | low         | real $ | Pre-release (manual today; nightly planned) |
 | 3    | Production episodes, scored continuously  | n/a         | n/a    | Always (online)       |
 
 \* Tier 1 replays recorded artifacts, so the _inputs_ are fixed; an LLM-judge
@@ -104,8 +107,13 @@ run the _entire_ loop against a live model, then assert the outcome:
    budget.
 
 Pass = (outcome criteria met) **AND** (process invariants held). This is
-expensive and stochastic, so it runs nightly, gated like the existing
-`SUPERFIELD_LIVE_AGENTS=1` live-smoke pattern.
+expensive and stochastic, so it cannot run per-PR. **Plan of record
+(2026-07-02):** Tier 2 runs nightly against the shipped default model, pinned
+(`claude-haiku-4-5-20251001` — the `SF_LLM_MODEL` default in
+`docs/architecture.md`'s `LoopConfig` table),
+gated like the existing `SUPERFIELD_LIVE_AGENTS=1` live-smoke pattern. Today
+that nightly workflow does not exist: Tier 2 is run manually before a release
+(see [testing.md](./testing.md)).
 
 ### Tier 3 — Online eval on production traces
 
@@ -122,7 +130,8 @@ The hard part. Our defenses:
   version, temperature — and record them in the episode (they are already
   columns / artifacts), so any run is reproducible and attributable.
 - **Record / replay cassettes** for CI (mirror `tests/fixtures/claude/*.json`);
-  reserve **live** runs for nightly.
+  reserve **live** runs for the Tier-2 cadence (manual pre-release today,
+  nightly planned).
 - **Score statistically:** run each scenario _k_ times, require pass-rate ≥ a
   threshold, and use multi-sample judges rather than a single verdict. Track the
   _distribution_, not one lucky run.
@@ -151,8 +160,9 @@ evals/
 ```
 
 See [`evals/README.md`](../evals/README.md) for the full layout and rationale
-(scenario-first, not tier-first). Wiring: Tier 0/1 into PR CI; Tier 2 nightly;
-Tier 3 as a Studio panel reading the `sharp.episodes` table.
+(scenario-first, not tier-first). Wiring: Tier 0/1 into PR CI; Tier 2 manual
+pre-release today, nightly once the planned workflow lands; Tier 3 as a Studio
+panel reading the `sharp.episodes` table.
 
 ## First scenario: `todo-app`
 
@@ -182,7 +192,11 @@ run needs no Anthropic key and no repo secret. It uploads `result.json`.
 - **Output:** `result.json` with `turns_to_acceptable` and per-rung pass/fail.
 
 It is intentionally rough (poll-based turn counting, keyword-or-judge rung 1) —
-a substrate for experimentation, not a gate. As the loop gains auto-commit →
+a substrate for experimentation, not a gate. Mind the model gap: the keyless CI
+run exercises the loop's plumbing on a free third-party model, not the shipped
+default, so its green badge is not quality evidence for the model customers
+run. Quality evidence comes from the Tier-2 plan of record — runs on the
+pinned shipped default model (`claude-haiku-4-5-20251001`). As the loop gains auto-commit →
 build → deploy, the browser leg upgrades from a render smoke to the true
 behavioral acceptance check, and this scenario becomes the template for more.
 
@@ -196,7 +210,10 @@ behavioral acceptance check, and this scenario becomes the template for more.
 4. **Tier-3 dashboard** — continuous online scoring of the live fleet.
 
 Acceptance criteria + a small Tier-2 harness are the first move: they make the
-user's expectation checkable and prove the entire loop end to end.
+user's expectation checkable and prove the entire loop end to end. Sequencing
+is binding in one direction (plan of record, 2026-07-02): executable acceptance
+criteria land **before** any outcome guarantee is claimed — until step 1
+ships, no document or badge may assert that user outcomes are verified.
 
 ## Component reference
 

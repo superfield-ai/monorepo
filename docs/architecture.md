@@ -24,6 +24,8 @@ Each node in the graph carries:
 
 **Target integration.** The Blueprint is a binding input to the validation gate: no change merges without conformance to the constraints it encodes. Advisory-only consultation is insufficient for the appliance.
 
+**Governance decision (ratified 2026-07-02, red-team review R-03).** The Blueprint is governed as a **versioned, fail-closed rule set held in the brain**: a missing or unparseable rule graph is a boot failure (fail-closed, like the policy engine), and per-change conformance verdicts are recorded in `forge.validation_runs`. The current loader does not yet meet this bar — its fail-open fallback is a documented defect (see §BlueprintRules under the Gardening Loop Engine).
+
 ## Nexum — Company Knowledge Graph
 
 [`crates/nexum`](crates/nexum) is the unified operational store for all company knowledge: product vision, requirements, source code, issues, behavioral traces, errors, and the causal links among them — under one schema and one clock. Agents are first-class writers: they record observations, candidate corrections, and outcomes directly into the graph. It is not a log or a warehouse — it is the shared ground truth that every agent, human, and service reasons against without crossing a system boundary.
@@ -87,7 +89,8 @@ Each component owns exactly one PostgreSQL schema. All tables, indexes, sequence
 | `auth`            | Auth (shared)   | `sessions`, `oauth_tokens`, `app_installations` (to be defined during auth port)                                                                                                                                                                                     |
 | `orchestrator`    | Orchestrator    | `gardening_cursor`                                                                                                                                                                                                                                                   |
 | `substrate`       | sf-db           | `backups`                                                                                                                                                                                                                                                            |
-| `forge`           | sf-db           | `changes`, `validation_runs`                                                                                                                                                                                                                                         |
+| `forge`           | sf-db           | `changes`, `validation_runs`, `policies`                                                                                                                                                                                                                             |
+| `public`          | sf-db (exception) | `workspaces` — the shared tenant root every component's `workspace_id` FKs against; the single deliberate exception to the one-schema-per-component rule                                                                                                           |
 
 **Schema creation is the first step of each component's migration sequence.** Migration runners call `CREATE SCHEMA IF NOT EXISTS <component>` before any `CREATE TABLE`.
 
@@ -119,6 +122,8 @@ Each component owns its schema's migrations exclusively. Migration files are col
 | sf-db        | `crates/sf-db/migrations/` (substrate workspace + `forge` tables)  |
 
 The migration runner (tracked separately) applies all pending migrations from all components in dependency order at startup. Component migrations must be idempotent (`CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`, `ALTER TABLE … ADD COLUMN IF NOT EXISTS`).
+
+The canonical dependency order is **`sf-db → sf-auth → nexum → sharp`** — the order the Rust runner walks `COMPONENT_DIRS` (`crates/sf-db/src/migrate.rs`) and the daemon health gate applies. `sf-db` must run first because it creates `public.workspaces`, which component tables (e.g. `nexum.page_revisions`) FK against. This document owns the migration order; `adr-schema-boundary.md` defers to it by reference.
 
 ### Cross-component joins and RLS scoping
 
@@ -326,6 +331,8 @@ Sharp performs semantic merge for Rust source files using **rust-analyzer** as a
 | `tsserver_bridge_client`     | `tsserver-bridge` subprocess harness — spawns the TypeScript bridge script, communicates over newline-delimited JSON-RPC 2.0 on stdio                      |
 | `workspace`                  | Working-tree primitives — snapshot a directory to SHA-256 blobs/trees and materialize a tree back to disk, using git-canonical header-prefixed ids         |
 
+**Object hashing (clarification).** Native Sharp objects are **SHA-256** (git-canonical header-prefixed ids, as the `workspace` and `git_canonical` modules describe). The `sharp.objects.algo` column's `sha1` default applies to objects imported from existing git repositories via `git_interop`, which preserves Git's SHA-1 object ids — it does not describe native objects.
+
 ### Merge algorithm (Tier-1)
 
 1. **Rename detection** — for each file changed on "ours" relative to base, ask rust-analyzer (via `textDocument/references`) for the rename-location set of every symbol whose identifier changed. If the same symbol is renamed on "ours" and edited on "theirs", the rename wins and all reference locations are propagated.
@@ -388,6 +395,8 @@ The reliability stack has three layers:
 2. **WAL archiving** — `archive_mode = on`; the `archive_command` copies each completed WAL segment to durable object storage (`gs://sf-wal-archive/<env>/` in the current deployment). Combined with the daily base backup, this enables point-in-time recovery to any LSN within the retention window (target: 7 days).
 
 3. **Daily base backup** — a `pg_basebackup` job runs against the primary and writes a consistent filesystem snapshot to durable object storage (`gs://sf-backups/<env>/YYYY-MM-DD/` in the current deployment). Scheduling the job is owned by the appliance's execution environment — no external scheduler is a required dependency.
+
+**The `gs://` targets are the vendor's development deployment, not the appliance contract.** An appliance runs entirely within the customer's trust boundary, so its backup target must be customer-local — a second disk or a customer-pointed S3-compatible endpoint, configured in Studio. The plan of record (adopted 2026-07-02, red-team review R-23) is appliance-managed backups: the daemon's loop owns scheduling, the no-op backup seam is replaced by an enforced health check that raises a high-severity signal when no recent backup event exists, and restore becomes a one-command `superfield restore` with periodic automated restore drills as a health metric.
 
 ### Restore Procedure
 
@@ -619,7 +628,7 @@ pub fn load(path: &Path) -> Result<BlueprintRules, BlueprintError>
 pub fn query(&self, keywords: &[&str]) -> String
 ```
 
-`BlueprintRules::load` reads `blueprint/rules/graph.yaml` once at loop startup. The file is a YAML mapping of rule-name to rule-body. If the file is missing or unreadable, `run_loop` falls back to `BlueprintRules::empty()` (no rules) with a warning log rather than aborting.
+`BlueprintRules::load` reads `blueprint/rules/graph.yaml` once at loop startup. The file is a YAML mapping of rule-name to rule-body. If the file is missing or unreadable, `run_loop` falls back to `BlueprintRules::empty()` (no rules) with a warning log rather than aborting. **This fail-open fallback is a documented defect** against the ratified fail-closed decision (2026-07-02, red-team review R-03): the planned remediation makes a missing or unparseable rule graph a **boot failure**, with Blueprint-conformance verdicts recorded per change in `forge.validation_runs` (see §Superfield Blueprint, Governance decision).
 
 `query(keywords)` filters the rule mapping to entries whose key or body contains any of the given keywords. If `keywords` is empty it returns all rules. Used by the `ArchitectureProposal` step to inject relevant architectural constraints into the LLM prompt.
 
@@ -718,6 +727,7 @@ crates/sf-serve/src/routes/
 
 ### Notes
 
+- **`/health` is a bare liveness probe, not a readiness check** — the handler verifies nothing beyond the process serving HTTP. Readiness comes from boot ordering rather than the route: the TCP listener binds only after the health-gated boot completes (Postgres accepting connections, all migrations applied — see §Daemon Lifecycle and `boot.rs::health_gate`), so a reachable `/health` implies those gates passed at startup. It does not re-verify them per request; milestone-1.md's readiness description refers to this bind-after-health-gate guarantee, not to per-request checks.
 - `/pages/project` uses `sf_db::fetch_project_page` — a recursive CTE traversal over `nexum.project_nodes` and `nexum.links`. All other `/pages/{name}` routes use `sf_db::fetch_page_content` against `nexum.page_revisions`.
 - Authentication on `/pages/*` is explicitly deferred for milestone 1; the route is expected to be reachable only from localhost during this phase.
 - The `/orchestrator/status` route returns live process state read from `crates/sf-serve/src/orchestrator_state.rs` (`OrchestratorState`) rather than hardcoded nulls; `apiReachable` is `true` whenever the handler runs (the request reached the server), so the control panel's connection indicator reflects real reachability (#674).
@@ -835,5 +845,7 @@ The deploy path coexists with k3s until parity. `runDeployCommand` (`packages/co
 ## Milestone 1 — Headless Gardening Appliance (completed)
 
 Milestone 1 delivered the headless binary: daemon auto-spawn, local Postgres lifecycle, seed document ingestion, knowledge base pages projection, and project management graph. All six phase issues (#489, #490, #491, #492, #493, #494) are closed. The `fastenv` doctor subcommand (#499) shipped alongside this milestone. Refer to the individual feature PRs for implementation details; architecture content for the milestone-1 seams is documented in the sections above.
+
+**Scope qualification (red-team review R-07).** The acceptance-criteria machinery described in milestone-1.md §4.6 was delivered **as schema only**: `AcceptanceCriterion` exists as a node type in `nexum.project_nodes` but is unused and non-gating — no acceptance-criteria data is attached to Features, and nothing checks it. The closed issues above delivered the headless binary, not executable acceptance criteria; eval-design.md owns that gap.
 
 **Note:** The `crates/sf-loop` gardening loop crate is fully implemented and tested, and the daemon-loop wiring is complete (#682). On the running daemon path, `run_as_daemon` (`crates/superfield/src/main.rs`) calls `daemon_runtime::boot_loop`, which starts the loop via `GardeningLoop::start_observed` and installs the real `Arc<dyn LoopHandle>`, retiring `NoopLoopHandle`. On `SIGTERM`, `daemon_runtime::shutdown` drains the loop (then aborts as a fallback) before taking the appliance down and stopping Postgres. See §Daemon Lifecycle and §Seam: LoopHandle for the lifecycle and ordering details.

@@ -103,24 +103,31 @@ Migration files are colocated with each component's source code. The file
 naming convention is:
 
 ```
-<NNNN>_<schema>_<description>.sql
+<NNNN>_<description>.sql
 ```
 
 Where:
 
 - `NNNN` is a zero-padded 4-digit sequence number, unique within the
   component's migrations directory (not globally).
-- `<schema>` is the component's PostgreSQL schema name.
-- `<description>` is a snake-case summary of the change.
+- `<description>` is a snake-case summary of the change. It **may** begin with
+  the component's schema name (`0001_sharp_vcs_schema.sql`), but the schema
+  token is **optional**: each component's migrations directory already
+  disambiguates ownership, so a token-free name like `0003_page_revisions.sql`
+  is conforming. *(Amended 2026-07-02: the previously mandatory
+  `<NNNN>_<schema>_<description>.sql` form was contradicted by the shipped
+  files this ADR governs — see Amendment below.)*
 
 Examples:
 
-| File                            | Component | Notes                                          |
-| ------------------------------- | --------- | ---------------------------------------------- |
-| `0001_sharp_vcs_schema.sql`     | Sharp     | Creates the `sharp` schema and VCS core tables |
-| `0002_sharp_episode_schema.sql` | Sharp     | Adds episode signal tables under `sharp`       |
-| `0001_nexum_schema.sql`         | Nexum     | Creates the `nexum` schema                     |
-| `0001_auth_schema.sql`          | Auth      | Creates the `auth` schema and session tables   |
+| File                              | Component | Notes                                             |
+| --------------------------------- | --------- | ------------------------------------------------- |
+| `0001_sharp_vcs_schema.sql`       | Sharp     | Creates the `sharp` schema and VCS core tables    |
+| `0002_sharp_episode_schema.sql`   | Sharp     | Adds episode signal tables under `sharp`          |
+| `0001_nexum_schema.sql`           | Nexum     | Creates the `nexum` schema                        |
+| `0003_page_revisions.sql`         | Nexum     | Schema token omitted — the directory disambiguates |
+| `0009_rls_workspace_isolation.sql`| Sharp     | Schema token omitted — the directory disambiguates |
+| `0001_auth_schema.sql`            | Auth      | Creates the `auth` schema and session tables      |
 
 **Rules enforced by convention:**
 
@@ -139,11 +146,10 @@ Examples:
 5. **`public`/`workspaces` exception (sf-db).** Workspace identity is
    deliberately cross-component, so `crates/sf-db/migrations/0001_workspaces.sql`
    creates `public.workspaces` in the shared `public` schema — it carries **no**
-   `CREATE SCHEMA` statement and **no** schema token in its filename, and is the
-   one sanctioned departure from rules 1 and the `<NNNN>_<schema>_<description>`
-   naming convention. sf-db's own `substrate` schema is first created later, in
-   `crates/sf-db/migrations/0002_substrate_backups.sql`. No other component may
-   place objects in `public`.
+   `CREATE SCHEMA` statement, and is the one sanctioned departure from rule 1
+   (schema creation first). sf-db's own `substrate` schema is first created
+   later, in `crates/sf-db/migrations/0002_substrate_backups.sql`. No other
+   component may place objects in `public`.
 6. **Migration comment header.** Each file opens with a comment block:
 
 ```sql
@@ -204,17 +210,19 @@ requirement while conforming to the one-binary one-instance constraint:
   it.
 - Recursive CTEs over `nexum.links` deliver multi-hop graph traversal on any
   stock Postgres 14+ instance.
-- The `packages/db/nexum-graph.ts` module provides `traverseGraph()`,
-  `isGraphReady()`, and `NEXUM_GRAPH_SETUP_SQL`.
+- The `crates/nexum/src/query.rs` module provides `traverseGraph()`
+  (recursive CTE), `isGraphReady()`, and graph traversal over `nexum.links`
+  (see `docs/architecture.md` §AGE graph extension).
 - AGE-in-instance remains the long-term option if Cypher query volume demands
   it; the namespaced schema boundary does not block that future adoption.
 
 ### Embedding
 
 Vector columns are orthogonal to schema topology. All vector columns across
-every schema use 384-dimensional vectors from `Xenova/all-MiniLM-L6-v2` (see
-`docs/architecture.md` §Governed Embedding Standard). The namespaced schema
-layout does not constrain embedding dimensionality or model selection.
+every schema use 384-dimensional vectors from
+`sentence-transformers/all-MiniLM-L6-v2` (see `docs/adr-embedding-model.md`
+and `docs/architecture.md` §Governed Embedding Standard). The namespaced
+schema layout does not constrain embedding dimensionality or model selection.
 
 ---
 
@@ -222,9 +230,48 @@ layout does not constrain embedding dimensionality or model selection.
 
 - All new DDL must be placed in the correct component schema directory.
 - Cross-component SQL must always use `<schema>.<table>` qualified names.
-- The migration runner (tracked separately) must apply migrations in component
-  dependency order: `auth` → `nexum` → `sharp` → `orchestrator`.
+- Migration order is owned by `docs/architecture.md` (§Single-Instance
+  Database Schema Layout); this ADR defers to it by reference. The Rust
+  migration runner (`crates/sf-db/src/migrate.rs`) walks `COMPONENT_DIRS` in
+  **`sf-db → sf-auth → nexum → sharp`** order — `sf-db` first, because it
+  creates `public.workspaces`, which later schemas (e.g.
+  `nexum.page_revisions`) reference. The runner does not walk
+  `orchestrator/migrations/`; that directory is applied on the prototype/k3s
+  track only, not by the appliance runner. *(Corrected 2026-07-02: the
+  previously stated `auth → nexum → sharp → orchestrator` order contradicted
+  the runner and would fail on FK dependencies — see Amendment below.)*
 - Future components add a row to the schema namespace table above and a new
   migrations directory before writing any DDL.
 - RLS policy work can proceed schema-by-schema without coordination between
   component teams.
+
+---
+
+## Amendment — 2026-07-02
+
+Corrections applied in place following the 2026-07-02 red-team concept review
+(`docs/code-reviews/2026-07-02-red-team-concept-review.md`, findings R-22 and
+R-36). The Decision itself (Option B, namespaced schemas) is unchanged.
+
+- **Migration order (Consequences).** The previously stated
+  `auth → nexum → sharp → orchestrator` order contradicted the actual Rust
+  runner — it omitted `sf-db` (which must run first: it creates
+  `public.workspaces` that `nexum.page_revisions` FKs against) and included
+  `orchestrator`, which the runner does not walk. `docs/architecture.md` now
+  owns the order (`sf-db → sf-auth → nexum → sharp`); this ADR defers to it
+  by reference.
+- **Migration-filename convention.** Amended from the mandatory
+  `<NNNN>_<schema>_<description>.sql` to `<NNNN>_<description>.sql` with the
+  schema token optional: the per-component migrations directory already
+  disambiguates ownership, and the shipped files this ADR governs
+  (`crates/nexum/migrations/0003_page_revisions.sql`,
+  `crates/sharp/migrations/0009_rls_workspace_isolation.sql`, all of
+  `crates/sf-db/migrations/`) never carried the token consistently. This
+  amendment ratifies reality rather than renaming applied migrations.
+- **Embedding model name (§Embedding).** `Xenova/all-MiniLM-L6-v2` (the
+  retired JS/ONNX packaging of the same weights) corrected to the governed
+  identifier `sentence-transformers/all-MiniLM-L6-v2`, matching
+  `docs/adr-embedding-model.md` and architecture.md.
+- **Graph-traversal attribution (§AGE).** `packages/db/nexum-graph.ts`
+  (retired TypeScript prototype) replaced with `crates/nexum/src/query.rs`,
+  the location architecture.md cites.

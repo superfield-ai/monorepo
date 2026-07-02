@@ -1,9 +1,14 @@
 # Testing Framework
 
-Superfield's runtime spawns an agent CLI as a subprocess. Real end-to-end
-tests against vendor CLIs are slow, expensive, non-deterministic, and require
-credentials in CI. This document describes the three-layer test strategy that
-keeps the codebase well-tested without paying that price on every commit.
+The prototype-era TypeScript runtime spawned an agent CLI as a subprocess;
+the appliance instead calls the LLM through the `AgentExecutor` trait
+(see [`architecture.md`](architecture.md) §AgentExecutor trait). Real
+end-to-end tests against a live model — CLI or endpoint — are slow, expensive,
+non-deterministic, and require credentials in CI. This document describes the
+three-layer test strategy that keeps the codebase well-tested without paying
+that price on every commit. The layers below are documented against the
+TypeScript harness where they originated; the same strategy applies at the
+appliance's executor seam.
 
 ## Three layers
 
@@ -224,7 +229,7 @@ as the spawn output. The `result` field's stringified JSON is what
 export GITHUB_TOKEN=ghp_xxx
 
 # Record one fixture from a real issue in the test repo
-bun record-claude-fixtures issue-audit dot-matrix-labs/superfield-ts 42 > \
+bun record-claude-fixtures issue-audit superfield-ai/superfield-ts 42 > \
   tests/fixtures/claude/issue-audit-conformant.json
 
 # Or record all standard fixtures at once
@@ -276,6 +281,16 @@ touched Rust crate), are documented in
 adding a test you intend to count as coverage.
 
 ## Running CI workflows locally with `act`
+
+> **Interim status.** `act` is the local method **only while GitHub Actions
+> remains the push target**. The accepted
+> [CI-execution-manifest ADR](adr-ci-execution-manifest.md) rules that the
+> appliance does not embed a GHA YAML parser or an ACT-style runner emulator:
+> the source of truth for CI execution is the fastenv CI manifest, with GHA
+> YAML generated as an adapter and validated by
+> [`manifest-lint.yml`](../.github/workflows/manifest-lint.yml). Everything in
+> this section is workflow-debugging tooling for that interim, not appliance
+> architecture — do not build new gating on the emulation path.
 
 Many of our workflows pin a job `container:` to the shared CI image
 `ghcr.io/superfield-ai/ci-runner:latest` (e.g.

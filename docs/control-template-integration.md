@@ -2,8 +2,8 @@
 > document specified was retired in the #452 Rust `sf-serve` cutover. The
 > studio server is now served entirely by the `sf-serve` Rust binary
 > (`crates/sf-serve`); `superfield control` builds the browser UI and delegates
-> all serving to it. See [`docs/architecture.md`](architecture.md) (§Control
-> Webapp) and `crates/sf-serve` for the current design. The historical
+> all serving to it. See [`docs/architecture.md`](architecture.md) (§HTTP
+> Routes) and `crates/sf-serve` for the current design. The historical
 > Node-server startup contract, `config.ts`/`deploy.ts`/`agent.ts` consumer map,
 > the `CONTROL_WEB_SERVICE_NAME` "Option A" decision (never implemented), and
 > the 12-test `node:http` + MSW plan below are retained only for context and no
