@@ -171,6 +171,7 @@ mod tests {
     ///
     /// Skipped unless `DATABASE_URL` is set.
     #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL"]
     async fn pool_hands_out_working_connection() {
         let cfg = DbConfig::from_env().expect("DATABASE_URL must be set for integration tests");
         let pool = connect(&cfg).await.expect("pool creation failed");
@@ -192,6 +193,7 @@ mod tests {
     ///
     /// Skipped unless `DATABASE_URL` is set.
     #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL"]
     async fn acquire_workspace_sets_principal_context() {
         let cfg = DbConfig::from_env().expect("DATABASE_URL must be set for integration tests");
         let pool = connect(&cfg).await.expect("pool creation failed");
