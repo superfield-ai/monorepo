@@ -417,17 +417,17 @@ corpus before the model is committed to.
 
 ## 8. Summary
 
-| Question                              | Answer                                                                                                                                     |
-| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| What flips?                           | Mergeability: from a merge-time exception to a continuously-enforced write-time invariant. An unmergeable branch tip is unrepresentable.   |
-| Against what is mergeability checked? | The moving current tip of the target — never the fork point, where it is trivially true.                                                    |
-| The invariant, precisely?             | A conflict surfaces within one write of becoming true and must be dissolved before the branch advances. Max conflict debt: one write (§2).  |
+| Question                              | Answer                                                                                                                                            |
+| ------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| What flips?                           | Mergeability: from a merge-time exception to a continuously-enforced write-time invariant. An unmergeable branch tip is unrepresentable.          |
+| Against what is mergeability checked? | The moving current tip of the target — never the fork point, where it is trivially true.                                                          |
+| The invariant, precisely?             | A conflict surfaces within one write of becoming true and must be dissolved before the branch advances. Max conflict debt: one write (§2).        |
 | Why is this possible now?             | Agent writes are brokered tool calls with exact access sets; interruption is a tool result; resolution happens in the author's live context (§3). |
-| Why was it never possible before?     | At line altitude the gate fires spuriously and constantly; semantic independence keeps it silent for disjoint work (§1, root axiom).        |
-| Where is it enforced?                 | Plan admission (advisory leases, not locks), write admission (disjoint fast path / incremental Tier 1 / Tier-3 dilemma), tip advance (§4).  |
-| The database frame?                   | Branches are transactions with `R(o)`/`W(o)` sets; the flip is immediate serializability validation instead of commit-time detection (§5). |
-| What does it demand?                  | Access sets promoted to the critical path; projections from lazy/poll/text-only to eager/push/full-pipeline (§6).                           |
-| What stays hard?                      | Hot-symbol liveness (escape hatch: commutative operation types), the type-level ceiling, O(in-flight branches) cost per landing (§7).       |
+| Why was it never possible before?     | At line altitude the gate fires spuriously and constantly; semantic independence keeps it silent for disjoint work (§1, root axiom).              |
+| Where is it enforced?                 | Plan admission (advisory leases, not locks), write admission (disjoint fast path / incremental Tier 1 / Tier-3 dilemma), tip advance (§4).        |
+| The database frame?                   | Branches are transactions with `R(o)`/`W(o)` sets; the flip is immediate serializability validation instead of commit-time detection (§5).        |
+| What does it demand?                  | Access sets promoted to the critical path; projections from lazy/poll/text-only to eager/push/full-pipeline (§6).                                 |
+| What stays hard?                      | Hot-symbol liveness (escape hatch: commutative operation types), the type-level ceiling, O(in-flight branches) cost per landing (§7).             |
 
 Git records what happened and reports conflicts as history; Sharp under this
 model admits what may happen and makes an unmergeable branch unrepresentable —
