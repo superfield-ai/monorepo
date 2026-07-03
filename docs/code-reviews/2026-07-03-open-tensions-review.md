@@ -1251,13 +1251,13 @@ land. (Same convention as the first review's log.)
 
 | Date | Finding ids | Action | Status |
 |------|-------------|--------|--------|
-| 2026-07-03 | T-1 (D-1; subsumes T-6/T-11/T-12 framing) | Decide sovereignty framing: brokered-inference disclosure vs customer-owned-key mode; ratify the "nothing except…" exception set | open |
-| 2026-07-03 | T-5 (D-2) | Decide partner fleet-plane trust boundary: control-plane-only vs pull-based fleet; write the trust design into PRD/architecture | open |
-| 2026-07-03 | T-7 (D-3) | Decide exit-continuity: customer-attachable credential on termination vs Superfield-escrowed master model contract | open |
-| 2026-07-03 | T-4 (D-4) | Decide cap semantics: reserved corrective allowance + discretionary cap vs un-parking pricing for a three-party unit-economics artifact | open |
-| 2026-07-03 | T-10 (D-5) | Decide premium-tier channel economics: margin-equivalent partner pricing vs direct sale | open |
-| 2026-07-03 | T-2 (D-6; subsumes T-8 doctrine) | Decide product sidedness: two-sided declaration (company PRD + partner PRD, direct path preserved) vs MSP-as-buyer repositioning | open |
-| 2026-07-03 | T-9 (D-7; T-3 rides the escalator design doc) | Decide tripwire un-park: one-page per-seam flip criteria vs honest interim positioning | open |
+| 2026-07-03 | T-1 (D-1; subsumes T-6/T-11/T-12 framing) | DECIDED: sovereignty stays directional positioning, not contract machinery — soften absolute "nothing leaves the appliance" language to "data-at-rest on-prem; inference transits the lab API via the partner"; defensibility leans on switching costs + appliance operations; no zero-retention mandate | decided |
+| 2026-07-03 | T-5 (D-2) | DECIDED (customer-first): partner fleet plane is control-plane-only — short-lived per-action credentials, hard data-plane exclusion, every partner action audited in the customer's brain | decided |
+| 2026-07-03 | T-7 (D-3) | DECIDED (customer-first): unilateral exit continuity — on partner termination the customer may attach their own LLM credential and run degraded-but-live | decided |
+| 2026-07-03 | T-4 (D-4) | DECIDED: single-tier spend cap; corrective/security work is pausable by the cap; the pause is loud (Owner + partner notified), never silent | decided |
+| 2026-07-03 | T-10 (D-5) | DISSOLVED: in-perimeter serving stays a roadmap candidate, not a committed tier; channel-conflict pricing design deferred until committed | decided |
+| 2026-07-03 | T-2 (D-6; subsumes T-8 doctrine) | DECIDED (customer-first): two-sided product declared — company PRD + partner PRD; guarantees bind to the company; direct-sale path preserved | decided |
+| 2026-07-03 | T-9 (D-7; T-3 rides the escalator design doc) | ADOPTED as hygiene default: minimal engineering tripwire page (flip criterion per seam) — no founder question required | planned |
 | 2026-07-03 | X-1, X-2, X-3, X-4, X-5, X-6, X-7 | Vision-doc sweep to the ratified corpus (ICP, schema ownership, outcome review, git export, R-13/R-14 bounds, retired terms) | open |
 | 2026-07-03 | X-8 | Rewrite architecture §Superfield Blueprint opening to the in-brain versioned rule set | open |
 | 2026-07-03 | X-9 | Move `0001_gardening_cursor.sql` to a runner-walked directory; align the three docs | open |
