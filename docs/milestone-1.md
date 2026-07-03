@@ -106,9 +106,9 @@ The project graph (`crates/sf-db/src/project_graph.rs`) is the typed representat
 
 1. **Feature and Issue nodes** — the appliance daemon does **not** ingest GitHub issues (GitHub is never required — `docs/technical-requirements.md`). The `ProjectGraphDerive` gardening step derives `Feature` and `Issue` nodes from the `plan`/`prd`/`strategy` knowledge pages (`docs/architecture.md`), writing them to `nexum.project_nodes` via `insert_feature`/`insert_issue`.
 
-2. **Acceptance criterion nodes** — *delivered as schema only.* The typed `AcceptanceCriterion` node and the `project:feature_has_acceptance_criterion` edge exist (`crates/sf-db/src/project_graph.rs`, `insert_acceptance_criterion`), but no acceptance-criteria data is attached to any Feature and nothing gates on it. Making criteria populated, executable, and gating is owned by `docs/eval-design.md` §"The missing primitive: executable acceptance criteria".
+2. **Acceptance criterion nodes** — _delivered as schema only._ The typed `AcceptanceCriterion` node and the `project:feature_has_acceptance_criterion` edge exist (`crates/sf-db/src/project_graph.rs`, `insert_acceptance_criterion`), but no acceptance-criteria data is attached to any Feature and nothing gates on it. Making criteria populated, executable, and gating is owned by `docs/eval-design.md` §"The missing primitive: executable acceptance criteria".
 
-3. **Test linkage** — *deferred.* Linking test functions named in the source tree to the acceptance criteria they verify (enabling the gardening loop to report coverage gaps) depends on populated acceptance criteria and is deferred with them; ownership likewise sits with `docs/eval-design.md` §"The missing primitive".
+3. **Test linkage** — _deferred._ Linking test functions named in the source tree to the acceptance criteria they verify (enabling the gardening loop to report coverage gaps) depends on populated acceptance criteria and is deferred with them; ownership likewise sits with `docs/eval-design.md` §"The missing primitive".
 
 4. **Corpus access** — the project graph is queryable via the `nexum.corpus_access` table, which restricts graph traversal to the requesting principal's permitted corpora. No cross-tenant graph leakage is permitted.
 

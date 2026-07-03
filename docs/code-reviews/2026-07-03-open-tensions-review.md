@@ -63,7 +63,7 @@ partner-set spend cap, vendor-distributed core schema and templates — each of
 which quietly amends a guarantee: data-in-use transits a frontier lab under a
 credential the customer doesn't own (T-1); a standing cross-customer partner
 plane collects telemetry and holds access across brains (T-5); the customer's
-ability to *think* depends on a partner contract (T-7); the fixed core can only
+ability to _think_ depends on a partner contract (T-7); the fixed core can only
 change via a vendor channel the self-sufficiency claim says doesn't exist
 (T-11); and the no-flywheel commitment deletes the evidence channel the
 falsifiability remediations depend on (T-12, T-6). None of these exceptions is
@@ -78,9 +78,9 @@ spec-inversion to maintenance-phase apps above a signal floor), and R-14
 (downgrade whole-company-coherence claims; make freshness a schema property)
 are recorded as ADOPTED at review lines 1315–1317 with status "planned" — and
 the 2026-07-02 sweep touched none of their targets (P-1, P-3, P-4; the vision
-halves are X-5, X-6). The sweep closed the findings that required *rewriting
-claims to match decisions*; it skipped the findings that required *shrinking
-claims to match evidence*. That asymmetry is itself a finding: remediation was
+halves are X-5, X-6). The sweep closed the findings that required _rewriting
+claims to match decisions_; it skipped the findings that required _shrinking
+claims to match evidence_. That asymmetry is itself a finding: remediation was
 narrative in the flattering direction.
 
 **3. The sweep created a new drift class: ratified target state written as
@@ -156,7 +156,7 @@ account." That is weaker, not stronger, than a customer using the lab directly
 sovereignty/regulated-industry positioning as "the one place hosted lab
 offerings can't follow" (R-08) — but the lab sees the same prompts either way;
 the differentiator collapses to storage location. The parked data-residency
-question (`docs/prd.md:175`) gets *harder*: residency is now determined by the
+question (`docs/prd.md:175`) gets _harder_: residency is now determined by the
 partner's API account region, invisible to the customer. And "nothing learned
 leaves the appliance" is falsified at the traffic layer unless the lab
 contractually zero-retains — a contract the **partner**, not Superfield or the
@@ -191,7 +191,7 @@ product, own the model relationship, set the cap, hold the fleet plane), while
 the PRD is written as if the CIO/COO is the buyer. Superfield's relationship
 with its stated customer is intermediated on every axis that matters —
 inference, operations, upgrades — which also weakens the switching-cost moat
-*for Superfield* (the customer's switching relationship is with the partner).
+_for Superfield_ (the customer's switching relationship is with the partner).
 
 **Resolutions:** (a) Declare the two-sided product explicitly: PRD for the
 company, a partner PRD for the MSP, with the value split named (agents do the
@@ -207,9 +207,9 @@ thesis, not with GTM realism.
 
 ## T-3 (major) — Fail-closed install + one part-time approver vs "time to first app in days": the escalator has a cold-start deadlock
 
-*Overlap: P-5 examines the same cold start from the document side — the
+_Overlap: P-5 examines the same cold start from the document side — the
 fail-closed default lives only in the review log, and certified templates as
-written can contradict it.*
+written can contradict it._
 
 **Pole A:** "Fresh appliances ship fail-closed — every change requires
 outcome-level approval at install; the trust escalator … earns autonomy per
@@ -251,7 +251,7 @@ set by the partner" (review:1338); R-04's adopted mechanism pauses the loop
 and notifies the Owner at threshold (review:1310).
 
 **Why it matters:** When the cap fires, the customer's appliance visibly stops
-improving — and, as specified, stops *correcting*: nothing in the decision
+improving — and, as specified, stops _correcting_: nothing in the decision
 exempts corrective/security changes from the pause, directly contradicting
 broken-system-first. The entity harmed (customer) is not the entity protected
 (partner margin), and the notification goes to an Owner who cannot raise a cap
@@ -263,7 +263,7 @@ cap's semantics were ratified against an undefined denominator.
 
 **Resolutions:** (a) Two-tier budget: a reserved corrective/security allowance
 that never pauses (broken-first honored), plus a partner-capped
-discretionary-improvement budget; cap breaches surface to *both* parties with
+discretionary-improvement budget; cap breaches surface to _both_ parties with
 a customer-side purchase path. Trade-off: partner margin exposed to runaway
 corrective loops — needs a defect-loop circuit breaker instead. (b) Un-park
 pricing enough to define the cap: publish the unit-economics page (already
@@ -276,7 +276,7 @@ product track.
 **Pole A:** PRD §9 Isolation (:157): "Each company's brain is isolated by the
 appliance boundary: nothing leaves the appliance, and no data crosses between
 customers." The whole trust model (RLS, workspace isolation, appliance
-boundary — `docs/technical-requirements.md:25`) is designed *within* one
+boundary — `docs/technical-requirements.md:25`) is designed _within_ one
 brain; the review praised these primitives as fail-closed.
 
 **Pole B:** PRD §7 (:134) and the Partner operator role (:58): a partner
@@ -288,7 +288,7 @@ possibly the Administrator role (backup/restore, i.e., data-plane access).
 brains is precisely the MSP supply-chain surface (Kaseya-class): one
 compromised partner tech = fleet-wide access to stores that each hold a
 company's source, operational record, and synthesized business view. The fleet
-surface also necessarily moves *some* data off-appliance (health, versions,
+surface also necessarily moves _some_ data off-appliance (health, versions,
 cost telemetry) into a cross-customer pane, quietly amending "nothing leaves
 the appliance" to "nothing except what the partner plane collects." No
 document designs this trust boundary — the remediation log itself says the
@@ -305,14 +305,14 @@ their own brain. Trade-off: partner cannot staff Administrator fully (restore
 touches data) — the role split must be redrawn. (b) Pull-based fleet:
 appliances publish signed outbound health beacons; no inbound standing
 credential; upgrades staged by `superfield self-update` with partner
-*approval* but appliance-side execution. Trade-off: slower partner incident
+_approval_ but appliance-side execution. Trade-off: slower partner incident
 response; weakens the fleet-ops sales pitch to MSPs.
 
 ## T-6 (major) — Certified policy templates without a flywheel: certification with no evidence channel
 
-*Overlap: P-5 finds the same hole from the design side — certification is
+_Overlap: P-5 finds the same hole from the design side — certification is
 undefined, and its only candidate evidence source is the R-12 metric that
-doesn't exist (P-4).*
+doesn't exist (P-4)._
 
 **Pole A:** "Policy enters the system only as certified templates the Owner
 selects and tunes" (`docs/prd.md:156,198`) — the mechanism that dissolves both
@@ -337,7 +337,7 @@ hasn't priced.
 
 **Resolutions:** (a) Narrow the certification claim to structural properties —
 fail-closed defaults, budget presence, audit coverage, escalator mechanics —
-and let *domain* risk calibration be earned locally by each customer's
+and let _domain_ risk calibration be earned locally by each customer's
 escalator track record. Trade-off: weaker sales artifact; "certified" becomes
 "well-formed," not "safe for your industry." (b) Carve one explicit exception
 to no-flywheel: opt-in, aggregate, non-content escalator outcomes (budget
@@ -354,12 +354,12 @@ guarantees, not policies" (`docs/prd.md:162`; review:1306, 1309).
 
 **Pole B:** The same decision set ratifies defensibility = "sovereignty +
 **switching costs**" (review:1304) and bundles inference through the partner
-with *no customer API key* (review:1338), while R-06's remediation makes the
+with _no customer API key_ (review:1338), while R-06's remediation makes the
 appliance "hard-refuse to run the production loop on fixtures" (review:1312).
 
 **Why it matters:** The exported git tree + portable schema is a corpse
 without the loop: the day the MSP relationship ends, an appliance with no
-customer-owned credential cannot think — and is *designed* to refuse to fake
+customer-owned credential cannot think — and is _designed_ to refuse to fake
 it. The customer's continuity depends on a partner contract Superfield
 ratified as the default. Meanwhile "switching costs as moat" and "no hostage
 problem as guarantee" are the same phenomenon described as a feature to
@@ -416,7 +416,7 @@ competitor ("one operations-minded employee with a $200/month frontier-agent
 subscription"), while carrying the full cost of a bespoke substrate (own VCS,
 CI, exec fabric) built for a speed regime deliberately not enabled. The
 differentiated value is all deferred; the cost is all current. The one
-instrument that would tell the company *when* to flip the seams —
+instrument that would tell the company _when_ to flip the seams —
 premise-timing tripwires (R-17) — is exactly what got parked. "Seams now"
 without tripwires is a seam with no trigger condition.
 
@@ -442,7 +442,7 @@ customer consumes no partner-brokered tokens: the premium tier deletes the
 partner's recurring token margin.
 
 **Why it matters:** The channel that owns the customer relationship has a
-direct financial incentive to steer customers *away* from the one tier that
+direct financial incentive to steer customers _away_ from the one tier that
 makes the sovereignty defensibility claim (T-1) true — and the customers who
 most need that tier (regulated) are the moat's flagship segment. The decision
 set thus routes the moat's proof-case through the party incentivized to
@@ -465,7 +465,7 @@ the same loop; no external release process is required to evolve it"; §5
 non-locally-evolvable: the fixed Superfield-owned core schema ("the core is
 product, not customer configuration," :153; review:1309), certified policy
 templates (only certified entry, :156), and the certified Blueprint rule set.
-The local loop *may not* author these — so they can only change via vendor
+The local loop _may not_ author these — so they can only change via vendor
 distribution; and R-24's adopted remediation ships "a boring `superfield
 self-update`" precisely because loop-driven self-modification isn't safe yet
 (review:1324).
@@ -480,7 +480,7 @@ mechanism. The doc sweep left PRD §9's claim intact while the remediation log
 ratified its exception.
 
 **Resolutions:** (a) Amend PRD §9 to name the two lanes honestly: local loop
-evolves apps and Forge behavior *within* the certified frame; the frame (core
+evolves apps and Forge behavior _within_ the certified frame; the frame (core
 schema, templates, Blueprint) arrives via signed vendor updates through the
 partner fleet channel. Trade-off: gives up a clean marketing sentence; also
 formally makes the partner plane (T-5) a code-distribution vector — raising
@@ -519,6 +519,7 @@ alternatively accept dogfood-only and say so.
 
 **X-1 (critical) — Vision's customer is the large enterprise; the PRD's is a
 mid-market company with no engineers**
+
 - Pole A: `docs/vision/unified-memory-layer.md:131-139` — "Going to Market:
   How This Enters an Enterprise… you cannot sell a large enterprise a
   rip-and-replace… Every large enterprise carries an unserved build backlog…
@@ -532,19 +533,21 @@ mid-market company with no engineers**
 
 **X-2 (major) — Vision assigns the customer a schema team and a PM; the PRD
 says the schema core is Superfield-owned and no customer role reads code**
+
 - Pole A: `unified-memory-layer.md:68,74` — "In a unified-memory company the
-  schema *is* the product… the schema team replaces the warehouse-and-ETL
+  schema _is_ the product… the schema team replaces the warehouse-and-ETL
   data team… The product manager's job shifts… to curating inferences."
 - Pole B: `docs/prd.md:153` — "The schema's core is fixed and
   Superfield-owned… extended per app by agent-authored leaf schemas… the core
   is product, not customer configuration"; `prd.md:51` — "No role assumes the
   ability to read code."
 - Fix: add one clause to the vision's "Schema Is the Product" section stating
-  the schema is *Superfield's* product (fixed core, agent-authored leaves),
+  the schema is _Superfield's_ product (fixed core, agent-authored leaves),
   not customer org design.
 
 **X-3 (major) — Vision's worked example has the human reviewing a code patch;
 the PRD forbids diff review**
+
 - Pole A: `unified-memory-layer.md:115` — "Draft patch ready for review. The
   human reviews the patch, not the diagnosis."
 - Pole B: `docs/prd.md:33,98,156` — "Approvers judge behavior demonstrated
@@ -555,6 +558,7 @@ the PRD forbids diff review**
 
 **X-4 (major) — Vision's "no Git tree, no Git remote" is unqualified;
 continuous git-tree export is now a ratified product guarantee**
+
 - Pole A: `unified-memory-layer.md:84,159` — "Source code lives in the
   database, not in a Git tree synced to a remote… There is no Git remote, no
   CI fleet, no separate tracker."
@@ -569,8 +573,8 @@ continuous git-tree export is now a ratified product guarantee**
 **X-5 (major) — Vision's whole-company terminal state remains unbounded; the
 ratified plan was to downgrade it to what the wedge supports**
 
-*Overlap: this is the vision-doc half of P-1 — R-14's claim-downgrade never
-landed anywhere, and the PRD half stands verbatim too.*
+_Overlap: this is the vision-doc half of P-1 — R-14's claim-downgrade never
+landed anywhere, and the PRD half stands verbatim too._
 
 - Pole A: `unified-memory-layer.md:145-153` — "the destination is… a company
   whose software all lives in one brain… the operational middle — people
@@ -583,11 +587,11 @@ landed anywhere, and the PRD half stands verbatim too.*
 - Fix: future-flag "Where This Goes" (explicit "beyond current product scope"
   marker) per the adopted R-14 remediation.
 
-**X-6 (major) — Spec-inversion is still unbounded in *both* vision and the
+**X-6 (major) — Spec-inversion is still unbounded in _both_ vision and the
 rewritten PRD; no doc landed the ratified bounding**
 
-*Overlap: this is the document-drift half of P-3 — the structural finding that
-the honest bound may exclude most of the wedge.*
+_Overlap: this is the document-drift half of P-3 — the structural finding that
+the honest bound may exclude most of the wedge._
 
 - Pole A: `unified-memory-layer.md:50-52` — "The delta is the spec… The PRD
   becomes a byproduct… the artifact is unnecessary"; and `docs/prd.md:94` —
@@ -607,6 +611,7 @@ the honest bound may exclude most of the wedge.*
 
 **X-7 (minor) — Vision uses the retired "agent IDE" term and GitHub-melting
 framing against incumbents the ICP doesn't have**
+
 - Pole A: `unified-memory-layer.md:159` — "The agent IDE is the surface
   through which humans participate"; `:86` — "We are melting the thin slice…
   the saaspocalypse."
@@ -616,7 +621,7 @@ framing against incumbents the ICP doesn't have**
   customer has no GitHub/CI estate to melt); MSP/appliance channel framing in
   prd.md §3/§7.
 - Fix: replace "agent IDE" with "Studio (the control panel)" and reframe §No
-  Assumed Priors as Superfield's *own* build choice rather than customer
+  Assumed Priors as Superfield's _own_ build choice rather than customer
   displacement.
 
 ## Part 2b — The 12 swept files against each other
@@ -624,9 +629,9 @@ framing against incumbents the ICP doesn't have**
 **X-8 (major) — The Blueprint is still told two incompatible ways inside
 architecture.md itself (and vision/PRD side with the second)**
 
-*Overlap: this is the residue of first-review R-03 — the decision ratified the
+_Overlap: this is the residue of first-review R-03 — the decision ratified the
 in-brain versioned rule set, but architecture's opening paragraph still
-teaches the fine-tuned-model story.*
+teaches the fine-tuned-model story._
 
 - Pole A: `docs/architecture.md:11` — "the Superfield Blueprint is
   Superfield's fine-tuned dev agent model… The rules are not a runtime config
@@ -644,6 +649,7 @@ teaches the fine-tuned-model story.*
 
 **X-9 (major) — The appliance loop's cursor table lives in a migrations
 directory the appliance runner is documented never to apply**
+
 - Pole A: `docs/adr-schema-boundary.md:238-242` — "The runner does not walk
   `orchestrator/migrations/`; that directory is applied on the prototype/k3s
   track only, not by the appliance runner."
@@ -661,6 +667,7 @@ directory the appliance runner is documented never to apply**
 **X-10 (major) — Architecture's deploy section still documents the
 k3s-default TS prototype as current, which README says is not documented
 there — and the ratified decision inverted both**
+
 - Pole A: `docs/architecture.md:837-841` — "The source of truth for the wire
   shape is the TypeScript artifact emitted by
   `packages/control-core/fastenv-translate.ts`… The deploy path coexists with
@@ -678,6 +685,7 @@ there — and the ratified decision inverted both**
 
 **X-11 (minor) — Policy lifecycle vocabulary: architecture attributes
 "drafted" to a PRD §6 that now says "template selected"**
+
 - Pole A: `docs/architecture.md:205` — "**Lifecycle (PRD §6):** a policy
   traverses `drafted → active → revised → retired`" (pinned by DB CHECK
   constraint).
@@ -689,6 +697,7 @@ there — and the ratified decision inverted both**
 
 **X-12 (minor) — Architecture's auth model enumerates "the seven PRD §3
 roles"; the swept PRD §3 now has nine**
+
 - Pole A: `docs/architecture.md:668` — "one of the seven PRD §3 roles
   (`owner`, `requestor`, `steerer`, `collaborator`, `agent`, `auditor`,
   `viewer`)."
@@ -702,6 +711,7 @@ roles"; the swept PRD §3 now has nine**
 
 **X-13 (minor) — The two new glossaries disagree on "Orchestrator," and README
 still equates the brain with the Nexum crate**
+
 - Pole A: `docs/prd.md:194` — "**Orchestrator** — in this document, only the
   CI job orchestrator seed app… other uses must be qualified, never bare";
   `prd.md:187` — "Where another document uses one of these terms differently,
@@ -721,6 +731,7 @@ still equates the brain with the Nexum crate**
 
 **X-14 (minor) — /health: milestone-1 promises one more boot guarantee than
 architecture backs**
+
 - Pole A: `docs/milestone-1.md:91-95` — a reachable `/health` implies Postgres
   up, migrations applied, **and** "The gardening loop task was running (i.e.
   `LoopHandle` registered in `AppState`)."
@@ -735,6 +746,7 @@ architecture backs**
 
 **X-15 (minor) — R-10's status escalates across docs: "DECIDED (inferred)" in
 the log, "ratified" in studio-ux**
+
 - Pole A: `2026-07-02-red-team-concept-review.md:1302` — "R-10 | DECIDED
   (inferred): Studio primary mode is batch review… | logged"; the RATIFIED row
   (`:1309`) covers R-02/R-03/R-09/R-34/R-16 but **not** R-10.
@@ -747,6 +759,7 @@ the log, "ratified" in studio-ux**
 **X-16 (minor) — PRD asserts Forge-in-fastenv is "a scheduled later step in
 the build order," but no build-order doc contains that step, and architecture
 still states the all-workloads constraint as hard**
+
 - Pole A: `docs/prd.md:13,152` — "moving the Forge itself into fastenv is
   explicitly a scheduled later step in the build order."
 - Pole B: `docs/technical-requirements.md` §4 build order and
@@ -776,7 +789,7 @@ other findings.
 
 ## P-1 (critical) — R-14's claim-downgrade never happened: the whole-company-view claim stands verbatim, and no freshness property exists anywhere
 
-*Overlap: X-5 is the vision-doc instance of the same unlanded remediation.*
+_Overlap: X-5 is the vision-doc instance of the same unlanded remediation._
 
 **Adopted:** "downgrade whole-company-coherence claims to what the green wedge
 supports, make freshness a first-class schema property on external replicas,
@@ -784,6 +797,7 @@ and future-flag the whole-business-view language" (review:1317, status:
 planned).
 
 **What stands today:**
+
 - `prd.md:15` — "The same store gives the business a **synthesized,
   continuously current view of itself**" — the exact sentence R-14 targeted,
   unmodified, unbounded.
@@ -793,7 +807,7 @@ planned).
 - `vision/unified-memory-layer.md:145-153` — the terminal state ("a company
   whose software-shaped operational roles… are run by agents against the
   brain") stands with zero bounding; the only bound in the vision (:127)
-  scopes the *software slice*, not data coverage.
+  scopes the _software slice_, not data coverage.
 - Freshness/staleness as a schema property: **zero hits** for
   freshness/staleness labeling in any doc. The connector seam
   (`architecture.md` §Systems-of-Record Connector Seam) specifies
@@ -801,8 +815,8 @@ planned).
   metadata, no brain-clock stamping of external reads, no staleness concept at
   all.
 
-**Deeper structural point:** tech-req 2.8 makes gap surfacing the *expansion
-engine* — but its input is the whole-company view, and the wedge only puts
+**Deeper structural point:** tech-req 2.8 makes gap surfacing the _expansion
+engine_ — but its input is the whole-company view, and the wedge only puts
 net-new departmental apps plus on-demand external reads in the brain. The
 expansion mechanism consumes exactly the coverage the coherence guarantee
 cannot provide. The wedge→brain escalation is asserted as "mechanical"
@@ -812,8 +826,8 @@ guarantee.
 **Resolvable?** Partially by work: the claim rewrite is hours of docs work;
 freshness labeling is a designable schema property (per-read timestamp in the
 brain's clock domain, staleness surfaced to agents). But "continuously current
-view of *itself*" is intrinsic overreach for a read-connector architecture —
-currency of the copy is achievable; currency of the *view of the company* is
+view of _itself_" is intrinsic overreach for a read-connector architecture —
+currency of the copy is achievable; currency of the _view of the company_ is
 not, because the systems of record update outside the brain's clock. The
 honest claim is "current view of what the brain governs, timestamped view of
 what it reads."
@@ -847,8 +861,8 @@ live-read-vs-copy semantics and freshness governance → product/architecture
 
 ## P-3 (critical) — R-13's bounds don't exist: no bootstrap path, no minimum-signal threshold, and the honest bound may exclude most of the wedge
 
-*Overlap: X-6 is the cross-document instance — neither the vision nor the
-rewritten PRD carries the adopted bound.*
+_Overlap: X-6 is the cross-document instance — neither the vision nor the
+rewritten PRD carries the adopted bound._
 
 **Adopted:** "bound the spec-inversion claim to maintenance-phase
 sufficiently-trafficked apps, specify the bootstrap path…, set a
@@ -856,6 +870,7 @@ minimum-signal threshold below which the loop must not auto-infer intent"
 (review:1316, status: planned).
 
 **What stands today:**
+
 - `vision/unified-memory-layer.md:48-52` — §The Spec Inversion is
   character-for-character unbounded: "The delta is the spec… close the
   distance and the artifact is unnecessary." No maintenance-phase qualifier.
@@ -865,7 +880,7 @@ minimum-signal threshold below which the loop must not auto-infer intent"
 - Minimum-signal threshold: **zero hits** in any doc
   ("minimum.signal|signal.densit" greps empty outside the review itself).
 - `prd.md:94` and `technical-requirements.md:82` (spec inference) carry no
-  signal floor; nothing tells the loop when *not* to infer.
+  signal floor; nothing tells the loop when _not_ to infer.
 
 **Is the tension resolvable?** The bootstrap path is resolvable by work
 (structured intake is ordinary product design). The signal-density floor is
@@ -891,6 +906,7 @@ approved' as a tracked metric and treat the studio-ux route mismatch as its
 acceptance test" (review:1315, status: planned).
 
 **What stands today:**
+
 - The metric appears in **no doc**: not in prd.md §2 success metrics, not in
   eval-design.md (whose Tier-3 "trust dashboard," eval-design:123, is the
   natural home but doesn't mention it), not in architecture.md. No tracking
@@ -905,7 +921,7 @@ acceptance test" (review:1315, status: planned).
   designated.
 - **Sequencing contradiction:** tech-req build order step 6 — "The first
   install where the Forge ships a validated change to itself **closes the
-  thesis**" — the self-proof evidence arrives at the *end* of the build order,
+  thesis**" — the self-proof evidence arrives at the _end_ of the build order,
   while prd.md:17 presents it as the most direct proof available. Meanwhile
   the actual dogfooding today is Sharp managing its own crate source
   (`architecture.md:357`) — a merge-gate dogfood, not a
@@ -923,15 +939,15 @@ definable work. **Recommendation:** define it: counted from
 `sharp.episodes`/`forge.validation_runs` (defect signal originating in the
 brain → agent-proposed fix → merged under policy), split by approval mode
 (autonomous vs approved), published on the Tier-3 dashboard; designate a
-*currently live* defect as the new acceptance test and freeze it against
+_currently live_ defect as the new acceptance test and freeze it against
 manual fixes; qualify prd.md:17 ("will become the most direct proof once the
 Forge ships changes to itself — build-order step 6").
 
 ## P-5 (major) — Trust-escalator cold start: the fail-closed-at-install decision lives only in the review's log, and certified templates as written can contradict it
 
-*Overlap: T-3 is the decision-set face of the same cold start (throughput
+_Overlap: T-3 is the decision-set face of the same cold start (throughput
 deadlock); T-6 is the certification-evidence face (no flywheel to calibrate
-templates). This finding is the document-side audit of both.*
+templates). This finding is the document-side audit of both._
 
 **Adopted/ratified:** "fresh appliances ship fail-closed — every change
 requires outcome-level approval at install; the trust escalator… earns
@@ -939,6 +955,7 @@ autonomy per change-class from track record" (review:1340 — ratified, but a
 log entry, not a doc).
 
 **What stands today:**
+
 - `prd.md:156` (§9 trust escalation) describes risk budgets and sampling
   audits but **never states the install-time default**. The fail-closed start
   is in no canonical doc.
@@ -968,7 +985,7 @@ define template certification as "vendor-measured autonomy track record per
 change-class on the vendor's own fleet/dogfood Forge, carried as initial
 per-window risk budgets"; state the escalation arithmetic (approvals-to-budget,
 audit sample rate) in a trust-escalator design doc; reconcile prd.md:53/:68
-with the fail-closed start (templates bound the *ceiling* the escalator can
+with the fail-closed start (templates bound the _ceiling_ the escalator can
 reach, not day-1 grants).
 
 ## P-6 (major) — The risk score that denominates the entire trust escalator still has no assigner; the self-graded-gate objection survived untouched
@@ -980,7 +997,7 @@ adopt risk budgets and sampling audits but are silent on scoring independence.
 **What stands today:** `architecture.md:203-207` — `RiskLevel` is "a `0..=100`
 score for a change's blast radius"; who assigns it is unspecified, exactly as
 the review found (review:257-258). `prd.md` §9 never mentions risk scoring
-provenance. Per-window "risk budgets" (prd.md:156) are *sums of this number* —
+provenance. Per-window "risk budgets" (prd.md:156) are _sums of this number_ —
 if the gated agent assigns its own score, the budget mechanism and the
 sampling-audit trigger both inherit the self-grading hole, and the escalator
 escalates on self-reported evidence.
@@ -992,9 +1009,10 @@ paragraph in prd.md §9 ("risk is scored independently of the proposing agent")
 plus the scoring design in the trust-escalator doc from P-5. Without it, every
 quantity in §9 is unanchored.
 
-## P-7 (major) — The remediation created a new drift class: ratified *target* state written as present-tense *fact* in the PRD
+## P-7 (major) — The remediation created a new drift class: ratified _target_ state written as present-tense _fact_ in the PRD
 
 **What stands today:**
+
 - `prd.md:155` and glossary `:197` state the Blueprint gate "**fails
   closed**: a missing or unreadable rule set blocks merges" — present tense.
   `architecture.md:631` says the shipped loader "falls back to
@@ -1006,7 +1024,7 @@ quantity in §9 is unanchored.
   still documents per-change `notify_awaiting_approval` dispatch.
 - The review's own concern was claims outrunning artifacts; the sweep's
   method — rewriting claims to the ratified decisions — moved several claims
-  *further ahead* of the system while the "bound the claim" items (P-1, P-3,
+  _further ahead_ of the system while the "bound the claim" items (P-1, P-3,
   P-4) stayed unbounded. Remediation was narrative in both directions.
 
 **Resolvable?** Yes — this is a documentation-convention fix, and the corpus
@@ -1019,7 +1037,7 @@ requirements doc may bind the future; it may not misreport the present.
 ## P-8 (major) — PRD "Answered (2026-07-02)" open questions were closed by reclassification, not by answers
 
 **What stands today:** `prd.md:169-170` — the review's "core safety mechanism
-filed as an open question" (R-02 evidence) is now marked *Answered*: "trust
+filed as an open question" (R-02 evidence) is now marked _Answered_: "trust
 escalation **is a requirement, not a question**." Renaming a question a
 requirement answers nothing: no measurement method, no budget arithmetic, no
 audit design, no scorer (P-5, P-6) exists. Likewise the policy-vocabulary
@@ -1037,7 +1055,7 @@ trust-escalator design doc (P-5). A decision record is not a design.
 ## P-9 (minor) — The wedge's v1-quality story has no evidence machinery at ICP fidelity — but eval-design contains the corpus's one genuinely structural bound, which should be credited and extended
 
 **What stands today:** The only scenario eval grades rung 1 "the project graph
-*describes* add/list/complete" and rung 2 "a *compiling* candidate"
+_describes_ add/list/complete" and rung 2 "a _compiling_ candidate"
 (`eval-design.md` §First scenario) — far below prd.md:83's promise
 (non-engineer's description → working app) and prd.md:42's time-to-first-app
 metric. The acceptance-criteria primitive is still "unused and non-gating"
@@ -1070,7 +1088,7 @@ is real.
   stack itself.
 - **Fixed Superfield-owned core schema + guaranteed continuous export**
   (review:1309): actively synergistic — a portable export schema is only
-  definable *because* the core is fixed and vendor-owned. This pairing also
+  definable _because_ the core is fixed and vendor-owned. This pairing also
   cleanly resolves R-34's schema-vs-configuration contradiction.
 - **Archive the prototype now + fastenv default + seams-now** (review:1339,
   1341): coherent with the self-sufficiency constraint, kills the
@@ -1083,7 +1101,7 @@ is real.
 - **Bundled inference + no-key-first-boot + spend cap, as a packaging unit**:
   internally well-constructed — one decision simultaneously closes R-04
   (runaway invoice), R-06 (credential first-boot), and R-15 (pricing
-  legibility). Every tension it creates (T-1, T-4, T-7, T-10) is with *other*
+  legibility). Every tension it creates (T-1, T-4, T-7, T-10) is with _other_
   commitments, not within the bundle itself.
 - **Fail-closed Blueprint + fail-closed policy + fail-closed autonomy at
   install** (review:1303, 1340): the governance surfaces now fail in one
@@ -1092,7 +1110,7 @@ is real.
 ## Feared inconsistencies checked and found CLEAN
 
 - **Migration order** ADR ↔ architecture: both `sf-db → sf-auth → nexum →
-  sharp`, single owner + defer-by-reference — CLEAN (except the
+sharp`, single owner + defer-by-reference — CLEAN (except the
   orchestrator-directory wrinkle, X-9).
 - **Schema-table inventories** ADR ↔ architecture: identical, including
   `forge`/`substrate`/`public.workspaces` — CLEAN.
@@ -1138,11 +1156,11 @@ in-perimeter serving pulled forward as the launch answer for the regulated
 segment — weakens the marketing claim now; local serving fights the 1000-tok/s
 premise. (b) Customer-owned-key / BYO-enterprise-agreement mode alongside the
 bundle — breaks bundle economics, the spend-cap semantics (D-4), and the
-no-key-at-first-boot UX that solved R-06. *Subsidiary: the T-6(a)/(b)
+no-key-at-first-boot UX that solved R-06. _Subsidiary: the T-6(a)/(b)
 certification-evidence choice and the T-11(a)/(b) vendor-update-lane choice
 are both instances of the same "convert absolutes to 'nothing except…'"
 framing this decision sets; T-12's metric-program scope follows from
-whichever exception set is ratified.*
+whichever exception set is ratified._
 
 **D-2 (from T-5, critical) — Partner fleet plane trust boundary.**
 (a) Control-plane-only plane: health/version/provision/upgrade, hard
@@ -1185,9 +1203,9 @@ MSP-as-buyer.**
 value split named, direct-sale path preserved so the channel is a multiplier
 — two personas to serve before v1. (b) Accept MSP-as-buyer and reposition
 (fleet product, per-appliance economics) — abandons the post-human category
-claim; the vision doc's terminal state becomes marketing. *Subsidiary: T-8's
+claim; the vision doc's terminal state becomes marketing. _Subsidiary: T-8's
 partner-plane knobs doctrine should be written into whichever PRD structure
-this decision produces.*
+this decision produces._
 
 **D-7 (from T-9, major) — Un-park the minimal premise tripwire.**
 (a) One page naming the model-speed/reliability indicator per seam (DAG loop,
@@ -1195,10 +1213,10 @@ merge-gate budget, batch API) and the flip criterion — cheap; the parking
 decision was about the commercial doc, and this is an engineering trigger.
 (b) Accept the interim positioning honestly: sell the wedge period on
 sovereignty + appliance ops, not speed — leans on the moat D-1 must first
-repair. *Subsidiary: T-3's cold-start resolution (greenfield-standup change
+repair. _Subsidiary: T-3's cold-start resolution (greenfield-standup change
 class vs standup-as-one-outcome) is a product-design choice that can ride the
 trust-escalator design doc rather than this queue, but it must be made before
-the first install.*
+the first install._
 
 # FIX QUEUE — mechanical corrections, no decision required
 
@@ -1206,6 +1224,7 @@ Each line: finding — file(s) — fix. These either execute already-adopted
 remediations or repair drift; none forks strategy.
 
 **Vision sweep (one pass resolves seven):**
+
 - X-1 — `docs/vision/unified-memory-layer.md` §Going to Market — rewrite to the ratified ICP or banner the framing as pre-ICP.
 - X-2 — vision §Schema Is the Product — one clause: the schema is Superfield's product (fixed core, agent-authored leaves), not customer org design.
 - X-3 — vision `:115` worked example — "reviews the demonstrated behavior/outcome, not the diagnosis or the diff."
@@ -1215,6 +1234,7 @@ remediations or repair drift; none forks strategy.
 - X-7 — vision `:159,:86` — replace "agent IDE" with "Studio (the control panel)"; reframe no-priors as Superfield's own build choice.
 
 **Swept-corpus drift:**
+
 - X-8 — `docs/architecture.md:11` — rewrite §Superfield Blueprint opening: in-brain versioned rule set is the target; fine-tuning is a possible future encoding.
 - X-9 — `orchestrator/migrations/0001_gardening_cursor.sql` — move into a runner-walked component directory (or add `orchestrator` to `COMPONENT_DIRS`); align adr-schema-boundary/architecture/milestone-1 to one story.
 - X-10 — `docs/architecture.md:837-841` — re-scope §Backend selector / §FastenvManifest to Rust-canonical + fastenv-default; mark TS translate path and k3s default as archived-prototype interim.
@@ -1227,6 +1247,7 @@ remediations or repair drift; none forks strategy.
 - X-adjacent — `docs/technical-requirements.md:99-101` (§2.10) — update live-steering-as-core-review-mode and the seven-role list to the batch-review decision and nine-role PRD.
 
 **Structural-claims repairs (execute the adopted-but-unlanded remediations):**
+
 - P-1 — `docs/prd.md:15`, `docs/technical-requirements.md:84`, architecture connector seam — land the R-14 rewrite ("current view of what the brain governs, timestamped view of what it reads"); specify freshness as connector-seam metadata; re-scope gap surfacing's v1 input to in-brain signal.
 - P-2 — `docs/prd.md:174` — split the read-boundary question: residency/regulatory → commercial; live-read-vs-copy semantics and freshness governance → tech-req §2.9.
 - P-3 — `docs/prd.md` §5 + vision §Spec Inversion — write the R-13 bound; make the signal floor a certified-template parameter; state the below-floor behavior (error-triage yes, intent-inference no).
@@ -1249,28 +1270,28 @@ the trust-escalator design doc is finalized.
 Decisions and fixes against this review's findings are recorded here as they
 land. (Same convention as the first review's log.)
 
-| Date | Finding ids | Action | Status |
-|------|-------------|--------|--------|
-| 2026-07-03 | T-1 (D-1; subsumes T-6/T-11/T-12 framing) | DECIDED: sovereignty stays directional positioning, not contract machinery — soften absolute "nothing leaves the appliance" language to "data-at-rest on-prem; inference transits the lab API via the partner"; defensibility leans on switching costs + appliance operations; no zero-retention mandate | decided |
-| 2026-07-03 | T-5 (D-2) | DECIDED (customer-first): partner fleet plane is control-plane-only — short-lived per-action credentials, hard data-plane exclusion, every partner action audited in the customer's brain | decided |
-| 2026-07-03 | T-7 (D-3) | DECIDED (customer-first): unilateral exit continuity — on partner termination the customer may attach their own LLM credential and run degraded-but-live | decided |
-| 2026-07-03 | T-4 (D-4) | DECIDED: single-tier spend cap; corrective/security work is pausable by the cap; the pause is loud (Owner + partner notified), never silent | decided |
-| 2026-07-03 | T-10 (D-5) | DISSOLVED: in-perimeter serving stays a roadmap candidate, not a committed tier; channel-conflict pricing design deferred until committed | decided |
-| 2026-07-03 | T-2 (D-6; subsumes T-8 doctrine) | DECIDED (customer-first): two-sided product declared — company PRD + partner PRD; guarantees bind to the company; direct-sale path preserved | decided |
-| 2026-07-03 | T-9 (D-7; T-3 rides the escalator design doc) | ADOPTED as hygiene default: minimal engineering tripwire page (flip criterion per seam) — no founder question required; shipped as `docs/premise-tripwires.md` | done (2026-07-03 fix sweep) |
-| 2026-07-03 | X-1, X-2, X-3, X-4, X-5, X-6, X-7 | Vision-doc sweep to the ratified corpus (ICP, schema ownership, outcome review, git export, R-13/R-14 bounds, retired terms) | done (2026-07-03 fix sweep) |
-| 2026-07-03 | X-8 | Rewrite architecture §Superfield Blueprint opening to the in-brain versioned rule set | done (2026-07-03 fix sweep) |
-| 2026-07-03 | X-9 | Move `0001_gardening_cursor.sql` to a runner-walked directory; align the three docs (runner walks `orchestrator/migrations/` as the final `COMPONENT_DIRS` entry per #762; architecture.md and adr-schema-boundary.md aligned) | done (2026-07-03 fix sweep) |
-| 2026-07-03 | X-10 | Re-scope architecture deploy section to Rust-canonical + fastenv-default | done (2026-07-03 fix sweep) |
-| 2026-07-03 | X-11, X-12, X-13, X-14, X-15, X-16, X-adjacent | Minor drift batch: policy vocabulary, nine roles, glossaries, /health gate, R-10 status, Forge-in-fastenv step (now build-order step 7, tech-req §4), tech-req §2.10 | done (2026-07-03 fix sweep) |
-| 2026-07-03 | P-1 (with X-5) | Land R-14: claim rewrite + freshness as connector-seam metadata + gap-surfacing re-scope | done (2026-07-03 fix sweep) |
-| 2026-07-03 | P-2 | Split the read-boundary question's ownership (residency → commercial; copy semantics → tech-req §2.9) | done (2026-07-03 fix sweep) |
-| 2026-07-03 | P-3 (with X-6) | Land R-13: maintenance-phase/signal-floor bound + below-floor behavior + template-parameterized floor (doc bounds landed; floor *enforcement* is engineering work) | docs done (2026-07-03); design/build planned |
-| 2026-07-03 | P-4 | Define the Forge self-fix metric; designate and freeze a new acceptance-test defect; qualify prd.md:17 (metric defined in eval-design Tier 3 and prd.md:17 qualified; acceptance-test defect designation pending) | docs done (2026-07-03); design/build planned |
-| 2026-07-03 | P-5, P-6 (with T-3, T-6) | Write the trust-escalator design doc: install default, certification definition, escalation arithmetic, independent risk scoring (fail-closed install default + template bounds now in PRD §9; escalator design doc still owed) | docs done (2026-07-03); design/build planned |
-| 2026-07-03 | P-7 | Apply "(target state)" markers uniformly to §9 constraints the artifact does not meet | done (2026-07-03 fix sweep) |
-| 2026-07-03 | P-8 | Re-mark the two "Answered" open questions as "Decided — design open," with owners | done (2026-07-03 fix sweep) |
-| 2026-07-03 | P-9 | Extend eval-design's binding-sentence pattern to P-1/P-3/P-4; add the ICP-fidelity Tier-2 scenario | done (2026-07-03 fix sweep) |
+| Date       | Finding ids                                    | Action                                                                                                                                                                                                                                                                                                   | Status                                       |
+| ---------- | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| 2026-07-03 | T-1 (D-1; subsumes T-6/T-11/T-12 framing)      | DECIDED: sovereignty stays directional positioning, not contract machinery — soften absolute "nothing leaves the appliance" language to "data-at-rest on-prem; inference transits the lab API via the partner"; defensibility leans on switching costs + appliance operations; no zero-retention mandate | decided                                      |
+| 2026-07-03 | T-5 (D-2)                                      | DECIDED (customer-first): partner fleet plane is control-plane-only — short-lived per-action credentials, hard data-plane exclusion, every partner action audited in the customer's brain                                                                                                                | decided                                      |
+| 2026-07-03 | T-7 (D-3)                                      | DECIDED (customer-first): unilateral exit continuity — on partner termination the customer may attach their own LLM credential and run degraded-but-live                                                                                                                                                 | decided                                      |
+| 2026-07-03 | T-4 (D-4)                                      | DECIDED: single-tier spend cap; corrective/security work is pausable by the cap; the pause is loud (Owner + partner notified), never silent                                                                                                                                                              | decided                                      |
+| 2026-07-03 | T-10 (D-5)                                     | DISSOLVED: in-perimeter serving stays a roadmap candidate, not a committed tier; channel-conflict pricing design deferred until committed                                                                                                                                                                | decided                                      |
+| 2026-07-03 | T-2 (D-6; subsumes T-8 doctrine)               | DECIDED (customer-first): two-sided product declared — company PRD + partner PRD; guarantees bind to the company; direct-sale path preserved                                                                                                                                                             | decided                                      |
+| 2026-07-03 | T-9 (D-7; T-3 rides the escalator design doc)  | ADOPTED as hygiene default: minimal engineering tripwire page (flip criterion per seam) — no founder question required; shipped as `docs/premise-tripwires.md`                                                                                                                                           | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | X-1, X-2, X-3, X-4, X-5, X-6, X-7              | Vision-doc sweep to the ratified corpus (ICP, schema ownership, outcome review, git export, R-13/R-14 bounds, retired terms)                                                                                                                                                                             | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | X-8                                            | Rewrite architecture §Superfield Blueprint opening to the in-brain versioned rule set                                                                                                                                                                                                                    | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | X-9                                            | Move `0001_gardening_cursor.sql` to a runner-walked directory; align the three docs (runner walks `orchestrator/migrations/` as the final `COMPONENT_DIRS` entry per #762; architecture.md and adr-schema-boundary.md aligned)                                                                           | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | X-10                                           | Re-scope architecture deploy section to Rust-canonical + fastenv-default                                                                                                                                                                                                                                 | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | X-11, X-12, X-13, X-14, X-15, X-16, X-adjacent | Minor drift batch: policy vocabulary, nine roles, glossaries, /health gate, R-10 status, Forge-in-fastenv step (now build-order step 7, tech-req §4), tech-req §2.10                                                                                                                                     | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | P-1 (with X-5)                                 | Land R-14: claim rewrite + freshness as connector-seam metadata + gap-surfacing re-scope                                                                                                                                                                                                                 | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | P-2                                            | Split the read-boundary question's ownership (residency → commercial; copy semantics → tech-req §2.9)                                                                                                                                                                                                    | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | P-3 (with X-6)                                 | Land R-13: maintenance-phase/signal-floor bound + below-floor behavior + template-parameterized floor (doc bounds landed; floor _enforcement_ is engineering work)                                                                                                                                       | docs done (2026-07-03); design/build planned |
+| 2026-07-03 | P-4                                            | Define the Forge self-fix metric; designate and freeze a new acceptance-test defect; qualify prd.md:17 (metric defined in eval-design Tier 3 and prd.md:17 qualified; acceptance-test defect designation pending)                                                                                        | docs done (2026-07-03); design/build planned |
+| 2026-07-03 | P-5, P-6 (with T-3, T-6)                       | Write the trust-escalator design doc: install default, certification definition, escalation arithmetic, independent risk scoring (fail-closed install default + template bounds now in PRD §9; escalator design doc still owed)                                                                          | docs done (2026-07-03); design/build planned |
+| 2026-07-03 | P-7                                            | Apply "(target state)" markers uniformly to §9 constraints the artifact does not meet                                                                                                                                                                                                                    | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | P-8                                            | Re-mark the two "Answered" open questions as "Decided — design open," with owners                                                                                                                                                                                                                        | done (2026-07-03 fix sweep)                  |
+| 2026-07-03 | P-9                                            | Extend eval-design's binding-sentence pattern to P-1/P-3/P-4; add the ICP-fidelity Tier-2 scenario                                                                                                                                                                                                       | done (2026-07-03 fix sweep)                  |
 
 ---
 

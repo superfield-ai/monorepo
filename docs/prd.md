@@ -166,8 +166,8 @@ Capability categories required (no specific vendors):
 
 **Decided (2026-07-02) — mechanism chosen, design open.**
 
-- *What is the minimum policy vocabulary an Owner needs to express autonomy boundaries clearly, without it becoming a configuration surface?* — Decided: policy ships as certified templates the customer selects and tunes (§9), so the Owner never authors policy from a blank vocabulary. Design owed: the policy-template specification — what a template contains, what tuning exposes, and where tuning ends and certification is voided.
-- *How does a company measure trust in autonomous changes well enough to raise the policy threshold over time?* — Decided: trust escalation is the mechanism (§9) — per-window autonomous risk budgets and sampling audits, with autonomy raised as budgets are met and audits stay clean. Design owed: the trust-escalator design — the install-time fail-closed default (§9), the escalation arithmetic (approvals per change-class, audit sample rates), and independent risk scoring.
+- _What is the minimum policy vocabulary an Owner needs to express autonomy boundaries clearly, without it becoming a configuration surface?_ — Decided: policy ships as certified templates the customer selects and tunes (§9), so the Owner never authors policy from a blank vocabulary. Design owed: the policy-template specification — what a template contains, what tuning exposes, and where tuning ends and certification is voided.
+- _How does a company measure trust in autonomous changes well enough to raise the policy threshold over time?_ — Decided: trust escalation is the mechanism (§9) — per-window autonomous risk budgets and sampling audits, with autonomy raised as budgets are met and audits stay clean. Design owed: the trust-escalator design — the install-time fail-closed default (§9), the escalation arithmetic (approvals per change-class, audit sample rates), and independent risk scoring.
 
 **Deferred to the commercial workstream** (owned there; not answered in this PRD).
 

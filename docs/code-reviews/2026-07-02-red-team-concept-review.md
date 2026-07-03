@@ -63,16 +63,16 @@ a config-file edit. Findings below are re-graded against that bar.
 
 **Re-grading of affected findings.**
 
-| Finding | Old status | New status | Why |
-|---------|-----------|------------|-----|
-| R-01 | OPEN (critical) | Largely **RESOLVED** → concrete remediation | The two-products ambiguity is settled by the ICP. What remains is the rewrite it implies: prd.md §2-3's "large enterprise," "office of the CTIO," and "Steerer (Product/Engineering lead)" (prd.md:49-51) describe the wrong company and must be rewritten to the mid-market ICP. |
-| R-02 | OPEN (critical) | **SHARPENED** | One part-time technical lead (the CIO/CTO/COO-titled generalist) is now the *entire* approval queue. Outcome-level review, batching, and risk budgets are promoted from recommendation to core-UX requirement. |
-| R-05 | OPEN (critical) | **STANDS**, remediation target clarified | Bar moves from "zero-touch" to "IT-admin grade": a signed installer a sysadmin-generalist can run is sufficient. Cargo builds and toolchain constellations remain disqualifying. |
-| R-06 | OPEN (critical) | **STANDS**, remediation target clarified | Studio-based credential setup, restore, and rollback at IT-admin grade is sufficient; `postgresql.conf` edits, `cargo run` recovery steps, and raw-JSON CLI invocations remain disqualifying. |
-| R-23, R-24 | OPEN (major) | **STAND**, remediation target clarified | Same bar shift as R-05/R-06: backup, restore, and upgrade must be Studio-driven and IT-admin operable — GCS provisioning and `curl \| bash` re-runs remain disqualifying. |
-| R-08, R-15 | OPEN | **SHARPENED / CLARIFIED** | The buyer is now named: the CIO/COO, spending from the existing IT/automation budget line. The real competitive set is vertical SaaS, Power-Platform consultants, MSPs, and a contractor wielding a frontier agent. The defensibility and commercial-thesis documents can now be written against a concrete buyer. |
-| R-14 (data-gravity) | OPEN (major) | **PRIORITY RAISED** | This ICP's truth lives in QuickBooks/NetSuite/Excel/vertical SaaS. The read-connector and freshness/staleness-labeling remediations gain priority: without them the brain is empty of the facts this customer's apps need. |
-| All others | OPEN | **UNCHANGED** | Spend ceilings (R-04), fail-open governance (R-03, R-11), security defaults (R-18), defensibility mechanics (R-08's moat analysis), premise timing (R-17), throughput (R-09, R-10, R-19, R-20), and the documentation-drift findings stand as issued. |
+| Finding             | Old status      | New status                                  | Why                                                                                                                                                                                                                                                                                                                |
+| ------------------- | --------------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R-01                | OPEN (critical) | Largely **RESOLVED** → concrete remediation | The two-products ambiguity is settled by the ICP. What remains is the rewrite it implies: prd.md §2-3's "large enterprise," "office of the CTIO," and "Steerer (Product/Engineering lead)" (prd.md:49-51) describe the wrong company and must be rewritten to the mid-market ICP.                                  |
+| R-02                | OPEN (critical) | **SHARPENED**                               | One part-time technical lead (the CIO/CTO/COO-titled generalist) is now the _entire_ approval queue. Outcome-level review, batching, and risk budgets are promoted from recommendation to core-UX requirement.                                                                                                     |
+| R-05                | OPEN (critical) | **STANDS**, remediation target clarified    | Bar moves from "zero-touch" to "IT-admin grade": a signed installer a sysadmin-generalist can run is sufficient. Cargo builds and toolchain constellations remain disqualifying.                                                                                                                                   |
+| R-06                | OPEN (critical) | **STANDS**, remediation target clarified    | Studio-based credential setup, restore, and rollback at IT-admin grade is sufficient; `postgresql.conf` edits, `cargo run` recovery steps, and raw-JSON CLI invocations remain disqualifying.                                                                                                                      |
+| R-23, R-24          | OPEN (major)    | **STAND**, remediation target clarified     | Same bar shift as R-05/R-06: backup, restore, and upgrade must be Studio-driven and IT-admin operable — GCS provisioning and `curl \| bash` re-runs remain disqualifying.                                                                                                                                          |
+| R-08, R-15          | OPEN            | **SHARPENED / CLARIFIED**                   | The buyer is now named: the CIO/COO, spending from the existing IT/automation budget line. The real competitive set is vertical SaaS, Power-Platform consultants, MSPs, and a contractor wielding a frontier agent. The defensibility and commercial-thesis documents can now be written against a concrete buyer. |
+| R-14 (data-gravity) | OPEN (major)    | **PRIORITY RAISED**                         | This ICP's truth lives in QuickBooks/NetSuite/Excel/vertical SaaS. The read-connector and freshness/staleness-labeling remediations gain priority: without them the brain is empty of the facts this customer's apps need.                                                                                         |
+| All others          | OPEN            | **UNCHANGED**                               | Spend ceilings (R-04), fail-open governance (R-03, R-11), security defaults (R-18), defensibility mechanics (R-08's moat analysis), premise timing (R-17), throughput (R-09, R-10, R-19, R-20), and the documentation-drift findings stand as issued.                                                              |
 
 The original findings below are preserved as issued; inline notes mark where
 this addendum modifies their status. Downstream remediation (the prd.md §2-3
@@ -111,7 +111,7 @@ R-20).
 
 **3. Governance is fail-open exactly where the thesis demands fail-closed.**
 The "binding" Blueprint gate silently falls back to `BlueprintRules::empty()`
-when the rule file is missing — and it *is* missing from a fresh checkout
+when the rule file is missing — and it _is_ missing from a fresh checkout
 (architecture.md:622, cross-doc F8). A fresh appliance with no LLM key
 "silently degrade[s]" to a fixture executor that gardens placeholder content
 while looking alive (architecture.md:590-604). A locked decisions document
@@ -184,15 +184,16 @@ multiplied by how much fixing it unlocks.
 
 **Sources:** L1:C-01, L3:F11
 
-**Issue.** Every canonical document describes an enterprise *with* an
+**Issue.** Every canonical document describes an enterprise _with_ an
 engineering organization; the stated target user — an org with no engineering
 org — appears in none of them.
 
-*(See Addendum 2026-07-02: largely RESOLVED by the founder's ICP decision;
+_(See Addendum 2026-07-02: largely RESOLVED by the founder's ICP decision;
 what remains is the concrete remediation — rewrite prd.md §2-3 for the
-mid-market, no-full-time-engineers customer.)*
+mid-market, no-full-time-engineers customer.)_
 
 **Evidence.**
+
 - prd.md:5-7 — the problem statement is "Every large enterprise carries an
   unserved build backlog… it loses the prioritization fight against the
   roadmap." Only orgs with engineering have roadmaps and prioritization fights.
@@ -236,18 +237,19 @@ cannot staff, that the architecture routes every change through individually,
 whose risk score may be assigned by the agent being gated, and behind which no
 liability story exists.
 
-*(See Addendum 2026-07-02: SHARPENED — the ICP's one part-time technical lead
+_(See Addendum 2026-07-02: SHARPENED — the ICP's one part-time technical lead
 is the entire approval queue; outcome-level review, batching, and risk budgets
-are now core-UX requirements, not recommendations.)*
+are now core-UX requirements, not recommendations.)_
 
 **Evidence.**
+
 - prd.md:145 — "no change above the policy-defined risk threshold may ship
   without human approval." unified-memory-layer.md:60 — "it does not remove
   the need for a human-set policy on what counts as a valid correction and
   when review is mandatory."
 - prd.md:161 — "How does an enterprise measure trust in autonomous changes
   well enough to raise the policy threshold over time?" — the core safety
-  mechanism is filed as an *open question*; prd.md:154 (minimum policy
+  mechanism is filed as an _open question_; prd.md:154 (minimum policy
   vocabulary) likewise.
 - architecture.md:202 — a single `active` policy per workspace with one scalar
   `RiskLevel 0..=100` vs `risk_threshold` as the only autonomy dial;
@@ -286,7 +288,7 @@ demonstrations plus a plain-language risk statement). Specify independent —
 non-self-graded — risk scoring; make canary/staged deploys with automatic
 rollback on telemetry regression the default blast-radius control; publish an
 operational-responsibility matrix (vendor vs customer). Promote the
-trust-escalation mechanism from open question to requirement — it *is* the
+trust-escalation mechanism from open question to requirement — it _is_ the
 product.
 
 ## R-03 (critical) — The "binding" Blueprint gate is fail-open prompt-stuffing, and the Blueprint itself is told three ways and absent
@@ -299,6 +301,7 @@ silent fallback to zero rules, and the artifact it reads does not exist in a
 fresh checkout.
 
 **Evidence.**
+
 - architecture.md:25 — "The Blueprint is a binding input to the validation
   gate: no change merges without conformance… Advisory-only consultation is
   insufficient for the appliance." vs architecture.md:622 — "If the file is
@@ -322,7 +325,7 @@ fresh checkout.
 - PRD Constraint §9 requires validation to include "conformance to the
   governed architectural and security constraints the brain holds, not test
   results alone." No document — not architecture.md, not any ADR — designs
-  *how conformance to a rule is checked* at the gate. As designed, the gate is
+  _how conformance to a rule is checked_ at the gate. As designed, the gate is
   `cargo check` + tests: exactly what the PRD calls insufficient.
 
 **Why it matters given the premise.** The policy engine and RLS are proudly
@@ -348,14 +351,15 @@ customer-billed API key, and the named budget-enforcement requirement exists
 nowhere in the code or the design.
 
 **Evidence.**
+
 - milestone-1.md §4.4 — the loop runs "indefinitely," inter-step delay
   default **5 s**.
-- technical-requirements.md:61 *names the requirement* — "per-agent cost
+- technical-requirements.md:61 _names the requirement_ — "per-agent cost
   metering and budget enforcement (an Owner must be able to see and cap what
   autonomy costs)" — but grep across `crates/sf-loop` and `crates/sf-serve`
   shows only display-side `costUsd` accumulation on WorkSlot cards
   (architecture.md:695, :724). The only budget primitive in the codebase is
-  `--turn-budget` in the *eval* binary (`crates/sf-eval/src/main.rs`).
+  `--turn-budget` in the _eval_ binary (`crates/sf-eval/src/main.rs`).
 - No document models unit economics: no $/app, no $/gardening-pass, no cost
   ceiling, no kill-switch-on-budget-exhaustion anywhere in `docs/`.
 
@@ -378,11 +382,12 @@ price) as a canonical page the loop itself maintains.
 from source, and a working system needs an unpackaged constellation of
 developer tooling on the customer host.
 
-*(See Addendum 2026-07-02: STANDS — the remediation target is now "IT-admin
+_(See Addendum 2026-07-02: STANDS — the remediation target is now "IT-admin
 grade," not "zero-touch"; a signed installer a sysadmin-generalist can run is
-sufficient, but cargo builds remain disqualifying.)*
+sufficient, but cargo builds remain disqualifying.)_
 
 **Evidence.**
+
 - README.md Requirements: "A Rust toolchain (see `rust-version` in
   `Cargo.toml`) to build the binary"; the Install section is literally
   `cargo build --release`.
@@ -424,11 +429,12 @@ test.
 terminate in CLI-and-Unix literacy, and the no-credential state is a
 false-alive machine.
 
-*(See Addendum 2026-07-02: STANDS — the bar is now "IT-admin grade":
+_(See Addendum 2026-07-02: STANDS — the bar is now "IT-admin grade":
 Studio-based credential setup, restore, and rollback is sufficient;
-`postgresql.conf` edits and `cargo run` recovery steps remain disqualifying.)*
+`postgresql.conf` edits and `cargo run` recovery steps remain disqualifying.)_
 
 **Evidence.**
+
 - architecture.md:590-604 — "A fresh appliance ships **no** LLM credential…
   the gardening loop and the studio agent **silently degrade** to the
   deterministic `FixtureAgentExecutor`: the loop gardens placeholder content
@@ -441,14 +447,14 @@ Studio-based credential setup, restore, and rollback is sufficient;
   `recovery_target_time = …`", and "run `cargo run -p sf-cli -- db status`".
 - The CLI operator surface (architecture.md:737-758):
   `superfield deploy ship <config-json>`, `episode append <ep-id> <type>
-  <json>`, `session issue <ws-id> <uid> <role>` — raw-JSON invocations.
+<json>`, `session issue <ws-id> <uid> <role>` — raw-JSON invocations.
 - technical-requirements.md §2.12 — "the appliance has no ops team. Its own
   backup, recovery, replication, and health monitoring are product features."
 - A zero-engineering customer whose appliance is producing "canned echoes" has
   no diagnostic path but `daemon.log` (milestone-1.md §4.2).
 
 **Why it matters given the premise.** A mis-set key yields a machine that
-*looks* alive — the loop advances, pages update — while producing placeholder
+_looks_ alive — the loop advances, pages update — while producing placeholder
 output: the exact false-green failure mode the repo's own test-coverage policy
 rails against, promoted to product behavior. And when disaster strikes, the
 recovery story is a DBA runbook for a customer with no DBA.
@@ -468,6 +474,7 @@ the CLI as an internal/agent surface, not an operator one.
 would arbitrate runs on the wrong model with non-gating acceptance criteria.
 
 **Evidence.**
+
 - milestone-1.md §4.6 (stated as "Milestone 1 requirements"): "each acceptance
   criterion is stored as a typed `AcceptanceCriterion` node linked to its
   parent `Feature` node via the `project:feature_has_acceptance_criterion`
@@ -504,13 +511,14 @@ before marketing outcome guarantees.
 **Issue.** No document contains a competitive landscape, and the claimed moat
 is precisely the competency set of the better-resourced entrants.
 
-*(See Addendum 2026-07-02: SHARPENED/CLARIFIED — the buyer is now the
+_(See Addendum 2026-07-02: SHARPENED/CLARIFIED — the buyer is now the
 CIO/COO spending from the existing IT/automation line; the real competitive
 set is vertical SaaS, Power-Platform consultants, MSPs, and a
 contractor-with-agent. The defensibility document can now be written against
-a concrete buyer.)*
+a concrete buyer.)_
 
 **Evidence.**
+
 - prd.md:123 — "Agent execution — access to large-language-model agent
   capability" is an external integration; Superfield owns none of the
   intelligence.
@@ -546,6 +554,7 @@ largest unstarted design artifact, while per-component schemas harden with
 governance language that raises the cost of the top-down redesign.
 
 **Evidence.**
+
 - technical-requirements.md:27 — "The schema is the product… it is top-down
   work: it cannot be assembled by unioning the schemas of components that
   happen to exist." :132 — "the brain _schema_ itself… remains the largest
@@ -576,6 +585,7 @@ current schemas explicitly as migration-fodder, not canon.
 affordance that the product's own premise makes vestigial.
 
 **Evidence.**
+
 - studio-ux.md:305-307 — "Polling runs every 10 seconds"; studio-ux.md:203-205
   — the session-log mock shows agent turns of "2.3s $0.04", "1.8s $0.03".
 - prd.md:66 — "watch an agent work against a live preview… and correct it
@@ -592,7 +602,7 @@ human-paced cockpit; in a true dark factory, live preview watching, mid-task
 correction, and per-turn session logs are vestigial.
 
 **Recommendation.** Redesign the human surface around the premise: humans
-interact with *batches of completed candidate states* — variants, A/B'd
+interact with _batches of completed candidate states_ — variants, A/B'd
 outcomes, policy exceptions — not live agent turns. The unit of human
 attention should be "which finished version do you want," not "watch and steer
 the worker." Keep steering only as a degraded mode for the pre-dark-factory
@@ -608,47 +618,47 @@ architecture-vs-concept, **L3** cross-document coherence, **L4** operational
 reality. Detail for R-01..R-10 is in "Top 10 issues" above; R-11..R-39 in
 "Remaining findings" below.
 
-| ID | Sev | Title | Lens(es) | Sources |
-|----|-----|-------|----------|---------|
-| R-01 | critical | Documented product (engineering org) vs pitched product (no engineers) | L1, L3 | C-01, F11 |
-| R-02 | critical | Human-approval gate: unstaffable, un-amortized, self-graded, no liability | L1, L2, L4 | C-02, RT-02, F6 |
-| R-03 | critical | "Binding" Blueprint gate is fail-open; Blueprint told three ways, artifact absent | L2, L3 | RT-01, F8 |
-| R-04 | critical | Unmetered spend on an infinite loop; budget requirement unimplemented | L4, L2 | F3, RT-07 |
-| R-05 | critical | Install requires Rust workflow; single-artifact claim vs toolchain constellation | L4, L2 | F1, RT-15 |
-| R-06 | critical | First-run/recovery assume an engineer; silent fixture degrade | L2, L4 | RT-03, F2 |
-| R-07 | critical | Milestone-1 completion claims vs eval-design reality; eval on free 3rd-party model | L3, L4 | F1, F11 |
-| R-08 | critical | No defensibility vs frontier labs; appliance forfeits cross-customer flywheel | L1 | C-04 |
-| R-09 | critical | Brain schema is the SPOF; substrate accreting the forbidden bottom-up union | L2 | RT-04 |
-| R-10 | critical | 1000-tok/s premise dissolves the steering surface | L1 | C-03 |
-| R-11 | critical | Locked decision mandates the silent-skip pattern the invariants ban | L2, L3 | RT-11, F2 |
-| R-12 | major | Forge-proves-thesis is circular; built artifact far from the claim | L1 | C-05 |
-| R-13 | major | Spec inversion can't bootstrap; departmental apps lack signal density | L1 | C-06 |
-| R-14 | major | Green wedge reintroduces the fragmentation the thesis declares fatal | L1 | C-07 |
-| R-15 | major | No buyer, no price, no alternatives; unit economics unquantified | L1, L4 | C-08, F12 |
-| R-16 | major | Self-sufficiency costs unaccounted: lock-in, ecosystem-zero, no exit path | L1 | C-09 |
-| R-17 | major | No premise-timing contingency reasoning anywhere | L1 | C-10 |
-| R-18 | major | Security defaults lab-grade: 0.0.0.0 bind, unauthenticated Owner-token minting, no TLS | L2, L4 | RT-10, F8 |
-| R-19 | major | Gardening loop is a serial 60-s poller vs the concurrent fan-out requirement | L2 | RT-05 |
-| R-20 | major | Merge-gate latency unexamined: cargo check + LSP subprocess per merge | L2 | RT-06 |
-| R-21 | major | LLM boundary decided twice, differently; appliance got the weaker one | L2, L3 | RT-07, F4 |
-| R-22 | major | Migration order, schema inventory, and filename convention drift (ADR vs architecture) | L2, L3 | RT-08, F3, F15 |
-| R-23 | major | Backup targets a GCS bucket; backup seam is a no-op stub; no scheduler | L2, L3, L4 | RT-12, F16, F5 |
-| R-24 | major | Upgrade story ("self-upgrade") does not exist; interim is curl \| bash | L4 | F9 |
-| R-25 | major | Dual-track duplication: appliance-critical truth lives in the disposable prototype | L2, L4 | RT-09, F7 |
-| R-26 | major | studio-ux.md specifies the retired prototype; documented UPDATE flow cannot work | L1, L3, L4 | C-13, F5, F7 |
-| R-27 | major | GitHub load-bearing (distribution, gate enforcement, UI shapes) despite GitHub-never | L2, L4 | RT-14, F4 |
-| R-28 | major | "Nexum" means three different things across README, architecture, tech-req | L3 | F6 |
-| R-29 | major | "Workspace" is simultaneously the enterprise brain and the per-app unit | L3 | F7 |
-| R-30 | major | PRD's "everything runs in fastenv" constraint has no owner for the Forge itself | L3 | F9 |
-| R-31 | major | testing.md's `act` doctrine contradicts the Accepted CI-manifest ADR | L3 | F10 |
-| R-32 | major | Glossary chaos: Forge/appliance/daemon; control panel/Studio; orchestrator; loop | L3 | F12 |
-| R-33 | minor | Operator documentation for the customer's personas does not exist | L4 | F13 |
-| R-34 | minor | "Schema is the product" vs "no configuration surface" — unassigned work | L1 | C-11 |
-| R-35 | minor | Success metrics are direction-only, baseline-free, and gameable | L1 | C-12 |
-| R-36 | minor | Embedding pin is sunk-cost reasoning; model named two ways across ADRs | L2, L3 | RT-13, F14 |
-| R-37 | minor | `/health` is readiness in milestone-1 but bare liveness in architecture | L3 | F13 |
-| R-38 | minor | Dangling/stale cross-references (product.md, §Control Webapp, org names, "container") | L3, L4 | F17, F10 |
-| R-39 | minor | Sharp's native hash algorithm told two ways (SHA-256 vs SHA-1 default) | L3 | F18 |
+| ID   | Sev      | Title                                                                                  | Lens(es)   | Sources         |
+| ---- | -------- | -------------------------------------------------------------------------------------- | ---------- | --------------- |
+| R-01 | critical | Documented product (engineering org) vs pitched product (no engineers)                 | L1, L3     | C-01, F11       |
+| R-02 | critical | Human-approval gate: unstaffable, un-amortized, self-graded, no liability              | L1, L2, L4 | C-02, RT-02, F6 |
+| R-03 | critical | "Binding" Blueprint gate is fail-open; Blueprint told three ways, artifact absent      | L2, L3     | RT-01, F8       |
+| R-04 | critical | Unmetered spend on an infinite loop; budget requirement unimplemented                  | L4, L2     | F3, RT-07       |
+| R-05 | critical | Install requires Rust workflow; single-artifact claim vs toolchain constellation       | L4, L2     | F1, RT-15       |
+| R-06 | critical | First-run/recovery assume an engineer; silent fixture degrade                          | L2, L4     | RT-03, F2       |
+| R-07 | critical | Milestone-1 completion claims vs eval-design reality; eval on free 3rd-party model     | L3, L4     | F1, F11         |
+| R-08 | critical | No defensibility vs frontier labs; appliance forfeits cross-customer flywheel          | L1         | C-04            |
+| R-09 | critical | Brain schema is the SPOF; substrate accreting the forbidden bottom-up union            | L2         | RT-04           |
+| R-10 | critical | 1000-tok/s premise dissolves the steering surface                                      | L1         | C-03            |
+| R-11 | critical | Locked decision mandates the silent-skip pattern the invariants ban                    | L2, L3     | RT-11, F2       |
+| R-12 | major    | Forge-proves-thesis is circular; built artifact far from the claim                     | L1         | C-05            |
+| R-13 | major    | Spec inversion can't bootstrap; departmental apps lack signal density                  | L1         | C-06            |
+| R-14 | major    | Green wedge reintroduces the fragmentation the thesis declares fatal                   | L1         | C-07            |
+| R-15 | major    | No buyer, no price, no alternatives; unit economics unquantified                       | L1, L4     | C-08, F12       |
+| R-16 | major    | Self-sufficiency costs unaccounted: lock-in, ecosystem-zero, no exit path              | L1         | C-09            |
+| R-17 | major    | No premise-timing contingency reasoning anywhere                                       | L1         | C-10            |
+| R-18 | major    | Security defaults lab-grade: 0.0.0.0 bind, unauthenticated Owner-token minting, no TLS | L2, L4     | RT-10, F8       |
+| R-19 | major    | Gardening loop is a serial 60-s poller vs the concurrent fan-out requirement           | L2         | RT-05           |
+| R-20 | major    | Merge-gate latency unexamined: cargo check + LSP subprocess per merge                  | L2         | RT-06           |
+| R-21 | major    | LLM boundary decided twice, differently; appliance got the weaker one                  | L2, L3     | RT-07, F4       |
+| R-22 | major    | Migration order, schema inventory, and filename convention drift (ADR vs architecture) | L2, L3     | RT-08, F3, F15  |
+| R-23 | major    | Backup targets a GCS bucket; backup seam is a no-op stub; no scheduler                 | L2, L3, L4 | RT-12, F16, F5  |
+| R-24 | major    | Upgrade story ("self-upgrade") does not exist; interim is curl \| bash                 | L4         | F9              |
+| R-25 | major    | Dual-track duplication: appliance-critical truth lives in the disposable prototype     | L2, L4     | RT-09, F7       |
+| R-26 | major    | studio-ux.md specifies the retired prototype; documented UPDATE flow cannot work       | L1, L3, L4 | C-13, F5, F7    |
+| R-27 | major    | GitHub load-bearing (distribution, gate enforcement, UI shapes) despite GitHub-never   | L2, L4     | RT-14, F4       |
+| R-28 | major    | "Nexum" means three different things across README, architecture, tech-req             | L3         | F6              |
+| R-29 | major    | "Workspace" is simultaneously the enterprise brain and the per-app unit                | L3         | F7              |
+| R-30 | major    | PRD's "everything runs in fastenv" constraint has no owner for the Forge itself        | L3         | F9              |
+| R-31 | major    | testing.md's `act` doctrine contradicts the Accepted CI-manifest ADR                   | L3         | F10             |
+| R-32 | major    | Glossary chaos: Forge/appliance/daemon; control panel/Studio; orchestrator; loop       | L3         | F12             |
+| R-33 | minor    | Operator documentation for the customer's personas does not exist                      | L4         | F13             |
+| R-34 | minor    | "Schema is the product" vs "no configuration surface" — unassigned work                | L1         | C-11            |
+| R-35 | minor    | Success metrics are direction-only, baseline-free, and gameable                        | L1         | C-12            |
+| R-36 | minor    | Embedding pin is sunk-cost reasoning; model named two ways across ADRs                 | L2, L3     | RT-13, F14      |
+| R-37 | minor    | `/health` is readiness in milestone-1 but bare liveness in architecture                | L3         | F13             |
+| R-38 | minor    | Dangling/stale cross-references (product.md, §Control Webapp, org names, "container")  | L3, L4     | F17, F10        |
+| R-39 | minor    | Sharp's native hash algorithm told two ways (SHA-256 vs SHA-1 default)                 | L3         | F18             |
 
 ---
 
@@ -740,7 +750,7 @@ attestations, a labor market — must all be rebuilt (Sharp, fastenv, Nexum,
 sf-auth, sf-deploy — README.md:113-126), and the customer bets their entire
 estate and its source on a bespoke stack with zero third-party auditors and no
 exit path. The concentration-of-risk objection is acknowledged and then
-*rebranded as the moat* (unified-memory-layer.md:94-96) — rhetorical judo, not
+_rebranded as the moat_ (unified-memory-layer.md:94-96) — rhetorical judo, not
 an answer. **Fix:** make continuous export (source-as-git-tree,
 brain-as-portable-schema) a customer guarantee — Sharp is already
 "backwards-compatible with Git" (README.md:28); publish the recovery/HA story;
@@ -752,7 +762,7 @@ No document discusses cheap-but-unreliable models (the human gate dominates
 and the buyer can't staff it — the product regresses to an AI-assisted dev
 tool in a brutally crowded market), premise-early (labs' integrated offerings
 arrive first and the steering surface is obsolete), or reliable-but-regulated
-(a self-hosted appliance means *every customer* individually bears
+(a self-hosted appliance means _every customer_ individually bears
 certification burden while a hosted competitor amortizes it once). Closest
 touchpoints: prd.md:148, prd.md:160. **Fix:** a premises-and-scenarios section
 in the vision doc — load-bearing assumptions, leading indicators, pre-planned
@@ -798,7 +808,7 @@ Every Tier-1 merge spawns `rust-analyzer`, performs the LSP initialize
 handshake, then runs `cargo check` on the merged workspace
 (architecture.md:329-346); every change must record a passing validation run
 (:169). technical-requirements.md:49 applies the sub-second economics argument
-to *environments* only — never to the merge gate, which costs tens of seconds
+to _environments_ only — never to the merge gate, which costs tens of seconds
 to minutes per attempt. With sequenced gated merging, merge throughput =
 1/(gate latency): the merge queue, not the model, becomes the factory's rate
 limiter. **Fix:** a numeric merge-gate latency budget alongside the fastenv
@@ -878,7 +888,7 @@ mechanism for upgrading a running daemon safely — and loop-driven
 self-modification without the R-02 controls means the appliance can brick
 itself. **Fix:** ship a boring `superfield self-update` (download, verify
 signature, drain, swap, migrate, health-gate, auto-rollback on failed gate)
-*before* pursuing loop-driven self-modification.
+_before_ pursuing loop-driven self-modification.
 
 ## R-25 (major) — Dual-track duplication: appliance-critical artifacts' source of truth lives in the disposable prototype, which still ships in the repo
 
@@ -890,7 +900,7 @@ with the Rust `FastenvManifest` as "the consumer-side mirror, kept in sync
 field-for-field" (:827) — canonical truth inside the code
 technical-requirements.md:122 has sentenced to death, default deploy backend
 still `k3s` (:831). Meanwhile the repo root still contains `package.json`
-(bun workspaces, a `superfield start` script for the *old* CLI), `packages/`,
+(bun workspaces, a `superfield start` script for the _old_ CLI), `packages/`,
 `orchestrator/migrations/`, and a `docker-compose.yml` whose `migrate` service
 runs `bun packages/db/migrate.ts` — the prototype's migration path (L4:F7). A
 customer, auditor, or agent cannot tell which half of the repo is the product,
@@ -991,14 +1001,14 @@ cross-linking the ADR and `manifest-lint.yml`.
 
 ## R-32 (major) — Glossary chaos: four core terms with two to four referents each
 
-*Forge vs appliance vs daemon vs binary:* PRD "The installation root is the
+_Forge vs appliance vs daemon vs binary:_ PRD "The installation root is the
 **Forge**"; README "The binary is the Forge"; architecture/milestone-1 say
-"the appliance"/"the daemon." *Control panel vs Studio vs control webapp vs
-agent IDE:* PRD/tech-req say "control panel"; architecture routes say "Studio"
+"the appliance"/"the daemon." _Control panel vs Studio vs control webapp vs
+agent IDE:_ PRD/tech-req say "control panel"; architecture routes say "Studio"
 — which is simultaneously the whole surface and one tab of three
-(`Studio │ Viewport │ Product`, studio-ux.md). *Orchestrator:* a PRD seed app,
+(`Studio │ Viewport │ Product`, studio-ux.md). _Orchestrator:_ a PRD seed app,
 the `orchestrator` schema/routes (daemon control), the retired TS stack, and a
-root `orchestrator/` directory holding one migration. *Loop:* "gardening
+root `orchestrator/` directory holding one migration. _Loop:_ "gardening
 loop," "loop engine," "core loop," plus plan/dev/doc "lanes." An agent
 grepping "control panel" finds nothing in the route table; "orchestrator"
 retrieval mixes four referents. **Fix:** one glossary section (README or
@@ -1047,7 +1057,7 @@ approved-vs-proposed ratio); numeric acceptance thresholds per milestone.
 adr-embedding-model.md rejects every alternative principally because it
 "would still require re-embedding existing corpora," asserting "no
 demonstrated retrieval gain" with no benchmark; architecture.md:261 makes it
-the *only* legal vector space. A 2021-era 22M-parameter sentence embedder is
+the _only_ legal vector space. A 2021-era 22M-parameter sentence embedder is
 frozen as the company brain's sole semantic geometry to avoid re-embedding a
 prototype corpus — exactly the mechanical bulk work a dark factory makes free.
 Meanwhile adr-schema-boundary.md:215 names "`Xenova/all-MiniLM-L6-v2`" (the
@@ -1106,10 +1116,11 @@ objects only), superseding the ambiguity.
 Consolidated from all four lenses — these are real, not consolation prizes.
 
 **Concept.**
+
 - **The core diagnosis is sharp and original.** "An agent reads the stale spec
   with exactly the same confidence as the fresh one, and has no way to
   triangulate" (unified-memory-layer.md:5) is a real, under-articulated
-  insight; framing fragmentation as a *distance* problem agents can't cross is
+  insight; framing fragmentation as a _distance_ problem agents can't cross is
   the strongest idea in the corpus.
 - **Intellectual honesty rare in vision documents.** Validation is named as
   the unsolved hard part (unified-memory-layer.md:58-62); "What This Is Not"
@@ -1129,10 +1140,11 @@ Consolidated from all four lenses — these are real, not consolation prizes.
 - **The backlog problem is real and large**, for exactly the cost-structure
   reasons prd.md:7-9 gives; **spec inversion is a novel, plausible
   maintenance-phase mechanism** for well-trafficked apps; and **dogfooding by
-  construction** is circular as *proof* but excellent as an
-  *evidence-generating machine*.
+  construction** is circular as _proof_ but excellent as an
+  _evidence-generating machine_.
 
 **Architecture.**
+
 - **adr-ci-execution-manifest.md is the best-reasoned document in the set** —
   the spec/substrate decomposition of GHA, "agent authors the
   schema-conformant artifact, deterministic executor enforces it," shipped as
@@ -1151,6 +1163,7 @@ Consolidated from all four lenses — these are real, not consolation prizes.
   documentation.
 
 **Operations.**
+
 - **Daemon lifecycle engineering is appliance-grade:** flock'd auto-spawn,
   health-gated boot (Postgres up + migrations applied before the socket
   binds), atomic `daemon.json`, drain-before-stop cursor commit,
@@ -1295,50 +1308,50 @@ No amount of engineering closes these; they are choices.
 
 Remediations against this review's findings are recorded here as they land.
 
-| Date | Finding ids | Remediation | Status |
-|------|-------------|-------------|--------|
-| 2026-07-02 | R-01 | Founder ICP decision recorded; PRD §1–§3 rewritten to the ratified ICP (mid-market, no-full-time-engineers, IT-admin-grade appliance) | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-02 | DECIDED: approval is outcome-level only (behavior demos, never diffs); trust escalation proceeds as default assumption pending explicit ratification | logged |
-| 2026-07-02 | R-10 | DECIDED (inferred): Studio primary mode is batch review of completed candidates; live cockpit demoted to interim/degraded mode | logged |
-| 2026-07-02 | R-03 | DECIDED (inferred): policy ships as certified templates; Blueprint as fail-closed versioned rule set proceeds as default assumption | logged; fail-open loader documented as a defect in architecture.md (2026-07-02 docs sweep); enforcement code planned |
-| 2026-07-02 | R-08, R-33 | DECIDED: no cross-customer flywheel — nothing leaves the appliance; defensibility thesis = sovereignty + switching costs. DECIDED: MSP/VAR-first channel; buyer path runs through partners, adding fleet-management requirement and MSP-grade operator docs | logged |
-| 2026-07-02 | R-09, R-34 | DEFAULT: one fixed Superfield-owned core schema with agent-extended leaves (unratified) | logged |
-| 2026-07-02 | R-16 (exit path) | DEFAULT: continuous export guarantee (git tree + portable schema) treated as product requirement (unratified); vendor-liability question deferred to counsel | logged |
-| 2026-07-02 | R-08, R-15, R-17, C-10, (liability/pricing) | PARKED as commercial-track details per founder decision: vendor liability + license (to counsel), pricing model, premise-timing tripwires, and the read-boundary/data-residency questions are deferred from product docs to the commercial workstream | logged |
-| 2026-07-02 | (new requirement) | PROMOTED to product feature per founder decision: multi-appliance fleet management for MSP/VAR partners — partner-facing provisioning, monitoring, upgrade, and health surface across the customer appliances they operate; not yet mentioned in any project doc, needs PRD/feature intake | logged |
-| 2026-07-02 | R-02, R-03, R-09, R-34, R-16 (exit path) | RATIFIED: the four standing defaults are now decisions — trust escalation via per-window risk budgets and sampling audits; Blueprint as versioned fail-closed rule set in the brain; one fixed Superfield-owned core schema with agent-extended leaves; guaranteed continuous export (git tree + portable schema) | logged |
-| 2026-07-02 | R-04 | ADOPTED: enforce a hard per-workspace daily/monthly budget in `sf-loop` before each step (pause and notify the Owner at threshold) and publish a loop-maintained unit-economics page. | decided (bundled-MSP cap semantics); build planned |
-| 2026-07-02 | R-05 | ADOPTED: ship a signed, checksummed single-binary release with signature-verifying `install.sh` and systemd unit, define the appliance-image ADR bundling the pinned toolchain constellation with extended doctor coverage, and make zero-toolchain install-to-running-daemon in under 5 minutes a CI-gated acceptance test. | docs done (2026-07-02 sweep): README install honesty landed; signed installer + CI-gated install test planned |
-| 2026-07-02 | R-06 | ADOPTED: build a first-boot Studio credential flow with encrypted storage that hard-refuses to run the production loop on fixtures (dev-flag-gated with a loud degraded-mode banner), plus one-click PITR and control-panel credential/health workflows, demoting the CLI to an internal/agent surface. | docs done (2026-07-02 sweep): README demotes CLI to developer/agent surface, Studio workflows stated as planned; first-boot flow code planned |
-| 2026-07-02 | R-07 | ADOPTED: amend milestone-1.md §4.6 to delivered-as-schema-only (or retract architecture.md's completion line), cross-link eval-design as owner of the acceptance-criteria gap, run the nightly Tier-2 eval on the pinned shipped default model, and land executable acceptance criteria before marketing outcome guarantees. | docs done (2026-07-02 sweep): milestone-1 §4.6 amended to schema-only, eval-design owns the gap, architecture scope-qualified; pinned-default nightly eval + executable criteria planned |
-| 2026-07-02 | R-11 | ADOPTED: add a SUPERSEDED-in-part banner on rust-reorg-decisions.md §Gate pointing at testing-invariants.md, and provision resource-backed CI lanes so DB/rust-analyzer tests fail loudly instead of silently skipping. | docs done (2026-07-02 sweep): SUPERSEDED-in-part banner landed; resource-backed CI lanes planned |
-| 2026-07-02 | R-12 | ADOPTED: publish "the Forge fixed X defects in itself autonomously, N% approved" as a tracked metric and treat the studio-ux route mismatch as its acceptance test. | planned |
-| 2026-07-02 | R-13 | ADOPTED: bound the spec-inversion claim to maintenance-phase sufficiently-trafficked apps, specify the bootstrap path (structured intake, agent-generated clickable prototypes), and set a minimum-signal threshold below which the loop must not auto-infer intent. | planned |
-| 2026-07-02 | R-14 | ADOPTED: downgrade whole-company-coherence claims to what the green wedge supports, make freshness a first-class schema property on external replicas, and future-flag the whole-business-view language. | planned |
-| 2026-07-02 | R-18 | ADOPTED: bind 127.0.0.1 by default, gate `session`/`register` behind a bootstrap secret, generate per-install credentials, add an embedded TLS flow, write the SSO/agents-as-principals ADR, and put a hardening checklist in the health gate. | planned |
-| 2026-07-02 | R-19 | ADOPTED: design the re-rooted loop engine now as a DAG of resumable jobs over the brain (using the existing `nexum.job_queue`) with per-step concurrency and event triggers instead of fixed cycle plus sleep. | decided (seams-now); design planned |
-| 2026-07-02 | R-20 | ADOPTED: set a numeric merge-gate latency budget alongside the fastenv one, backed by persistent warm rust-analyzer/tsserver pools, incremental `cargo check` against snapshots, and projections as the default path so merge is a cache hit. | decided (seams-now); design planned |
-| 2026-07-02 | R-21 | ADOPTED: banner runtime-agent-selection.md as prototype-era, rewrite testing.md's first paragraph, and write the appliance LLM-boundary ADR covering provider abstraction, hard budget enforcement at the executor seam, persistent availability state, and a customer-perimeter model-serving path. | docs done (2026-07-02 sweep): banner + testing.md rewrite landed; appliance LLM-boundary ADR still planned |
-| 2026-07-02 | R-22 | ADOPTED: make one document own the migration order (the other points by reference), sync the two schema-table inventories, fix or ratify the migration filename convention, and delete the stale TS graph-traversal attribution. | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-23 | ADOPTED: default to an appliance-local backup target configured in Studio, use the daemon's loop as the scheduler, replace the no-op backup seam with an enforced health check that raises a high-severity signal, and add one-command `superfield restore` plus periodic automated restore drills as a health metric. | docs done (2026-07-02 sweep): architecture caveats gs:// targets and records the plan; appliance-managed backup code planned |
-| 2026-07-02 | R-24 | ADOPTED: ship a boring `superfield self-update` (download, verify signature, drain, swap, migrate, health-gate, auto-rollback on failed gate) before pursuing loop-driven self-modification. | planned |
-| 2026-07-02 | R-25 | ADOPTED: invert ownership now — Rust canonical for RLS and the fastenv manifest with TS generated or deleted, a CI gate diffing the RLS pair until k3s retires, fastenv as default backend at parity, and `packages/`/`orchestrator/` split or archived so the distribution artifact contains only the appliance. | decided (archive now); execution planned |
-| 2026-07-02 | R-26 | ADOPTED: rewrite studio-ux.md against the sf-serve route table (or banner the GitHub/`packages/db` sections as prototype-historical), fix the PATCH/update mismatch, and make cross-doc consistency an automated gardening-loop check. | docs done (2026-07-02 sweep): banner + PATCH/update fix landed; automated gardening-loop consistency check planned |
-| 2026-07-02 | R-27 | ADOPTED: host release artifacts on a vendor domain, run `lint-manifest` in the FastENV executor as the primary gate, and reshape the analytics contract around `forge.validation_runs` before more UI binds to the GitHub-shaped envelope. | decided (archive now); execution planned |
-| 2026-07-02 | R-28 | ADOPTED: give Nexum one definition in the README, delete or date-stamp the Phase-2 external-repo row, and align architecture's "live company brain" phrasing with tech-req's fit caution. | partially done (2026-07-02 sweep): README Nexum definition + Phase-2 row retired; architecture 'live company brain' phrasing alignment pending |
-| 2026-07-02 | R-29 | ADOPTED: add a PRD glossary distinguishing enterprise/brain from app/workspace, relabel §6, and have architecture state which level `workspace_id` denotes and how cross-app joins survive RLS. | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-30 | ADOPTED: soften PRD §9's everything-runs-in-fastenv constraint to "target state," or add the Forge-in-fastenv step to the build order or a milestone doc. | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-31 | ADOPTED: add a paragraph to testing.md's `act` section marking it interim-while-GitHub-remains-push-target, cross-linking the CI-manifest ADR and `manifest-lint.yml`. | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-32 | ADOPTED: write one glossary section mapping Forge = appliance = `superfield` binary and control panel = Studio, disambiguating "orchestrator," and normalize per-doc first-use. | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-35 | ADOPTED: pair every velocity metric with a quality counter-metric (rollback rate, defect-reintroduction rate, approved-vs-proposed ratio) and set numeric acceptance thresholds per milestone. | docs done (2026-07-02 sweep): PRD counter-metrics paired; numeric per-milestone thresholds planned |
-| 2026-07-02 | R-36 | ADOPTED: keep the single-vector-space invariant but decouple it from the pinned model via a versioned embedding-space column and a designed re-embed pipeline, benchmark retrieval on code-plus-causal-link workloads before the brain schema locks in 384 dims, and fix the model-name and inventory drift. | docs done (2026-07-02 sweep): model-name/inventory drift fixed via ADR amendment; versioned embedding space + re-embed pipeline planned |
-| 2026-07-02 | R-37 | ADOPTED: state the actual `/health` contract in both milestone-1.md and architecture.md — either the readiness gate is implicit in bind-after-health-gate or `/health` really checks, and say which. | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-38 | ADOPTED: point control-template-integration.md's banner at §HTTP Routes, drop the product.md clause, replace the "container" wording, align the nightly-eval claims, and fix the org name. | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-39 | ADOPTED: add one line in architecture §Sharp stating the truth — e.g. native objects are SHA-256 with the `algo` default `sha1` applying to imported git objects only — superseding the ambiguity. | done (2026-07-02 docs sweep) |
-| 2026-07-02 | R-04, R-06, R-08, R-15 | DECIDED: inference is bundled via the MSP — Superfield/partner owns the frontier-model relationship and tokens are priced in; the spend cap is enforced as vendor/partner margin protection and set by the partner; first boot requires no customer API key; in-perimeter model serving remains the candidate premium/regulated tier | logged |
-| 2026-07-02 | R-19, R-20, R-10 | DECIDED: v1 is architected "seams now, serial implementation" — the concurrency seams (DAG loop contract, merge-gate latency budget, batch-approval API) are designed now while implementations stay serial until model speeds demand the swap | logged |
-| 2026-07-02 | R-02 | DECIDED: fresh appliances ship fail-closed — every change requires outcome-level approval at install; the trust escalator (per-window risk budgets, sampling audits) earns autonomy per change-class from track record | logged |
-| 2026-07-02 | R-25, R-27 | DECIDED: archive the prototype now — invert RLS and deploy-manifest ownership to Rust, verify fastenv parity, archive packages/ and orchestrator/, and make fastenv the default deploy backend | logged |
+| Date       | Finding ids                                 | Remediation                                                                                                                                                                                                                                                                                                                          | Status                                                                                                                                                                                   |
+| ---------- | ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 2026-07-02 | R-01                                        | Founder ICP decision recorded; PRD §1–§3 rewritten to the ratified ICP (mid-market, no-full-time-engineers, IT-admin-grade appliance)                                                                                                                                                                                                | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-02                                        | DECIDED: approval is outcome-level only (behavior demos, never diffs); trust escalation proceeds as default assumption pending explicit ratification                                                                                                                                                                                 | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-10                                        | DECIDED (inferred): Studio primary mode is batch review of completed candidates; live cockpit demoted to interim/degraded mode                                                                                                                                                                                                       | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-03                                        | DECIDED (inferred): policy ships as certified templates; Blueprint as fail-closed versioned rule set proceeds as default assumption                                                                                                                                                                                                  | logged; fail-open loader documented as a defect in architecture.md (2026-07-02 docs sweep); enforcement code planned                                                                     |
+| 2026-07-02 | R-08, R-33                                  | DECIDED: no cross-customer flywheel — nothing leaves the appliance; defensibility thesis = sovereignty + switching costs. DECIDED: MSP/VAR-first channel; buyer path runs through partners, adding fleet-management requirement and MSP-grade operator docs                                                                          | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-09, R-34                                  | DEFAULT: one fixed Superfield-owned core schema with agent-extended leaves (unratified)                                                                                                                                                                                                                                              | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-16 (exit path)                            | DEFAULT: continuous export guarantee (git tree + portable schema) treated as product requirement (unratified); vendor-liability question deferred to counsel                                                                                                                                                                         | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-08, R-15, R-17, C-10, (liability/pricing) | PARKED as commercial-track details per founder decision: vendor liability + license (to counsel), pricing model, premise-timing tripwires, and the read-boundary/data-residency questions are deferred from product docs to the commercial workstream                                                                                | logged                                                                                                                                                                                   |
+| 2026-07-02 | (new requirement)                           | PROMOTED to product feature per founder decision: multi-appliance fleet management for MSP/VAR partners — partner-facing provisioning, monitoring, upgrade, and health surface across the customer appliances they operate; not yet mentioned in any project doc, needs PRD/feature intake                                           | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-02, R-03, R-09, R-34, R-16 (exit path)    | RATIFIED: the four standing defaults are now decisions — trust escalation via per-window risk budgets and sampling audits; Blueprint as versioned fail-closed rule set in the brain; one fixed Superfield-owned core schema with agent-extended leaves; guaranteed continuous export (git tree + portable schema)                    | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-04                                        | ADOPTED: enforce a hard per-workspace daily/monthly budget in `sf-loop` before each step (pause and notify the Owner at threshold) and publish a loop-maintained unit-economics page.                                                                                                                                                | decided (bundled-MSP cap semantics); build planned                                                                                                                                       |
+| 2026-07-02 | R-05                                        | ADOPTED: ship a signed, checksummed single-binary release with signature-verifying `install.sh` and systemd unit, define the appliance-image ADR bundling the pinned toolchain constellation with extended doctor coverage, and make zero-toolchain install-to-running-daemon in under 5 minutes a CI-gated acceptance test.         | docs done (2026-07-02 sweep): README install honesty landed; signed installer + CI-gated install test planned                                                                            |
+| 2026-07-02 | R-06                                        | ADOPTED: build a first-boot Studio credential flow with encrypted storage that hard-refuses to run the production loop on fixtures (dev-flag-gated with a loud degraded-mode banner), plus one-click PITR and control-panel credential/health workflows, demoting the CLI to an internal/agent surface.                              | docs done (2026-07-02 sweep): README demotes CLI to developer/agent surface, Studio workflows stated as planned; first-boot flow code planned                                            |
+| 2026-07-02 | R-07                                        | ADOPTED: amend milestone-1.md §4.6 to delivered-as-schema-only (or retract architecture.md's completion line), cross-link eval-design as owner of the acceptance-criteria gap, run the nightly Tier-2 eval on the pinned shipped default model, and land executable acceptance criteria before marketing outcome guarantees.         | docs done (2026-07-02 sweep): milestone-1 §4.6 amended to schema-only, eval-design owns the gap, architecture scope-qualified; pinned-default nightly eval + executable criteria planned |
+| 2026-07-02 | R-11                                        | ADOPTED: add a SUPERSEDED-in-part banner on rust-reorg-decisions.md §Gate pointing at testing-invariants.md, and provision resource-backed CI lanes so DB/rust-analyzer tests fail loudly instead of silently skipping.                                                                                                              | docs done (2026-07-02 sweep): SUPERSEDED-in-part banner landed; resource-backed CI lanes planned                                                                                         |
+| 2026-07-02 | R-12                                        | ADOPTED: publish "the Forge fixed X defects in itself autonomously, N% approved" as a tracked metric and treat the studio-ux route mismatch as its acceptance test.                                                                                                                                                                  | planned                                                                                                                                                                                  |
+| 2026-07-02 | R-13                                        | ADOPTED: bound the spec-inversion claim to maintenance-phase sufficiently-trafficked apps, specify the bootstrap path (structured intake, agent-generated clickable prototypes), and set a minimum-signal threshold below which the loop must not auto-infer intent.                                                                 | planned                                                                                                                                                                                  |
+| 2026-07-02 | R-14                                        | ADOPTED: downgrade whole-company-coherence claims to what the green wedge supports, make freshness a first-class schema property on external replicas, and future-flag the whole-business-view language.                                                                                                                             | planned                                                                                                                                                                                  |
+| 2026-07-02 | R-18                                        | ADOPTED: bind 127.0.0.1 by default, gate `session`/`register` behind a bootstrap secret, generate per-install credentials, add an embedded TLS flow, write the SSO/agents-as-principals ADR, and put a hardening checklist in the health gate.                                                                                       | planned                                                                                                                                                                                  |
+| 2026-07-02 | R-19                                        | ADOPTED: design the re-rooted loop engine now as a DAG of resumable jobs over the brain (using the existing `nexum.job_queue`) with per-step concurrency and event triggers instead of fixed cycle plus sleep.                                                                                                                       | decided (seams-now); design planned                                                                                                                                                      |
+| 2026-07-02 | R-20                                        | ADOPTED: set a numeric merge-gate latency budget alongside the fastenv one, backed by persistent warm rust-analyzer/tsserver pools, incremental `cargo check` against snapshots, and projections as the default path so merge is a cache hit.                                                                                        | decided (seams-now); design planned                                                                                                                                                      |
+| 2026-07-02 | R-21                                        | ADOPTED: banner runtime-agent-selection.md as prototype-era, rewrite testing.md's first paragraph, and write the appliance LLM-boundary ADR covering provider abstraction, hard budget enforcement at the executor seam, persistent availability state, and a customer-perimeter model-serving path.                                 | docs done (2026-07-02 sweep): banner + testing.md rewrite landed; appliance LLM-boundary ADR still planned                                                                               |
+| 2026-07-02 | R-22                                        | ADOPTED: make one document own the migration order (the other points by reference), sync the two schema-table inventories, fix or ratify the migration filename convention, and delete the stale TS graph-traversal attribution.                                                                                                     | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-23                                        | ADOPTED: default to an appliance-local backup target configured in Studio, use the daemon's loop as the scheduler, replace the no-op backup seam with an enforced health check that raises a high-severity signal, and add one-command `superfield restore` plus periodic automated restore drills as a health metric.               | docs done (2026-07-02 sweep): architecture caveats gs:// targets and records the plan; appliance-managed backup code planned                                                             |
+| 2026-07-02 | R-24                                        | ADOPTED: ship a boring `superfield self-update` (download, verify signature, drain, swap, migrate, health-gate, auto-rollback on failed gate) before pursuing loop-driven self-modification.                                                                                                                                         | planned                                                                                                                                                                                  |
+| 2026-07-02 | R-25                                        | ADOPTED: invert ownership now — Rust canonical for RLS and the fastenv manifest with TS generated or deleted, a CI gate diffing the RLS pair until k3s retires, fastenv as default backend at parity, and `packages/`/`orchestrator/` split or archived so the distribution artifact contains only the appliance.                    | decided (archive now); execution planned                                                                                                                                                 |
+| 2026-07-02 | R-26                                        | ADOPTED: rewrite studio-ux.md against the sf-serve route table (or banner the GitHub/`packages/db` sections as prototype-historical), fix the PATCH/update mismatch, and make cross-doc consistency an automated gardening-loop check.                                                                                               | docs done (2026-07-02 sweep): banner + PATCH/update fix landed; automated gardening-loop consistency check planned                                                                       |
+| 2026-07-02 | R-27                                        | ADOPTED: host release artifacts on a vendor domain, run `lint-manifest` in the FastENV executor as the primary gate, and reshape the analytics contract around `forge.validation_runs` before more UI binds to the GitHub-shaped envelope.                                                                                           | decided (archive now); execution planned                                                                                                                                                 |
+| 2026-07-02 | R-28                                        | ADOPTED: give Nexum one definition in the README, delete or date-stamp the Phase-2 external-repo row, and align architecture's "live company brain" phrasing with tech-req's fit caution.                                                                                                                                            | partially done (2026-07-02 sweep): README Nexum definition + Phase-2 row retired; architecture 'live company brain' phrasing alignment pending                                           |
+| 2026-07-02 | R-29                                        | ADOPTED: add a PRD glossary distinguishing enterprise/brain from app/workspace, relabel §6, and have architecture state which level `workspace_id` denotes and how cross-app joins survive RLS.                                                                                                                                      | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-30                                        | ADOPTED: soften PRD §9's everything-runs-in-fastenv constraint to "target state," or add the Forge-in-fastenv step to the build order or a milestone doc.                                                                                                                                                                            | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-31                                        | ADOPTED: add a paragraph to testing.md's `act` section marking it interim-while-GitHub-remains-push-target, cross-linking the CI-manifest ADR and `manifest-lint.yml`.                                                                                                                                                               | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-32                                        | ADOPTED: write one glossary section mapping Forge = appliance = `superfield` binary and control panel = Studio, disambiguating "orchestrator," and normalize per-doc first-use.                                                                                                                                                      | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-35                                        | ADOPTED: pair every velocity metric with a quality counter-metric (rollback rate, defect-reintroduction rate, approved-vs-proposed ratio) and set numeric acceptance thresholds per milestone.                                                                                                                                       | docs done (2026-07-02 sweep): PRD counter-metrics paired; numeric per-milestone thresholds planned                                                                                       |
+| 2026-07-02 | R-36                                        | ADOPTED: keep the single-vector-space invariant but decouple it from the pinned model via a versioned embedding-space column and a designed re-embed pipeline, benchmark retrieval on code-plus-causal-link workloads before the brain schema locks in 384 dims, and fix the model-name and inventory drift.                         | docs done (2026-07-02 sweep): model-name/inventory drift fixed via ADR amendment; versioned embedding space + re-embed pipeline planned                                                  |
+| 2026-07-02 | R-37                                        | ADOPTED: state the actual `/health` contract in both milestone-1.md and architecture.md — either the readiness gate is implicit in bind-after-health-gate or `/health` really checks, and say which.                                                                                                                                 | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-38                                        | ADOPTED: point control-template-integration.md's banner at §HTTP Routes, drop the product.md clause, replace the "container" wording, align the nightly-eval claims, and fix the org name.                                                                                                                                           | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-39                                        | ADOPTED: add one line in architecture §Sharp stating the truth — e.g. native objects are SHA-256 with the `algo` default `sha1` applying to imported git objects only — superseding the ambiguity.                                                                                                                                   | done (2026-07-02 docs sweep)                                                                                                                                                             |
+| 2026-07-02 | R-04, R-06, R-08, R-15                      | DECIDED: inference is bundled via the MSP — Superfield/partner owns the frontier-model relationship and tokens are priced in; the spend cap is enforced as vendor/partner margin protection and set by the partner; first boot requires no customer API key; in-perimeter model serving remains the candidate premium/regulated tier | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-19, R-20, R-10                            | DECIDED: v1 is architected "seams now, serial implementation" — the concurrency seams (DAG loop contract, merge-gate latency budget, batch-approval API) are designed now while implementations stay serial until model speeds demand the swap                                                                                       | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-02                                        | DECIDED: fresh appliances ship fail-closed — every change requires outcome-level approval at install; the trust escalator (per-window risk budgets, sampling audits) earns autonomy per change-class from track record                                                                                                               | logged                                                                                                                                                                                   |
+| 2026-07-02 | R-25, R-27                                  | DECIDED: archive the prototype now — invert RLS and deploy-manifest ownership to Rust, verify fastenv parity, archive packages/ and orchestrator/, and make fastenv the default deploy backend                                                                                                                                       | logged                                                                                                                                                                                   |
 
 All 39 findings now have a plan of record (2026-07-02). The project-docs
 sweep against this log is authorized.
