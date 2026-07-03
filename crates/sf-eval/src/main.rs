@@ -65,6 +65,13 @@ fn usage() -> ! {
 
 fn parse_args() -> Args {
     let raw: Vec<String> = std::env::args().skip(1).collect();
+    parse_args_from(raw)
+}
+
+/// The argument-parsing body, factored out of [`parse_args`] so it is
+/// unit-testable against a synthetic `argv` (excluding the binary name, but
+/// including the `run` subcommand) instead of the real process `argv`.
+fn parse_args_from(raw: Vec<String>) -> Args {
     if raw.first().map(String::as_str) != Some("run") {
         usage();
     }
@@ -209,26 +216,22 @@ async fn compute_deterministic_rungs(
     pool: &sqlx::PgPool,
     workspace_id: Uuid,
 ) -> DeterministicRungs {
-    let mut rungs = DeterministicRungs::default();
-
     let Some(corpus_id) = seed_corpus_id(pool, workspace_id).await else {
         eprintln!("sf-eval: deterministic seed rung FAILED — no 'seed' corpus for workspace");
-        return rungs;
+        return deterministic_rungs_from(false, false, false);
     };
-    rungs.seed = true;
 
     let embedded = embedded_block_count(pool, workspace_id, corpus_id).await;
     if embedded < 1 {
         eprintln!("sf-eval: deterministic ingest rung FAILED — no embedded blocks in seed corpus");
-        return rungs;
+        return deterministic_rungs_from(true, false, false);
     }
-    rungs.ingest = true;
 
     // The semantic-search probe constructs the governed Embedder (offline,
     // cache-resolved in CI) and runs a real ANN query. A retrieval miss or an
     // embedder-init failure means embedding coverage is broken — record `false`
     // (the caller fails loudly), never silently skip.
-    match Embedder::new() {
+    let semantic_hit = match Embedder::new() {
         Ok(embedder) => {
             let opts = SemanticOptions {
                 workspace_id,
@@ -237,18 +240,51 @@ async fn compute_deterministic_rungs(
                 limit: 5,
             };
             match semantic_search(pool, &embedder, opts).await {
-                Ok(hits) if !hits.is_empty() => rungs.semantic_search = true,
-                Ok(_) => eprintln!(
-                    "sf-eval: deterministic semantic_search rung FAILED — probe retrieved no blocks"
-                ),
-                Err(e) => eprintln!("sf-eval: semantic_search probe errored: {e}"),
+                Ok(hits) if !hits.is_empty() => true,
+                Ok(_) => {
+                    eprintln!(
+                        "sf-eval: deterministic semantic_search rung FAILED — probe retrieved no blocks"
+                    );
+                    false
+                }
+                Err(e) => {
+                    eprintln!("sf-eval: semantic_search probe errored: {e}");
+                    false
+                }
             }
         }
         Err(e) => {
-            eprintln!("sf-eval: governed Embedder init FAILED (weights missing offline?): {e}")
+            eprintln!("sf-eval: governed Embedder init FAILED (weights missing offline?): {e}");
+            false
         }
-    }
+    };
 
+    deterministic_rungs_from(true, true, semantic_hit)
+}
+
+/// The deterministic-rungs assembly rule, factored out of
+/// [`compute_deterministic_rungs`] as a pure function so the gating/short-circuit
+/// branching (seed → ingest → semantic_search, each gated on the previous rung's
+/// evidence) is unit-testable without a database or live embedder.
+///
+/// Mirrors the async function's short-circuit: a later rung is only ever `true`
+/// when every earlier rung is also `true`, matching how the caller never even
+/// attempts the later probes once an earlier one is missing.
+fn deterministic_rungs_from(
+    has_seed: bool,
+    has_embedded: bool,
+    semantic_hit: bool,
+) -> DeterministicRungs {
+    let mut rungs = DeterministicRungs::default();
+    if !has_seed {
+        return rungs;
+    }
+    rungs.seed = true;
+    if !has_embedded {
+        return rungs;
+    }
+    rungs.ingest = true;
+    rungs.semantic_search = semantic_hit;
     rungs
 }
 
@@ -626,4 +662,147 @@ async fn dump_turns(pool: &sqlx::PgPool, dir: &Path, workspace_id: Uuid) {
         "sf-eval: dumped {} per-turn page_revision record(s) to turns.json",
         turns.len()
     );
+}
+
+// A thin wrapper module (distinct namespace from `fn main` above — Rust keeps
+// modules and functions in separate namespaces, so this is not a redefinition)
+// that exists only so the test binary reports these tests under the
+// `main::tests::` path issue #844's acceptance criteria pin
+// (`cargo test -p sf-eval main::tests::<name>`), matching how the binary
+// target's root is conventionally addressed as `main` in that AC.
+mod main {
+    #[cfg(test)]
+    mod tests {
+        use crate::*;
+
+        // ── compute_deterministic_rungs (via the pure `deterministic_rungs_from`
+        // branching it delegates to — no DATABASE_URL, no live embedder) ──────────
+
+        #[test]
+        fn compute_deterministic_rungs_all_pass_when_every_rung_passes() {
+            let rungs = deterministic_rungs_from(true, true, true);
+            assert!(rungs.seed);
+            assert!(rungs.ingest);
+            assert!(rungs.semantic_search);
+            assert!(rungs.all_pass());
+        }
+
+        #[test]
+        fn compute_deterministic_rungs_fails_loud_on_missing_rung() {
+            // No seed corpus at all: every downstream rung is false too — the
+            // caller never even attempts the ingest/semantic-search probes.
+            let no_seed = deterministic_rungs_from(false, false, false);
+            assert!(!no_seed.seed);
+            assert!(!no_seed.ingest);
+            assert!(!no_seed.semantic_search);
+            assert!(!no_seed.all_pass());
+
+            // Seed exists but nothing was embedded: seed passes, ingest/semantic
+            // remain false.
+            let no_ingest = deterministic_rungs_from(true, false, false);
+            assert!(no_ingest.seed);
+            assert!(!no_ingest.ingest);
+            assert!(!no_ingest.semantic_search);
+            assert!(!no_ingest.all_pass());
+
+            // Seed + ingest pass but the semantic-search probe misses (or the
+            // embedder failed to initialize): only the last rung is false, and the
+            // overall floor still fails loudly.
+            let no_semantic = deterministic_rungs_from(true, true, false);
+            assert!(no_semantic.seed);
+            assert!(no_semantic.ingest);
+            assert!(!no_semantic.semantic_search);
+            assert!(!no_semantic.all_pass());
+        }
+
+        // ── write_project_graph / write_candidate (filesystem I/O, no DB) ────────
+
+        #[test]
+        fn write_project_graph_and_write_candidate_emit_expected_json_shape() {
+            let tmp = tempfile::tempdir().expect("tempdir");
+            let dir = tmp.path();
+
+            // Non-empty graph: the raw markdown is embedded verbatim under a
+            // stable header.
+            write_project_graph(dir, "- [feature] Add a task");
+            let graph = std::fs::read_to_string(dir.join("project-graph.md")).expect("read graph");
+            assert!(graph.starts_with("# Derived project graph\n\n"));
+            assert!(graph.contains("- [feature] Add a task"));
+
+            // Empty graph: an explicit "no graph derived yet" marker, never a
+            // silently-absent file.
+            write_project_graph(dir, "   \n");
+            let empty_graph =
+                std::fs::read_to_string(dir.join("project-graph.md")).expect("read empty graph");
+            assert!(empty_graph.contains("no project graph derived yet"));
+
+            // A candidate payload carrying a `diff` field emits both the pretty
+            // JSON and the sidecar `.diff` file.
+            let mut found = 0usize;
+            let payload = serde_json::json!({
+                "repo": "todo-app",
+                "merged_files": ["src/main.rs"],
+                "diff": "--- a\n+++ b\n",
+            });
+            write_candidate(dir, 7, &payload, &mut found);
+            assert_eq!(found, 1);
+
+            let json_path = dir.join("candidate-7.json");
+            let written = std::fs::read_to_string(&json_path).expect("read candidate json");
+            let parsed: serde_json::Value = serde_json::from_str(&written).expect("valid json");
+            assert_eq!(parsed["repo"], "todo-app");
+            assert_eq!(parsed["merged_files"][0], "src/main.rs");
+
+            let diff_path = dir.join("candidate-7.diff");
+            let diff = std::fs::read_to_string(&diff_path).expect("read candidate diff");
+            assert_eq!(diff, "--- a\n+++ b\n");
+
+            // A payload with no diff/patch field writes the JSON but no `.diff`.
+            let mut found2 = 0usize;
+            let payload_no_diff = serde_json::json!({"repo": "todo-app"});
+            write_candidate(dir, 8, &payload_no_diff, &mut found2);
+            assert_eq!(found2, 1);
+            assert!(dir.join("candidate-8.json").exists());
+            assert!(!dir.join("candidate-8.diff").exists());
+        }
+
+        // ── run_dir / parse_args (pure path join + argv parsing, no env coupling
+        // because every flag is passed explicitly) ───────────────────────────────
+
+        #[test]
+        fn run_dir_and_parse_args_produce_expected_paths() {
+            let workspace_id = Uuid::parse_str("11111111-1111-4111-8111-111111111111").unwrap();
+            let dir = run_dir(Path::new("evals/results"), "todo-app", workspace_id);
+            assert_eq!(
+                dir,
+                Path::new("evals/results")
+                    .join("todo-app")
+                    .join(workspace_id.to_string())
+            );
+
+            let raw: Vec<String> = vec![
+                "run",
+                "--scenario",
+                "evals/scenarios/todo-app",
+                "--turn-budget",
+                "17",
+                "--workspace-id",
+                "11111111-1111-4111-8111-111111111111",
+                "--poll-interval-secs",
+                "3",
+                "--results-root",
+                "/tmp/sf-eval-results",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+            let args = parse_args_from(raw);
+            assert_eq!(args.scenario_dir, PathBuf::from("evals/scenarios/todo-app"));
+            assert_eq!(args.turn_budget, 17);
+            assert_eq!(args.workspace_id, workspace_id);
+            assert_eq!(args.poll_interval, Duration::from_secs(3));
+            assert_eq!(args.results_root, PathBuf::from("/tmp/sf-eval-results"));
+        }
+    }
 }

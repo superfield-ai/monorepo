@@ -114,20 +114,20 @@ Where:
   the component's schema name (`0001_sharp_vcs_schema.sql`), but the schema
   token is **optional**: each component's migrations directory already
   disambiguates ownership, so a token-free name like `0003_page_revisions.sql`
-  is conforming. *(Amended 2026-07-02: the previously mandatory
+  is conforming. _(Amended 2026-07-02: the previously mandatory
   `<NNNN>_<schema>_<description>.sql` form was contradicted by the shipped
-  files this ADR governs — see Amendment below.)*
+  files this ADR governs — see Amendment below.)_
 
 Examples:
 
-| File                              | Component | Notes                                             |
-| --------------------------------- | --------- | ------------------------------------------------- |
-| `0001_sharp_vcs_schema.sql`       | Sharp     | Creates the `sharp` schema and VCS core tables    |
-| `0002_sharp_episode_schema.sql`   | Sharp     | Adds episode signal tables under `sharp`          |
-| `0001_nexum_schema.sql`           | Nexum     | Creates the `nexum` schema                        |
-| `0003_page_revisions.sql`         | Nexum     | Schema token omitted — the directory disambiguates |
-| `0009_rls_workspace_isolation.sql`| Sharp     | Schema token omitted — the directory disambiguates |
-| `0001_auth_schema.sql`            | Auth      | Creates the `auth` schema and session tables      |
+| File                               | Component | Notes                                              |
+| ---------------------------------- | --------- | -------------------------------------------------- |
+| `0001_sharp_vcs_schema.sql`        | Sharp     | Creates the `sharp` schema and VCS core tables     |
+| `0002_sharp_episode_schema.sql`    | Sharp     | Adds episode signal tables under `sharp`           |
+| `0001_nexum_schema.sql`            | Nexum     | Creates the `nexum` schema                         |
+| `0003_page_revisions.sql`          | Nexum     | Schema token omitted — the directory disambiguates |
+| `0009_rls_workspace_isolation.sql` | Sharp     | Schema token omitted — the directory disambiguates |
+| `0001_auth_schema.sql`             | Auth      | Creates the `auth` schema and session tables       |
 
 **Rules enforced by convention:**
 
@@ -239,11 +239,11 @@ schema layout does not constrain embedding dimensionality or model selection.
   migration sorts last because it depends only on the component schemas
   existing. Since #762 the appliance runner **does** walk
   `orchestrator/migrations/` as the final `COMPONENT_DIRS` entry.
-  *(Corrected 2026-07-02: the previously stated
+  _(Corrected 2026-07-02: the previously stated
   `auth → nexum → sharp → orchestrator` order contradicted the runner and
   would fail on FK dependencies. Corrected again 2026-07-03: the 2026-07-02
   text said the runner does not walk `orchestrator/migrations/`, which #762
-  made false — see Amendments below.)*
+  made false — see Amendments below.)_
 - Future components add a row to the schema namespace table above and a new
   migrations directory before writing any DDL.
 - RLS policy work can proceed schema-by-schema without coordination between

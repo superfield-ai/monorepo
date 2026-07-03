@@ -61,12 +61,12 @@ We layer evals by cost, determinism, and how much of the loop they exercise.
 This mirrors the structure of [testing.md](./testing.md), applied to the AI
 process rather than the code.
 
-| Tier | What it exercises                         | Determinism | Cost   | When it runs          |
-| ---- | ----------------------------------------- | ----------- | ------ | --------------------- |
-| 0    | Loop mechanics via injected fixtures      | total       | $0     | Every PR              |
-| 1    | A single step's output, replayed & graded | total\*     | ~$0    | Every PR              |
+| Tier | What it exercises                         | Determinism | Cost   | When it runs                                |
+| ---- | ----------------------------------------- | ----------- | ------ | ------------------------------------------- |
+| 0    | Loop mechanics via injected fixtures      | total       | $0     | Every PR                                    |
+| 1    | A single step's output, replayed & graded | total\*     | ~$0    | Every PR                                    |
 | 2    | The whole loop, live, from seed intent    | low         | real $ | Pre-release (manual today; nightly planned) |
-| 3    | Production episodes, scored continuously  | n/a         | n/a    | Always (online)       |
+| 3    | Production episodes, scored continuously  | n/a         | n/a    | Always (online)                             |
 
 \* Tier 1 replays recorded artifacts, so the _inputs_ are fixed; an LLM-judge
 grader is itself sampled and thresholded (see Non-determinism).

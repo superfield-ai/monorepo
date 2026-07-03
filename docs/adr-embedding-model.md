@@ -26,15 +26,15 @@ type so that every store shares one governed vector space.
 
 All Superfield components **must** embed text using:
 
-| Property               | Value                                                                           |
-| ---------------------- | ------------------------------------------------------------------------------- |
-| **Model**              | `sentence-transformers/all-MiniLM-L6-v2` (safetensors, via `hf-hub` + `candle`) |
-| **Runtime**            | Rust (`crates/nexum/src/embed.rs`) — the sole shipping runtime *(see Amendment 2026-07-02)* |
-| **HF revision**        | `c9745ed` — `sentence-transformers/all-MiniLM-L6-v2@c9745ed`                    |
-| **Dimensions**         | **384**                                                                         |
-| **Normalisation**      | L2-normalised (unit vectors)                                                    |
-| **Distance**           | Cosine similarity                                                               |
-| **Index type**         | HNSW via pgvector — `USING hnsw (col vector_cosine_ops)`                        |
+| Property          | Value                                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------------- |
+| **Model**         | `sentence-transformers/all-MiniLM-L6-v2` (safetensors, via `hf-hub` + `candle`)             |
+| **Runtime**       | Rust (`crates/nexum/src/embed.rs`) — the sole shipping runtime _(see Amendment 2026-07-02)_ |
+| **HF revision**   | `c9745ed` — `sentence-transformers/all-MiniLM-L6-v2@c9745ed`                                |
+| **Dimensions**    | **384**                                                                                     |
+| **Normalisation** | L2-normalised (unit vectors)                                                                |
+| **Distance**      | Cosine similarity                                                                           |
+| **Index type**    | HNSW via pgvector — `USING hnsw (col vector_cosine_ops)`                                    |
 
 No other embedding model or dimensionality is permitted without a superseding
 ADR that also covers corpus re-embedding and schema migration.
@@ -110,12 +110,12 @@ resolves the checkpoint using this file.
 
 All existing pgvector columns are conforming:
 
-| Component | Schema  | Table    | Column           | Declared dimension | Status                                                                                           |
-| --------- | ------- | -------- | ---------------- | ------------------ | ------------------------------------------------------------------------------------------------ |
-| Nexum     | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live                                                              |
-| Nexum     | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — populated by `ai_link.rs` (`embed_edge` + INSERT); ANN search over it in `query.rs` |
-| Sharp     | `sharp` | —        | —                | —                  | No vector columns yet                                                                            |
-| CLI (retired TS prototype) | local | — | —                | —                  | Historical — lowdb JSON store, no vector columns; retired with the prototype *(Amendment 2026-07-02)* |
+| Component                  | Schema  | Table    | Column           | Declared dimension | Status                                                                                                |
+| -------------------------- | ------- | -------- | ---------------- | ------------------ | ----------------------------------------------------------------------------------------------------- |
+| Nexum                      | `nexum` | `blocks` | `embedding`      | 384                | Conforming — HNSW cosine index live                                                                   |
+| Nexum                      | `nexum` | `links`  | `edge_embedding` | 384                | Conforming — populated by `ai_link.rs` (`embed_edge` + INSERT); ANN search over it in `query.rs`      |
+| Sharp                      | `sharp` | —        | —                | —                  | No vector columns yet                                                                                 |
+| CLI (retired TS prototype) | local   | —        | —                | —                  | Historical — lowdb JSON store, no vector columns; retired with the prototype _(Amendment 2026-07-02)_ |
 
 New vector columns added by any component must:
 
