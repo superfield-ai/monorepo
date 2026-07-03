@@ -1257,20 +1257,20 @@ land. (Same convention as the first review's log.)
 | 2026-07-03 | T-4 (D-4) | DECIDED: single-tier spend cap; corrective/security work is pausable by the cap; the pause is loud (Owner + partner notified), never silent | decided |
 | 2026-07-03 | T-10 (D-5) | DISSOLVED: in-perimeter serving stays a roadmap candidate, not a committed tier; channel-conflict pricing design deferred until committed | decided |
 | 2026-07-03 | T-2 (D-6; subsumes T-8 doctrine) | DECIDED (customer-first): two-sided product declared — company PRD + partner PRD; guarantees bind to the company; direct-sale path preserved | decided |
-| 2026-07-03 | T-9 (D-7; T-3 rides the escalator design doc) | ADOPTED as hygiene default: minimal engineering tripwire page (flip criterion per seam) — no founder question required | planned |
-| 2026-07-03 | X-1, X-2, X-3, X-4, X-5, X-6, X-7 | Vision-doc sweep to the ratified corpus (ICP, schema ownership, outcome review, git export, R-13/R-14 bounds, retired terms) | open |
-| 2026-07-03 | X-8 | Rewrite architecture §Superfield Blueprint opening to the in-brain versioned rule set | open |
-| 2026-07-03 | X-9 | Move `0001_gardening_cursor.sql` to a runner-walked directory; align the three docs | open |
-| 2026-07-03 | X-10 | Re-scope architecture deploy section to Rust-canonical + fastenv-default | open |
-| 2026-07-03 | X-11, X-12, X-13, X-14, X-15, X-16, X-adjacent | Minor drift batch: policy vocabulary, nine roles, glossaries, /health gate, R-10 status, Forge-in-fastenv step, tech-req §2.10 | open |
-| 2026-07-03 | P-1 (with X-5) | Land R-14: claim rewrite + freshness as connector-seam metadata + gap-surfacing re-scope | open |
-| 2026-07-03 | P-2 | Split the read-boundary question's ownership (residency → commercial; copy semantics → tech-req §2.9) | open |
-| 2026-07-03 | P-3 (with X-6) | Land R-13: maintenance-phase/signal-floor bound + below-floor behavior + template-parameterized floor | open |
-| 2026-07-03 | P-4 | Define the Forge self-fix metric; designate and freeze a new acceptance-test defect; qualify prd.md:17 | open |
-| 2026-07-03 | P-5, P-6 (with T-3, T-6) | Write the trust-escalator design doc: install default, certification definition, escalation arithmetic, independent risk scoring | open |
-| 2026-07-03 | P-7 | Apply "(target state)" markers uniformly to §9 constraints the artifact does not meet | open |
-| 2026-07-03 | P-8 | Re-mark the two "Answered" open questions as "Decided — design open," with owners | open |
-| 2026-07-03 | P-9 | Extend eval-design's binding-sentence pattern to P-1/P-3/P-4; add the ICP-fidelity Tier-2 scenario | open |
+| 2026-07-03 | T-9 (D-7; T-3 rides the escalator design doc) | ADOPTED as hygiene default: minimal engineering tripwire page (flip criterion per seam) — no founder question required; shipped as `docs/premise-tripwires.md` | done (2026-07-03 fix sweep) |
+| 2026-07-03 | X-1, X-2, X-3, X-4, X-5, X-6, X-7 | Vision-doc sweep to the ratified corpus (ICP, schema ownership, outcome review, git export, R-13/R-14 bounds, retired terms) | done (2026-07-03 fix sweep) |
+| 2026-07-03 | X-8 | Rewrite architecture §Superfield Blueprint opening to the in-brain versioned rule set | done (2026-07-03 fix sweep) |
+| 2026-07-03 | X-9 | Move `0001_gardening_cursor.sql` to a runner-walked directory; align the three docs (runner walks `orchestrator/migrations/` as the final `COMPONENT_DIRS` entry per #762; architecture.md and adr-schema-boundary.md aligned) | done (2026-07-03 fix sweep) |
+| 2026-07-03 | X-10 | Re-scope architecture deploy section to Rust-canonical + fastenv-default | done (2026-07-03 fix sweep) |
+| 2026-07-03 | X-11, X-12, X-13, X-14, X-15, X-16, X-adjacent | Minor drift batch: policy vocabulary, nine roles, glossaries, /health gate, R-10 status, Forge-in-fastenv step (now build-order step 7, tech-req §4), tech-req §2.10 | done (2026-07-03 fix sweep) |
+| 2026-07-03 | P-1 (with X-5) | Land R-14: claim rewrite + freshness as connector-seam metadata + gap-surfacing re-scope | done (2026-07-03 fix sweep) |
+| 2026-07-03 | P-2 | Split the read-boundary question's ownership (residency → commercial; copy semantics → tech-req §2.9) | done (2026-07-03 fix sweep) |
+| 2026-07-03 | P-3 (with X-6) | Land R-13: maintenance-phase/signal-floor bound + below-floor behavior + template-parameterized floor (doc bounds landed; floor *enforcement* is engineering work) | docs done (2026-07-03); design/build planned |
+| 2026-07-03 | P-4 | Define the Forge self-fix metric; designate and freeze a new acceptance-test defect; qualify prd.md:17 (metric defined in eval-design Tier 3 and prd.md:17 qualified; acceptance-test defect designation pending) | docs done (2026-07-03); design/build planned |
+| 2026-07-03 | P-5, P-6 (with T-3, T-6) | Write the trust-escalator design doc: install default, certification definition, escalation arithmetic, independent risk scoring (fail-closed install default + template bounds now in PRD §9; escalator design doc still owed) | docs done (2026-07-03); design/build planned |
+| 2026-07-03 | P-7 | Apply "(target state)" markers uniformly to §9 constraints the artifact does not meet | done (2026-07-03 fix sweep) |
+| 2026-07-03 | P-8 | Re-mark the two "Answered" open questions as "Decided — design open," with owners | done (2026-07-03 fix sweep) |
+| 2026-07-03 | P-9 | Extend eval-design's binding-sentence pattern to P-1/P-3/P-4; add the ICP-fidelity Tier-2 scenario | done (2026-07-03 fix sweep) |
 
 ---
 

@@ -122,6 +122,18 @@ Tier-1 graders and track **success rate by `model` × `harness_version`** — a
 query the episode docs already anticipate. This is the regression alarm for the
 real fleet and the data source for the Studio "trust dashboard."
 
+One trust-dashboard metric is called out by name: the **Forge self-fix
+metric** (red-team review R-12) — the tracked form of "the Forge fixed X
+defects in itself autonomously, N% approved." It is counted from
+`sharp.episodes` / `forge.validation_runs`: a defect signal originating in the
+brain → an agent-proposed fix → merged under policy, split by approval mode
+(**autonomous** vs **approved**). Two riders, stated as policy rather than as
+current fact: a currently-live defect must be designated the metric's standing
+acceptance test and frozen against manual fixes (none is designated yet); and
+because fresh appliances ship fail-closed, the autonomous count is
+definitionally zero until the trust escalator grants a change-class — until
+then, vendor dogfood evidence counts, labeled **vendor-approved**.
+
 ## Handling non-determinism
 
 The hard part. Our defenses:
@@ -200,6 +212,11 @@ pinned shipped default model (`claude-haiku-4-5-20251001`). As the loop gains au
 build → deploy, the browser leg upgrades from a render smoke to the true
 behavioral acceptance check, and this scenario becomes the template for more.
 
+The next Tier-2 scenario on the roadmap is **ICP fidelity**: a
+non-engineer-authored seed intent, run with the fail-closed install policy
+active and outcome-level approval exercised end to end — the evidence that
+backs the PRD's time-to-first-app metric.
+
 ## Sequencing
 
 1. **Executable acceptance criteria** — data model + gating change. Forces "what
@@ -214,6 +231,13 @@ user's expectation checkable and prove the entire loop end to end. Sequencing
 is binding in one direction (plan of record, 2026-07-02): executable acceptance
 criteria land **before** any outcome guarantee is claimed — until step 1
 ships, no document or badge may assert that user outcomes are verified.
+
+The same binding pattern extends to three adjacent claims (open-tensions
+review, 2026-07-03). No document may claim a continuously current
+whole-company view until freshness metadata ships on external reads (P-1).
+No document may claim usage-derived specs below the signal floor until that
+floor is defined and enforced (P-3). No document may claim autonomous
+self-repair until the Tier-3 self-fix metric above records it (P-4).
 
 ## Component reference
 
