@@ -40,9 +40,9 @@ target design.
    - No active session → UPDATE (edit the local spec)
    - Active session → STEER (send mid-turn context to the running agent)
 
-> **Decision update (2026-07-02).** The ratified product decision (red-team
-> concept review, finding R-10) makes **batch review of completed candidate
-> states** Studio's primary interaction mode. Live steering — the STEER flow
+> **Decision update (2026-07-02).** The product decision — decided
+> (2026-07-02; red-team concept review, finding R-10) — makes **batch review
+> of completed candidate states** Studio's primary interaction mode. Live steering — the STEER flow
 > this document specifies as a primary intent mode — is an interim/degraded
 > mode for the pre-dark-factory period, not the primary surface. Future UX
 > revisions of this document follow that decision.

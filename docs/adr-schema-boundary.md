@@ -233,13 +233,17 @@ schema layout does not constrain embedding dimensionality or model selection.
 - Migration order is owned by `docs/architecture.md` (§Single-Instance
   Database Schema Layout); this ADR defers to it by reference. The Rust
   migration runner (`crates/sf-db/src/migrate.rs`) walks `COMPONENT_DIRS` in
-  **`sf-db → sf-auth → nexum → sharp`** order — `sf-db` first, because it
-  creates `public.workspaces`, which later schemas (e.g.
-  `nexum.page_revisions`) reference. The runner does not walk
-  `orchestrator/migrations/`; that directory is applied on the prototype/k3s
-  track only, not by the appliance runner. *(Corrected 2026-07-02: the
-  previously stated `auth → nexum → sharp → orchestrator` order contradicted
-  the runner and would fail on FK dependencies — see Amendment below.)*
+  **`sf-db → sf-auth → nexum → sharp → orchestrator`** order — `sf-db` first,
+  because it creates `public.workspaces`, which later schemas (e.g.
+  `nexum.page_revisions`) reference; the cross-cutting `orchestrator` cursor
+  migration sorts last because it depends only on the component schemas
+  existing. Since #762 the appliance runner **does** walk
+  `orchestrator/migrations/` as the final `COMPONENT_DIRS` entry.
+  *(Corrected 2026-07-02: the previously stated
+  `auth → nexum → sharp → orchestrator` order contradicted the runner and
+  would fail on FK dependencies. Corrected again 2026-07-03: the 2026-07-02
+  text said the runner does not walk `orchestrator/migrations/`, which #762
+  made false — see Amendments below.)*
 - Future components add a row to the schema namespace table above and a new
   migrations directory before writing any DDL.
 - RLS policy work can proceed schema-by-schema without coordination between
@@ -275,3 +279,21 @@ R-36). The Decision itself (Option B, namespaced schemas) is unchanged.
 - **Graph-traversal attribution (§AGE).** `packages/db/nexum-graph.ts`
   (retired TypeScript prototype) replaced with `crates/nexum/src/query.rs`,
   the location architecture.md cites.
+
+---
+
+## Amendment — 2026-07-03
+
+Correction applied following the 2026-07-03 open-tensions review
+(`docs/code-reviews/2026-07-03-open-tensions-review.md`). The Decision itself
+(Option B, namespaced schemas) is unchanged.
+
+- **Migration order (Consequences), orchestrator inclusion.** The 2026-07-02
+  amendment stated that the appliance runner does not walk
+  `orchestrator/migrations/`. That predates #762: the runner's
+  `COMPONENT_DIRS` (`crates/sf-db/src/migrate.rs`) now includes
+  `orchestrator/migrations/` as its final entry, so the canonical order is
+  **`sf-db → sf-auth → nexum → sharp → orchestrator`** and the appliance
+  creates its own `orchestrator.gardening_cursor` table. `docs/architecture.md`
+  (§Single-Instance Database Schema Layout) owns the order; this ADR continues
+  to defer to it by reference.
