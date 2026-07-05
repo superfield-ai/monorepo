@@ -13,6 +13,8 @@ tokio = { workspace = true }
 uuid = { workspace = true }
 thiserror = { workspace = true }
 chrono = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
 
 [dev-dependencies]
 tokio = { workspace = true, features = ["full", "test-util"] }

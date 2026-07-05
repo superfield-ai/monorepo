@@ -36,6 +36,53 @@
 //!
 //! - `docs/prd.md` §6 (entity lifecycles), US13, Constraint §9 (validation gate).
 //! - `docs/architecture.md` §Change Lifecycle and Validation Gate.
+//! - `docs/eval-design.md` §"The missing primitive: executable acceptance
+//!   criteria" — the per-criterion verdict-row seam below.
+//!
+//! # Per-criterion verdict-row seam (dev-scout #869, documented contract)
+//!
+//! [`CriterionVerdictKey`] pins the **additive** schema seam between #861 (the
+//! feature that executes acceptance criteria and writes per-criterion
+//! verdicts) and #862 (the feature that reads the latest verdict per
+//! criterion for the project-page projection). This dev-scout section is
+//! documentation plus a compile-time key type — no migration, no new column,
+//! and no change to [`record_validation_run`] / [`has_passing_validation`] /
+//! [`transition_change`] ships here; those stay exactly as they are today.
+//!
+//! **The additive migration shape (#861 owns the actual `ALTER TABLE`):**
+//! `forge.validation_runs` gains a nullable
+//! `criterion_node_id UUID REFERENCES nexum.project_nodes(id) ON DELETE CASCADE`
+//! column.
+//!
+//! - `NULL` (every row today, and every row a caller that does not know about
+//!   criteria ever inserts) means "change-level aggregate run" — the exact
+//!   run this module already models. Existing rows and existing callers are
+//!   untouched by the addition.
+//! - Non-`NULL` means "this row is the verdict for one `AcceptanceCriterion`
+//!   node (identified by its `nexum.project_nodes.id`) belonging to the
+//!   change", one row per criterion per execution (#861's
+//!   `per_criterion_verdicts_recorded` acceptance criterion).
+//!
+//! **How `has_passing_validation` composes with criterion rows (the
+//! resolved open question from #861/#862):** the run-state machine
+//! (`queued → running → passed | failed`) and the row shape are unchanged —
+//! a criterion-linked row is a [`ValidationRunState`] just like an aggregate
+//! row. What #861 must implement (not this stub) is the AND-aggregation
+//! [`has_passing_validation`] needs once criterion rows exist: a change with
+//! any criterion-linked rows passes the gate iff **every distinct
+//! `criterion_node_id` recorded for that change has its most recent row in
+//! state `passed`** (one failing or errored criterion fails the whole
+//! change, per #861's mixed-result acceptance criterion); a change with zero
+//! criterion-linked rows keeps today's behaviour unchanged (any `passed`
+//! aggregate row satisfies the gate, preserving pre-#861 callers and the "no
+//! criteria, no synthetic pass" acceptance criterion).
+//!
+//! **The read-side key (#862's join):** [`CriterionVerdictKey`] is the pair
+//! `(change_id, criterion_node_id)` #862's latest-verdict query groups and
+//! orders by (`DISTINCT ON (criterion_node_id) ... ORDER BY criterion_node_id,
+//! created_at DESC`) to resolve one latest verdict per `AcceptanceCriterion`
+//! node for rendering — never-run is simply "no row exists for this key",
+//! requiring no sentinel state.
 
 use sqlx::PgPool;
 use std::fmt;
@@ -428,12 +475,73 @@ pub async fn transition_change(
 }
 
 // ---------------------------------------------------------------------------
+// Per-criterion verdict-row seam stub (dev-scout #869) — see the module doc
+// comment "Per-criterion verdict-row seam" above for the full contract.
+// ---------------------------------------------------------------------------
+
+/// The key a per-criterion verdict row is written and read against: a
+/// change plus the `AcceptanceCriterion` `nexum.project_nodes.id` it
+/// verdicts.
+///
+/// This is the seam key #861 (writer, via the additive
+/// `criterion_node_id` column on `forge.validation_runs`) and #862 (reader,
+/// resolving the latest verdict per criterion) both build against. It is a
+/// documentation-and-compile-time stub: no migration adds the backing
+/// column yet, and nothing in this module persists or queries by this key —
+/// #861 wires the write path, #862 the read path.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct CriterionVerdictKey {
+    /// The change (`forge.changes.id`) the verdict belongs to.
+    pub change_id: Uuid,
+    /// The `AcceptanceCriterion` node (`nexum.project_nodes.id`) the verdict
+    /// is for.
+    pub criterion_node_id: Uuid,
+}
+
+impl CriterionVerdictKey {
+    /// Construct a key for a change/criterion pair.
+    pub fn new(change_id: Uuid, criterion_node_id: Uuid) -> Self {
+        Self {
+            change_id,
+            criterion_node_id,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ── Per-criterion verdict-row seam stub tests (dev-scout #869, no DB) ────
+
+    /// [`CriterionVerdictKey`] compiles, constructs, and compares by value —
+    /// the compile-time proof this dev-scout stub pins for #861/#862 to build
+    /// against (see the module doc comment "Per-criterion verdict-row seam").
+    #[test]
+    fn criterion_verdict_key_constructs_and_compares() {
+        let change_id = Uuid::new_v4();
+        let criterion_node_id = Uuid::new_v4();
+
+        let key = CriterionVerdictKey::new(change_id, criterion_node_id);
+        assert_eq!(key.change_id, change_id);
+        assert_eq!(key.criterion_node_id, criterion_node_id);
+
+        let same = CriterionVerdictKey::new(change_id, criterion_node_id);
+        assert_eq!(
+            key, same,
+            "keys built from the same pair must compare equal"
+        );
+
+        let different = CriterionVerdictKey::new(change_id, Uuid::new_v4());
+        assert_ne!(
+            key, different,
+            "keys for different criteria on the same change must differ"
+        );
+    }
 
     // ── Pure state-machine tests (no database) ──────────────────────────────
 

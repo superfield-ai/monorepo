@@ -80,6 +80,7 @@
 //! - `docs/milestone-1.md` §4.6.
 //! - Issue #493 scope; issue #677 (seam), #672 (downstream feature).
 
+use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use thiserror::Error;
 use uuid::Uuid;
@@ -111,6 +112,149 @@ pub enum ProjectGraphError {
     /// [`NODE_STATES`]).
     #[error("invalid node state '{0}'; expected one of: open, in_progress, validated, closed")]
     InvalidState(String),
+
+    /// A raw JSON assertion payload does not match a known [`AssertionKind`]
+    /// or that kind's typed parameter schema.
+    ///
+    /// Dev-scout stub (issue #869) — [`validate_assertion_spec`] is the only
+    /// caller today; #860 wires the equivalent check into the real
+    /// [`insert_acceptance_criterion`] write path.
+    #[error("invalid assertion spec: {0}")]
+    InvalidAssertionSpec(String),
+}
+
+// ---------------------------------------------------------------------------
+// Assertion schema stub (dev-scout #869, "Executable acceptance criteria"
+// phase) — see docs/eval-design.md §"The missing primitive: executable
+// acceptance criteria" and docs/architecture.md.
+//
+// This section pins the COMPILE-TIME SHAPE of the assertion schema so #860
+// (the feature that adds the real `0004_acceptance_assertions.sql` migration
+// and wires write-time validation into `insert_acceptance_criterion`) has a
+// stable type to build against instead of guessing at the wire shape. It is
+// a stub, not the feature:
+//
+// - No migration is added here (#860 owns `0004_acceptance_assertions.sql`).
+// - [`insert_acceptance_criterion`] above is UNCHANGED — it still stores only
+//   a title. Nothing in this crate calls [`validate_assertion_spec`] yet;
+//   wiring it in is #860's write path, not this stub's no-op one.
+// - [`traverse_project_graph`] / [`ProjectNode`] do not yet carry
+//   `assertion_kind` / `assertion_params` — #860's read-path extension adds
+//   that column projection.
+//
+// serde does the write-time-rejection work #860's AC requires: an unknown
+// `kind` or a `params` shape that does not match its kind's typed struct
+// fails to deserialize (see the round-trip + malformed-input unit tests
+// below), so #860 only has to call `serde_json::from_value` (or this stub's
+// [`validate_assertion_spec`] convenience wrapper) at insert time.
+// ---------------------------------------------------------------------------
+
+/// The three assertion kinds an `AcceptanceCriterion` can carry
+/// (docs/eval-design.md §"The missing primitive: executable acceptance
+/// criteria").
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum AssertionKind {
+    /// An HTTP/probe check against the deployed preview.
+    HttpProbe,
+    /// A Playwright check against the Studio app preview.
+    Playwright,
+    /// A `RequiredTest` the generated code must contain and pass.
+    RequiredTest,
+}
+
+impl AssertionKind {
+    /// The canonical wire string for this kind (matches the `serde`
+    /// `kebab-case` rename and the CHECK-constrained vocabulary #860's
+    /// migration will pin at the database level).
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AssertionKind::HttpProbe => "http-probe",
+            AssertionKind::Playwright => "playwright",
+            AssertionKind::RequiredTest => "required-test",
+        }
+    }
+}
+
+/// Typed parameters for an [`AssertionKind::HttpProbe`] criterion — an
+/// HTTP/probe check against the deployed preview (e.g. "`POST /orders`
+/// returns `201` and persists a row").
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct HttpProbeParams {
+    /// HTTP method, e.g. `"GET"` or `"POST"`.
+    pub method: String,
+    /// Request path against the deployed preview, e.g. `"/orders"`.
+    pub path: String,
+    /// Expected HTTP status code.
+    pub expected_status: u16,
+}
+
+/// Typed parameters for an [`AssertionKind::Playwright`] criterion — a
+/// browser check against the Studio app preview (e.g. "the order form shows
+/// a confirmation toast on submit").
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct PlaywrightParams {
+    /// Path (relative to the Studio preview origin) the check navigates to.
+    pub path: String,
+    /// Human-readable expectation the Playwright script asserts.
+    pub expectation: String,
+}
+
+/// Typed parameters for an [`AssertionKind::RequiredTest`] criterion — a
+/// named test the generated code must contain and pass.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RequiredTestParams {
+    /// Fully-qualified test name the generated code must contain and pass,
+    /// e.g. `"sf_loop::acceptance::per_criterion_verdicts_recorded"`.
+    pub test_name: String,
+}
+
+/// An assertion kind paired with its kind-specific typed parameters.
+///
+/// Serde-tagged on `kind` with parameters nested under `params`, so an
+/// unknown `kind` or a `params` shape that does not match its kind's typed
+/// struct fails to deserialize — the write-time-rejection behaviour #860's
+/// acceptance criteria require, without either side hand-rolling a
+/// validator.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(tag = "kind", content = "params", rename_all = "kebab-case")]
+pub enum AssertionSpec {
+    /// An HTTP/probe check — see [`HttpProbeParams`].
+    HttpProbe(HttpProbeParams),
+    /// A Playwright check — see [`PlaywrightParams`].
+    Playwright(PlaywrightParams),
+    /// A required-test check — see [`RequiredTestParams`].
+    RequiredTest(RequiredTestParams),
+}
+
+impl AssertionSpec {
+    /// The [`AssertionKind`] this spec carries.
+    pub fn kind(&self) -> AssertionKind {
+        match self {
+            AssertionSpec::HttpProbe(_) => AssertionKind::HttpProbe,
+            AssertionSpec::Playwright(_) => AssertionKind::Playwright,
+            AssertionSpec::RequiredTest(_) => AssertionKind::RequiredTest,
+        }
+    }
+}
+
+/// Validate a raw JSON assertion payload against the [`AssertionSpec`]
+/// schema — the **no-op write path** this dev-scout pins (issue #869).
+///
+/// This performs no database access and is not called by
+/// [`insert_acceptance_criterion`]; #860 wires the equivalent check into
+/// that write path (or calls this function directly) alongside the
+/// `0004_acceptance_assertions.sql` migration.
+///
+/// # Errors
+///
+/// Returns [`ProjectGraphError::InvalidAssertionSpec`] when `raw` does not
+/// match a known kind or that kind's typed parameter shape.
+pub fn validate_assertion_spec(
+    raw: &serde_json::Value,
+) -> Result<AssertionSpec, ProjectGraphError> {
+    serde_json::from_value(raw.clone())
+        .map_err(|e| ProjectGraphError::InvalidAssertionSpec(e.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -811,6 +955,72 @@ mod tests {
         // Just exercise the module-level constant so rustc verifies the
         // public API surface compiles with the stub lazy pool.
         assert_eq!(PROJECT_GRAPH_DOC_TITLE, "project");
+    }
+
+    // ── Assertion schema stub tests (dev-scout #869, no database) ───────────
+
+    /// Each kind round-trips through JSON with valid parameters, and
+    /// [`AssertionSpec::kind`] reports the matching [`AssertionKind`].
+    #[test]
+    fn assertion_spec_round_trips_for_each_kind() {
+        let http = serde_json::json!({
+            "kind": "http-probe",
+            "params": { "method": "POST", "path": "/orders", "expected_status": 201 },
+        });
+        let spec = validate_assertion_spec(&http).expect("valid http-probe spec");
+        assert_eq!(spec.kind(), AssertionKind::HttpProbe);
+        assert_eq!(
+            serde_json::to_value(&spec).expect("serializes"),
+            http,
+            "round trip must reproduce the original JSON"
+        );
+
+        let playwright = serde_json::json!({
+            "kind": "playwright",
+            "params": { "path": "/checkout", "expectation": "confirmation toast shown" },
+        });
+        let spec = validate_assertion_spec(&playwright).expect("valid playwright spec");
+        assert_eq!(spec.kind(), AssertionKind::Playwright);
+
+        let required_test = serde_json::json!({
+            "kind": "required-test",
+            "params": { "test_name": "sf_loop::acceptance::per_criterion_verdicts_recorded" },
+        });
+        let spec = validate_assertion_spec(&required_test).expect("valid required-test spec");
+        assert_eq!(spec.kind(), AssertionKind::RequiredTest);
+    }
+
+    /// An unknown `kind` is rejected at write time (serde deserialize fails),
+    /// never silently accepted.
+    #[test]
+    fn assertion_spec_rejects_unknown_kind() {
+        let raw = serde_json::json!({
+            "kind": "smoke-test",
+            "params": { "path": "/x" },
+        });
+        let err = validate_assertion_spec(&raw).expect_err("unknown kind must be rejected");
+        assert!(matches!(err, ProjectGraphError::InvalidAssertionSpec(_)));
+    }
+
+    /// Parameters that do not match the declared kind's typed schema are
+    /// rejected at write time.
+    #[test]
+    fn assertion_spec_rejects_malformed_params() {
+        // http-probe requires expected_status: u16 — supply a string instead.
+        let raw = serde_json::json!({
+            "kind": "http-probe",
+            "params": { "method": "GET", "path": "/orders", "expected_status": "ok" },
+        });
+        let err = validate_assertion_spec(&raw).expect_err("malformed params must be rejected");
+        assert!(matches!(err, ProjectGraphError::InvalidAssertionSpec(_)));
+
+        // playwright missing the required `expectation` field.
+        let raw = serde_json::json!({
+            "kind": "playwright",
+            "params": { "path": "/checkout" },
+        });
+        let err = validate_assertion_spec(&raw).expect_err("missing field must be rejected");
+        assert!(matches!(err, ProjectGraphError::InvalidAssertionSpec(_)));
     }
 
     // ── Integration tests (require DATABASE_URL) ─────────────────────────────

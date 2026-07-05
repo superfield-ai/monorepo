@@ -31,6 +31,10 @@
 //!   enforces the validation gate (a change cannot reach `merged` without a
 //!   recorded passing `forge.validation_runs` row). Backed by
 //!   `crates/sf-db/migrations/0004_change_lifecycle.sql` (`forge` schema).
+//!   [`change::CriterionVerdictKey`] is a dev-scout stub (issue #869) pinning
+//!   the additive per-criterion verdict-row seam #861 (writer) and #862
+//!   (reader) build against — documentation and a compile-time key only, no
+//!   migration or behavior change yet.
 //! - [`policy`]: the policy engine for autonomous-versus-approval governance
 //!   (issue #716). [`policy::PolicyState`] models the PRD §6 policy lifecycle
 //!   (`drafted → active → revised → retired`) with a pure legal-transition
@@ -49,7 +53,11 @@
 //!   #493). Typed nodes (Issue, Feature, RequiredTest, AcceptanceCriterion,
 //!   PullRequest) stored in `nexum.project_nodes`; edges in `nexum.links`
 //!   with `project:` prefixed `rel_type` values; recursive CTE traversal for
-//!   the `GET /pages/project` read path.
+//!   the `GET /pages/project` read path. [`project_graph::AssertionKind`] /
+//!   [`project_graph::AssertionSpec`] are a dev-scout stub (issue #869) pinning
+//!   the executable-acceptance-criteria assertion schema shape (docs/eval-design.md)
+//!   for #860 to wire into a real write path and migration; no-op today —
+//!   [`project_graph::insert_acceptance_criterion`] is unchanged.
 //! - [`runtime_signal::fetch_recent_runtime_signals`]: read projection over
 //!   `sharp.runtime_signals` (issue #709). Lets the gardening loop's
 //!   intent-to-spec inference step consume behavioral traces without depending
@@ -76,7 +84,7 @@ pub use backup::{
 };
 pub use change::{
     fetch_change, has_passing_validation, insert_change, record_validation_run, transition_change,
-    Change, ChangeError, ChangeState, ValidationRunState,
+    Change, ChangeError, ChangeState, CriterionVerdictKey, ValidationRunState,
 };
 pub use config::DbConfig;
 pub use migrate::{
@@ -92,7 +100,8 @@ pub use pool::{acquire_with_workspace_id, acquire_workspace, connect};
 pub use project_graph::{
     fetch_project_page, insert_acceptance_criterion, insert_feature, insert_issue,
     insert_required_test, link_pr_to_issue, list_nodes, traverse_project_graph, update_node,
-    ProjectGraphError, ProjectNode, NODE_STATES, PROJECT_GRAPH_DOC_TITLE,
+    validate_assertion_spec, AssertionKind, AssertionSpec, HttpProbeParams, PlaywrightParams,
+    ProjectGraphError, ProjectNode, RequiredTestParams, NODE_STATES, PROJECT_GRAPH_DOC_TITLE,
 };
 pub use provisioner::{
     FailingProvisioner, LocalPostgresProvisioner, PostgresProvisioner, ProvisionerError,
