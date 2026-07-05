@@ -1,0 +1,10 @@
+[
+  {
+    "type": "rust_semantic_merge",
+    "repo": "todo-app",
+    "workspace": "/workspaces/todo-app",
+    "renames_propagated": [],
+    "merged_files": 3,
+    "compile_gate": "passed"
+  }
+]
