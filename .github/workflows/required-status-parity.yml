@@ -1,0 +1,88 @@
+name: Required-status parity
+
+# =============================================================================
+# Required-status parity (issue #846) — asserts main's LIVE branch-protection
+# required_status_checks.contexts matches scripts/required-status-contexts.txt
+# EXACTLY, so the drift issue #846 found (the file said "Sharp merge-guarantee"
+# and "Manifest gate" were required-branch-protection contexts; main's live
+# setting did not actually list them, so a red run of either job would not have
+# blocked a merge) cannot recur silently.
+#
+# scripts/check-required-status-parity.sh is the guardrail: it fetches main's
+# live required_status_checks.contexts via the GitHub API and diffs it against
+# the file in both directions (a context the file lists but live is missing, or
+# vice versa), failing loudly on either.
+#
+# WHY SCHEDULED, NOT A REQUIRED PER-PR CONTEXT
+#   The thing under test — main's OWN branch-protection setting — is server
+#   state that is completely independent of any given PR's diff, so gating an
+#   individual PR's merge on it would not add signal beyond "main's settings
+#   are currently fine". Reading branch protection also needs a token with
+#   `administration:read` on the repo, which the default `GITHUB_TOKEN` cannot
+#   be granted (not in its permission-scope set at all — actionlint rejects
+#   `administration` in a `permissions:` block); this job therefore uses
+#   `secrets.BLUEPRINT_SYNC_TOKEN`, the PAT this repo already relies on
+#   wherever `GITHUB_TOKEN` is insufficient (private submodule checkout in
+#   test-unit.yml, container-build.yml, release.yml, etc.). A nightly full
+#   sweep (same pattern as manifest-lint.yml's and actionlint.yml's nightly
+#   re-checks) plus an on-demand + on-touch trigger catches drift promptly
+#   without adding a new required-context bootstrap problem (a context can't
+#   gate itself into existence). CI_CLASS = code-hygiene: it asserts a
+#   repo-config invariant, not product runtime behaviour.
+env:
+  CI_CLASS: code-hygiene
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "scripts/required-status-contexts.txt"
+      - "scripts/check-required-status-parity.sh"
+      - ".github/workflows/required-status-parity.yml"
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review]
+    paths:
+      - "scripts/required-status-contexts.txt"
+      - "scripts/check-required-status-parity.sh"
+      - ".github/workflows/required-status-parity.yml"
+  schedule:
+    # Nightly full sweep — re-diffs main's live branch protection against the
+    # file even when nothing in the PR touches either, so drift introduced
+    # directly via the GitHub UI/API (as #846 found) is still caught.
+    - cron: "30 7 * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  # Required to pull the private GHCR ci-runner image for the job `container:`.
+  # An explicit permissions block narrows the token and drops the default
+  # packages:read, which makes `docker pull ghcr.io/...` return 403 Forbidden
+  # (same fix as required-status-bypass.yml).
+  packages: read
+
+concurrency:
+  group: required-status-parity-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  required-status-parity:
+    name: Required-status parity
+    runs-on: [self-hosted, Linux, X64]
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      GH_TOKEN: ${{ secrets.BLUEPRINT_SYNC_TOKEN }}
+      GITHUB_API_URL: ${{ github.api_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Self-test the guardrail (synthetic fixtures, no network)
+        run: scripts/check-required-status-parity.sh --self-test
+
+      - name: Diff live branch-protection against required-status-contexts.txt
+        run: scripts/check-required-status-parity.sh --repo "${{ github.repository }}" --branch main
