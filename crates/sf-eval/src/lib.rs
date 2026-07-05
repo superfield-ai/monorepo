@@ -20,11 +20,19 @@
 //! into these pure functions so the turn counter, graders, and `result.json`
 //! emission are unit-tested without a live model or database. The orchestration
 //! that wires them to a real `superfield serve` is the runner binary's job.
+//!
+//! [`corpus`] pins the Tier-2 **corpus-level** seams (issue #870): the
+//! multi-scenario aggregate `result.json` envelope and the scenario-directory
+//! discovery contract, layered on top of the single-scenario pieces above.
 
+pub mod corpus;
 pub mod graders;
 pub mod result;
 pub mod runner;
 
+pub use corpus::{
+    discover_scenarios, CorpusResult, DiscoveryError, ScenarioDescriptor, ScenarioVerdict,
+};
 pub use graders::{compiling_candidate_pass, project_graph_pass};
 pub use result::{Acceptance, DeterministicRungs, RunResult};
 pub use runner::{count_turns, evaluate_run};

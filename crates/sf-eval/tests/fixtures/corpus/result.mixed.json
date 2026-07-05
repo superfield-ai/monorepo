@@ -1,0 +1,14 @@
+{
+  "scenarios": [
+    {
+      "scenario": "green-scenario",
+      "green": true,
+      "failing_stage": null
+    },
+    {
+      "scenario": "red-scenario",
+      "green": false,
+      "failing_stage": "rungs"
+    }
+  ]
+}
