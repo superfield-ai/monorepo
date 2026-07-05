@@ -337,7 +337,15 @@ jobs:
           # freshly migrated pgvector DB). Keep all `-p` flags on the same line
           # as `cargo nextest run` so check-coverage-truth.sh can parse the
           # executed crates from this invocation.
-          FILTER='(package(sf-db) & (binary(provision_migrate_integration) | binary(rls_workspace_isolation_integration))) | (package(superfield) & binary(daemon_loop_integration)) | (package(sf-serve) & test(/tests::integration::/)) | (package(sharp) & (test(db_round_trip_snapshot_build_materialize_is_identity) | test(episode_open_append_finish_query) | test(init_add_commit_roundtrip) | test(merge_flow_onboard_workspace_is_idempotent))) | (package(sf-loop) & (test(cursor_persists_after_step_commit) | test(loop_resumes_from_cursor_after_restart) | test(project_graph_derive_writes_nodes)))'
+          # sf-db's `test(/^pool::tests::.../)` arm (issue #847) additionally
+          # selects the two pool.rs lib unit tests by fully-qualified name:
+          # they live in the `sf-db` lib unit-test binary (not the
+          # `provision_migrate_integration` / `rls_workspace_isolation_integration`
+          # tests/*.rs binaries the `binary(...)` arms above already select),
+          # so a plain `binary(...)` filter never reaches them even under
+          # `--run-ignored all` — see .agents/agent-warnings.md "Coverage
+          # warning — sf-db::acquire_workspace / acquire_with_workspace_id".
+          FILTER='(package(sf-db) & (binary(provision_migrate_integration) | binary(rls_workspace_isolation_integration) | test(/^pool::tests::(pool_hands_out_working_connection|acquire_workspace_sets_principal_context)$/))) | (package(superfield) & binary(daemon_loop_integration)) | (package(sf-serve) & test(/tests::integration::/)) | (package(sharp) & (test(db_round_trip_snapshot_build_materialize_is_identity) | test(episode_open_append_finish_query) | test(init_add_commit_roundtrip) | test(merge_flow_onboard_workspace_is_idempotent))) | (package(sf-loop) & (test(cursor_persists_after_step_commit) | test(loop_resumes_from_cursor_after_restart) | test(project_graph_derive_writes_nodes)))'
           # Run for real (exit code propagates: a test failure or zero-collection
           # under --no-tests=fail fails the step), capturing libtest-json NDJSON.
           cargo nextest run -p sf-db -p sf-serve -p sharp -p superfield -p sf-loop --profile ci --run-ignored all --no-tests=fail --test-threads=1 -E "$FILTER" --message-format libtest-json 2>/dev/null | tee nextest.jsonl

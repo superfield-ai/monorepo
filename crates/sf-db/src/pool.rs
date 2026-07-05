@@ -3,7 +3,7 @@
 //! All component crates call [`connect`] once at startup and retain the returned
 //! [`sqlx::PgPool`].  Per-request, callers use [`acquire_workspace`] to obtain a
 //! connection with the workspace (principal) context already set via
-//! `SELECT set_config('app.current_principal_id', '<id>', true)` so that
+//! `SELECT set_config('app.current_principal_id', '<id>', false)` so that
 //! per-schema RLS policies can fire correctly. `set_config` is used instead of
 //! `SET LOCAL ... = $1` because Postgres's `SET` statement does not accept
 //! bind parameters for its value.
@@ -44,15 +44,26 @@ pub async fn connect(cfg: &DbConfig) -> Result<PgPool, sqlx::Error> {
 /// After taking a connection from the pool, this function runs:
 ///
 /// ```sql
-/// SELECT set_config('app.current_principal_id', '<principal_id>', true);
+/// SELECT set_config('app.current_principal_id', '<principal_id>', false);
 /// ```
 ///
 /// This makes the principal identity available to RLS policies via
-/// `current_setting('app.current_principal_id')` for the duration of the
-/// current transaction (the third `set_config` argument, `true`, scopes the
-/// setting to the transaction like `SET LOCAL` would).  Callers must open a
-/// transaction before issuing data-modifying statements so that the setting
-/// is scoped correctly.
+/// `current_setting('app.current_principal_id')` for the lifetime of this
+/// pooled *connection* (the third `set_config` argument, `false`, scopes the
+/// setting to the session rather than to a transaction). A transaction-scoped
+/// (`true` / `SET LOCAL`-equivalent) setting would revert as soon as the
+/// `set_config` call's own implicit statement transaction completes — since
+/// this function issues `set_config` as a standalone statement with no
+/// surrounding transaction, that would silently discard the context before
+/// the caller ever gets to use it. Session scoping is the fix: it survives
+/// until this connection sets a different value or is dropped.
+///
+/// Because the setting lives on the physical connection, callers must not
+/// hand this connection back to the pool and then rely on
+/// `app.current_principal_id` still being set on a *different* connection
+/// acquired later — always re-derive workspace context via
+/// [`acquire_workspace`] (or [`acquire_with_workspace_id`]) per logical unit
+/// of work.
 ///
 /// # Arguments
 ///
@@ -69,7 +80,7 @@ pub async fn acquire_workspace(
     principal_id: &str,
 ) -> Result<PoolConnection<Postgres>, PoolError> {
     let mut conn = pool.acquire().await?;
-    sqlx::query("SELECT set_config('app.current_principal_id', $1, true)")
+    sqlx::query("SELECT set_config('app.current_principal_id', $1, false)")
         .bind(principal_id)
         .execute(&mut *conn)
         .await?;
@@ -147,6 +158,14 @@ mod tests {
     }
 
     // --- Integration tests (require DATABASE_URL) ---
+    //
+    // Both tests below run in the `rust-test-seam` CI job (issue #847): that
+    // job is DB-provisioned (pgvector + migrations via
+    // provision-test-substrate) and its FILTER names these two tests by
+    // fully-qualified path in the `sf-db` lib unit-test binary, so
+    // `--run-ignored all` executes them for real instead of skipping. Run
+    // locally the same way:
+    //   DATABASE_URL=postgres://… cargo test -p sf-db -- --include-ignored integration
 
     /// Unit test: pool hands out working connections.
     ///
@@ -166,37 +185,34 @@ mod tests {
 
     /// Integration test: a connection carries workspace context for RLS.
     ///
-    /// Verifies that [`acquire_workspace`] sets `app.current_principal_id`
-    /// on the connection so RLS policies can read it.
+    /// Calls [`acquire_workspace`] directly (not a hand-rolled duplicate of
+    /// its SQL) and asserts the *returned connection's* `current_setting`
+    /// reflects the passed principal — i.e. this test would have caught the
+    /// invalid `SET LOCAL ... = $1` bind-param bug fixed alongside this
+    /// change, because it exercises the exact statement the function issues.
     ///
     /// Skipped unless `DATABASE_URL` is set.
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL"]
     async fn acquire_workspace_sets_principal_context() {
-        use sqlx::Acquire;
-
         let cfg = DbConfig::from_env().expect("DATABASE_URL must be set for integration tests");
         let pool = connect(&cfg).await.expect("pool creation failed");
 
         let principal_id = "ws_test_00000000-0000-0000-0000-000000000001";
 
-        // acquire_workspace requires an explicit transaction for SET LOCAL to be
-        // scoped to the transaction; here we start one manually.
-        let mut conn = pool.acquire().await.expect("acquire failed");
-        let mut tx = conn.begin().await.expect("begin failed");
-
-        sqlx::query("SELECT set_config('app.current_principal_id', $1, true)")
-            .bind(principal_id)
-            .execute(&mut *tx)
+        let mut conn = acquire_workspace(&pool, principal_id)
             .await
-            .expect("set_config failed");
+            .expect("acquire_workspace failed");
 
+        // Read on the SAME connection acquire_workspace returned: the setting
+        // is session-scoped (see acquire_workspace's doc comment), so it is
+        // visible to any subsequent statement on this connection without
+        // needing an explicit wrapping transaction.
         let row: (String,) = sqlx::query_as("SELECT current_setting('app.current_principal_id')")
-            .fetch_one(&mut *tx)
+            .fetch_one(&mut *conn)
             .await
             .expect("current_setting query failed");
 
         assert_eq!(row.0, principal_id);
-        tx.rollback().await.expect("rollback failed");
     }
 }
