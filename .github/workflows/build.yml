@@ -114,3 +114,11 @@ jobs:
         run: python3 scripts/skipped-required-contexts.py --validate
       - name: Self-test the required-status-bypass decision
         run: tests/skipped-required-contexts-selftest.sh
+      # Tier-2 nightly eval gate (issue #864): proves
+      # scripts/eval-tier2-nightly-gate.sh actually enforces its four red
+      # conditions (any red scenario, zero scenarios executed, budget breach,
+      # missing live-model secret) rather than silently passing, and asserts
+      # the nightly workflow's schedule/CI_CLASS/budget-env/no-continue-on-error
+      # structure.
+      - name: Self-test the Tier-2 nightly eval gate
+        run: tests/eval-tier2-nightly-gate-selftest.sh

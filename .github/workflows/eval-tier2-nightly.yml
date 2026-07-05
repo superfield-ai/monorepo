@@ -1,0 +1,231 @@
+name: Eval — Tier-2 nightly
+
+# The Tier-2 nightly eval workflow (issue #864, docs/eval-design.md's
+# "plan of record", 2026-07-02): runs the Tier-2 harness against the LIVE
+# pinned shipped default model (`SF_LLM_MODEL=claude-haiku-4-5-20251001`, the
+# `LoopConfig` default — docs/architecture.md) under an enforced turn +
+# wall-clock budget cap, then gates on the result via
+# scripts/eval-tier2-nightly-gate.sh.
+#
+# This is the LIVE-MODEL counterpart to the keyless eval-todo-app.yml (issue
+# #748): that workflow drives a free third-party model and proves the loop's
+# plumbing; THIS workflow drives the real shipped model and is the actual
+# quality evidence for what customers run. It needs the `SF_LLM_API_KEY` repo
+# secret — until an operator provisions it, every run goes loudly RED via the
+# gate's missing-secret condition (never a silent skip, never a fake green).
+#
+# Reaches a live external model and is stochastic/slow, so under the CI
+# taxonomy this is `heavy`: no `pull_request` trigger at all — only
+# `schedule:` (nightly) and `workflow_dispatch:` (manual, with a `budget`
+# preset input for a cheap smoke run) — mirroring
+# `.agents/agent-warnings.md`'s "per-scenario eval workflows are heavy class"
+# note and the `eval-todo-app.yml` shape.
+#
+# The corpus-level `result.json` envelope this workflow's gate consumes is the
+# `CorpusResult` shape pinned by the dev-scout (issue #870,
+# `crates/sf-eval/src/corpus.rs`): `{"scenarios": [{"scenario","green",
+# "failing_stage"}, ...]}`. The actual multi-scenario corpus DRIVER (issue
+# #863) is a sibling feature developed in parallel and is intentionally NOT
+# depended on here (out of scope, per issue #864's Scope) — today only one
+# scenario (`todo-app`) is committed under `evals/scenarios/`, so the
+# "Aggregate the corpus envelope" step below wraps that scenario's existing
+# per-scenario `result.json` (the #780 `RunResult` shape the `sf-eval` binary
+# already emits) into the one-scenario `CorpusResult` envelope. Once #863's
+# driver lands and enumerates every scenario itself, this step is replaced by
+# its native aggregate output — the gate script is unaffected either way,
+# since it only ever reads the `CorpusResult` shape.
+env:
+  CI_CLASS: heavy
+
+on:
+  schedule:
+    # Nightly, off-peak. (Cron is UTC.)
+    - cron: "45 4 * * *"
+  workflow_dispatch:
+    inputs:
+      budget:
+        description: "Budget preset (turn + wall-clock cap) for this run"
+        required: false
+        default: "standard"
+        type: choice
+        options:
+          - minimal
+          - standard
+
+concurrency:
+  group: eval-tier2-nightly-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eval-tier2-nightly:
+    name: Tier-2 nightly (live, pinned shipped default model)
+    runs-on: [self-hosted, Linux, X64]
+    timeout-minutes: 120
+    # The self-hosted runner forbids container-less jobs; run inside the
+    # shared CI image, same as eval-todo-app.yml and rust.yml.
+    container:
+      image: ghcr.io/superfield-ai/ci-runner:latest
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_USER: superfield
+          POSTGRES_PASSWORD: superfield
+          POSTGRES_DB: superfield
+        options: >-
+          --health-cmd "pg_isready -U superfield"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+    defaults:
+      run:
+        shell: bash
+    env:
+      # The live pinned shipped default model (docs/architecture.md's
+      # `LoopConfig` table; docs/eval-design.md plan of record, 2026-07-02).
+      # SF_LLM_PROVIDER defaults to Anthropic when unset, but set it explicitly
+      # so this workflow's intent is not implicit.
+      SF_LLM_PROVIDER: anthropic
+      SF_LLM_MODEL: claude-haiku-4-5-20251001
+      SF_LLM_ENDPOINT: https://api.anthropic.com/v1/messages
+      # Operator-provisioned repo secret. Empty/unset until provisioned — the
+      # gate's missing-secret condition (below) is what makes that loud
+      # instead of a silent green (issue #864).
+      SF_LLM_API_KEY: ${{ secrets.SF_LLM_API_KEY }}
+      DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
+      # Enforced turn + wall-clock budget cap (issue #864 AC2). `minimal` is
+      # for a cheap workflow_dispatch smoke run; `schedule` runs (no
+      # `github.event.inputs`) and an unspecified dispatch both fall through
+      # to `standard`, mirroring the `TURN_BUDGET` fallback idiom already used
+      # in eval-todo-app.yml.
+      TURN_BUDGET: ${{ github.event.inputs.budget == 'minimal' && '4' || '40' }}
+      SF_EVAL_DEADLINE_SECS: ${{ github.event.inputs.budget == 'minimal' && '300' || '5400' }}
+      WORKSPACE_ID: 00000000-0000-4000-8000-000000000864
+      SF_NO_DAEMON: "1"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Prepare the eval results + log directory
+        run: mkdir -p evals/results/todo-app/_logs
+
+      - name: Install stable toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install C toolchain (required by Rust build scripts)
+        run: apt-get update -y && apt-get install -y --no-install-recommends gcc libc6-dev pkg-config libssl-dev
+
+      - name: Cache Cargo registry + build
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+            target/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
+      - name: Provision governed embed weights (offline)
+        uses: ./.github/actions/governed-embed-weights
+
+      - name: Build the appliance and the eval harness
+        run: |
+          cargo build --bin superfield
+          cargo build -p sf-eval --bin sf-eval
+
+      - name: Boot the appliance (health-gated provision, migrate, serve, loop)
+        run: |
+          set -euo pipefail
+          export RUST_LOG="info,sf_loop=debug,sf_serve=info,nexum=info,sqlx=warn,hyper=warn,hyper_util=warn,reqwest=warn,h2=warn"
+          SF_START_DAEMON=1 cargo run --bin superfield -- serve \
+            >evals/results/todo-app/_logs/appliance.log 2>&1 &
+          echo "APPLIANCE_PID=$!" >> "$GITHUB_ENV"
+          for i in $(seq 1 60); do
+            if curl -fsS "http://127.0.0.1:7000/healthz" >/dev/null 2>&1 \
+               || curl -fsS "http://127.0.0.1:7000/" >/dev/null 2>&1; then
+              echo "appliance up after ${i}0s"; break
+            fi
+            sleep 10
+          done
+
+      - name: Seed the todo-app intent
+        run: |
+          set -euo pipefail
+          cargo run --bin superfield -- garden \
+            evals/scenarios/todo-app/seed/*.md \
+            --workspace-id "${WORKSPACE_ID}"
+
+      - name: Run the todo-app scenario (live runner, live pinned model)
+        # NO continue-on-error and NO secret-conditional `if:` guard (issue
+        # #864 AC2) — a red/missing-credential run must surface as a real
+        # step failure, not be swallowed. `sf-eval run` itself exits non-zero
+        # only on a broken deterministic floor; it exits 0 whether or not the
+        # live loop converged within budget (the aggregation step below turns
+        # that into the corpus envelope's red/green verdict).
+        run: |
+          set -euo pipefail
+          cargo run -p sf-eval --bin sf-eval -- \
+            run \
+            --scenario evals/scenarios/todo-app \
+            --turn-budget "${TURN_BUDGET}" \
+            --workspace-id "${WORKSPACE_ID}" \
+            2>&1 | tee evals/results/todo-app/_logs/scenario.log
+
+      - name: Stop the appliance
+        if: always()
+        run: |
+          if [ -n "${APPLIANCE_PID:-}" ]; then kill "${APPLIANCE_PID}" 2>/dev/null || true; fi
+          echo "--- appliance.log (tail) ---"
+          tail -n 100 evals/results/todo-app/_logs/appliance.log 2>/dev/null || true
+
+      - name: Aggregate the corpus envelope (result.json)
+        # `if: always()` so this runs even when the scenario step above failed
+        # (e.g. a broken deterministic floor) — the aggregate envelope must
+        # still exist and record that scenario as red, per issue #864's
+        # Behaviour ("never silently skips or reports green without executed
+        # scenarios"). scripts/eval-tier2-nightly-aggregate.py wraps the
+        # scenario's per-scenario #780 `RunResult` at
+        # evals/results/todo-app/<workspace-id>/result.json into the
+        # `CorpusResult` envelope (issue #870,
+        # crates/sf-eval/src/corpus.rs) the gate script consumes, stamping
+        # `failing_stage: "budget_exhausted"` when the run stopped on the
+        # turn/wall-clock cap without accepting (issue #864's budget-breach
+        # condition) rather than a plain `"rungs"` miss.
+        if: always()
+        run: |
+          set -euo pipefail
+          scripts/eval-tier2-nightly-aggregate.py \
+            "evals/results/todo-app/${WORKSPACE_ID}/result.json" \
+            "${TURN_BUDGET}" \
+            "${SF_EVAL_DEADLINE_SECS}" \
+            "evals/results/result.json"
+
+      - name: Gate on the Tier-2 nightly result
+        # NO continue-on-error and NO secret-conditional `if:` guard (issue
+        # #864 AC2) beyond `always()`, which is required so the gate still
+        # runs — and correctly reds out — when an earlier step failed.
+        if: always()
+        run: scripts/eval-tier2-nightly-gate.sh evals/results/result.json
+
+      - name: Upload the corpus result.json (retained artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-tier2-nightly-result-json-${{ github.run_id }}
+          path: evals/results/result.json
+          if-no-files-found: warn
+          retention-days: 30
+
+      - name: Upload per-scenario results + logs (retained artifact)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: eval-tier2-nightly-scenario-logs-${{ github.run_id }}
+          # The whole per-scenario results tree: result.json, work products
+          # (project-graph.md, candidate-*.{json,diff}, turns.json) and the
+          # captured process logs under `_logs/` (appliance.log,
+          # scenario.log) — mirrors the eval-todo-app.yml upload pattern.
+          path: evals/results/todo-app/**
+          if-no-files-found: warn
+          retention-days: 30

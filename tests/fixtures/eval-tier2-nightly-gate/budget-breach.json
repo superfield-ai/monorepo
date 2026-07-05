@@ -1,0 +1,9 @@
+{
+  "scenarios": [
+    {
+      "scenario": "todo-app",
+      "green": false,
+      "failing_stage": "budget_exhausted"
+    }
+  ]
+}
