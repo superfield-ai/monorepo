@@ -118,6 +118,41 @@ exercised by multiple tiers (the same scenario's live trace is later replayed by
 Tier-1 graders). Keeping the test material in one place per scenario means you
 describe the To Do app once, not once per tier.
 
+## Scenario-directory discovery contract (Tier-2 corpus)
+
+The planned Tier-2 corpus driver (docs/eval-design.md sequencing item 2, #863)
+runs **every** scenario under `evals/scenarios/`, not just `todo-app`. What
+counts as a discoverable scenario is a pinned contract, implemented as
+[`sf_eval::discover_scenarios`](../crates/sf-eval/src/corpus.rs) — a
+directory under `evals/scenarios/` qualifies iff it has:
+
+- a `README.md` at the scenario root (the spec, as above),
+- an `acceptance.md` at the scenario root containing a rung table (mirroring
+  the `| Rung | ... |` table `todo-app/acceptance.md` uses), and
+- a `seed/` subdirectory containing at least one `.md` seed-intent file.
+
+A directory missing any of these fails discovery loudly (naming the scenario
+and the missing piece) rather than being silently skipped, so a malformed
+scenario directory cannot quietly drop out of the corpus run. This is the
+layout the `icp-fidelity` scenario (#865) mirrors so it is enumerable by the
+same driver without a special case. A fixture corpus proving both a
+discoverable green and red scenario lives at
+[`crates/sf-eval/tests/fixtures/corpus/`](../crates/sf-eval/tests/fixtures/corpus/)
+for #864's nightly-workflow gate-script development.
+
+## Corpus aggregate `result.json` envelope (Tier-2 corpus)
+
+Layered on top of (never replacing) the per-scenario `result.json` convention
+(issue #780), the corpus driver additionally emits one aggregate envelope with
+exactly one [`sf_eval::ScenarioVerdict`](../crates/sf-eval/src/corpus.rs) per
+enumerated scenario — `green`/`red`, with a `failing_stage` named whenever a
+scenario is red — and the harness process exits `0` iff every scenario is
+green. See
+[`crates/sf-eval/tests/fixtures/corpus/result.green.json`](../crates/sf-eval/tests/fixtures/corpus/result.green.json)
+and
+[`result.mixed.json`](../crates/sf-eval/tests/fixtures/corpus/result.mixed.json)
+for example envelopes.
+
 ## Glossary
 
 - **Turn** — one completed gardening step (the loop has 9 per pass). The headline

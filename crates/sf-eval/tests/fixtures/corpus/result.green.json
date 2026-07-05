@@ -1,0 +1,9 @@
+{
+  "scenarios": [
+    {
+      "scenario": "green-scenario",
+      "green": true,
+      "failing_stage": null
+    }
+  ]
+}
