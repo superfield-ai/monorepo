@@ -2,6 +2,6 @@
 
 `accepted = rung1`.
 
-| Rung | Must be true                              | Grader     |
-| ---- | ------------------------------------------ | ---------- |
-| 1    | The fixture condition is trivially false   | (fixture) |
+| Rung | Must be true                             | Grader    |
+| ---- | ---------------------------------------- | --------- |
+| 1    | The fixture condition is trivially false | (fixture) |
