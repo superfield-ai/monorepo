@@ -12,6 +12,14 @@
 # file in the same PR. The job `name:` strings below are the verbatim status
 # context identities (GitHub uses the job name as the check-run name).
 #
+# scripts/check-required-status-parity.sh (issue #846) continuously verifies
+# this lockstep: it fetches main's LIVE required_status_checks.contexts and
+# diffs it against this file in both directions, failing loudly on any
+# divergence. Wired as the `required-status-parity` job in
+# .github/workflows/required-status-parity.yml (nightly sweep + on-touch +
+# on-demand) — see that job's header for why it is scheduled rather than a
+# required per-PR context.
+#
 # Format: one context name per line. Blank lines and lines beginning with `#`
 # are ignored. Trailing/leading whitespace is trimmed.
 #
