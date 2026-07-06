@@ -1028,6 +1028,67 @@ mod tests {
         );
     }
 
+    /// Issue #843 gap 1: every other "real, hermetic end-to-end" test above
+    /// drives `ExecSubstrate` with `crun_path=/bin/true`, which always exits 0
+    /// — so a regression that makes `ExecSubstrate::run_command` swallow or
+    /// hard-code the exit code (instead of returning the real subprocess exit
+    /// status from `exec::run_exec` / `CrunBackend::start`) would NEVER be
+    /// caught by this file, only by `FakeSubstrate`-based tests (which do not
+    /// touch the real substrate at all).
+    ///
+    /// This test closes that hole: `crun_path` points at a real, tiny
+    /// executable (not `/bin/true`, not a mock) that ALWAYS exits 3, following
+    /// the same fake-binary pattern already used for `crun_path`/`firecracker`
+    /// fakes in `doctor.rs` and `host_control_plane.rs`. It proves the genuine
+    /// nonzero exit code produced by that real child process propagates all
+    /// the way through `ExecSubstrate` -> `run_job` -> `execute` as a loud
+    /// graph failure that names the real code (3), never a silent pass.
+    #[test]
+    fn real_exec_substrate_propagates_nonzero_exit() {
+        use std::os::unix::fs::PermissionsExt;
+
+        let root = TempDir::new().unwrap();
+        let _ = Registry::open(root.path()).unwrap();
+
+        // A real executable — standing in for `crun` — that unconditionally
+        // exits 3. `CrunBackend::start` spawns `crun_path` directly, so this
+        // script's exit code IS the exit code `ExecSubstrate::run_command`
+        // must report; nothing about it is mocked or faked at the trait level.
+        let fake_crun = root.path().join("fake-crun-exits-3.sh");
+        std::fs::write(&fake_crun, b"#!/bin/sh\nexit 3\n").unwrap();
+        let mut perms = std::fs::metadata(&fake_crun).unwrap().permissions();
+        perms.set_mode(0o755);
+        std::fs::set_permissions(&fake_crun, perms).unwrap();
+
+        let executor = FastenvCiExecutor {
+            root: root.path().to_path_buf(),
+            substrate: ExecSubstrate {
+                crun_path: fake_crun.to_str().unwrap().to_owned(),
+                network: GuestNetworkMode::Host,
+            },
+            workspace: DirWorkspace,
+        };
+
+        let m = manifest(
+            "real-nonzero-exit",
+            vec![job(
+                "fails-for-real",
+                &[],
+                vec![cmd("/bin/true", &[])],
+                hermetic_contract(),
+            )],
+        );
+
+        let err = executor
+            .execute(&m)
+            .expect_err("a genuine nonzero exit from the real substrate must fail the graph");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("exited with code 3"),
+            "error must report the REAL nonzero exit code from the child process, got: {msg}"
+        );
+    }
+
     #[test]
     fn unimplemented_executor_is_a_trait_object() {
         // The #821 seam guarantee: still referenceable as a trait object.
