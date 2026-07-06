@@ -280,3 +280,6 @@ self-repair until the Tier-3 self-fix metric above records it (P-4).
 | Project graph / nodes | `nexum.project_nodes` (incl. unused `AcceptanceCriterion`)          |
 | Resume cursor         | `orchestrator.gardening_cursor`                                     |
 | User surface          | Studio `/studio/*`, `WS /studio/ws`                                 |
+| Tier-2 scenarios      | `evals/scenarios/{todo-app,icp-fidelity}` (loop-plumbing fidelity vs. non-engineer-seed install-policy/approval fidelity, issue #865) |
+| Policy engine         | `crates/sf-db/src/policy.rs` (`Policy::evaluate`, `MergeDecision`, fail-closed when no policy is active) |
+| Change lifecycle      | `crates/sf-db/src/change.rs` (`ChangeState`, `awaiting-approval → merged`) |

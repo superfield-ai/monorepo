@@ -39,6 +39,9 @@ pub use corpus::{
     discover_scenarios, CorpusResult, DiscoveryError, ScenarioDescriptor, ScenarioVerdict,
 };
 pub use corpus_runner::{run_corpus, CorpusConfig, CorpusOutcome, CORPUS_RESULT_FILENAME};
-pub use graders::{compiling_candidate_pass, project_graph_pass};
-pub use result::{Acceptance, DeterministicRungs, RunResult};
+pub use graders::{
+    compiling_candidate_pass, install_policy_fail_closed_pass, outcome_approval_pass,
+    project_graph_pass, ChangeAudit,
+};
+pub use result::{Acceptance, DeterministicRungs, IcpFidelityAcceptance, RunResult};
 pub use runner::{count_turns, evaluate_run};

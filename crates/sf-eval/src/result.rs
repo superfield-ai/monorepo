@@ -28,6 +28,39 @@ impl Acceptance {
     }
 }
 
+/// The gating rungs of the `icp-fidelity` acceptance bar (issue #865) — the
+/// `icp-fidelity` analog of [`Acceptance`] (todo-app's rungs).
+///
+/// A distinct type rather than reusing [`Acceptance`]'s fields: `Acceptance`'s
+/// `project_graph`/`compiling_candidate` names are `todo-app`-specific, and
+/// stuffing `icp-fidelity`'s unrelated install-policy/approval verdicts into
+/// them would mislabel a serialized `result.json`. `Acceptance`, `RunResult`,
+/// and `evaluate_run` stay byte-for-byte unchanged for `todo-app` (issue
+/// #865's scope) — this type pins the identical accept-rule *shape* (AND of
+/// gating rungs, each independently serialized pass/fail) for `icp-fidelity`,
+/// ready for the sibling Tier-2 nightly harness (#863/#864, out of scope
+/// here) to fold into its own run's `result.json` once it wires real
+/// execution.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct IcpFidelityAcceptance {
+    /// Rung 1: the fail-closed install policy held for every merged change
+    /// (`install-policy-fail-closed` grader,
+    /// [`crate::graders::install_policy_fail_closed_pass`]).
+    pub install_policy_fail_closed: bool,
+    /// Rung 2: the seeded change reached `merged` via a recorded
+    /// `awaiting-approval → merged` transition (`outcome-approval` grader,
+    /// [`crate::graders::outcome_approval_pass`]).
+    pub outcome_approval: bool,
+}
+
+impl IcpFidelityAcceptance {
+    /// The scenario accept rule — identical in shape to
+    /// [`Acceptance::accepted`]: all gating rungs must pass.
+    pub fn accepted(self) -> bool {
+        self.install_policy_fail_closed && self.outcome_approval
+    }
+}
+
 /// The **deterministic** rungs — the ones reached without the live-LLM gardening
 /// loop converging.
 ///
@@ -206,5 +239,83 @@ mod tests {
         let typed: RunResult = serde_json::from_str(&json).expect("round-trips");
         assert!(typed.deterministic.all_pass());
         assert!(!typed.accepted);
+    }
+}
+
+// Deliberately a top-level module (not nested under `mod tests` above) so its
+// fully-qualified test path is `result::icp_fidelity_accept_rule::<name>` —
+// the exact substring issue #865's AC selects on (`cargo test -p sf-eval
+// result::icp_fidelity_accept_rule`). Hermetic, no DB — already covered by
+// the required `rust-test` job's `cargo nextest run --workspace` (see the
+// matching note in `graders.rs`).
+#[cfg(test)]
+mod icp_fidelity_accept_rule {
+    use super::*;
+
+    #[test]
+    fn accepted_only_when_both_rungs_pass() {
+        assert!(IcpFidelityAcceptance {
+            install_policy_fail_closed: true,
+            outcome_approval: true,
+        }
+        .accepted());
+
+        assert!(!IcpFidelityAcceptance {
+            install_policy_fail_closed: false,
+            outcome_approval: true,
+        }
+        .accepted());
+
+        assert!(!IcpFidelityAcceptance {
+            install_policy_fail_closed: true,
+            outcome_approval: false,
+        }
+        .accepted());
+
+        assert!(!IcpFidelityAcceptance {
+            install_policy_fail_closed: false,
+            outcome_approval: false,
+        }
+        .accepted());
+    }
+
+    #[test]
+    fn accept_rule_has_the_same_and_of_gating_rungs_shape_as_todo_app() {
+        // Same rule structure as `Acceptance::accepted` (todo-app): a gate
+        // that is `true` iff every named rung is `true` — proven by
+        // constructing both with an identical true/false rung pattern and
+        // asserting they agree.
+        let todo_app_rungs = [(true, true), (true, false), (false, true), (false, false)];
+        for (a, b) in todo_app_rungs {
+            let todo_app = Acceptance {
+                project_graph: a,
+                compiling_candidate: b,
+            };
+            let icp_fidelity = IcpFidelityAcceptance {
+                install_policy_fail_closed: a,
+                outcome_approval: b,
+            };
+            assert_eq!(
+                todo_app.accepted(),
+                icp_fidelity.accepted(),
+                "both accept rules must agree for rungs ({a}, {b})"
+            );
+        }
+    }
+
+    #[test]
+    fn per_rung_pass_fail_is_serialized() {
+        let acceptance = IcpFidelityAcceptance {
+            install_policy_fail_closed: true,
+            outcome_approval: false,
+        };
+        let json = serde_json::to_string(&acceptance).expect("serializes");
+        let parsed: serde_json::Value = serde_json::from_str(&json).expect("valid json");
+        assert_eq!(parsed["install_policy_fail_closed"], true);
+        assert_eq!(parsed["outcome_approval"], false);
+
+        let typed: IcpFidelityAcceptance = serde_json::from_str(&json).expect("round-trips");
+        assert_eq!(typed, acceptance);
+        assert!(!typed.accepted());
     }
 }

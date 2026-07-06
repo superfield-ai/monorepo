@@ -373,4 +373,51 @@ mod tests {
             "expected todo-app among discovered scenarios: {found:?}"
         );
     }
+
+    /// Issue #865 AC: the real `evals/scenarios/icp-fidelity/` directory
+    /// follows the same discovery contract as `todo-app` — a seed intent, an
+    /// acceptance.md rung table, and (specific to this scenario) references to
+    /// both new grader specs. This fails loud if the seed intent, the rung
+    /// table, or either grader reference goes missing, rather than silently
+    /// passing on an incomplete scenario directory.
+    #[test]
+    fn scenario_corpus_parses() {
+        let scenarios_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/scenarios");
+        let found = discover_scenarios(&scenarios_root).expect("real evals/scenarios/ discovers");
+        let icp_fidelity = found
+            .iter()
+            .find(|s| s.name == "icp-fidelity")
+            .unwrap_or_else(|| {
+                panic!("expected icp-fidelity among discovered scenarios: {found:?}")
+            });
+        assert!(
+            !icp_fidelity.seed_files.is_empty(),
+            "icp-fidelity must have a seed intent under seed/"
+        );
+
+        let acceptance_content = std::fs::read_to_string(icp_fidelity.path.join("acceptance.md"))
+            .expect("icp-fidelity/acceptance.md is readable");
+        assert!(
+            has_rung_table(&acceptance_content),
+            "icp-fidelity/acceptance.md must have a rung table"
+        );
+        assert!(
+            acceptance_content.contains("install-policy-fail-closed"),
+            "icp-fidelity/acceptance.md must reference the install-policy-fail-closed grader"
+        );
+        assert!(
+            acceptance_content.contains("outcome-approval"),
+            "icp-fidelity/acceptance.md must reference the outcome-approval grader"
+        );
+
+        let graders_root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../evals/graders");
+        assert!(
+            graders_root.join("install-policy-fail-closed.md").is_file(),
+            "the install-policy-fail-closed grader spec must exist"
+        );
+        assert!(
+            graders_root.join("outcome-approval.md").is_file(),
+            "the outcome-approval grader spec must exist"
+        );
+    }
 }

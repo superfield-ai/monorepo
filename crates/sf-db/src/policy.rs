@@ -620,6 +620,31 @@ mod tests {
         }
     }
 
+    /// Fail-closed regression (test plan item, issue #865): with no *governing*
+    /// policy — the fresh-appliance state a non-active/absent policy models —
+    /// `evaluate` must return `MergeDecision::RequiresApproval` at *every* risk
+    /// level, not just the safest one. This is the property the `icp-fidelity`
+    /// eval's `install-policy-fail-closed` grader relies on
+    /// (`crates/sf-eval/src/graders.rs`).
+    #[test]
+    fn non_active_policy_fail_closed_holds_at_every_risk_level() {
+        let mut policy = active_policy(100, true);
+        for state in [
+            PolicyState::Drafted,
+            PolicyState::Revised,
+            PolicyState::Retired,
+        ] {
+            policy.state = state;
+            for score in [0u8, 1, 20, 50, 99, 100] {
+                assert_eq!(
+                    policy.evaluate(RiskLevel::new(score)),
+                    MergeDecision::RequiresApproval,
+                    "a {state} policy must not govern the merge gate at risk {score}"
+                );
+            }
+        }
+    }
+
     // ── Integration tests (require DATABASE_URL) ────────────────────────────
 
     /// Integration test: a policy persists in `drafted`, activates, and the
