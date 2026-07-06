@@ -107,10 +107,9 @@ jobs:
         run: bun run test:e2e:control
         env:
           DATABASE_URL: postgres://superfield:superfield@postgres:5432/superfield
-          # .cargo/config.toml sets target-dir = "~/.cache/cargo-target/cli".
-          # Cargo does NOT shell-expand ~ in target-dir, so the binary lands at
-          # the literal path <workspace>/~/.cache/cargo-target/cli/release/superfield.
-          SF_SERVE_BIN: ./~/.cache/cargo-target/cli/release/superfield
+          # .cargo/config.toml sets target-dir = "target/cli" (per-workspace,
+          # gitignored); sccache is the shared cross-workspace cache.
+          SF_SERVE_BIN: ./target/cli/release/superfield
 
   # ---------------------------------------------------------------------------
   # Job 2: Browser UI unit tests (Vitest + jsdom, no server required).
