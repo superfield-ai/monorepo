@@ -5,9 +5,9 @@
 
 ## Background
 
-`install-policy-fail-closed` (rung 1) only ever proves the *negative*: no
+`install-policy-fail-closed` (rung 1) only ever proves the _negative_: no
 change bypassed the approval gate. It would vacuously pass on a run that
-seeded and merged nothing. This grader forces the *positive* case: the
+seeded and merged nothing. This grader forces the _positive_ case: the
 scenario's seeded change must have actually reached `merged` by walking
 through a real, recorded `awaiting-approval → merged` transition
 (`crates/sf-db/src/change.rs`) — the outcome-level approval the PRD describes

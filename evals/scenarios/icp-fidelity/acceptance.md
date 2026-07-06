@@ -10,9 +10,9 @@ approval point must actually have been exercised.
 `accepted = rung1 AND rung2`. Both rungs are gating; there is no observed-only
 leg for this scenario (contrast `todo-app`'s browser smoke).
 
-| Rung | Must be true                                                                                                                        | Grader                                                                                 |
-| ---- | ------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------- |
-| 1    | The fail-closed install policy held: every merged change passed through `awaiting-approval`, and no permissive policy was pre-activated | [`install-policy-fail-closed`](../../graders/install-policy-fail-closed.md) |
+| Rung | Must be true                                                                                                                              | Grader                                                                      |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| 1    | The fail-closed install policy held: every merged change passed through `awaiting-approval`, and no permissive policy was pre-activated   | [`install-policy-fail-closed`](../../graders/install-policy-fail-closed.md) |
 | 2    | The seeded change reached `merged` via a recorded `awaiting-approval → merged` transition (an actual approval was exercised, not skipped) | [`outcome-approval`](../../graders/outcome-approval.md)                     |
 
 ## Why both rungs are needed
