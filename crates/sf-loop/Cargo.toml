@@ -31,3 +31,7 @@ tokio = { workspace = true, features = ["full", "test-util"] }
 uuid = { version = "1", features = ["v4"] }
 tempfile = { workspace = true }
 sqlx = { workspace = true }
+# Fixture HTTP server for the acceptance-criteria http-probe executor tests
+# (issue #861) — spins up a real axum/hyper server on an ephemeral port so the
+# executor's reqwest probe has a real target to hit.
+axum = { workspace = true }

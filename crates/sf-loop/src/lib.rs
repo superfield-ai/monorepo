@@ -24,7 +24,12 @@
 //! 9. `CodeChangeProposal` — select an open node, ask the agent for a source
 //!    diff, and gate it through the Sharp semantic-merge + `cargo check` gate
 //!    (`sharp::merge_flow::run_merge_flow`); a non-compiling proposal is refused
-//!    (`SharpError::MergeRefused`) and discarded, never stored (#706)
+//!    (`SharpError::MergeRefused`) and discarded, never stored (#706). Once a
+//!    proposal for a `Feature` node merges, [`acceptance::execute_criteria_for_feature_change`]
+//!    executes that Feature's attached acceptance criteria and records one
+//!    verdict per criterion in `forge.validation_runs` (#861) — see the
+//!    [`acceptance`] module doc comment for the http-probe/playwright
+//!    scoping decisions and the assertion-schema (#860) gap it documents.
 //!
 //! Each of the page-authoring steps:
 //! - Calls [`AgentExecutor::run`] to produce content + provenance.
@@ -50,6 +55,7 @@
 //! - `docs/architecture.md` §Daemon Lifecycle
 //! - `docs/milestone-1.md` §4.4
 
+pub mod acceptance;
 pub mod agent;
 pub mod blueprint;
 pub mod cursor;
@@ -57,6 +63,10 @@ pub mod handle;
 pub mod provider;
 pub mod steps;
 
+pub use acceptance::{
+    execute_and_record, execute_criteria_for_feature_change, resolve_attached_criteria,
+    AcceptanceError, AttachedCriterion, CriterionVerdict, ExecutionContext,
+};
 pub use agent::{
     AgentExecutor, AgentRequest, AgentResponse, FixtureAgentExecutor, LlmAgentExecutor,
 };
