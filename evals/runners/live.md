@@ -82,3 +82,42 @@ key and no login.
 - **Non-determinism** — for a real metric, run the scenario _k_ times and report
   the distribution of `turns_to_acceptable`, not a single number (see
   [`docs/eval-design.md`](../../docs/eval-design.md) §Handling non-determinism).
+
+## Corpus mode (`sf-eval corpus`, Tier-2 whole-loop harness, issue #863)
+
+`sf-eval run` above drives **one** scenario. `sf-eval corpus` drives **every**
+scenario under `evals/scenarios/` (the discovery contract in
+[`evals/README.md`](../README.md#scenario-directory-discovery-contract-tier-2-corpus))
+through this same live-runner pipeline, sequentially, against the one
+already-booted appliance and live model endpoint:
+
+```
+sf-eval corpus --scenarios-root <dir> [--results-root <dir>] \
+               [--turn-budget N] [--poll-interval-secs S] \
+               [--endpoint-health-addr <host:port>] [--scenario-cmd <path>]
+```
+
+For each discovered scenario it seeds the intent (`superfield garden
+<scenario>/seed/*.md --workspace-id <fresh-uuid>`) then re-invokes `sf-eval
+run` to observe it — "reset" is implicit in the fresh workspace id, so there is
+no shared state to clear between scenarios. One green/red
+[`ScenarioVerdict`](../../crates/sf-eval/src/corpus.rs) is recorded per
+scenario (red names the failing stage: `deterministic_floor`, `rungs`, `seed`,
+or `process_error`), aggregated into `<results-root>/corpus-result.json`
+(layered on top of, not replacing, each scenario's own per-scenario
+`result.json` above). The process exits `0` iff every scenario is green.
+
+`--endpoint-health-addr` runs a reachability precheck against the live model
+endpoint before any scenario executes; unreachable fails the whole corpus
+loud — every scenario recorded red (`endpoint_unreachable`), never a skip.
+An empty or unreadable `--scenarios-root` likewise exits non-zero rather than
+vacuously passing. `--scenario-cmd` overrides the per-scenario execution
+command; production runs never set it, but it is how
+[`crates/sf-eval/tests/corpus_harness.rs`](../../crates/sf-eval/tests/corpus_harness.rs)
+exercises the driver hermetically (no live model or database) via the
+`green-scenario` / `red-scenario` fixtures at
+[`crates/sf-eval/tests/fixtures/corpus/`](../../crates/sf-eval/tests/fixtures/corpus/).
+
+Scheduling this invocation on a cron (and booting the appliance beforehand) is
+the nightly workflow — a separate sibling feature
+(docs/eval-design.md:111-116, #864).
