@@ -200,6 +200,20 @@ jobs:
           fi
           echo "OK: zero-collection run exited non-zero as required — --no-tests=fail is active."
 
+      # ── FILTER-include selftest (dev-scout #869, executable-acceptance-criteria
+      #    phase) ─────────────────────────────────────────────────────────────
+      # The rust-test-seam job's curated nextest FILTER (below) is assembled
+      # from scripts/rust-test-seam-filter.txt (one selector per line) instead
+      # of one hardcoded inline string, so downstream issues that add a
+      # crate's DB-gated selection APPEND A LINE to that file rather than
+      # editing the same hot FILTER string (the shared-file-pressure problem
+      # #869 was asked to resolve for #860/#861/#862 and, in a later phase,
+      # #865/#868). This step proves the extraction changed NO test
+      # selection: the assembled expression must be string-identical to the
+      # committed pre-extraction golden (scripts/rust-test-seam-filter.golden).
+      - name: "FILTER-include selftest: assembled seam FILTER matches pre-extraction golden [#869]"
+        run: bash scripts/assemble-rust-test-seam-filter.selftest.sh
+
   # ── SHARED RUST-TEST SEAM (dev-scout #771, coverage-enforcement phase) ──────
   # This job is the shared Rust-test seam the three phase features land on:
   #   #765 (THIS PR) — fills in the provision-test-substrate composite action
@@ -345,7 +359,13 @@ jobs:
           # so a plain `binary(...)` filter never reaches them even under
           # `--run-ignored all` — see .agents/agent-warnings.md "Coverage
           # warning — sf-db::acquire_workspace / acquire_with_workspace_id".
-          FILTER='(package(sf-db) & (binary(provision_migrate_integration) | binary(rls_workspace_isolation_integration) | test(/^pool::tests::(pool_hands_out_working_connection|acquire_workspace_sets_principal_context)$/))) | (package(superfield) & binary(daemon_loop_integration)) | (package(sf-serve) & test(/tests::integration::/)) | (package(sharp) & (test(db_round_trip_snapshot_build_materialize_is_identity) | test(episode_open_append_finish_query) | test(init_add_commit_roundtrip) | test(merge_flow_onboard_workspace_is_idempotent))) | (package(sf-loop) & (test(cursor_persists_after_step_commit) | test(loop_resumes_from_cursor_after_restart) | test(project_graph_derive_writes_nodes)))'
+          # FILTER is ASSEMBLED from scripts/rust-test-seam-filter.txt (one
+          # selector per line, issue #869) instead of hardcoded inline here —
+          # add a new crate's DB-gated selection by appending a line to that
+          # file, not by editing this job. The FILTER-include selftest in the
+          # required `rust-test` job above proves this assembly is
+          # string-identical to the pre-extraction FILTER.
+          FILTER="$(scripts/assemble-rust-test-seam-filter.sh)"
           # Run for real (exit code propagates: a test failure or zero-collection
           # under --no-tests=fail fails the step), capturing libtest-json NDJSON.
           cargo nextest run -p sf-db -p sf-serve -p sharp -p superfield -p sf-loop --profile ci --run-ignored all --no-tests=fail --test-threads=1 -E "$FILTER" --message-format libtest-json 2>/dev/null | tee nextest.jsonl
