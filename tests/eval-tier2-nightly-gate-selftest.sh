@@ -27,6 +27,7 @@ cd "$ROOT"
 
 GATE="scripts/eval-tier2-nightly-gate.sh"
 AGGREGATE="scripts/eval-tier2-nightly-aggregate.py"
+SMOKE="scripts/eval-tier2-nightly-dispatch-smoke.sh"
 WORKFLOW=".github/workflows/eval-tier2-nightly.yml"
 
 # Fixtures pinned by the dev-scout (issue #870) against the REAL, merged
@@ -43,8 +44,19 @@ FIXTURE_ZERO="tests/fixtures/eval-tier2-nightly-gate/zero-scenarios.json"
 FIXTURE_BUDGET="tests/fixtures/eval-tier2-nightly-gate/budget-breach.json"
 FIXTURE_MALFORMED="tests/fixtures/eval-tier2-nightly-gate/malformed.json"
 
-for f in "$GATE" "$AGGREGATE" "$WORKFLOW" "$FIXTURE_GREEN" "$FIXTURE_MIXED" \
-         "$FIXTURE_ZERO" "$FIXTURE_BUDGET" "$FIXTURE_MALFORMED"; do
+# Recorded GitHub REST payloads for the dispatch smoke asserter (issue #864
+# AC3): `/actions/runs/{id}/jobs` and `/actions/runs/{id}/artifacts`.
+DISPATCH_FIXTURES="tests/fixtures/eval-tier2-nightly-dispatch"
+FIXTURE_JOBS_OK="$DISPATCH_FIXTURES/jobs.gate-executed.json"
+FIXTURE_JOBS_SKIPPED="$DISPATCH_FIXTURES/jobs.gate-skipped.json"
+FIXTURE_ARTIFACTS_OK="$DISPATCH_FIXTURES/artifacts.both.json"
+FIXTURE_ARTIFACTS_MISSING="$DISPATCH_FIXTURES/artifacts.missing-logs.json"
+FIXTURE_ARTIFACTS_SHORT="$DISPATCH_FIXTURES/artifacts.short-retention.json"
+
+for f in "$GATE" "$AGGREGATE" "$SMOKE" "$WORKFLOW" "$FIXTURE_GREEN" "$FIXTURE_MIXED" \
+         "$FIXTURE_ZERO" "$FIXTURE_BUDGET" "$FIXTURE_MALFORMED" \
+         "$FIXTURE_JOBS_OK" "$FIXTURE_JOBS_SKIPPED" "$FIXTURE_ARTIFACTS_OK" \
+         "$FIXTURE_ARTIFACTS_MISSING" "$FIXTURE_ARTIFACTS_SHORT"; do
   if [ ! -f "$f" ]; then
     echo "SELFTEST FAIL  $f not found" >&2
     exit 1
@@ -156,6 +168,66 @@ else
   fail=1
 fi
 
+# ── Dispatch smoke asserter: reached-the-gate + retained-artifacts
+# (issue #864 AC3) ───────────────────────────────────────────────────────────
+#
+# The live `workflow_dispatch` run this asserter is built for cannot execute
+# before merge — GitHub only exposes a workflow_dispatch trigger for a
+# workflow file already present on the DEFAULT branch (`gh run list
+# --workflow=eval-tier2-nightly.yml` → HTTP 404 "not found on the default
+# branch"), the same platform ordering constraint issue #748 hit for
+# eval-todo-app.yml. So the asserter's LOGIC is exercised here offline against
+# recorded GitHub REST payloads; post-merge the identical `assert_run` code
+# path runs against the live API. Both directions are covered: a run that
+# reached the gate with both artifacts PASSES, and each way of failing that
+# property REDS OUT.
+
+smoke_pass() {
+  local label="$1" artifacts="$2" jobs="$3" out
+  if out="$(bash "$SMOKE" --artifacts-json "$artifacts" --jobs-json "$jobs" 2>&1)"; then
+    echo "ok    [smoke:$label] asserter exited 0 as expected"
+  else
+    echo "FAIL  [smoke:$label] expected exit 0 but asserter FAILED: $out" >&2
+    fail=1
+  fi
+}
+
+smoke_reject() {
+  local label="$1" artifacts="$2" jobs="$3" out rc=0
+  out="$(bash "$SMOKE" --artifacts-json "$artifacts" --jobs-json "$jobs" 2>&1)" || rc=$?
+  if [ "$rc" -eq 0 ]; then
+    echo "FAIL  [smoke:$label] expected NON-ZERO exit but asserter PASSED" >&2
+    fail=1
+  elif [ -z "$out" ]; then
+    echo "FAIL  [smoke:$label] non-zero exit but NO message (silent-skip violation)" >&2
+    fail=1
+  else
+    echo "ok    [smoke:$label] rejected as expected (\"$out\")"
+  fi
+}
+
+# A run that reached the gate and retained both artifacts passes EVEN THOUGH
+# the gate step concluded `failure` — that is the expected shape of a nightly
+# run until an operator provisions SF_LLM_API_KEY, and what AC3 pins is
+# "reached the gate + uploaded both artifacts", not "run was green".
+smoke_pass   "gate-executed-both-artifacts" "$FIXTURE_ARTIFACTS_OK"      "$FIXTURE_JOBS_OK"
+smoke_reject "gate-skipped"                 "$FIXTURE_ARTIFACTS_OK"      "$FIXTURE_JOBS_SKIPPED"
+smoke_reject "missing-scenario-logs"        "$FIXTURE_ARTIFACTS_MISSING" "$FIXTURE_JOBS_OK"
+smoke_reject "retention-too-short"          "$FIXTURE_ARTIFACTS_SHORT"   "$FIXTURE_JOBS_OK"
+
+# The asserter must key on the artifact names and gate step name the workflow
+# actually declares — otherwise it would pass against a workflow that renamed
+# them. Cross-check the constants against the workflow file itself.
+for needle in "eval-tier2-nightly-result-json-" "eval-tier2-nightly-scenario-logs-" \
+              "Gate on the Tier-2 nightly result"; do
+  if grep -qF "$needle" "$WORKFLOW" && grep -qF "$needle" "$SMOKE"; then
+    echo "ok    [smoke:contract] '$needle' agrees between workflow and asserter"
+  else
+    echo "FAIL  [smoke:contract] '$needle' missing from $WORKFLOW or $SMOKE" >&2
+    fail=1
+  fi
+done
+
 # ── Structural workflow assertions (issue #864 AC2) ──────────────────────────
 
 assert_grep() {
@@ -196,4 +268,4 @@ if [ "$fail" -ne 0 ]; then
   exit 1
 fi
 
-echo "SELFTEST OK — eval-tier2-nightly-gate.sh enforces all four red conditions; workflow structure asserted"
+echo "SELFTEST OK — eval-tier2-nightly-gate.sh enforces all four red conditions; dispatch smoke asserter enforces reached-the-gate + retained-artifacts; workflow structure asserted"

@@ -1,0 +1,64 @@
+{
+  "total_count": 1,
+  "jobs": [
+    {
+      "id": 55510002,
+      "run_id": 19283746504,
+      "workflow_name": "Eval — Tier-2 nightly",
+      "head_branch": "main",
+      "name": "Tier-2 nightly (live, pinned shipped default model)",
+      "status": "completed",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1
+        },
+        {
+          "name": "Prepare the eval results + log directory",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2
+        },
+        {
+          "name": "Build the appliance and the eval harness",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3
+        },
+        {
+          "name": "Run the todo-app scenario (live runner, live pinned model)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 4
+        },
+        {
+          "name": "Aggregate the corpus envelope (result.json)",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 5
+        },
+        {
+          "name": "Gate on the Tier-2 nightly result",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 6
+        },
+        {
+          "name": "Upload the corpus result.json (retained artifact)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7
+        },
+        {
+          "name": "Upload per-scenario results + logs (retained artifact)",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8
+        }
+      ]
+    }
+  ]
+}
