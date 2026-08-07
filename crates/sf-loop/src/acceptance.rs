@@ -486,6 +486,45 @@ mod support {
         .expect("write src/lib.rs");
         dir
     }
+
+    /// Insert a fresh `public.workspaces` row and return its id.
+    ///
+    /// `forge.changes.workspace_id` carries a NOT-NULL FK to
+    /// `public.workspaces(id)` (migration 0004), so every DB-gated test here
+    /// needs a real tenant row. Seeding one per test — rather than reading a
+    /// `WORKSPACE_ID` env var — keeps these tests self-provisioning, so they
+    /// execute in any job that supplies only `DATABASE_URL` (the
+    /// `rust-test-seam` job does exactly that). Mirrors the idiom already
+    /// used by the nexum/sharp/sf-serve DB tests.
+    pub async fn seed_workspace(pool: &sqlx::PgPool) -> uuid::Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO public.workspaces (slug, display_name) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(format!("sf-loop-acceptance-{}", uuid::Uuid::new_v4()))
+        .bind("sf-loop acceptance-criteria test workspace")
+        .fetch_one(pool)
+        .await
+        .expect("workspace insert failed")
+    }
+
+    /// Delete the change, its validation runs, and the seeded workspace row.
+    pub async fn cleanup(pool: &sqlx::PgPool, change_id: uuid::Uuid, workspace_id: uuid::Uuid) {
+        sqlx::query("DELETE FROM forge.validation_runs WHERE change_id = $1")
+            .bind(change_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM forge.changes WHERE id = $1")
+            .bind(change_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM public.workspaces WHERE id = $1")
+            .bind(workspace_id)
+            .execute(pool)
+            .await
+            .ok();
+    }
 }
 
 #[cfg(test)]
@@ -499,18 +538,16 @@ use sf_db::{HttpProbeParams, PlaywrightParams, RequiredTestParams};
 /// verdict rows in `forge.validation_runs`, one per criterion, each carrying
 /// kind and verdict.
 ///
-/// Requires `DATABASE_URL` + `WORKSPACE_ID` with sf-db migrations 0004+0006
-/// applied, and `cargo` on `PATH` (for the required-test fixture crate).
+/// Requires `DATABASE_URL` with sf-db migrations 0004+0006 applied, and
+/// `cargo` on `PATH` (for the required-test fixture crate). The tenant row is
+/// seeded by the test itself via [`support::seed_workspace`].
 #[cfg(test)]
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL (sf-db migrations 0004+0006) and cargo on PATH"]
 async fn per_criterion_verdicts_recorded() {
     let cfg = sf_db::DbConfig::from_env().expect("DATABASE_URL must be set for integration tests");
     let pool = sf_db::connect(&cfg).await.expect("pool creation failed");
-    let workspace_id: Uuid = std::env::var("WORKSPACE_ID")
-        .expect("WORKSPACE_ID must be set")
-        .parse()
-        .expect("WORKSPACE_ID must be a UUID");
+    let workspace_id: Uuid = seed_workspace(&pool).await;
 
     let change_id = sf_db::insert_change(&pool, workspace_id, "Change for per-criterion verdicts")
         .await
@@ -561,17 +598,7 @@ async fn per_criterion_verdicts_recorded() {
     .expect("count criterion rows failed");
     assert_eq!(row_count, 2, "expected exactly two verdict rows in the DB");
 
-    // Cleanup.
-    sqlx::query("DELETE FROM forge.validation_runs WHERE change_id = $1")
-        .bind(change_id)
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("DELETE FROM forge.changes WHERE id = $1")
-        .bind(change_id)
-        .execute(&pool)
-        .await
-        .ok();
+    cleanup(&pool, change_id, workspace_id).await;
 }
 
 /// Acceptance criterion (#861): a criterion whose execution errors
@@ -579,18 +606,15 @@ async fn per_criterion_verdicts_recorded() {
 /// unprovisioned playwright runtime) records a failed verdict with an error
 /// detail — never a skip or a pass.
 ///
-/// Requires `DATABASE_URL` + `WORKSPACE_ID` with sf-db migrations 0004+0006
-/// applied.
+/// Requires `DATABASE_URL` with sf-db migrations 0004+0006 applied. The
+/// tenant row is seeded by the test itself via [`support::seed_workspace`].
 #[cfg(test)]
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL with sf-db migrations 0004+0006 applied"]
 async fn execution_error_fails_closed() {
     let cfg = sf_db::DbConfig::from_env().expect("DATABASE_URL must be set for integration tests");
     let pool = sf_db::connect(&cfg).await.expect("pool creation failed");
-    let workspace_id: Uuid = std::env::var("WORKSPACE_ID")
-        .expect("WORKSPACE_ID must be set")
-        .parse()
-        .expect("WORKSPACE_ID must be a UUID");
+    let workspace_id: Uuid = seed_workspace(&pool).await;
 
     let change_id = sf_db::insert_change(&pool, workspace_id, "Change for fail-closed test")
         .await
@@ -660,17 +684,7 @@ async fn execution_error_fails_closed() {
         "every recorded row must be 'failed', never a skip or a pass, got {row_states:?}"
     );
 
-    // Cleanup.
-    sqlx::query("DELETE FROM forge.validation_runs WHERE change_id = $1")
-        .bind(change_id)
-        .execute(&pool)
-        .await
-        .ok();
-    sqlx::query("DELETE FROM forge.changes WHERE id = $1")
-        .bind(change_id)
-        .execute(&pool)
-        .await
-        .ok();
+    cleanup(&pool, change_id, workspace_id).await;
 }
 
 /// Acceptance criterion (#861): a Feature with zero attached criteria
@@ -678,18 +692,15 @@ async fn execution_error_fails_closed() {
 /// and existing run-level behaviour ([`sf_db::has_passing_validation`])
 /// is unchanged.
 ///
-/// Requires `DATABASE_URL` + `WORKSPACE_ID` with sf-db migrations 0004+0006
-/// applied.
+/// Requires `DATABASE_URL` with sf-db migrations 0004+0006 applied. The
+/// tenant row is seeded by the test itself via [`support::seed_workspace`].
 #[cfg(test)]
 #[tokio::test]
 #[ignore = "integration: requires DATABASE_URL with sf-db migrations 0004+0006 applied"]
 async fn no_criteria_no_synthetic_passes() {
     let cfg = sf_db::DbConfig::from_env().expect("DATABASE_URL must be set for integration tests");
     let pool = sf_db::connect(&cfg).await.expect("pool creation failed");
-    let workspace_id: Uuid = std::env::var("WORKSPACE_ID")
-        .expect("WORKSPACE_ID must be set")
-        .parse()
-        .expect("WORKSPACE_ID must be a UUID");
+    let workspace_id: Uuid = seed_workspace(&pool).await;
 
     let change_id = sf_db::insert_change(&pool, workspace_id, "Change with zero criteria")
         .await
@@ -725,12 +736,7 @@ async fn no_criteria_no_synthetic_passes() {
          (unchanged pre-#861 behaviour)"
     );
 
-    // Cleanup.
-    sqlx::query("DELETE FROM forge.changes WHERE id = $1")
-        .bind(change_id)
-        .execute(&pool)
-        .await
-        .ok();
+    cleanup(&pool, change_id, workspace_id).await;
 }
 
 /// Pure unit test (no DB): [`execute_playwright`] always fails closed,

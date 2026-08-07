@@ -833,13 +833,51 @@ mod tests {
 mod validation {
     use super::*;
 
+    /// Insert a fresh `public.workspaces` row and return its id.
+    ///
+    /// `forge.changes.workspace_id` carries a NOT-NULL FK to
+    /// `public.workspaces(id)` (migration 0004), so these tests need a real
+    /// tenant row. Seeding one per test — rather than reading a
+    /// `WORKSPACE_ID` env var — keeps them self-provisioning, so they execute
+    /// in any job that supplies only `DATABASE_URL` (the `rust-test-seam` job
+    /// does exactly that). Mirrors the nexum/sharp/sf-serve DB-test idiom.
+    async fn seed_workspace(pool: &sqlx::PgPool) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO public.workspaces (slug, display_name) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(format!("sf-db-validation-{}", Uuid::new_v4()))
+        .bind("sf-db criterion-verdict test workspace")
+        .fetch_one(pool)
+        .await
+        .expect("workspace insert failed")
+    }
+
+    /// Delete the change, its validation runs, and the seeded workspace row.
+    async fn cleanup(pool: &sqlx::PgPool, change_id: Uuid, workspace_id: Uuid) {
+        sqlx::query("DELETE FROM forge.validation_runs WHERE change_id = $1")
+            .bind(change_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM forge.changes WHERE id = $1")
+            .bind(change_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM public.workspaces WHERE id = $1")
+            .bind(workspace_id)
+            .execute(pool)
+            .await
+            .ok();
+    }
+
     /// Integration test: per-criterion verdict rows round-trip through
     /// [`record_criterion_validation_run`] — one row per criterion, each
     /// carrying its own `criterion_node_id` and `state`, distinct from the
     /// change-level aggregate rows [`record_validation_run`] writes.
     ///
-    /// Requires `DATABASE_URL` + `WORKSPACE_ID` with sf-db migrations 0004
-    /// and 0006 applied.
+    /// Requires `DATABASE_URL` with sf-db migrations 0004 and 0006 applied.
+    /// The tenant row is seeded by the test itself via [`seed_workspace`].
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL with sf-db migration 0004+0006 applied"]
     async fn criterion_validation_run_round_trips() {
@@ -848,10 +886,7 @@ mod validation {
         let pool = crate::pool::connect(&cfg)
             .await
             .expect("pool creation failed");
-        let workspace_id: Uuid = std::env::var("WORKSPACE_ID")
-            .expect("WORKSPACE_ID must be set")
-            .parse()
-            .expect("WORKSPACE_ID must be a UUID");
+        let workspace_id: Uuid = seed_workspace(&pool).await;
 
         let change_id = insert_change(&pool, workspace_id, "Change for criterion round-trip test")
             .await
@@ -881,17 +916,7 @@ mod validation {
         assert_eq!(rows[0], (criterion_a, "passed".to_string()));
         assert_eq!(rows[1], (criterion_b, "failed".to_string()));
 
-        // Cleanup.
-        sqlx::query("DELETE FROM forge.validation_runs WHERE change_id = $1")
-            .bind(change_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM forge.changes WHERE id = $1")
-            .bind(change_id)
-            .execute(&pool)
-            .await
-            .ok();
+        cleanup(&pool, change_id, workspace_id).await;
     }
 
     /// Acceptance criterion (#861): a mixed result — one passing and one
@@ -902,8 +927,8 @@ mod validation {
     /// even though a change-level `passed` aggregate row is NOT present and
     /// even if one criterion did pass.
     ///
-    /// Requires `DATABASE_URL` + `WORKSPACE_ID` with sf-db migrations 0004
-    /// and 0006 applied.
+    /// Requires `DATABASE_URL` with sf-db migrations 0004 and 0006 applied.
+    /// The tenant row is seeded by the test itself via [`seed_workspace`].
     #[tokio::test]
     #[ignore = "integration: requires DATABASE_URL with sf-db migration 0004+0006 applied"]
     async fn failing_criterion_blocks_merge_gate() {
@@ -912,10 +937,7 @@ mod validation {
         let pool = crate::pool::connect(&cfg)
             .await
             .expect("pool creation failed");
-        let workspace_id: Uuid = std::env::var("WORKSPACE_ID")
-            .expect("WORKSPACE_ID must be set")
-            .parse()
-            .expect("WORKSPACE_ID must be a UUID");
+        let workspace_id: Uuid = seed_workspace(&pool).await;
 
         let change_id = insert_change(&pool, workspace_id, "Change for mixed-criteria gate test")
             .await
@@ -987,16 +1009,6 @@ mod validation {
             .expect("merge must succeed once every criterion passes");
         assert_eq!(merged, ChangeState::Merged);
 
-        // Cleanup.
-        sqlx::query("DELETE FROM forge.validation_runs WHERE change_id = $1")
-            .bind(change_id)
-            .execute(&pool)
-            .await
-            .ok();
-        sqlx::query("DELETE FROM forge.changes WHERE id = $1")
-            .bind(change_id)
-            .execute(&pool)
-            .await
-            .ok();
+        cleanup(&pool, change_id, workspace_id).await;
     }
 }
