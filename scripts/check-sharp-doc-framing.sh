@@ -8,7 +8,9 @@
 #      (field tables) even in postgres-storage-plugin.md, never as literal DDL.
 #   2. The whitepaper H1 does NOT contain "database-native" — the thesis leads,
 #      not the storage substrate.
-#   3. The whitepaper H1 leads with the semantic/agent-first thesis.
+#   3. The whitepaper H1 leads with the thesis, not the substrate. The thesis
+#      has been stated as "semantic", "agent-first", and (since issue #887)
+#      "AI-native"; any of those spellings satisfies the invariant.
 #   4. Every relative markdown link under crates/sharp/docs resolves to a file
 #      that exists (anchors stripped before the existence check).
 #
@@ -53,13 +55,13 @@ else
   pass "whitepaper H1 does not contain 'database-native'"
 fi
 
-# --- 3. Whitepaper H1 leads with the semantic/agent-first thesis -------------
+# --- 3. Whitepaper H1 leads with the semantic/agent-first/AI-native thesis ---
 
 h1="$(grep -m1 -E '^#[[:space:]]' "$WHITEPAPER" || true)"
-if printf '%s' "$h1" | grep -qiE 'semantic|agent-first'; then
-  pass "whitepaper H1 leads with the semantic/agent-first thesis"
+if printf '%s' "$h1" | grep -qiE 'semantic|agent-first|ai-native'; then
+  pass "whitepaper H1 leads with the semantic/agent-first/AI-native thesis"
 else
-  note_fail "whitepaper H1 does not match /semantic|agent-first/i (got: ${h1:-<none>})"
+  note_fail "whitepaper H1 does not match /semantic|agent-first|ai-native/i (got: ${h1:-<none>})"
 fi
 
 # --- 4. Relative markdown links resolve to existing files --------------------

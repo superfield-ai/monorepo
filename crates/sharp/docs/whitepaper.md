@@ -15,14 +15,14 @@
 Sharp is a version control protocol for development done primarily by agents,
 with humans reviewing, steering, and owning policy. Its foundational claim is
 narrow: a merge conflict is not a property of two changes, but of two changes
-*and the representation in which the VCS compares them*. Line-based comparison
+_and the representation in which the VCS compares them_. Line-based comparison
 uses lexical adjacency as a proxy for independence — a proxy that manufactures
 conflicts between unrelated adjacent edits and misses conflicts between
 distant, semantically interfering ones. The correct representation is
 symbol-level access sets: each change carries a **footprint** — read and write
 sets over symbols, signatures, and type contracts — and two changes commute
 exactly when the Bernstein conditions hold. When they do not, the conflict is
-a *nameable* fact ("op A writes `foo`'s signature; op B reads it"), never a
+a _nameable_ fact ("op A writes `foo`'s signature; op B reads it"), never a
 pair of text markers.
 
 Two conditions that did not hold in 2005 make this buildable now: the caller
@@ -55,10 +55,10 @@ and line-based comparison fails in both directions at once:
 - **Missed conflicts.** One change narrows a function's return type; another
   adds a caller binding the old type. Zero textual overlap; the merge is
   "clean" and does not compile. The substrate certifies a merge the program
-  *does* conflict about.
+  _does_ conflict about.
 
-Both failures have one cause: the only question that decides a merge — *are
-these two changes independent?* — is answered with the wrong proxy. Line merge
+Both failures have one cause: the only question that decides a merge — _are
+these two changes independent?_ — is answered with the wrong proxy. Line merge
 approximates a semantic relation (do the changes touch the same symbol's
 meaning, the same type's contract, the same reference?) by lexical adjacency
 (do they touch the same or neighboring lines?). The proxy is simultaneously
@@ -66,7 +66,7 @@ unsound and incomplete, and the gap between proxy and question is exactly
 where silently broken merges live.
 
 A human tolerates the proxy because a human reads every conflict the substrate
-raises and silently repairs the ones it misses — the human *is* the semantic
+raises and silently repairs the ones it misses — the human _is_ the semantic
 layer the VCS omits. Remove the human, as agent harnesses do at machine speed,
 and both failure modes go unhandled. The substrate must compute the relation
 itself.
@@ -78,21 +78,21 @@ access set. Each change T carries a **footprint**: a read set R(T) and a write
 set W(T) over symbols, signatures, and type contracts. Two changes are
 independent — they **commute** — exactly when the Bernstein conditions hold:
 
-> W(T₁) ∩ W(T₂) = ∅  and  W(T₁) ∩ R(T₂) = ∅  and  R(T₁) ∩ W(T₂) = ∅.
+> W(T₁) ∩ W(T₂) = ∅ and W(T₁) ∩ R(T₂) = ∅ and R(T₁) ∩ W(T₂) = ∅.
 
 This is conflict-serializability from database concurrency control, applied
 to the symbol graph. It explains both failure modes at once: adjacent lines
 with disjoint footprints commute (the manufactured conflict dissolves), and a
 return-type narrowing writes a signature some distant caller reads (the missed
 conflict is caught, because the intersection is non-empty). A non-empty
-intersection is a genuine, *nameable* semantic conflict, reported as the
+intersection is a genuine, _nameable_ semantic conflict, reported as the
 symbols in tension. The full formal treatment — operations, footprint algebra,
 and the serializability argument — is `semantic-patches.md`, "Operations and
 footprints" and "Independence as conflict-serializability".
 
 The claim stays bounded. Moving the comparison from line to symbol dissolves
-the *spurious* conflict class — the one lexical adjacency manufactures. It
-does not dissolve *genuine* semantic disagreement, where two changes truly
+the _spurious_ conflict class — the one lexical adjacency manufactures. It
+does not dissolve _genuine_ semantic disagreement, where two changes truly
 cannot both stand; those become precisely named dilemmas instead of text
 markers. The empirical split between spurious and genuine in real agent
 traffic is an open quantity Sharp commits to measuring, not assuming
@@ -101,18 +101,18 @@ traffic is an open quantity Sharp commits to measuring, not assuming
 ### 1.2 Soundness: the tri-state certificate
 
 Static analysis has blind spots — macros, code generation, reflection,
-cross-language seams — and analyzers do *not* reliably flag their own blind
+cross-language seams — and analyzers do _not_ reliably flag their own blind
 spots: an empty references answer is indistinguishable from an incomplete one.
 A system that treated "the analyzer found nothing" as "nothing is there" would
 be unsound exactly where codebases are trickiest.
 
 Sharp's discipline [design target] is therefore that independence certificates
-are **tri-state**: *proven-independent*, *proven-conflicting*, or *unknown* —
-with known blind-spot categories forced to *unknown by construction*, and
-*unknown* treated as dependent. The analyzer is trusted only in the safe
+are **tri-state**: _proven-independent_, _proven-conflicting_, or _unknown_ —
+with known blind-spot categories forced to _unknown by construction_, and
+_unknown_ treated as dependent. The analyzer is trusted only in the safe
 direction: references it finds create dependencies; references it fails to
 find prove nothing. A macro-heavy change does not get a clean certificate; it
-gets an honest *unknown* and serializes conservatively. The trust rule and
+gets an honest _unknown_ and serializes conservatively. The trust rule and
 its consequences are specified in `semantic-patches.md`, "Soundness and the
 tri-state certificate".
 
@@ -140,7 +140,7 @@ Two honesty requirements bound this claim. First, capture happens by
 land faster, not a coerced operation vocabulary — an agent that edits raw text
 is still served, just with weaker certificates. Second, free-form body edits
 still require partial reconstruction, and their footprints may be
-*unknown*-heavy; the capture story is strongest for structural operations and
+_unknown_-heavy; the capture story is strongest for structural operations and
 degrades honestly from there. See `semantic-patches.md`, "Capture, not
 reconstruction".
 
@@ -170,7 +170,7 @@ Sharp assigns complexity by principle, in three layers.
   state, so it is the component kept small enough to trust.
 - **Language-server oracle** — the complexity sink. All "what does this change
   touch" semantics live here. It is complex, external, per-language, and
-  *allowed to be incomplete*, because the kernel wraps it in the tri-state
+  _allowed to be incomplete_, because the kernel wraps it in the tri-state
   discipline of §1.2: oracle findings create dependencies; oracle silence
   proves nothing.
 - **MCP advisory layer** — the intelligence. It suggests, explains, and
@@ -178,13 +178,13 @@ Sharp assigns complexity by principle, in three layers.
   alternative lands today"). It **never acts**. The developing agent decides.
   A bad tip costs efficiency, never correctness.
 
-Three principles govern the assignment. *Failure severity must be inversely
-proportional to component complexity*: the components allowed to be complex
-are exactly the ones allowed to be wrong. *Layers are separated by rate of
-change*: the kernel protocol should evolve on the timescale of decades,
+Three principles govern the assignment. _Failure severity must be inversely
+proportional to component complexity_: the components allowed to be complex
+are exactly the ones allowed to be wrong. _Layers are separated by rate of
+change_: the kernel protocol should evolve on the timescale of decades,
 language semantics with their languages, intelligence monthly. And the
 **kernel admission rule**: an operation enters the kernel only if it needs
-*authority* over objects and refs; if it needs only *intelligence*, it is an
+_authority_ over objects and refs; if it needs only _intelligence_, it is an
 advisory-layer composition of kernel verbs.
 
 ### 3.2 The six verbs
@@ -233,13 +233,13 @@ both sides only added lines. Its outcome is `CleanOk`, `Dilemma`, or
 `Unhandled` — never a silent pick and never text conflict markers.
 
 Two precision notes, because they mark the v1/design-target line. Rename
-*detection* is semantic: the Rust path (`src/semantic_merge.rs`) asks
+_detection_ is semantic: the Rust path (`src/semantic_merge.rs`) asks
 rust-analyzer for the rename-location set of each touched symbol, and the
 TypeScript path (`src/semantic_merge_ts.rs`) drives the tsserver bridge. Rename
-*application* in the unified driver is a whole-word text rewrite of the
+_application_ in the unified driver is a whole-word text rewrite of the
 detected name — informed by the language server, executed at text level. And
 the Tier-1 baseline under the rename pass is a standard three-way text merge.
-v1 is a semantic *decision* layer over a textual *mechanism*; the operation-
+v1 is a semantic _decision_ layer over a textual _mechanism_; the operation-
 native mechanism is the design target of `semantic-patches.md`.
 
 **The verification gate.** For Rust, every candidate merge runs
@@ -289,7 +289,7 @@ recomputes. Consequences, the first two real today at v1's text-tier fidelity:
 - **Conflicts surface at authoring time**, not at land time: outstanding
   dilemmas are a queryable signal a pipeline polls, not a discovery made when
   someone finally clicks merge.
-- **Landing is promotion** [design target]: the projection *is* the merged
+- **Landing is promotion** [design target]: the projection _is_ the merged
   state, so landing is a ref CAS advancing the target to the projection
   commit, not a re-run of merge logic. v1 stores the merged commit in the
   projection row but does not yet implement the promotion CAS
@@ -339,7 +339,7 @@ the ecosystem. Interop is bounded and one-shot in each direction
   repo passes `git fsck`, and SHAs match what Git would compute, so exported
   work lands on a standard remote with stable identity.
 
-Sharp's object IDs *are* Git's object IDs (SHA-1 by default, matching Git's
+Sharp's object IDs _are_ Git's object IDs (SHA-1 by default, matching Git's
 own default posture; SHA-256 per Git's transition format). One correction to
 earlier drafts: v1 uses the standard `sha1` crate and **defers the SHA-1DC
 collision-detection posture**; hardened intake is a tracked decision, not a
@@ -408,7 +408,7 @@ independent set of the interference graph. Deep-dive: `branch-semantics.md`,
 "Dynamic phases".
 
 **The bidirectional plan↔code loop** [design target]. The plan is a
-*hypothesis about footprints*; brokered operations are the *measurement*;
+_hypothesis about footprints_; brokered operations are the _measurement_;
 reconciliation is the posterior. The update rule is asymmetric: a realized
 footprint that exceeds its declaration tightens the plan immediately
 (re-check independence, add the edge or demote); a realized footprint smaller
@@ -431,18 +431,18 @@ after the fact. Restating them plainly is the persuasion strategy.
 
 ### 6.1 The type-level ceiling
 
-Sharp guarantees (1) *consistency* — the merge result is deterministic and
-order-independent when access sets are disjoint — and (2) *reference- and
-type-level correctness* — the result parses, resolves its references, and
-passes the language's diagnostics. It does **not** guarantee (3) *behavioral
-correctness*, and cannot from the access-set model alone: two changes with
+Sharp guarantees (1) _consistency_ — the merge result is deterministic and
+order-independent when access sets are disjoint — and (2) _reference- and
+type-level correctness_ — the result parses, resolves its references, and
+passes the language's diagnostics. It does **not** guarantee (3) _behavioral
+correctness_, and cannot from the access-set model alone: two changes with
 disjoint symbol footprints can commute, compile, and still jointly violate a
 runtime invariant the type system does not encode — a DB schema assumption, a
 wire-protocol contract, a config coupling, an ordering or resource budget.
-The §1 missed-conflict example is caught *because* a return-type narrowing is
+The §1 missed-conflict example is caught _because_ a return-type narrowing is
 a type-level dependency; a purely behavioral dependency would pass both the
 footprint check and the compile gate. Behavioral verification stays in CI:
-executed-in-CI assertions are the *complement* of the independence
+executed-in-CI assertions are the _complement_ of the independence
 certificate, never replaced by it. This is why the generalized merge queue
 keeps a thin final CI gate.
 
@@ -464,7 +464,7 @@ Honest read sets can be large — a change that reads a hot type touches, by
 the Bernstein conditions, everything that writes it — and a saturated
 frontier serializes all work; trimmed read sets restore concurrency by
 breaking soundness. Whether real concurrent development is mostly
-Bernstein-independent is an *empirical* question, and Sharp commits to
+Bernstein-independent is an _empirical_ question, and Sharp commits to
 measuring it before claiming it: mine git history for temporally overlapping
 merged PRs, compute retroactive footprints, and measure the independence base
 rate. That experiment is the committed validation plan of
@@ -483,7 +483,7 @@ carries (oracle, version), because a merge that is `CleanOk` under
 rust-analyzer 2026.1 may be `Dilemma` under 2026.2 — an unpinned certificate
 is not reproducible. And there is an explicit **degradation ladder**: a
 language without a capable LSP falls back to text three-way merge with every
-footprint entry marked *unknown* — degrade honestly, never silently. See
+footprint entry marked _unknown_ — degrade honestly, never silently. See
 `semantic-patches.md`, "Oracle discipline".
 
 ### 6.5 Complexity is relocated, not eliminated
@@ -499,7 +499,7 @@ other two layers absorb what it refuses to contain.
 If landing is the reward, agents will land trivial additive substrate and let
 switchovers rot — the additive-first gradient of §5 has a gaming mode. The
 deferred wiring issue is therefore the visible debt instrument: it is aged,
-it is alarmed on, and the metric that counts is wiring issues *closed*, not
+it is alarmed on, and the metric that counts is wiring issues _closed_, not
 substrate segments landed. Dormant substrate must not fake test coverage:
 behavioral acceptance tests attach to the wiring issue, so it cannot close on
 a green run that never executed the feature. See `branch-semantics.md`,

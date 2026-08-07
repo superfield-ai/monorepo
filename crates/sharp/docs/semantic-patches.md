@@ -36,7 +36,7 @@ decision is revisited ("Validation: the base-rate experiment", adoption path).
 
 ## Operations and footprints
 
-*Status: [design target].*
+_Status: [design target]._
 
 A change is a set of **operations** over the code graph, not hunks over text. The
 vocabulary is small and language-defined:
@@ -72,7 +72,7 @@ serialize the world — the read-set-explosion risk this document returns to in 
 validation section.
 
 History under this model is a DAG of operations rather than of trees; a tree is
-recoverable at any point by replay. Making the operation store the *canonical* unit is a
+recoverable at any point by replay. Making the operation store the _canonical_ unit is a
 substrate decision with a real bill — the metadata spine re-keys from snapshot hashes,
 Git export becomes a projection that must re-earn byte-canonicality, and the vocabulary
 plus footprint extraction is recurring per-language work
@@ -84,8 +84,8 @@ substrate fork in order to be tested.
 
 ## Independence as conflict-serializability
 
-*Status: [design target]; the formal core. Borrowed from database concurrency theory, not
-invented.*
+_Status: [design target]; the formal core. Borrowed from database concurrency theory, not
+invented._
 
 Model each change as a transaction `T` with footprint `(R(T), W(T))`. Two changes `T₁`
 and `T₂` are **independent** — they commute, producing the identical program in either
@@ -99,7 +99,7 @@ R(T₁) ∩ W(T₂) = ∅      no read–write  conflict
 
 `R(T₁) ∩ R(T₂)` is unconstrained: shared reads do not conflict. When all three hold, the
 merge is a no-decision — order does not matter and the operations compose with no human,
-no heuristic, no guess. When any intersection is non-empty there is a genuine, *nameable*
+no heuristic, no guess. When any intersection is non-empty there is a genuine, _nameable_
 conflict — "operation A writes `foo.signature`; operation B reads it" — surfaced as a
 structured **dilemma** (v1's embryo of the shape is `DilemmaPayload` in `tier1.rs`), never
 text markers, never a silent pick.
@@ -120,7 +120,7 @@ Three precisions bound this to what the mathematics actually supports:
    manufactured class and converts the missed class into named intersections — where
    footprints see them. Genuinely dependent changes stay dependent: the
    rename-versus-signature-change pair that `snapshots-vs-patches.md` §4 concedes "does
-   not commute" is simply `W(T₁) ∩ W(T₂) ≠ ∅`; the model *identifies* it rather than
+   not commute" is simply `W(T₁) ∩ W(T₂) ≠ ∅`; the model _identifies_ it rather than
    guessing, and correct non-commutation is a feature. Three decades of structured-merge
    research (Mens's 2002 survey; the JDime and semistructured-merge measurements) caution
    that the manufactured fraction is meaningful but bounded and that many real conflicts
@@ -133,7 +133,7 @@ Three precisions bound this to what the mathematics actually supports:
    and resolves (reference/type correctness). Nothing in the model delivers behavioral
    correctness: two changes with disjoint footprints can jointly violate an invariant the
    type system never sees — an ordering assumption, a protocol state, a resource budget.
-   Executed-in-CI behavioral assertions are the *complement* of the independence
+   Executed-in-CI behavioral assertions are the _complement_ of the independence
    certificate, not a redundancy it retires (whitepaper.md, "Boundaries").
 
 Within those bounds, the consequences are what the other two documents build on. A line
@@ -142,7 +142,7 @@ theory could prove commutation only for line-graphs; over footprints, order-inde
 of pairwise-independent sets returns as a conditional theorem at the semantic layer.
 Concretely:
 
-- a branch becomes a dependency-ordered *set* of operations rather than a sequence, and
+- a branch becomes a dependency-ordered _set_ of operations rather than a sequence, and
   landing becomes admission of a union — branch-semantics.md, "Branches as sets";
 - the conflict relation over footprints, intersected with the **frontier** (the union of
   footprints of all in-flight branches), is what the landable prefix, fission, and
@@ -156,12 +156,12 @@ Concretely:
 
 ## Soundness and the tri-state certificate
 
-*Status: [design target].*
+_Status: [design target]._
 
 Static analysis has blind spots: macro expansion, build-time codegen, reflection, dynamic
 dispatch, conditional compilation, cross-language seams. Worse, analyzers do not reliably
-flag their own blind spots — an *empty* references answer is indistinguishable from an
-*incomplete* one. A model that read "the analyzer found no intersection" as "independent"
+flag their own blind spots — an _empty_ references answer is indistinguishable from an
+_incomplete_ one. A model that read "the analyzer found no intersection" as "independent"
 would be unsound in exactly the silent way line merges are.
 
 The discipline: every independence claim is a **tri-state certificate** —
@@ -174,14 +174,14 @@ proven-independent / proven-conflicting / **unknown** — governed by two rules:
 - **Blind spots are unknown by construction.** A per-language taxonomy of known blind-spot
   categories is part of the model. A footprint entry that falls inside one — a symbol
   produced or consumed through a macro, a codegen boundary, an FFI seam — is forced to
-  *unknown* regardless of what the analyzer reports. Proven-independent therefore requires
+  _unknown_ regardless of what the analyzer reports. Proven-independent therefore requires
   a positive completeness argument, and only one source can supply it: a captured
   structural operation whose effect set the language computed, over a region outside every
   blind-spot category ("Capture, not reconstruction").
 
 For admission, unknown is treated as dependent: the pair is not certified to commute, so
 it serializes through the ordinary gate rather than landing concurrently on the
-certificate's authority. But unknown is *reported* distinctly from proven-conflicting,
+certificate's authority. But unknown is _reported_ distinctly from proven-conflicting,
 because the remedies differ. A proven conflict names the facets to negotiate; an unknown
 names the coverage gap — which blind-spot category, which footprint entries — and can
 often be discharged: declare the resource, re-express the edit as a captured operation, or
@@ -198,7 +198,7 @@ assumed ("Validation: the base-rate experiment").
 
 ## Capture, not reconstruction
 
-*Status: [design target]; this is the "why now".*
+_Status: [design target]; this is the "why now"._
 
 For the model to run, footprints must be obtained. There are two ways, and they are not
 equal.
@@ -220,9 +220,9 @@ feasible now rather than in 2005: the author is an agent in a harness. A human d
 the operation before the VCS sees it — the rename is in their head; the text is what
 remains — which is why Darcs and Pijul reconstruct from line states, and why operation-
 based merge (Lippe & van Oosterom, 1992) and refactoring-aware merge (Dig et al.,
-*MolhadoRef*, 2007) had to coax operations out of humans through IDE instrumentation. An
+_MolhadoRef_, 2007) had to coax operations out of humans through IDE instrumentation. An
 agent's edit is already a tool call the harness brokers and records (episode capture —
-whitepaper.md, "Episodes"). A footprint-aware `rename` call *is* an operation with a
+whitepaper.md, "Episodes"). A footprint-aware `rename` call _is_ an operation with a
 language-computed effect set at the moment of issue: captured, not reconstructed — no
 detection heuristic, no canonicality problem for that operation. Sharp's claim over this
 lineage is deliberately narrow: capture at the harness boundary, serializability
@@ -243,7 +243,7 @@ Two honesty requirements bound the claim:
   one definition is still reconstruction, bounded to a symbol: `W` is the enclosing
   symbol's `body` facet by construction, but `R` is computed by resolving the new body's
   references — exactly where the analyzer's blind spots live. Body-edit footprints are
-  therefore *unknown*-heavy in precisely the regions (macros, codegen, dynamic dispatch)
+  therefore _unknown_-heavy in precisely the regions (macros, codegen, dynamic dispatch)
   the tri-state discipline exists for. The realistic model is hybrid: declared structural
   operations with exact footprints, plus symbol-scoped body edits whose footprints are
   sound in the found direction and honest about the rest.
@@ -256,7 +256,7 @@ validation plan below.
 
 ## Resource-extended footprints
 
-*Status: [design target]; a design direction, entirely unimplemented.*
+_Status: [design target]; a design direction, entirely unimplemented._
 
 Symbol graphs are per-language, and the costliest conflicts in real systems live at seams
 no language server owns: two changes that both alter a database schema, a wire format, a
@@ -276,7 +276,7 @@ Epistemic status, stated exactly: declarations can prove conflict; they can neve
 seam-independence. A declared intersection is a found access — the safe direction again —
 so it yields a genuine, nameable dilemma. An absent declaration proves nothing: undeclared
 resource access is a blind spot exactly as a macro is, so the resource component of a
-certificate is at best *independent-as-declared*, never proven-independent. That residual
+certificate is at best _independent-as-declared_, never proven-independent. That residual
 is one more reason the behavioral-CI complement (whitepaper.md, "Boundaries") is
 permanent. The aim is recall on the costliest conflict class at declaration cost — not a
 verified model of the world's resources.
@@ -285,7 +285,7 @@ verified model of the world's resources.
 
 ## Oracle discipline
 
-*Status: [design target] rules; v1 already runs the relationship in miniature.*
+_Status: [design target] rules; v1 already runs the relationship in miniature._
 
 The language server is the **oracle** in Sharp's trichotomy — kernel / oracle / advisory
 layer, whitepaper.md, "The protocol" — and it is the designated complexity sink: complex,
@@ -293,7 +293,7 @@ external, allowed to be incomplete, wrapped by the kernel's tri-state discipline
 borrows a semantic engine per language instead of building one; it is a second client of
 the IDE market's LSP investment (whitepaper.md, "Why now"). Complexity is thereby
 relocated, not eliminated — placed where it is cheapest to maintain and safest to get
-wrong. (Naming note: v1's `oracle.rs` uses "oracle" for the Tier-2 *oracle branches*
+wrong. (Naming note: v1's `oracle.rs` uses "oracle" for the Tier-2 _oracle branches_
 that merge candidates are scored against; the trichotomy's oracle is the language server.)
 
 The v1 embryo: `semantic_merge.rs` consults rust-analyzer's rename-location index during
@@ -319,12 +319,12 @@ Rules for the full model [design target]:
   everywhere" is sound within one toolchain version and silently wrong across one.
 - **Degrade honestly, never silently — the degradation ladder.** Language support is a
   ladder, and every certificate records the rung that produced it:
-  1. *Full LSP* (references, rename, signature intelligence): structural capture and
+  1. _Full LSP_ (references, rename, signature intelligence): structural capture and
      footprint computation at full strength.
-  2. *Syntax only* (a tree-sitter grammar, no resolution): symbol boundaries and
+  2. _Syntax only_ (a tree-sitter grammar, no resolution): symbol boundaries and
      AST-equivalence are available — v1's `ast_equivalence.rs` is this rung — but
      reference resolution is absent, so footprints are unknown-heavy.
-  3. *No support*: text three-way with every footprint entry marked unknown. Under
+  3. _No support_: text three-way with every footprint entry marked unknown. Under
      unknown-treated-as-dependent, such changes are never certified to commute; they
      serialize through the ordinary behavioral gate. The bottom rung is the classic
      CI-gated merge queue — Sharp's degenerate case (whitepaper.md, "Positioning") and
@@ -337,7 +337,7 @@ Rules for the full model [design target]:
 
 ## Validation: the base-rate experiment
 
-*Status: committed plan; not yet run.*
+_Status: committed plan; not yet run._
 
 The model has one known way to fail even if every component works: **read-set explosion**.
 Honest R-sets may be large — a body edit reads the signature of everything it calls, and
@@ -361,7 +361,7 @@ concurrent work**. The committed experiment:
 
 Reading the results honestly cuts both ways. Retroactive footprints are reconstruction —
 the weak path by this document's own argument — so the measured proven-independent rate is
-a *lower bound* on what captured operations could certify, and unknown-heavy results
+a _lower bound_ on what captured operations could certify, and unknown-heavy results
 indict reconstruction before they indict the model. But if the manufactured-conflict class
 turns out small — if most overlapping pairs that conflicted were genuine disagreements —
 then the model's headroom over a line-based merge queue is bounded no matter how good
