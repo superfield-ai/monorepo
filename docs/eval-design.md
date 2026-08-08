@@ -134,7 +134,7 @@ step executed — not `skipped`, not absent) and **retained both artifacts**
 (`eval-tier2-nightly-result-json-<run>` and
 `eval-tier2-nightly-scenario-logs-<run>`, at the configured 30-day retention).
 A red run still satisfies the smoke check — until `SF_LLM_API_KEY` is
-provisioned a red gate is the *expected* outcome, and what the check pins is
+provisioned a red gate is the _expected_ outcome, and what the check pins is
 that the pipeline did not silently skip. GitHub only exposes a
 `workflow_dispatch` trigger for a workflow file already on the **default
 branch**, so the live dispatch can only run post-merge; the asserter's logic is
