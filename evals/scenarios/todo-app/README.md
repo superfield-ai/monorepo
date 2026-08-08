@@ -46,7 +46,6 @@ The runner writes `evals/results/todo-app/<workspace-id>/` containing:
 The CI workflow uploads `_logs/` next to these — the captured `appliance.log`
 (with `RUST_LOG`-raised gardening-loop + LLM-call traces), `opencode-server.log`,
 and `scenario.log` — and retains the whole `evals/results/todo-app/**` tree for
-30 days. A Studio screenshot is **not yet produced** (the browser-smoke step is a
-follow-up; `browser_smoke` reports `skipped`), but would upload under this same
-prefix once wired. See the [`live` runner](../../runners/live.md) for the result
-shape.
+30 days. A Studio screenshot is captured (`studio-smoke.png`), and an executed
+`pass`/`fail` verdict is written to `browser_smoke` rather than a silent `skipped`.
+See the [`live` runner](../../runners/live.md) for the result shape.
