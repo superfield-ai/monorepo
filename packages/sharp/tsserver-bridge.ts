@@ -112,12 +112,7 @@ interface DetectedRename {
 }
 
 type SymbolKind =
-  | "function"
-  | "class"
-  | "interface"
-  | "type"
-  | "enum"
-  | "const";
+  "function" | "class" | "interface" | "type" | "enum" | "const";
 
 interface SymbolDef {
   name: string;
