@@ -83,9 +83,9 @@ algorithm.
 
 ### 3a. Writers (must carry the per-object algorithm — #725)
 
-| Site                            | Function                  | Algorithm today                           | Notes for #725                                                                                                                                                                                                                                                                                                            |
+| Site | Function | Algorithm today | Notes for #725 |
 | ------------------------------- | ------------------------- | ----------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------- |
-| `crates/sharp/src/object.rs:50` | `object::store`           | SHA-256 (raw bytes, `sha256_hex`)         | The `INSERT INTO sharp.objects (...)` at line 62 omits `algo`; must add it. The id is the raw-bytes SHA-256 (`sha256_hex`, line 34).                                                                                                                                                                                      |
+| `crates/sharp/src/object.rs:50` | `object::store` | SHA-256 (raw bytes, `sha256_hex`) | The `INSERT INTO sharp.objects (...)` at line 62 omits `algo`; must add it. The id is the raw-bytes SHA-256 (`sha256_hex`, line 34). |
 | `crates/sharp/src/object.rs:95` | `object::store_canonical` | `HashAlgo::Sha256` (hard-coded, line 101) | `id_hex(hash_object(kind, payload, HashAlgo::Sha256))` — the git-canonical, header-prefixed id. The `INSERT` at line 112 omits `algo`. This is the site that, in a real `objectformat=sha256`/SHA-1 world, must thread the repo's `HashAlgo`. `HashAlgo` already exists in `crates/sharp/src/git_canonical.rs:63` (`Sha1` | `Sha256`); #725 / a later issue can pass it in instead of the hard-coded `Sha256`. |
 
 `store` callers (raw-bytes SHA-256 path):
