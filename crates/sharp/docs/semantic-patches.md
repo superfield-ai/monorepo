@@ -1,85 +1,95 @@
-# Semantic Patches: The Post-v1 Fork Where the Store Becomes the Code Graph
+# Semantic Patches: The Formal Model of Independence
 
-Sharp v1 decides merges at semantic altitude over a **snapshot** store (whitepaper §1.1,
-[`snapshots-vs-patches.md`](./snapshots-vs-patches.md)). This document analyzes the
-distinct, larger decision Sharp does **not** take in v1: making the canonical stored unit
-itself semantic — history recorded as first-class **symbol-level operations** over a code
-graph, with snapshots demoted to an export projection.
+This is the formal-model document for Sharp's central claim: that the independence of two
+changes is decidable — and a conflict nameable — when changes carry symbol-level access
+sets instead of line positions. It defines the operation vocabulary and its **footprints**,
+states independence as conflict-serializability, fixes the epistemic discipline (the
+**tri-state certificate**) that keeps the model sound over an incomplete analyzer, and
+commits to the experiment that would validate — or bound — the whole approach.
 
-It is the unoccupied lower-right cell of the
-[`comparison-merge-theories.md`](./comparison-merge-theories.md) §4.5 matrix. The purpose
-here is not to commit to it. It is to state it precisely enough that the decision can be
-made on evidence: what it buys that v1 cannot, what single problem it stands or falls on,
-why that problem is uniquely tractable for an agent-first system, and what would have to be
-true before Sharp moved.
+**Scope note: almost everything in this document is [design target].** Sharp v1 stores
+snapshots, not operations ([`snapshots-vs-patches.md`](./snapshots-vs-patches.md)), and
+implements none of the footprint machinery. What v1 actually ships at the merge surface:
 
----
+- rename-aware Tier-1 merge for Rust — rust-analyzer's rename-location sets drive
+  rename-vs-edit resolution, but propagation is text-level whole-word replacement, not
+  span-aware rewriting (`semantic_merge.rs`, which says so in its own comments);
+- tree-sitter AST whitespace-equivalence (`ast_equivalence.rs`) and the unified Tier-1
+  driver with structured dilemmas — `MergeOutcome::{CleanOk, Dilemma, Unhandled}` and
+  `DilemmaPayload` in `tier1.rs`;
+- Tier-2 scoring of multiple merge candidates against other in-flight branches
+  (`oracle.rs`);
+- the compile-refusal gate: a merged candidate that fails `cargo check` is refused before
+  storage (`SharpError::MergeRefused`, `semantic_merge.rs`).
 
-## 1. The two axes, and the cell no one occupies
-
-Two independent axes govern a merge substrate (`comparison-merge-theories.md` §4.5):
-
-- **Unit of history** — a _snapshot_ (store states, derive diffs: Git, `jj`) or a
-  first-class _patch_ (store changes, derive states: Darcs, Pijul).
-- **Merge altitude** — _lexical_ (lines: every system above) or _semantic_ (symbols,
-  types: Sharp).
-
-|                   | Snapshot / derived diff | Patch / first-class change |
-| ----------------- | ----------------------- | -------------------------- |
-| **Lexical atom**  | Git, Jujutsu            | Darcs, Pijul               |
-| **Semantic atom** | **Sharp v1**            | **this document**          |
-
-Sharp v1 already left the top row — that is the entire contribution of the snapshot
-decision: a semantic merge altitude over a snapshot store. The move analyzed here is along
-the _other_ axis: from snapshot to patch, while staying semantic. It is the only cell that
-differs from Git, Jujutsu, **and** Pijul simultaneously, because it is the only cell that
-is both not-snapshot (unlike Git/`jj`) and not-lexical (unlike Darcs/Pijul).
-
-The reason to want it is not novelty. It is that the patch-vs-snapshot question becomes a
-_different question_ once the atom is semantic, and the difference resolves the one
-concession v1 has to make.
+Everything else here — stored operations, footprints, Bernstein checking, tri-state
+certificates, resource declarations, the degradation ladder — is [design target] and
+labeled as such. The v1 snapshot substrate is not a compromise this model corrects; it is the
+correct v1 answer for the reasons `snapshots-vs-patches.md` records. This model is the
+content of the open lower-right cell of the
+[`comparison-merge-theories.md`](./comparison-merge-theories.md) §4.5 matrix (semantic
+atom, first-class change), and it is designed to run first as an **overlay** — footprints
+computed and recorded alongside snapshots, exercised advisorily — before any substrate
+decision is revisited ("Validation: the base-rate experiment", adoption path).
 
 ---
 
-## 2. What a semantic patch is
+## Operations and footprints
 
-A semantic patch is a change expressed as an operation over the code graph, not a hunk over
-text. The operation vocabulary is small and language-defined:
+_Status: [design target]._
+
+A change is a set of **operations** over the code graph, not hunks over text. The
+vocabulary is small and language-defined:
 
 - **Structural operations** — `rename(symbol, new_name)`, `change_signature(symbol, sig)`,
   `move(symbol, target_module)`, `add_definition(symbol)`, `remove_definition(symbol)`,
   `change_visibility(symbol, vis)`. These are exactly the refactors a language server
-  already exposes (`textDocument/rename`, rust-analyzer's `move_item`, etc.), and each
-  carries a precise, language-computed set of sites it affects.
-- **Intra-symbol body edits** — a change confined to one definition's body that alters no
-  signature or reference. This is the residue that has no clean structural name; it is
-  represented as a text/AST patch _scoped to a single symbol_, so even the unstructured
-  case is bounded by the graph rather than floating over a file's line space.
-
-History is then a DAG of these operations rather than a DAG of trees. A tree is recoverable
-at any point by replaying operations (Pijul-style state reconstruction, with the same
-caching mitigation); the operations are primary.
+  already exposes (`textDocument/rename`, rust-analyzer's move assists), and each carries a
+  language-computed set of affected sites.
+- **Intra-symbol body edits** — a change confined to one definition's body, altering no
+  signature or reference. It has no clean structural name; it is represented as a text/AST
+  patch scoped to a single symbol, so even the unstructured case is bounded by the graph
+  rather than floating over a file's line space.
 
 The point of the vocabulary is not expressiveness — text is maximally expressive. It is
-that each operation carries the one thing a line does not: **a declaration of what it reads
-and what it writes in the symbol graph.**
+that each operation carries the one thing a line cannot: a **footprint**, the pair
+`(R(T), W(T))` of read and write sets over the code graph.
+
+The access-set universe is deliberately finer than "symbols." Its elements are **facets**:
+`symbol × {name, signature, visibility, body}`, later extended with declared named
+resources ("Resource-extended footprints"). Examples:
+
+- `rename(foo, bar)` writes `foo.name` and every reference site of `foo`.
+- `change_signature(f, sig)` writes `f.signature` and reads the types the new signature
+  mentions.
+- a body edit of `f` writes `f.body` and reads the `name` and `signature` facets of every
+  item the new body references.
+
+Faceting is what keeps honest read sets small: a caller depends on `f.signature`, not on
+`f.body`, so an implementation-only change to `f` does not interfere with `f`'s callers.
+Without the facet split, every caller–callee pair would conflict and the model would
+serialize the world — the read-set-explosion risk this document returns to in its
+validation section.
+
+History under this model is a DAG of operations rather than of trees; a tree is
+recoverable at any point by replay. Making the operation store the _canonical_ unit is a
+substrate decision with a real bill — the metadata spine re-keys from snapshot hashes,
+Git export becomes a projection that must re-earn byte-canonicality, and the vocabulary
+plus footprint extraction is recurring per-language work
+(`snapshots-vs-patches.md` §2). That bill is why v1 stays snapshot-based and why this
+model is specified to run as an overlay first: nothing in the sections below requires the
+substrate fork in order to be tested.
 
 ---
 
-## 3. Independence as conflict-serializability over the symbol graph
+## Independence as conflict-serializability
 
-This is the technical core, and it is borrowed wholesale from database concurrency theory
-rather than invented.
+_Status: [design target]; the formal core. Borrowed from database concurrency theory, not
+invented._
 
-Model each change as a transaction `T` with two sets over the symbol graph:
-
-- a **write set** `W(T)` — the symbols, signatures, and type contracts the change modifies;
-- a **read set** `R(T)` — the symbols, signatures, and type contracts the change depends on
-  for its correctness (the references it binds, the types it consumes).
-
-Two changes `T₁` and `T₂` are **independent** — and therefore commute, applying in either
-order to the identical program — exactly when their access sets do not conflict, i.e. when
-all three of the following hold (the Bernstein conditions for conflict-serializability):
+Model each change as a transaction `T` with footprint `(R(T), W(T))`. Two changes `T₁`
+and `T₂` are **independent** — they commute, producing the identical program in either
+order — exactly when the Bernstein conditions hold:
 
 ```
 W(T₁) ∩ W(T₂) = ∅      no write–write conflict
@@ -87,249 +97,288 @@ W(T₁) ∩ R(T₂) = ∅      no write–read  conflict
 R(T₁) ∩ W(T₂) = ∅      no read–write  conflict
 ```
 
-When all three hold, the merge is a no-decision: order does not matter, and the two
-operations compose into one program with no human, no heuristic, and no guess. When any
-intersection is non-empty, there is a **genuine** semantic conflict, and the substrate can
-name it precisely — _these symbols, this contract_ — as a structured dilemma (whitepaper
-§6.5) rather than a text marker.
+`R(T₁) ∩ R(T₂)` is unconstrained: shared reads do not conflict. When all three hold, the
+merge is a no-decision — order does not matter and the operations compose with no human,
+no heuristic, no guess. When any intersection is non-empty there is a genuine, _nameable_
+conflict — "operation A writes `foo.signature`; operation B reads it" — surfaced as a
+structured **dilemma** (v1's embryo of the shape is `DilemmaPayload` in `tier1.rs`), never
+text markers, never a silent pick.
 
-Two things make this the decisive frame:
+Three precisions bound this to what the mathematics actually supports:
 
-1. **It is the formal statement of the root axiom.** Whitepaper §1.1 says independence is a
-   semantic relation that line merges approximate by lexical adjacency. Conflict-
-   serializability over symbol-level read/write sets _is_ that relation, written exactly.
-   The rename-versus-signature-change pair that `snapshots-vs-patches.md` §4 concedes "does
-   not commute" is simply the case `W(T₁) ∩ W(T₂) ≠ ∅` (both write the same symbol) — the
-   model does not fail to commute it; the model _identifies_ it as dependent and refuses to
-   guess. Correct non-commutation is a feature, not a gap.
+1. **The theorem is conditional on footprint completeness.** Disjointness implies
+   commutation only if `R` and `W` contain every access the change makes. The conditions
+   themselves are trivial set algebra; the entire weight of the model rests on where
+   footprints come from and when they may be trusted — the subject of the next two
+   sections.
 
-2. **It is the information a line cannot carry.** Pijul must _prove_ commutation through the
-   pushout structure of its line-graph because a line has no read or write set — it is an
-   anonymous position in a file. The symbol graph supplies the access sets the line-graph
-   structurally lacks. Sharp would not be giving a better proof of Pijul's theorem; it would
-   be operating on the substrate that _has the inputs the theorem needs_, which Pijul never
-   had.
+2. **It dissolves the manufactured class and names the genuine class; it does not shrink
+   genuine disagreement.** Line-based merge errs in both directions: adjacent-but-
+   independent edits collide (manufactured conflicts), and semantically interfering edits
+   with zero textual overlap merge silently and fail to compile (missed conflicts) —
+   whitepaper.md, "The root axiom". Serializability over footprints removes the
+   manufactured class and converts the missed class into named intersections — where
+   footprints see them. Genuinely dependent changes stay dependent: the
+   rename-versus-signature-change pair that `snapshots-vs-patches.md` §4 concedes "does
+   not commute" is simply `W(T₁) ∩ W(T₂) ≠ ∅`; the model _identifies_ it rather than
+   guessing, and correct non-commutation is a feature. Three decades of structured-merge
+   research (Mens's 2002 survey; the JDime and semistructured-merge measurements) caution
+   that the manufactured fraction is meaningful but bounded and that many real conflicts
+   are genuine disagreements no representation dissolves. How that split falls for
+   concurrent agent-authored work is an empirical question this document commits to
+   measuring, not a premise it assumes.
 
-Honest boundary: the access sets are only as sound as the language's static analysis.
-Macros, reflection, dynamic dispatch, conditional compilation, and build-time codegen can
-hide a true dependency from the analyzer. The discipline that keeps this _sound_ rather
-than merely convenient is the same as everywhere else in Sharp: when the analysis cannot
-prove disjointness, the operation is treated as **dependent** (conservative over-
-approximation of the write set), trading some false dependencies — extra dilemmas — for the
-guarantee that no genuine conflict is ever cleared by an incomplete read set. Soundness
-first, exactly as in §1.1.
+3. **The ceiling is reference/type-level, not behavioral.** A proven-independent pair
+   composes deterministically (consistency) and — with the verification gate — compiles
+   and resolves (reference/type correctness). Nothing in the model delivers behavioral
+   correctness: two changes with disjoint footprints can jointly violate an invariant the
+   type system never sees — an ordering assumption, a protocol state, a resource budget.
+   Executed-in-CI behavioral assertions are the _complement_ of the independence
+   certificate, not a redundancy it retires (whitepaper.md, "Boundaries").
 
----
+Within those bounds, the consequences are what the other two documents build on. A line
+carries no read or write set — it is an anonymous position in a file — which is why patch
+theory could prove commutation only for line-graphs; over footprints, order-independence
+of pairwise-independent sets returns as a conditional theorem at the semantic layer.
+Concretely:
 
-## 4. What the semantic-patch substrate buys
-
-Everything below follows from §3; none of it is independently postulated.
-
-- **The patch-theory laws return as near-theorems, not test obligations.**
-  Order-independence and associativity — which `snapshots-vs-patches.md` §4 demotes to
-  differential-corpus tests because Pijul proves them only for lines — hold for any set of
-  pairwise-independent operations directly, by §3. The corpus suite stops being the
-  _source_ of confidence and becomes a _regression net_ on the analyzer's soundness.
-- **Continuous speculative merge stops being maintained and starts being implied.** v1's
-  projection (whitepaper §6.7) is a derived ref the engine recomputes as a target advances.
-  Over commuting operations, "feature rebased onto target" is just the union of two
-  independent operation sets — there is nothing to recompute and nothing to rebase, because
-  independence is a property of the operations, not of an order imposed on them.
-- **Cherry-pick and partial adoption are free.** Lifting one operation onto another branch
-  is sound whenever that operation is independent of the ones not carried — the Darcs
-  "cherry-pick falls out of commutation" result, now decided semantically instead of
-  structurally.
-- **Conflicts are reported in the language's own terms.** A dilemma is "operation A writes
-  `foo`'s signature; operation B reads it" — a decision problem an agent can act on
-  directly — not a region of overlapping lines it must re-parse to understand.
-- **A branch becomes a set of diffs, not a sequence of commits.** Because operations carry
-  their dependency relation (§3), a branch is a dependency-ordered _set_ whose net effect is
-  sequence-independent, collapse is non-destructive set union, and rebase/squash become
-  read-only projections. This is the workflow-side payoff of the substrate, developed in
-  [`branch-semantics.md`](./branch-semantics.md).
-- **The harness query layer becomes the substrate, not an index.** `commit_paths` and
-  `commit_metadata` (whitepaper §4) are today a lossy, derived projection of "what changed."
-  A code-graph store answers "every caller of `X`", "every change that wrote `X`'s
-  contract", "which operations are independent of this one" as primary queries, because the
-  read/write sets are the stored form, not an analytic afterthought.
+- a branch becomes a dependency-ordered _set_ of operations rather than a sequence, and
+  landing becomes admission of a union — branch-semantics.md, "Branches as sets";
+- the conflict relation over footprints, intersected with the **frontier** (the union of
+  footprints of all in-flight branches), is what the landable prefix, fission, and
+  dynamic-phase admission are computed from — branch-semantics.md, "The landable prefix
+  and fission" and "Dynamic phases";
+- queried continuously instead of once at land time, the same relation generalizes the
+  merge queue — whitepaper.md, "What the protocol unlocks"; branch-semantics.md, "The
+  generalized merge queue".
 
 ---
 
-## 5. The load-bearing risk: canonical semantic diff
+## Soundness and the tri-state certificate
 
-One problem decides whether any of §4 is reachable, and it must not be understated.
+_Status: [design target]._
 
-To record a change as an operation, the operation must be _obtained_. If the agent emits
-text (the normal case for a model writing code), the system must reduce
-`(old_tree, new_tree)` to a sequence of semantic operations. This is **semantic diff with
-move and rename detection**, and it is hard in two distinct ways:
+Static analysis has blind spots: macro expansion, build-time codegen, reflection, dynamic
+dispatch, conditional compilation, cross-language seams. Worse, analyzers do not reliably
+flag their own blind spots — an _empty_ references answer is indistinguishable from an
+_incomplete_ one. A model that read "the analyzer found no intersection" as "independent"
+would be unsound in exactly the silent way line merges are.
 
-1. **It is computationally hard.** Minimal tree edit distance with moves is NP-hard in
-   general; rename/move detection is a heuristic matching problem, the same family as Git's
-   `-M`/`-C` detection but required to be _reliable_ rather than advisory.
-2. **It is under-determined, which is worse.** Many different operation sequences produce
-   the identical `new_tree`. "Rename `foo`→`bar` then edit the body" and "delete `foo`, add
-   `bar` with the new body" yield the same snapshot but different operations, different
-   read/write sets, and therefore different merge behavior against a third branch.
+The discipline: every independence claim is a **tri-state certificate** —
+proven-independent / proven-conflicting / **unknown** — governed by two rules:
 
-The second point is the real threat, because Sharp's adopted machinery depends on
-**canonicality**, not just correctness. The `jj` conflict algebra and its memoized,
-self-cancelling dilemma resolution ([`jj-adoption.md`](./jj-adoption.md) §4) are sound only because every node
-computing the same merge derives the _byte-identical_ term. If two nodes diff the same
-change into different operation sequences, the terms diverge, memoized resolutions stop
-matching, and the determinism the whole content layer rests on is gone. So the requirement
-is not "a good semantic diff" but a **canonical** one: a deterministic function from a pair
-of trees to a unique operation sequence. That function is unsolved in general and would be
-per-language. It is the crux. If it cannot be made canonical and cheap, the snapshot
-substrate is not a compromise — it is the correct answer, and this fork should not be taken.
+- **Safe-direction trust.** The analyzer is trusted only in the direction where its errors
+  are harmless: found references create dependencies; absent references prove nothing. Any
+  reported intersection suffices for proven-conflicting. Proven-independent is never
+  concluded from an empty query answer.
+- **Blind spots are unknown by construction.** A per-language taxonomy of known blind-spot
+  categories is part of the model. A footprint entry that falls inside one — a symbol
+  produced or consumed through a macro, a codegen boundary, an FFI seam — is forced to
+  _unknown_ regardless of what the analyzer reports. Proven-independent therefore requires
+  a positive completeness argument, and only one source can supply it: a captured
+  structural operation whose effect set the language computed, over a region outside every
+  blind-spot category ("Capture, not reconstruction").
 
-There is a second, temporal face of the same requirement, and it is a latent soundness bug
-if ignored. The canonical operation — and therefore the conflict term — is computed from the
-_semantic representation_, which is produced by versioned tooling: tree-sitter grammars,
-rust-analyzer, `ts.LanguageService`. A grammar or analyzer upgrade can change the AST or the
-resolved symbol set for _identical source bytes_ (`research.md` flags exactly this for the
-representation cache). So "the same merge" computed at two times under two toolchain versions
-can yield two different canonical terms — silently breaking memoized-resolution reuse and the
-self-cancellation of projections ([`jj-adoption.md`](./jj-adoption.md) §4), both of which
-assume term identity is stable over the repository's lifetime. Canonicality must therefore be
-defined _relative to a pinned analyzer/grammar version_: the term carries its toolchain
-version, memoized resolutions are keyed by it, and a version bump has defined semantics
-(invalidate or migrate), never a silent re-key. Until that exists, "resolve once, apply
-everywhere" is sound within a toolchain version and unproven across one.
+For admission, unknown is treated as dependent: the pair is not certified to commute, so
+it serializes through the ordinary gate rather than landing concurrently on the
+certificate's authority. But unknown is _reported_ distinctly from proven-conflicting,
+because the remedies differ. A proven conflict names the facets to negotiate; an unknown
+names the coverage gap — which blind-spot category, which footprint entries — and can
+often be discharged: declare the resource, re-express the edit as a captured operation, or
+accept serialization. Collapsing the two states would either alarm on phantom conflicts or
+tempt the system to clear what it cannot see.
+
+The certificate's cost model is deliberately asymmetric. False dependencies — extra
+dilemmas, lost concurrency — are the price the design pays on purpose; a false
+independence — a genuine conflict cleared — is the failure treated as intolerable. Whether
+the price is affordable is the read-set-explosion question, and it is measured, not
+assumed ("Validation: the base-rate experiment").
 
 ---
 
-## 6. The agent-first unlock: operations are observed, not reconstructed
+## Capture, not reconstruction
 
-The reason this fork is worth keeping open — rather than filing next to Pijul as elegant and
-impractical — is that the §5 problem is _structurally different for an agent author than for
-a human one_, and the difference runs in Sharp's favor.
+_Status: [design target]; this is the "why now"._
 
-A human edits text. The operation that produced the text is in the human's head and is gone;
-a human-facing VCS has no choice but to reconstruct it from the diff. This is why Darcs and
-Pijul must derive patches from line states: their author destroys the operation before the
-VCS sees it.
+For the model to run, footprints must be obtained. There are two ways, and they are not
+equal.
 
-An agent in a harness does not. The harness _issues_ the change: it calls the language
-server's rename, applies a scoped edit to a named symbol, invokes a move refactor. The
-operation is **observable at authoring time** — it is a tool call the harness already
-brokers and already records as an episode artifact (whitepaper §5). In the agent-first
-setting the operation log can be _captured_ rather than _recovered_, which sidesteps the
-canonical-diff problem precisely where it is hardest: structural operations are declared, so
-no detection heuristic runs on them at all.
+**Reconstruction** — reducing `(old_tree, new_tree)` to operations after the fact — is
+hard in two distinct ways. It is computationally hard: minimal tree edit distance with
+moves is NP-hard in general, and rename/move detection is the same heuristic family as
+Git's `-M`/`-C`, needed here as reliable rather than advisory. And it is under-determined,
+which is worse: "rename `foo`→`bar` then edit the body" and "delete `foo`, add `bar` with
+the new body" yield the same tree but different operations, different footprints, and
+different merge behavior against a third branch. The machinery downstream — memoized
+dilemma resolutions, self-cancelling projections
+([`jj-adoption.md`](./jj-adoption.md) §4) — needs the derivation to be **canonical**: a
+deterministic function from tree pairs to a unique operation sequence. That function is
+unsolved in general and would be per-language.
 
-This is where Sharp meets its real prior art, and the meeting is favorable. Operation-based
-merge (Lippe & van Oosterom, 1992) and refactoring-aware merge (Dig et al., _MolhadoRef_, 2007) both established that recording operations beats diffing states — but both assumed a
-_human_ author, from whom the operation had to be coaxed by a refactoring IDE or inferred
-after the fact. The agent-first setting removes that assumption: the operation is already a
-brokered tool call. Sharp's claim over this lineage is therefore narrow and specific —
-capture instead of reconstruction, independence decided by serializability over the symbol
-graph (§3), and the canonical-term determinism the memoized machinery needs (§5) — not the
-operation-based idea itself (`comparison-merge-theories.md` §4.6).
+**Capture** dissolves most of this, and it is the structural reason the model became
+feasible now rather than in 2005: the author is an agent in a harness. A human destroys
+the operation before the VCS sees it — the rename is in their head; the text is what
+remains — which is why Darcs and Pijul reconstruct from line states, and why operation-
+based merge (Lippe & van Oosterom, 1992) and refactoring-aware merge (Dig et al.,
+_MolhadoRef_, 2007) had to coax operations out of humans through IDE instrumentation. An
+agent's edit is already a tool call the harness brokers and records (episode capture —
+whitepaper.md, "Episodes"). A footprint-aware `rename` call _is_ an operation with a
+language-computed effect set at the moment of issue: captured, not reconstructed — no
+detection heuristic, no canonicality problem for that operation. Sharp's claim over this
+lineage is deliberately narrow: capture at the harness boundary, serializability
+certification over captured footprints, and canonical-term determinism — not the
+operation-based idea itself.
 
-This does not make §5 vanish; it bounds it. The realistic model is hybrid:
+Two honesty requirements bound the claim:
 
-- **Declared structural operations** — renames, moves, signature and visibility changes —
-  recorded directly from the harness's tool calls, with exact language-computed access sets
-  and no diffing.
-- **Residual body edits** — the free-form text a model writes inside a single definition —
-  diffed only _within the boundary of one symbol_, where the under-determination of §5 is
-  contained: the read/write sets are dominated by the enclosing symbol regardless of how the
-  body edit is decomposed, so canonicality is needed only at a granularity where it is
-  achievable.
+- **Adoption is voluntary, not coerced.** Sharp does not impose an operation vocabulary.
+  Nothing stops an agent writing free text, and a system that worked only under coercion
+  would not be adopted: SemanticMerge shipped working language-aware merge around 2013 and
+  stalled — working technology is not adoption. The bet — stated as a bet — is that
+  footprint-aware tooling wins on its own merits: an operation with a proven footprint can
+  be certified independent and land without waiting, so agents that use the tooling land
+  faster. Because adoption is a harness integration rather than a per-developer habit
+  change, the diffusion problem differs from SemanticMerge's — favorable, but unproven.
+- **Body edits are the residue, and their footprints are weaker.** Free-form text inside
+  one definition is still reconstruction, bounded to a symbol: `W` is the enclosing
+  symbol's `body` facet by construction, but `R` is computed by resolving the new body's
+  references — exactly where the analyzer's blind spots live. Body-edit footprints are
+  therefore _unknown_-heavy in precisely the regions (macros, codegen, dynamic dispatch)
+  the tri-state discipline exists for. The realistic model is hybrid: declared structural
+  operations with exact footprints, plus symbol-scoped body edits whose footprints are
+  sound in the found direction and honest about the rest.
 
-The bet of this fork is that capturing structural operations at the harness boundary plus
-symbol-scoped diffing of bodies covers enough of real change traffic to make the substrate
-sound and canonical where v1's snapshot diffing is neither. Whether that bet holds is an
-empirical question (§8), not a settled one.
-
----
-
-## 7. Costs beyond the diff
-
-Even granting a canonical semantic diff, the move is not free, and the v1 decision recorded
-these costs correctly (`snapshots-vs-patches.md` §2):
-
-- **The metadata spine relocates.** Episodes, semantic representations, and commit metadata
-  key on snapshot hashes today (`snapshots-vs-patches.md` §2.1). If the canonical unit is an
-  operation, every one of those addressing roots must be re-answered: what does an episode
-  attach to, what does a representation key on. This is the single largest engineering
-  consequence and the reason the fork is post-v1, not a v1 variant.
-- **Git export becomes a projection, not a consequence.** v1 gets byte-canonical Git objects
-  for free because the store is already snapshots (whitepaper §7, `snapshots-vs-patches.md`
-  §5). An operation store must _materialize_ to snapshots at the export boundary and prove
-  the materialization is byte-canonical. Recoverable, but it forfeits the "compatibility
-  falls out for free" property and must re-earn it. This is also a strategic-coherence
-  question the whitepaper must answer head-on: byte-isomorphism is sold as a v1 _adoption
-  pillar_ (whitepaper §2.2, §4.0), so the end-state must say plainly whether it stays a
-  permanent _property_ or becomes a boundary _courtesy_ re-earned at export. The honest
-  answer is the latter — on the operation substrate byte-isomorphism is a property of the
-  export projection, not of the store — and v1's pillar is not retracted by this, only
-  relocated to the boundary.
-- **The operation algebra is per-language.** The structural vocabulary (§2) and the
-  read/write-set extraction (§3) are defined per language family. v1's snapshot core is
-  language-agnostic — blob/tree/commit hold any bytes — and this fork trades that
-  universality for the semantic atoms. New languages cost more here than in v1.
-- **The language server moves onto the write path.** v1 can analyze lazily and cache; a
-  declared-operation model needs access sets computed at authoring time, putting the
-  analyzer in the latency budget of every change, not every merge.
-
-None of these refute the fork. They price it. The fork is justified only if §4's gains
-exceed this bill, and that comparison cannot be made until §5's crux is known to be
-solvable.
+What fraction of real change traffic is structural versus body-edit — and therefore how
+much of the model runs at full capture strength — is empirical, and is folded into the
+validation plan below.
 
 ---
 
-## 8. Decision: deferred, with the experiments that would settle it
+## Resource-extended footprints
 
-**v1 ships the snapshot substrate.** The semantic-patch substrate is deferred — not
-rejected. The deferral is correct because v1's value (semantic merge altitude, episodes,
-Git interop) is fully available without it, and because the fork rests on an unsolved
-problem (§5) that v1 does not need to solve to be correct.
+_Status: [design target]; a design direction, entirely unimplemented._
 
-The fork should be reconsidered when, and only when, the following are known. Each is a
-spike that can run against v1's corpus without committing to the substrate:
+Symbol graphs are per-language, and the costliest conflicts in real systems live at seams
+no language server owns: two changes that both alter a database schema, a wire format, a
+config key, an endpoint contract, a build script. A footprint model that stopped at
+symbols would certify independence precisely where independence is least assured.
 
-1. **Canonicality of declared operations.** Instrument the harness to capture structural
-   tool calls as operations on a sample of real episodes. Measure: what fraction of change
-   traffic is structural (declared, no diffing) versus residual body edits, and whether the
-   captured operations replay to byte-identical trees. If structural coverage is high and
-   replay is exact, §5's crux is mostly avoided rather than solved — the strongest possible
-   evidence for the fork.
-2. **Symbol-scoped diff canonicality.** For the residual body edits, test whether a
-   symbol-bounded semantic diff is deterministic across nodes and across analyzer versions.
-   A single non-canonical case here is a finding, because it breaks the determinism §5
-   requires.
-3. **Access-set soundness on the corpus.** Run the conflict-serializability check (§3)
-   against known-good and known-bad historical merges. Measure false-independent rate (a
-   merge cleared that should have conflicted — must be zero under the conservative rule) and
-   false-dependent rate (extra dilemmas — the tolerable cost). The first number is the gate;
-   the second is the price.
+The extension is cheap because the formal model never cared what the set elements were.
+Extend the access-set universe with **declared named resources** — `writes: table users`,
+`reads: config STRIPE_KEY`, `touches: endpoint /v1/charges` — namespaced identifiers
+declared by the agent (or suggested by advisory tooling from migration files and config
+diffs; the advisory layer suggests, never acts) at operation-issue time. The Bernstein
+conditions apply unchanged over the extended universe: two changes that are
+symbol-disjoint but both declare `writes: table users` are proven-conflicting, with the
+conflict named at the seam where it lives.
 
-If spike 1 shows structural operations dominate and spikes 2–3 hold, the fork is live and
-the §7 costs become the engineering question. If spike 1 shows body edits dominate and
-spike 2 cannot make them canonical, the snapshot substrate is not a compromise but the
-right substrate, and this document is the record of why.
+Epistemic status, stated exactly: declarations can prove conflict; they can never prove
+seam-independence. A declared intersection is a found access — the safe direction again —
+so it yields a genuine, nameable dilemma. An absent declaration proves nothing: undeclared
+resource access is a blind spot exactly as a macro is, so the resource component of a
+certificate is at best _independent-as-declared_, never proven-independent. That residual
+is one more reason the behavioral-CI complement (whitepaper.md, "Boundaries") is
+permanent. The aim is recall on the costliest conflict class at declaration cost — not a
+verified model of the world's resources.
 
 ---
 
-## 9. Relationship to the v1 decision
+## Oracle discipline
 
-This is a **promotion path, not a reversal.** The v1 snapshot decision
-(`snapshots-vs-patches.md`) is correct for the row Sharp lives in today, and nothing here
-retracts it. What carries forward if the fork is ever taken:
+_Status: [design target] rules; v1 already runs the relationship in miniature._
 
-- The **root axiom** (whitepaper §1.1) is unchanged — the fork is a different _realization_
-  of the same semantic-altitude commitment, not a different goal.
-- The **`jj` conflict algebra** (`jj-adoption.md` §4) carries over directly; it was always
-  granularity-agnostic, and over operations it gains canonical terms by construction rather
-  than by careful diffing.
-- **Episodes** (whitepaper §5) carry over as the provenance layer, and in fact supply the
-  declared-operation capture of §6 — the fork is partly a matter of _promoting_ episode
-  artifacts that already record tool calls into the primary history, rather than building a
-  new record.
+The language server is the **oracle** in Sharp's trichotomy — kernel / oracle / advisory
+layer, whitepaper.md, "The protocol" — and it is the designated complexity sink: complex,
+external, allowed to be incomplete, wrapped by the kernel's tri-state discipline. Sharp
+borrows a semantic engine per language instead of building one; it is a second client of
+the IDE market's LSP investment (whitepaper.md, "Why now"). Complexity is thereby
+relocated, not eliminated — placed where it is cheapest to maintain and safest to get
+wrong. (Naming note: v1's `oracle.rs` uses "oracle" for the Tier-2 _oracle branches_
+that merge candidates are scored against; the trichotomy's oracle is the language server.)
 
-What relocates is the addressing root (§7), and that is exactly why the decision is large
-enough to be its own fork rather than a setting. v1 earns the right to make it later by
-keeping the merge altitude semantic now: Sharp is already in the bottom-left cell, so the
-remaining move is along one axis, not two.
+The v1 embryo: `semantic_merge.rs` consults rust-analyzer's rename-location index during
+Tier-1 merge, treats its answers as advisory — an analyzer error falls through to textual
+merge — and gates every result behind `cargo check`, refusing any merge whose output does
+not compile (`SharpError::MergeRefused`). The trust asymmetry is already the right one:
+the oracle's found locations improve the merge; its silence never clears anything the
+compile gate would catch.
+
+Rules for the full model [design target]:
+
+- **The oracle is in the merge path — price it.** Merging stops being pure computation
+  over stored objects: a live language server with a loaded workspace sits in the latency
+  budget, with warm-up and flakiness. Captured operations move analysis to authoring time
+  (the footprint is computed when the tool call is issued); projections amortize the rest
+  by keeping a server warm per (feature, target) pair — whitepaper.md, "Boundaries".
+- **Pin the oracle version in the merge record.** Oracle answers change across versions
+  for identical source bytes: a merge that is CleanOk under rust-analyzer 2026.1 may be a
+  Dilemma under 2026.2. Replayability therefore requires the merge record to carry
+  (oracle identity, version); memoized artifacts — cached footprints, dilemma
+  resolutions — are keyed by that pin; and a version bump has defined semantics,
+  invalidate or migrate, never a silent re-key. Without this, "resolve once, apply
+  everywhere" is sound within one toolchain version and silently wrong across one.
+- **Degrade honestly, never silently — the degradation ladder.** Language support is a
+  ladder, and every certificate records the rung that produced it:
+  1. _Full LSP_ (references, rename, signature intelligence): structural capture and
+     footprint computation at full strength.
+  2. _Syntax only_ (a tree-sitter grammar, no resolution): symbol boundaries and
+     AST-equivalence are available — v1's `ast_equivalence.rs` is this rung — but
+     reference resolution is absent, so footprints are unknown-heavy.
+  3. _No support_: text three-way with every footprint entry marked unknown. Under
+     unknown-treated-as-dependent, such changes are never certified to commute; they
+     serialize through the ordinary behavioral gate. The bottom rung is the classic
+     CI-gated merge queue — Sharp's degenerate case (whitepaper.md, "Positioning") and
+     its honest fallback, plus an explicit record of being it.
+- **Per-language cost is recurring.** Each rung is earned per language: operation
+  vocabulary, facet model, blind-spot taxonomy, extraction. This is a substantial,
+  recurring investment, not a plugin. v1 scopes to Rust and TypeScript.
+
+---
+
+## Validation: the base-rate experiment
+
+_Status: committed plan; not yet run._
+
+The model has one known way to fail even if every component works: **read-set explosion**.
+Honest R-sets may be large — a body edit reads the signature of everything it calls, and
+popular facets (a core type, a widely-imported module) may appear in nearly every
+footprint. If honest footprints make almost every concurrent pair Bernstein-dependent, the
+frontier saturates, everything serializes, and Sharp degenerates into an expensive queue.
+The tempting fix — trimming R-sets — is unsound: a trimmed read set clears merges the
+model cannot see. The facet split exists to keep honest sets small; whether it suffices is
+not decidable from the armchair.
+
+So the load-bearing quantity is empirical: **the Bernstein-independence base rate of real
+concurrent work**. The committed experiment:
+
+1. Mine git history — this monorepo and public corpora — for temporally-overlapping merged
+   PRs: pairs whose open intervals overlap and which both landed.
+2. Compute retroactive footprints for each PR at facet granularity with today's analyzers,
+   applying the tri-state discipline (blind-spot categories forced to unknown).
+3. Measure: the fraction of overlapping pairs that are proven-independent; the unknown
+   fraction; and, for the pairs that conflicted textually or broke after merging, whether
+   footprints would have named the interference.
+
+Reading the results honestly cuts both ways. Retroactive footprints are reconstruction —
+the weak path by this document's own argument — so the measured proven-independent rate is
+a _lower bound_ on what captured operations could certify, and unknown-heavy results
+indict reconstruction before they indict the model. But if the manufactured-conflict class
+turns out small — if most overlapping pairs that conflicted were genuine disagreements —
+then the model's headroom over a line-based merge queue is bounded no matter how good
+capture becomes, and the design must say so.
+
+The experiment is also step one of a deliberately advisory-before-authoritative adoption
+path: (1) run the history experiment; (2) ship footprint-overlap prediction as advisory PR
+annotations and measure precision/recall against actual conflicts and post-merge breakage;
+(3) only with that evidence let certificates gate admission; (4) only then derive plan
+structure from them (branch-semantics.md, "The plan loop"). Each step is falsifiable and
+useful alone; nothing downstream is entitled to trust the model has not earned upstream.
+
+Two companion measurements from the same corpus carry over from the earlier draft of this
+document, because the eventual substrate decision still depends on them: the
+structural-versus-body-edit split of real change traffic (how much of the model runs at
+full capture strength), and whether symbol-scoped diffs of body edits are deterministic
+across nodes and across pinned analyzer versions (the canonicality the memoized machinery
+needs). If capture coverage is low and body-edit diffs cannot be made canonical, the
+snapshot substrate is not a waypoint but the destination — and this document is the record
+of what was measured before deciding.

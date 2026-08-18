@@ -8,7 +8,7 @@ in both directions, without either side silently drifting from the other.
 Decisions below were locked in the product-owner brainstorm of 2026-08-13
 and are presented as decisions, not options.
 
-**Origin.** Today, Plan state lives *only* as markdown in a single GitHub
+**Origin.** Today, Plan state lives _only_ as markdown in a single GitHub
 issue body (issue #199), parsed back out with regex/awk helper functions —
 `plan_entries_json_from_body`, `plan_phases_json_from_body` — in
 `superfield-ai/prompts`'s `scripts/{auto,feature,replan}/common.sh`, keyed
@@ -46,10 +46,10 @@ grounded in what actually exists, not assumed:
   `scripts/{auto,feature,replan}/common.sh` (in `superfield-ai/prompts`)
   regex/awk-parse it back into structured data on every read, keyed on an
   embedded `<!-- superfield: {json} -->` comment per entry. There is no
-  database table backing Plan state; the issue body *is* the database.
+  database table backing Plan state; the issue body _is_ the database.
 - **No client abstraction in the live system.** ~40 files in
   `superfield-ai/prompts` shell out to `gh` directly (`gh issue
-  create/edit/list/view`, `gh pr create/edit/list/view/checks/merge/ready`,
+create/edit/list/view`, `gh pr create/edit/list/view/checks/merge/ready`,
   `gh api graphql`). Every call site owns its own error handling and output
   parsing; there is no single seam a sync engine could sit behind today.
 - **A real adapter interface already exists, but it's archived scaffolding.**
@@ -78,7 +78,7 @@ grounded in what actually exists, not assumed:
 2. **The Superfield database is canonical.** Tasks, features, and PRs exist
    first in Superfield's own schema. The tracker is a projection of that
    state for human visibility, not the other way around.
-3. **Sync is bidirectional.** Superfield pushes its state out, *and* ingests
+3. **Sync is bidirectional.** Superfield pushes its state out, _and_ ingests
    issues/comments/edits that human team members post directly in the
    external tracker, reconciling them back into the canonical DB.
 4. **Reconciliation is deterministic-first, LLM-assisted-second.** Every
@@ -99,14 +99,14 @@ Tasks, features, and PRs live in Superfield's own schema, unchanged by
 whether sync is configured. Alongside each syncable entity, a
 `provider_link` join table records, per entity per tracker:
 
-| Column               | Purpose                                                             |
-| -------------------- | --------------------------------------------------------------------|
-| `entity_id`           | FK to the canonical task/feature/PR row                            |
-| `provider`            | `github` \| `linear` \| `jira` \| ...                              |
-| `tenant_id`            | Which customer's provider connection this link belongs to         |
-| `external_id`          | The tracker's own identifier (issue number, Linear ticket ID, ...)|
-| `last_pushed_hash`     | Content hash/version of what Superfield last *wrote* out          |
-| `last_seen_remote_hash`| Content hash/version of what Superfield last *read* from the tracker |
+| Column                  | Purpose                                                              |
+| ----------------------- | -------------------------------------------------------------------- |
+| `entity_id`             | FK to the canonical task/feature/PR row                              |
+| `provider`              | `github` \| `linear` \| `jira` \| ...                                |
+| `tenant_id`             | Which customer's provider connection this link belongs to            |
+| `external_id`           | The tracker's own identifier (issue number, Linear ticket ID, ...)   |
+| `last_pushed_hash`      | Content hash/version of what Superfield last _wrote_ out             |
+| `last_seen_remote_hash` | Content hash/version of what Superfield last _read_ from the tracker |
 
 A row exists once a given entity is linked to a given tracker for a given
 tenant; an entity with no `provider_link` row simply isn't synced anywhere.
@@ -254,10 +254,10 @@ outbound-only: `getIssue`, `listIssues`, `createIssue`, `updateIssueBody`,
 
 ## Milestones
 
-| Milestone | Scope                                                          |
-| --------- | --------------------------------------------------------------- |
+| Milestone | Scope                                                                                      |
+| --------- | ------------------------------------------------------------------------------------------ |
 | M1        | GitHub provider, outbound push only (`provider_link`, provider port, sync engine skeleton) |
-| M2        | GitHub inbound ingestion, echo suppression, deterministic reconciliation ladder |
-| M3        | LLM-assisted reconciliation tier, per-tenant field mapping configuration |
-| M4        | Linear provider (both directions), provider registry generalized beyond GitHub |
-| M5        | Jira and additional providers |
+| M2        | GitHub inbound ingestion, echo suppression, deterministic reconciliation ladder            |
+| M3        | LLM-assisted reconciliation tier, per-tenant field mapping configuration                   |
+| M4        | Linear provider (both directions), provider registry generalized beyond GitHub             |
+| M5        | Jira and additional providers                                                              |
