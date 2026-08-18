@@ -28,9 +28,9 @@ revisit triggers. Do not deliver a menu of options for a human to choose from.
    - **(b) HTML** — self-contained rich pages, allowing interactive
      interfaces, embedded data viz, and direct rendering in Studio and the
      delivered webapps.
-   You may evaluate secondary candidates (PDF as a terminal/archival render,
-   Typst/LaTeX pipelines, md-with-render-pipeline as a "neither" position),
-   but only if they materially change the recommendation.
+     You may evaluate secondary candidates (PDF as a terminal/archival render,
+     Typst/LaTeX pipelines, md-with-render-pipeline as a "neither" position),
+     but only if they materially change the recommendation.
 
 3. **Be forward-looking.** Weight the evaluation by where things are going
    over roughly the next 3–7 years, not the present installed base:
@@ -92,9 +92,9 @@ Key product facts to hold constant:
 - In this repo, **"projection"** already means (a) Sharp's speculative-merge
   projection (`crates/sharp/docs/projections.md`) and (b) the brain's
   markdown pages projection. **"Export"** means estate portability (git tree
-  + portable schema), not document export. Your report must not overload
-  these terms — pick a distinct term for rendered workproducts (e.g.
-  "renders," "workproduct projections") and define it once.
+  - portable schema), not document export. Your report must not overload
+    these terms — pick a distinct term for rendered workproducts (e.g.
+    "renders," "workproduct projections") and define it once.
 - There is **no existing ADR** on user-facing output formats. Your report is
   the input to that ADR; structure the recommendation so it can be lifted
   into one.
