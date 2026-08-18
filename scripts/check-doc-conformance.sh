@@ -26,6 +26,7 @@ SF_PROJECT="crates/sf-serve/src/routes/project.rs"
 AGENT_ENSURE=".agents/agent-ensure-feature.md"
 TESTING_INV="docs/testing-invariants.md"
 AGENT_WARN=".agents/agent-warnings.md"
+TODO_APP_README="evals/scenarios/todo-app/README.md"
 
 fail=0
 
@@ -232,6 +233,18 @@ assert_match "curated filterset documents re-inclusion conditions (agent-warning
   "Re-inclusion conditions" "$AGENT_WARN"
 assert_match "check-coverage-truth.sh --workspace over-claim risk named (agent-warnings)" \
   "check-coverage-truth.sh.*over-claim risk" "$AGENT_WARN"
+
+# --- evals/scenarios/todo-app/README.md (issue #906) ------------------------
+
+# The README must not claim the scenario is documentation-only / has no runner.
+assert_absent "todo-app README stale banner removed" \
+  "Documentation only|no runner code.*exists yet" "$TODO_APP_README"
+
+# The README must name the unauthenticated GET / placeholder surface that the
+# browser-smoke screenshot actually captures, so it does not over-claim Studio UI
+# coverage (issue #906).
+assert_match "todo-app README names unauthenticated placeholder surface" \
+  "unauthenticated \`GET /\` placeholder surface" "$TODO_APP_README"
 
 # ----------------------------------------------------------------------------
 
