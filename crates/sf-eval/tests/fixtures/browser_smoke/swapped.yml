@@ -1,0 +1,15 @@
+name: swapped fixture
+on: workflow_dispatch
+jobs:
+  eval-todo-app:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run the todo-app scenario (live runner, keyless)
+        run: |
+          cargo run -p sf-eval --bin sf-eval -- \
+            run \
+            --scenario evals/scenarios/todo-app
+
+      - name: Studio browser-smoke (capture + verdict)
+        run: |
+          echo "SF_EVAL_BROWSER_SMOKE=pass" >> "$GITHUB_ENV"

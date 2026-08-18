@@ -364,8 +364,13 @@ async fn main() {
     );
 
     let start = Instant::now();
-    // The browser smoke is driven outside this binary (Playwright); record it as
-    // skipped here unless a verdict was supplied via the environment.
+    // The browser-smoke verdict is produced by the workflow's chromium
+    // --screenshot capture step (see `.github/workflows/eval-todo-app.yml`) and
+    // read here via $GITHUB_ENV. The ordering contract between that producer
+    // step and this consumer is enforced by
+    // `crates/sf-eval/tests/browser_smoke_step_order.rs` (issue #907); if the
+    // producer is missing or runs too late, this process observes the default
+    // `skipped` value and the workflow's post-run assertion fails loudly.
     let browser_smoke = std::env::var("SF_EVAL_BROWSER_SMOKE").unwrap_or_else(|_| "skipped".into());
 
     // ── Deterministic floor ─────────────────────────────────────────────────
