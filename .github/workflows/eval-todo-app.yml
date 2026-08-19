@@ -8,6 +8,14 @@ name: Eval — todo-app
 # sweep-only, never a PR gate. It runs ONLY on explicit manual dispatch
 # (`workflow_dispatch`) — there is no `pull_request`, no `schedule`, and no
 # `push` trigger, so it never fires on a commit, merge, or nightly cron.
+#
+# INVARIANT (issue #907): The "Studio browser-smoke (capture + verdict)" step
+# must run BEFORE the "Run the todo-app scenario (live runner, keyless)" step
+# in the SAME job. $GITHUB_ENV writes are only visible to subsequent steps
+# within one job, so reordering or splitting the steps makes `sf-eval` observe
+# the default `browser_smoke: "skipped"` silently. That ordering is enforced by
+# `crates/sf-eval/tests/browser_smoke_step_order.rs`; see
+# `docs/testing-invariants.md` invariant 1 (loud-skip, never silent-skip).
 env:
   CI_CLASS: heavy
 
@@ -317,6 +325,35 @@ jobs:
             --turn-budget "${TURN_BUDGET}" \
             --workspace-id "${WORKSPACE_ID}" \
             2>&1 | tee evals/results/todo-app/_logs/scenario.log
+
+      - name: Assert browser_smoke verdict is present and valid
+        if: always()
+        run: |
+          set -euo pipefail
+          # Loud-skip guard (issue #907): if the capture step did not run before
+          # sf-eval, or if it failed to write $GITHUB_ENV, result.json will show
+          # the default `skipped` value. That is a silent false green, so this
+          # step fails the job. A genuine `fail` verdict remains observed-not-gating
+          # per evals/scenarios/todo-app/acceptance.md.
+          RESULT="evals/results/todo-app/${WORKSPACE_ID}/result.json"
+          if [ ! -f "${RESULT}" ]; then
+            echo "browser_smoke assertion FAILED: ${RESULT} does not exist" >&2
+            exit 1
+          fi
+
+          python3 -c "
+          import json, sys
+          with open('${RESULT}') as f:
+              d = json.load(f)
+          v = d.get('browser_smoke')
+          if v not in ('pass', 'fail'):
+              if v is None:
+                  print('browser_smoke assertion FAILED: field is absent from result.json', file=sys.stderr)
+              else:
+                  print(f'browser_smoke assertion FAILED: field is {v!r} (must be pass or fail)', file=sys.stderr)
+              sys.exit(1)
+          print(f'browser_smoke assertion OK: {v}')
+          "
 
       - name: Stop the appliance and the opencode server
         if: always()

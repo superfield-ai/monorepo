@@ -3545,6 +3545,7 @@ dependencies = [
  "nexum",
  "serde",
  "serde_json",
+ "serde_yaml",
  "sf-db",
  "sf-loop",
  "sqlx",
