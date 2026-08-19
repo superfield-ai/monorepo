@@ -20,11 +20,13 @@ function makeIssue(overrides: Partial<Issue> = {}): Issue {
 }
 
 function spawnReturning(json: string) {
-  return vi.fn(async (_opts: AgentOpts): Promise<AgentResult> => ({
-    sessionId: "sess",
-    output: json,
-    isError: false,
-  }));
+  return vi.fn(
+    async (_opts: AgentOpts): Promise<AgentResult> => ({
+      sessionId: "sess",
+      output: json,
+      isError: false,
+    }),
+  );
 }
 
 const sampleViolation: PrePRSelfAuditViolation = {

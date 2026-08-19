@@ -19,7 +19,9 @@ export interface LocalOAuthCredential {
 }
 
 export type GcpCredentialType =
-  "service-account-json" | "access-token" | "oauth-token-file";
+  | "service-account-json"
+  | "access-token"
+  | "oauth-token-file";
 
 export interface GcpCredentialDescriptor {
   key?: ServiceAccountKey;

@@ -293,7 +293,8 @@ describe("dev loop — escalation + remediation e2e (#94)", () => {
           expect(marker).not.toBeNull();
           expect(marker?.selfAuditRemediationCount).toBe(1);
           const pending = marker?.selfAuditPendingViolations as
-            { rule_id: string }[] | undefined;
+            | { rule_id: string }[]
+            | undefined;
           expect(Array.isArray(pending)).toBe(true);
           expect(pending?.length).toBeGreaterThan(0);
           expect(pending?.[0]?.rule_id).toBe("TEST-A-002");

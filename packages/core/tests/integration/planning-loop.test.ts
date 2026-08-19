@@ -85,33 +85,39 @@ function makeClient(overrides: Partial<GitHubClient> = {}): GitHubClient {
 
 // Fake step implementations
 function fakeAudit(result: Partial<IssueAuditResult> = {}) {
-  return vi.fn(async (): Promise<IssueAuditResult> => ({
-    audited: 0,
-    nonConformant: [],
-    reports: {},
-    ...result,
-  }));
+  return vi.fn(
+    async (): Promise<IssueAuditResult> => ({
+      audited: 0,
+      nonConformant: [],
+      reports: {},
+      ...result,
+    }),
+  );
 }
 
 function fakeBlueprint(result: Partial<BlueprintConformanceResult> = {}) {
-  return vi.fn(async (): Promise<BlueprintConformanceResult> => ({
-    checked: 0,
-    issuesWithViolations: [],
-    reports: {},
-    ...result,
-  }));
+  return vi.fn(
+    async (): Promise<BlueprintConformanceResult> => ({
+      checked: 0,
+      issuesWithViolations: [],
+      reports: {},
+      ...result,
+    }),
+  );
 }
 
 function fakeCoverage(result: Partial<PlanCoverageResult> = {}) {
-  return vi.fn(async (): Promise<PlanCoverageResult> => ({
-    planCreated: false,
-    appended: [],
-    alreadyCovered: [],
-    skipped: [],
-    llmPlaced: [],
-    createdPhases: [],
-    ...result,
-  }));
+  return vi.fn(
+    async (): Promise<PlanCoverageResult> => ({
+      planCreated: false,
+      appended: [],
+      alreadyCovered: [],
+      skipped: [],
+      llmPlaced: [],
+      createdPhases: [],
+      ...result,
+    }),
+  );
 }
 
 // ── tests ─────────────────────────────────────────────────────────────────────

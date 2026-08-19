@@ -62,26 +62,32 @@ function makeConfig(): Config {
   };
 }
 
-const noOpAudit = vi.fn(async (): Promise<IssueAuditResult> => ({
-  audited: 0,
-  nonConformant: [],
-  reports: {},
-}));
+const noOpAudit = vi.fn(
+  async (): Promise<IssueAuditResult> => ({
+    audited: 0,
+    nonConformant: [],
+    reports: {},
+  }),
+);
 
-const noOpBlueprint = vi.fn(async (): Promise<BlueprintConformanceResult> => ({
-  checked: 0,
-  issuesWithViolations: [],
-  reports: {},
-}));
+const noOpBlueprint = vi.fn(
+  async (): Promise<BlueprintConformanceResult> => ({
+    checked: 0,
+    issuesWithViolations: [],
+    reports: {},
+  }),
+);
 
-const noOpCoverage = vi.fn(async (): Promise<PlanCoverageResult> => ({
-  planCreated: false,
-  appended: [],
-  alreadyCovered: [],
-  skipped: [],
-  llmPlaced: [],
-  createdPhases: [],
-}));
+const noOpCoverage = vi.fn(
+  async (): Promise<PlanCoverageResult> => ({
+    planCreated: false,
+    appended: [],
+    alreadyCovered: [],
+    skipped: [],
+    llmPlaced: [],
+    createdPhases: [],
+  }),
+);
 
 // ── tests ─────────────────────────────────────────────────────────────────────
 
