@@ -153,6 +153,28 @@ and
 [`result.mixed.json`](../crates/sf-eval/tests/fixtures/corpus/result.mixed.json)
 for example envelopes.
 
+## Tier-1 fixture corpus (PR-CI regression net)
+
+The planned Tier-1 grader job (docs/eval-design.md sequencing item 3, #866)
+replays checked-in recorded artifacts through each grader spec'd in
+[`graders/`](graders/) that has a deterministic no-model mode, and asserts its
+verdict — no live model, no DB, no network. Of the three specs today, two
+qualify: `project-graph` (structural fallback,
+[`sf_eval::project_graph_pass`](../crates/sf-eval/src/graders.rs)) and
+`compiling-candidate`
+([`sf_eval::compiling_candidate_pass`](../crates/sf-eval/src/graders.rs));
+`browser-smoke` does not (it drives a live Studio session) and is out of scope
+for Tier-1.
+
+A fixture corpus pinning this layout — one `passing.*` and one `regressed.*`
+recorded-artifact sample per in-scope grader — lives at
+[`crates/sf-eval/tests/fixtures/tier1/`](../crates/sf-eval/tests/fixtures/tier1/),
+proven against the real grader functions by
+[`crates/sf-eval/tests/tier1_graders.rs`](../crates/sf-eval/tests/tier1_graders.rs).
+#866 owns extending each pair into the full per-grader matrix (including a
+`malformed.*` sample) and the required `eval-tier1.yml` workflow that runs
+`cargo nextest run -p sf-eval --no-tests=fail` per PR.
+
 ## Glossary
 
 - **Turn** — one completed gardening step (the loop has 9 per pass). The headline
