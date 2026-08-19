@@ -24,13 +24,14 @@ README="evals/scenarios/todo-app/README.md"
 WORKFLOW=".github/workflows/eval-todo-app.yml"
 SCRIPT="scripts/check-doc-conformance.sh"
 
-# Copy the entire asserted doc set (all tracked files the script checks) into a
-# temp tree, then mutate only the README. The temp tree is not a git repo, so
-# check-doc-conformance.sh resolves its root from $(dirname "$0")/.., i.e. the
-# temp tree itself.
+# Copy the working tree into a temp tree, then mutate only the README. We avoid
+# git commands here because CI containers may flag the checkout as a dubious
+# ownership repository, which would make `git ls-files` fail before we can use
+# it. The temp tree is not a git repo, so check-doc-conformance.sh resolves its
+# root from $(dirname "$0")/.., i.e. the temp tree itself.
 TMP_TREE="$TMP/tree"
 mkdir -p "$TMP_TREE"
-git ls-files | tar -T - -cf - | (cd "$TMP_TREE" && tar -xf -)
+find . -mindepth 1 -maxdepth 1 -not -name '.git' -exec cp -a {} "$TMP_TREE/" \;
 
 # Zero-assertions guard: the asserted file must exist in the temp tree.
 if [ ! -f "$TMP_TREE/$README" ]; then
