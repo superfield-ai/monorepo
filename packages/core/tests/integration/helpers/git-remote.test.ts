@@ -178,7 +178,9 @@ describe("createTestGitRemote", () => {
 
       for (const call of connectSpy.mock.calls) {
         const arg = call[0] as
-          { host?: string; address?: string; port?: number } | string | number;
+          | { host?: string; address?: string; port?: number }
+          | string
+          | number;
         if (typeof arg === "object" && arg !== null) {
           const host = arg.host ?? arg.address ?? "127.0.0.1";
           expect(["127.0.0.1", "::1", "localhost"]).toContain(host);

@@ -32,7 +32,8 @@ const webRoot = dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
 
 const reactPluginModule = require("@vitejs/plugin-react") as
-  { default?: () => unknown } | (() => unknown);
+  | { default?: () => unknown }
+  | (() => unknown);
 const react =
   typeof reactPluginModule === "function"
     ? reactPluginModule

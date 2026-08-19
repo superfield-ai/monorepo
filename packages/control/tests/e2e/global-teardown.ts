@@ -2,10 +2,12 @@ import type { ChildProcess } from "node:child_process";
 
 export default async function globalTeardown() {
   const proc = (globalThis as Record<string, unknown>).__studioProc as
-    ChildProcess | undefined;
+    | ChildProcess
+    | undefined;
   // Shut down the Rust sf-serve process started by global-setup.ts.
   const origPath = (globalThis as Record<string, unknown>).__origPath as
-    string | undefined;
+    | string
+    | undefined;
   const studioLogPath = (globalThis as Record<string, unknown>)
     .__studioLogPath as string | undefined;
 
