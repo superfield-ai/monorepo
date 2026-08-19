@@ -27,8 +27,17 @@ cd "$ROOT"
 
 # Same prettier invocation as scripts/check-doc-prettier.sh. Arrays preserve the
 # quoted globs so Prettier resolves them, not the shell.
-PRETTIER_CHECK=(bunx prettier --check '*.md' 'docs/**/*.md' 'evals/**/*.md' 'crates/sharp/docs/**/*.md')
-PRETTIER_LIST=(bunx prettier --list-different '*.md' 'docs/**/*.md' 'evals/**/*.md' 'crates/sharp/docs/**/*.md')
+CHECKED_GLOBS=(
+  '*.md'
+  '.agents/*.md'
+  'docs/**/*.md'
+  'evals/**/*.md'
+  'crates/**/docs/**/*.md'
+  'crates/**/README.md'
+  'packages/*/README.md'
+)
+PRETTIER_CHECK=(bunx prettier --check "${CHECKED_GLOBS[@]}")
+PRETTIER_LIST=(bunx prettier --list-different "${CHECKED_GLOBS[@]}")
 
 fail=0
 
@@ -61,8 +70,95 @@ assert_included "evals/scenarios/todo-app/README.md"
 assert_included "workproduct-format-report.md"
 assert_included "workproduct-format-research-prompt.md"
 
-# 2) Zero-files guard: a known-bad fixture must produce a non-empty
-#    --list-different output, so a glob matching nothing cannot report green.
+# 2) Coverage-completeness guard: every .md file in the repo must be either
+#    inside the checked set or explicitly exempt via `.prettierignore`. A
+#    markdown path outside both sets fails loudly rather than being silently
+#    unchecked (issue #903).
+set +e
+coverage_out=$(python3 - "${CHECKED_GLOBS[@]}" <<'PY'
+import fnmatch
+import re
+import sys
+from pathlib import Path
+
+checked_globs = sys.argv[1:]
+
+def glob_to_regex(glob: str) -> re.Pattern[str]:
+    parts = glob.split("/")
+    regex_parts = ["^"]
+    for i, part in enumerate(parts):
+        if part == "**":
+            if i == len(parts) - 1:
+                regex_parts.append(".*")
+            else:
+                regex_parts.append("(?:.*/)?")
+        elif "**" in part:
+            raise ValueError(f"unsupported glob part: {part!r}")
+        else:
+            escaped = ""
+            for c in part:
+                if c == "*":
+                    escaped += "[^/]*"
+                elif c == "?":
+                    escaped += "[^/]"
+                else:
+                    escaped += re.escape(c)
+            regex_parts.append(escaped)
+            if i < len(parts) - 1:
+                regex_parts.append("/")
+    regex_parts.append("$")
+    return re.compile("".join(regex_parts))
+
+glob_regexes = [glob_to_regex(g) for g in checked_globs]
+
+def is_covered(path_str: str) -> bool:
+    return any(r.match(path_str) for r in glob_regexes)
+
+ignore_patterns = []
+for line in Path(".prettierignore").read_text().splitlines():
+    line = line.strip()
+    if line and not line.startswith("#"):
+        ignore_patterns.append(line.rstrip("/"))
+
+def is_ignored(path_str: str) -> bool:
+    for ig in ignore_patterns:
+        if path_str == ig or path_str.startswith(ig + "/"):
+            return True
+        if fnmatch.fnmatch(path_str, ig):
+            return True
+    return False
+
+uncovered = []
+for p in sorted(Path(".").rglob("*.md")):
+    sp = str(p)
+    if any(part in sp for part in ["node_modules", ".git", "target", "dist"]):
+        continue
+    if is_covered(sp):
+        continue
+    if is_ignored(sp):
+        continue
+    uncovered.append(sp)
+
+if uncovered:
+    sys.stderr.write("FAIL  markdown files outside checked set and not .prettierignore'd:\n")
+    for f in uncovered:
+        sys.stderr.write(f"  - {f}\n")
+    sys.exit(1)
+
+print("PASS  coverage-completeness guard: every .md file is checked or explicitly ignored")
+PY
+)
+coverage_rc=$?
+set -e
+if [ "$coverage_rc" -ne 0 ]; then
+  printf '%s\n' "$coverage_out" >&2
+  fail=1
+else
+  printf '%s\n' "$coverage_out"
+fi
+
+# 3) Zero-files guard: a known-bad fixture must produce a non-empty
+#    --list-different output, so a glob matching nothing cannot masquerade as green.
 TMP_MD="DOC_PRETTIER_SELFTEST_TEMP.md"
 rm -f "$TMP_MD"
 trap 'rm -f "$TMP_MD"' EXIT
@@ -86,7 +182,7 @@ else
   printf '  output:\n%s\n' "$list_out" | sed 's/^/    /' >&2
 fi
 
-# 3) Anti-bypass: the same prettier check that runs in CI must fail on the
+# 4) Anti-bypass: the same prettier check that runs in CI must fail on the
 #    deliberately unformatted file and must name it in the output.
 set +e
 check_out=$("${PRETTIER_CHECK[@]}" 2>&1)

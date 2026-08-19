@@ -11,10 +11,13 @@
 # CHECKED SET
 #   The checked set is explicit and must subsume every markdown file that is not
 #   legitimately exempt via `.prettierignore`:
-#     - *.md                    (repo root, e.g. workproduct-format-*.md)
-#     - docs/**/*.md            (all durable docs, including testing-invariants.md)
-#     - evals/**/*.md           (eval scenarios and seeds, e.g. todo-app README)
-#     - crates/sharp/docs/**/*.md (Sharp doc set)
+#     - *.md                       (repo root, e.g. workproduct-format-*.md)
+#     - .agents/*.md               (agent instructions/warnings)
+#     - docs/**/*.md               (all durable docs, including testing-invariants.md)
+#     - evals/**/*.md              (eval scenarios and seeds, e.g. todo-app README)
+#     - crates/**/docs/**/*.md     (per-crate doc sets, including Sharp and fastenv)
+#     - crates/**/README.md        (crate READMEs)
+#     - packages/*/README.md       (package READMEs)
 #
 # CI_WIRING
 #   Run as a step in .github/workflows/doc-conformance.yml, which has NO paths
@@ -35,4 +38,11 @@ cd "$ROOT"
 
 # Quoted globs are passed to Prettier so it resolves them (and so a zero-match
 # glob fails loudly instead of being silently skipped).
-bunx prettier --check '*.md' 'docs/**/*.md' 'evals/**/*.md' 'crates/sharp/docs/**/*.md'
+bunx prettier --check \
+  '*.md' \
+  '.agents/*.md' \
+  'docs/**/*.md' \
+  'evals/**/*.md' \
+  'crates/**/docs/**/*.md' \
+  'crates/**/README.md' \
+  'packages/*/README.md'

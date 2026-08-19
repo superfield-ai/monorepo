@@ -6,4 +6,13 @@ packages/core/blueprint-data.generated.ts
 # output is compared byte-for-byte against supported.yml, so prettier must not
 # reformat these or the golden round-trip test breaks.
 crates/fastenv/tests/fixtures/gha/
+
+# Test fixtures and templates whose content is asserted byte-for-byte or copied
+# verbatim by tests; formatting them would break the tests that depend on their
+# exact layout (issue #903).
+crates/sf-eval/tests/fixtures/corpus/
+e2e/fixtures/hello-world/README.md
+packages/core/templates/container/README.md
+packages/core/tests/fixtures/digitalocean/README.md
+tests/fixtures/
 ~/
