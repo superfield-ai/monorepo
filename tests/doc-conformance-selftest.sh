@@ -11,10 +11,10 @@
 
 set -euo pipefail
 
-ROOT="$(git rev-parse --show-toplevel 2>/dev/null)" || {
-  echo "ERROR: must run inside a git repository" >&2
-  exit 1
-}
+# Resolve repo root from the script location so the self-test runs correctly in
+# CI containers (including shallow checkouts) even if git's top-level lookup
+# is momentarily unavailable.
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 TMP="$(mktemp -d)"
