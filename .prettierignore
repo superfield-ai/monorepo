@@ -15,3 +15,8 @@ e2e/fixtures/hello-world/README.md
 packages/core/templates/container/README.md
 packages/core/tests/fixtures/digitalocean/README.md
 tests/fixtures/
+
+# Dev-scout workproduct artifacts: temporary seam reports that gate implementation
+# issues. They are not canonical documentation and may have environment-specific
+# formatting, so prettier is intentionally skipped for them (issue #903).
+docs/scout/*.md
