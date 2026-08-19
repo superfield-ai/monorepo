@@ -116,37 +116,41 @@ pub enum ProjectGraphError {
     /// A raw JSON assertion payload does not match a known [`AssertionKind`]
     /// or that kind's typed parameter schema.
     ///
-    /// Dev-scout stub (issue #869) — [`validate_assertion_spec`] is the only
-    /// caller today; #860 wires the equivalent check into the real
-    /// [`insert_acceptance_criterion`] write path.
+    /// Returned by [`validate_assertion_spec`] and by
+    /// [`insert_acceptance_criterion`] (issue #860), which validates before
+    /// writing so a rejected assertion leaves no row behind.
     #[error("invalid assertion spec: {0}")]
     InvalidAssertionSpec(String),
 }
 
 // ---------------------------------------------------------------------------
-// Assertion schema stub (dev-scout #869, "Executable acceptance criteria"
+// Assertion schema (originally a dev-scout stub, issue #869; wired into the
+// real write and read paths by issue #860, "Executable acceptance criteria"
 // phase) — see docs/eval-design.md §"The missing primitive: executable
 // acceptance criteria" and docs/architecture.md.
 //
-// This section pins the COMPILE-TIME SHAPE of the assertion schema so #860
-// (the feature that adds the real `0004_acceptance_assertions.sql` migration
-// and wires write-time validation into `insert_acceptance_criterion`) has a
-// stable type to build against instead of guessing at the wire shape. It is
-// a stub, not the feature:
+// #869 pinned the COMPILE-TIME SHAPE of the assertion schema below
+// (`AssertionKind`, the per-kind param structs, `AssertionSpec`,
+// `validate_assertion_spec`) as a stable type for #860 to build against.
+// #860 adds the rest of the feature:
 //
-// - No migration is added here (#860 owns `0004_acceptance_assertions.sql`).
-// - [`insert_acceptance_criterion`] above is UNCHANGED — it still stores only
-//   a title. Nothing in this crate calls [`validate_assertion_spec`] yet;
-//   wiring it in is #860's write path, not this stub's no-op one.
-// - [`traverse_project_graph`] / [`ProjectNode`] do not yet carry
-//   `assertion_kind` / `assertion_params` — #860's read-path extension adds
-//   that column projection.
+// - `crates/nexum/migrations/0004_acceptance_assertions.sql` — the
+//   `assertion_kind` / `assertion_params` columns on `nexum.project_nodes`,
+//   CHECK-constrained to this schema's vocabulary and to
+//   `node_type = 'AcceptanceCriterion'`.
+// - [`insert_acceptance_criterion`] now takes an optional raw JSON assertion
+//   payload, calls [`validate_assertion_spec`] on it BEFORE inserting any
+//   row (so a rejected assertion leaves no row behind), and persists the
+//   validated kind + params.
+// - [`traverse_project_graph`] / [`ProjectNode`] project `assertion_kind` /
+//   `assertion_params` back out on read.
 //
 // serde does the write-time-rejection work #860's AC requires: an unknown
 // `kind` or a `params` shape that does not match its kind's typed struct
 // fails to deserialize (see the round-trip + malformed-input unit tests
-// below), so #860 only has to call `serde_json::from_value` (or this stub's
-// [`validate_assertion_spec`] convenience wrapper) at insert time.
+// below), so [`insert_acceptance_criterion`] only has to call
+// [`validate_assertion_spec`] at insert time rather than hand-rolling a
+// validator.
 // ---------------------------------------------------------------------------
 
 /// The three assertion kinds an `AcceptanceCriterion` can carry
@@ -236,15 +240,30 @@ impl AssertionSpec {
             AssertionSpec::RequiredTest(_) => AssertionKind::RequiredTest,
         }
     }
+
+    /// The typed parameters as a JSON `Value`, with the `kind` tag stripped
+    /// (issue #860) — the shape persisted in
+    /// `nexum.project_nodes.assertion_params` by
+    /// [`insert_acceptance_criterion`]. Pair with [`AssertionSpec::kind`] to
+    /// recover the full tagged shape ([`validate_assertion_spec`] does the
+    /// reverse: kind + params -> validated `AssertionSpec`).
+    pub fn params_json(&self) -> serde_json::Value {
+        match self {
+            AssertionSpec::HttpProbe(p) => serde_json::to_value(p),
+            AssertionSpec::Playwright(p) => serde_json::to_value(p),
+            AssertionSpec::RequiredTest(p) => serde_json::to_value(p),
+        }
+        .expect("typed assertion parameter structs always serialize to JSON")
+    }
 }
 
 /// Validate a raw JSON assertion payload against the [`AssertionSpec`]
-/// schema — the **no-op write path** this dev-scout pins (issue #869).
+/// schema. Originally a dev-scout no-op stub (issue #869); called by
+/// [`insert_acceptance_criterion`] (issue #860) before any row is written,
+/// so a rejected assertion never leaves a partial `AcceptanceCriterion`
+/// node behind.
 ///
-/// This performs no database access and is not called by
-/// [`insert_acceptance_criterion`]; #860 wires the equivalent check into
-/// that write path (or calls this function directly) alongside the
-/// `0004_acceptance_assertions.sql` migration.
+/// Performs no database access — pure serde validation.
 ///
 /// # Errors
 ///
@@ -483,7 +502,9 @@ pub async fn insert_required_test(
 }
 
 /// Insert an `AcceptanceCriterion` node and link it to a parent `Feature`
-/// node.
+/// node, optionally attaching an executable assertion (issue #860;
+/// docs/eval-design.md §"The missing primitive: executable acceptance
+/// criteria").
 ///
 /// Returns the `project_nodes.id` of the new AcceptanceCriterion node.
 ///
@@ -492,17 +513,47 @@ pub async fn insert_required_test(
 /// * `pool`       — shared [`sqlx::PgPool`].
 /// * `feature_id` — `project_nodes.id` of the parent Feature node.
 /// * `title`      — the acceptance criterion description.
+/// * `assertion`  — optional raw JSON assertion payload (`{"kind": ...,
+///   "params": {...}}`). Validated against [`AssertionSpec`] via
+///   [`validate_assertion_spec`] **before** any row is written, so a
+///   malformed payload leaves no partial `AcceptanceCriterion` node behind.
+///   `None` inserts a criterion with no assertion attached (title-only, the
+///   pre-#860 behaviour).
 ///
 /// # Errors
 ///
-/// Returns [`ProjectGraphError::Database`] on Postgres errors.
+/// - [`ProjectGraphError::InvalidAssertionSpec`] — `assertion` is `Some` and
+///   its `kind` is unrecognized, or its `params` do not match that kind's
+///   typed schema. No node is inserted.
+/// - [`ProjectGraphError::Database`] — a Postgres error.
 pub async fn insert_acceptance_criterion(
     pool: &PgPool,
     feature_id: Uuid,
     title: &str,
+    assertion: Option<&serde_json::Value>,
 ) -> Result<Uuid, ProjectGraphError> {
+    // Validate before writing anything: an unknown kind or malformed params
+    // must leave no row behind (issue #860 acceptance criteria).
+    let validated = match assertion {
+        Some(raw) => Some(validate_assertion_spec(raw)?),
+        None => None,
+    };
+
     let doc_id = ensure_project_doc(pool).await?;
     let ac_id = insert_project_node(pool, doc_id, title, "AcceptanceCriterion", None).await?;
+
+    if let Some(spec) = &validated {
+        sqlx::query(
+            "UPDATE nexum.project_nodes \
+             SET assertion_kind = $1, assertion_params = $2 \
+             WHERE id = $3",
+        )
+        .bind(spec.kind().as_str())
+        .bind(spec.params_json())
+        .bind(ac_id)
+        .execute(pool)
+        .await?;
+    }
 
     // Link: Feature → AcceptanceCriterion
     let feature_block = block_id_for_node(pool, feature_id).await?;
@@ -670,15 +721,30 @@ pub async fn list_nodes(
     pool: &PgPool,
     node_type: Option<&str>,
 ) -> Result<Vec<ProjectNode>, ProjectGraphError> {
-    let rows = sqlx::query_as::<_, (Uuid, Uuid, String, String, String, Option<String>)>(
+    #[allow(clippy::type_complexity)]
+    let rows = sqlx::query_as::<
+        _,
+        (
+            Uuid,
+            Uuid,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+            Option<serde_json::Value>,
+        ),
+    >(
         r#"
         SELECT
-            pn.id           AS node_id,
-            pn.block_id     AS block_id,
-            b.content       AS content,
-            pn.node_type    AS node_type,
-            pn.state        AS state,
-            pn.external_ref AS external_ref
+            pn.id                AS node_id,
+            pn.block_id          AS block_id,
+            b.content            AS content,
+            pn.node_type         AS node_type,
+            pn.state             AS state,
+            pn.external_ref      AS external_ref,
+            pn.assertion_kind    AS assertion_kind,
+            pn.assertion_params  AS assertion_params
         FROM nexum.project_nodes pn
         JOIN nexum.blocks b ON b.id = pn.block_id
         WHERE ($1::TEXT IS NULL OR pn.node_type = $1)
@@ -692,15 +758,28 @@ pub async fn list_nodes(
     Ok(rows
         .into_iter()
         .map(
-            |(id, block_id, content, node_type, state, external_ref)| ProjectNode {
+            |(
                 id,
                 block_id,
                 content,
                 node_type,
                 state,
                 external_ref,
-                via_rel_type: None,
-                parent_block_id: None,
+                assertion_kind,
+                assertion_params,
+            )| {
+                ProjectNode {
+                    id,
+                    block_id,
+                    content,
+                    node_type,
+                    state,
+                    external_ref,
+                    assertion_kind,
+                    assertion_params,
+                    via_rel_type: None,
+                    parent_block_id: None,
+                }
             },
         )
         .collect())
@@ -725,6 +804,17 @@ pub struct ProjectNode {
     pub state: String,
     /// Optional external reference.
     pub external_ref: Option<String>,
+    /// The executable assertion kind attached to this node, if any (only
+    /// `AcceptanceCriterion` nodes carry one — issue #860). Wire values match
+    /// [`AssertionKind::as_str`]: `"http-probe"`, `"playwright"`,
+    /// `"required-test"`.
+    pub assertion_kind: Option<String>,
+    /// The typed assertion parameters attached to this node, if any — the
+    /// JSON shape returned by [`AssertionSpec::params_json`] for the kind in
+    /// [`ProjectNode::assertion_kind`]. Always `Some` together with
+    /// `assertion_kind` and `None` together (issue #860's pairing CHECK
+    /// constraint in `0004_acceptance_assertions.sql`).
+    pub assertion_params: Option<serde_json::Value>,
     /// The `rel_type` of the edge that led to this node (`None` for root
     /// Issue nodes).
     pub via_rel_type: Option<String>,
@@ -746,6 +836,7 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
     // Recursive CTE:
     // 1. Seed: all Issue nodes (no parent).
     // 2. Recurse: follow any project: edge from each reached node.
+    #[allow(clippy::type_complexity)]
     let rows = sqlx::query_as::<
         _,
         (
@@ -756,6 +847,8 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
             String,
             Option<String>,
             Option<String>,
+            Option<serde_json::Value>,
+            Option<String>,
             Option<Uuid>,
         ),
     >(
@@ -763,14 +856,16 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
         WITH RECURSIVE project_tree AS (
             -- Seed: all Issue nodes
             SELECT
-                pn.id            AS node_id,
-                pn.block_id      AS block_id,
-                b.content        AS content,
-                pn.node_type     AS node_type,
-                pn.state         AS state,
-                pn.external_ref  AS external_ref,
-                NULL::TEXT       AS via_rel_type,
-                NULL::UUID       AS parent_block_id
+                pn.id                AS node_id,
+                pn.block_id          AS block_id,
+                b.content            AS content,
+                pn.node_type         AS node_type,
+                pn.state             AS state,
+                pn.external_ref      AS external_ref,
+                pn.assertion_kind    AS assertion_kind,
+                pn.assertion_params  AS assertion_params,
+                NULL::TEXT           AS via_rel_type,
+                NULL::UUID           AS parent_block_id
             FROM nexum.project_nodes pn
             JOIN nexum.blocks b ON b.id = pn.block_id
             WHERE pn.node_type = 'Issue'
@@ -779,14 +874,16 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
 
             -- Recurse: follow project: edges
             SELECT
-                child_pn.id          AS node_id,
-                child_pn.block_id    AS block_id,
-                child_b.content      AS content,
-                child_pn.node_type   AS node_type,
-                child_pn.state       AS state,
-                child_pn.external_ref AS external_ref,
-                l.rel_type           AS via_rel_type,
-                pt.block_id          AS parent_block_id
+                child_pn.id               AS node_id,
+                child_pn.block_id         AS block_id,
+                child_b.content           AS content,
+                child_pn.node_type        AS node_type,
+                child_pn.state            AS state,
+                child_pn.external_ref     AS external_ref,
+                child_pn.assertion_kind   AS assertion_kind,
+                child_pn.assertion_params AS assertion_params,
+                l.rel_type                AS via_rel_type,
+                pt.block_id               AS parent_block_id
             FROM project_tree pt
             JOIN nexum.links l
                 ON l.src = pt.block_id
@@ -802,6 +899,8 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
             node_type,
             state,
             external_ref,
+            assertion_kind,
+            assertion_params,
             via_rel_type,
             parent_block_id
         FROM project_tree
@@ -820,6 +919,8 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
                 node_type,
                 state,
                 external_ref,
+                assertion_kind,
+                assertion_params,
                 via_rel_type,
                 parent_block_id,
             )| {
@@ -830,6 +931,8 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
                     node_type,
                     state,
                     external_ref,
+                    assertion_kind,
+                    assertion_params,
                     via_rel_type,
                     parent_block_id,
                 }
@@ -1177,7 +1280,7 @@ mod tests {
             .await
             .expect("insert feature failed");
 
-        let ac_id = insert_acceptance_criterion(&pool, feature_id, "AC for AC chain test")
+        let ac_id = insert_acceptance_criterion(&pool, feature_id, "AC for AC chain test", None)
             .await
             .expect("insert_acceptance_criterion failed");
 
@@ -1227,6 +1330,183 @@ mod tests {
 
         // Cleanup.
         cleanup_test_nodes(&pool, &[issue_id, feature_id, ac_id]).await;
+    }
+
+    /// Integration test (issue #860): insert an `AcceptanceCriterion` under a
+    /// Feature for each of the three assertion kinds with valid parameters
+    /// and assert `traverse_project_graph` returns each node with its kind
+    /// and parameters intact; also assert that an insert with an unknown
+    /// kind, and an insert whose parameters fail the kind's typed schema,
+    /// both return `Err(ProjectGraphError::InvalidAssertionSpec)` and leave
+    /// no row behind.
+    ///
+    /// Acceptance criteria: "Valid roundtrip" and "Write-time rejection"
+    /// (issue #860).
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with nexum migrations applied"]
+    async fn project_graph_acceptance_assertion_roundtrip() {
+        let cfg = crate::config::DbConfig::from_env()
+            .expect("DATABASE_URL must be set for integration tests");
+        let pool = crate::pool::connect(&cfg)
+            .await
+            .expect("pool creation failed");
+
+        let issue_id = insert_issue(&pool, "Issue for assertion roundtrip test", None)
+            .await
+            .expect("insert issue failed");
+        let feature_id = insert_feature(&pool, issue_id, "Feature for assertion roundtrip test")
+            .await
+            .expect("insert feature failed");
+
+        // ── Valid roundtrip: one AcceptanceCriterion per kind ───────────────
+
+        let http_probe = serde_json::json!({
+            "kind": "http-probe",
+            "params": { "method": "POST", "path": "/orders", "expected_status": 201 },
+        });
+        let http_probe_ac_id = insert_acceptance_criterion(
+            &pool,
+            feature_id,
+            "AC: http-probe roundtrip",
+            Some(&http_probe),
+        )
+        .await
+        .expect("valid http-probe assertion must insert");
+
+        let playwright = serde_json::json!({
+            "kind": "playwright",
+            "params": { "path": "/checkout", "expectation": "confirmation toast shown" },
+        });
+        let playwright_ac_id = insert_acceptance_criterion(
+            &pool,
+            feature_id,
+            "AC: playwright roundtrip",
+            Some(&playwright),
+        )
+        .await
+        .expect("valid playwright assertion must insert");
+
+        let required_test = serde_json::json!({
+            "kind": "required-test",
+            "params": { "test_name": "sf_loop::acceptance::per_criterion_verdicts_recorded" },
+        });
+        let required_test_ac_id = insert_acceptance_criterion(
+            &pool,
+            feature_id,
+            "AC: required-test roundtrip",
+            Some(&required_test),
+        )
+        .await
+        .expect("valid required-test assertion must insert");
+
+        let nodes = traverse_project_graph(&pool)
+            .await
+            .expect("traverse failed");
+
+        let find = |id: Uuid| -> &ProjectNode {
+            nodes
+                .iter()
+                .find(|n| n.id == id)
+                .expect("assertion-bearing AcceptanceCriterion node must be in traversal")
+        };
+
+        let found_http = find(http_probe_ac_id);
+        assert_eq!(found_http.assertion_kind.as_deref(), Some("http-probe"));
+        assert_eq!(
+            found_http
+                .assertion_params
+                .as_ref()
+                .expect("params present"),
+            &http_probe["params"],
+            "http-probe params must round-trip intact"
+        );
+
+        let found_playwright = find(playwright_ac_id);
+        assert_eq!(
+            found_playwright.assertion_kind.as_deref(),
+            Some("playwright")
+        );
+        assert_eq!(
+            found_playwright
+                .assertion_params
+                .as_ref()
+                .expect("params present"),
+            &playwright["params"],
+            "playwright params must round-trip intact"
+        );
+
+        let found_required_test = find(required_test_ac_id);
+        assert_eq!(
+            found_required_test.assertion_kind.as_deref(),
+            Some("required-test")
+        );
+        assert_eq!(
+            found_required_test
+                .assertion_params
+                .as_ref()
+                .expect("params present"),
+            &required_test["params"],
+            "required-test params must round-trip intact"
+        );
+
+        // ── Write-time rejection: unknown kind ──────────────────────────────
+
+        let node_count_before: i64 = sqlx::query_scalar("SELECT count(*) FROM nexum.project_nodes")
+            .fetch_one(&pool)
+            .await
+            .expect("count query failed");
+
+        let unknown_kind = serde_json::json!({
+            "kind": "smoke-test",
+            "params": { "path": "/x" },
+        });
+        let err = insert_acceptance_criterion(
+            &pool,
+            feature_id,
+            "AC: should not be inserted (unknown kind)",
+            Some(&unknown_kind),
+        )
+        .await
+        .expect_err("unknown assertion kind must be rejected at write time");
+        assert!(matches!(err, ProjectGraphError::InvalidAssertionSpec(_)));
+
+        // ── Write-time rejection: malformed params for a known kind ─────────
+
+        let malformed_params = serde_json::json!({
+            "kind": "http-probe",
+            "params": { "method": "GET", "path": "/orders", "expected_status": "ok" },
+        });
+        let err = insert_acceptance_criterion(
+            &pool,
+            feature_id,
+            "AC: should not be inserted (malformed params)",
+            Some(&malformed_params),
+        )
+        .await
+        .expect_err("malformed assertion params must be rejected at write time");
+        assert!(matches!(err, ProjectGraphError::InvalidAssertionSpec(_)));
+
+        let node_count_after: i64 = sqlx::query_scalar("SELECT count(*) FROM nexum.project_nodes")
+            .fetch_one(&pool)
+            .await
+            .expect("count query failed");
+        assert_eq!(
+            node_count_before, node_count_after,
+            "rejected assertion writes must leave no row behind"
+        );
+
+        // Cleanup.
+        cleanup_test_nodes(
+            &pool,
+            &[
+                issue_id,
+                feature_id,
+                http_probe_ac_id,
+                playwright_ac_id,
+                required_test_ac_id,
+            ],
+        )
+        .await;
     }
 
     /// Integration test: insert a fixture Issue node with state='in_progress'

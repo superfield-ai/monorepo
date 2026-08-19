@@ -54,10 +54,17 @@
 //!   PullRequest) stored in `nexum.project_nodes`; edges in `nexum.links`
 //!   with `project:` prefixed `rel_type` values; recursive CTE traversal for
 //!   the `GET /pages/project` read path. [`project_graph::AssertionKind`] /
-//!   [`project_graph::AssertionSpec`] are a dev-scout stub (issue #869) pinning
-//!   the executable-acceptance-criteria assertion schema shape (docs/eval-design.md)
-//!   for #860 to wire into a real write path and migration; no-op today —
-//!   [`project_graph::insert_acceptance_criterion`] is unchanged.
+//!   [`project_graph::AssertionSpec`] pin the executable-acceptance-criteria
+//!   assertion schema shape (docs/eval-design.md), originally a dev-scout
+//!   stub (issue #869) and wired into a real write path by issue #860:
+//!   [`project_graph::insert_acceptance_criterion`] takes an optional raw
+//!   JSON assertion payload, validates it against [`project_graph::AssertionSpec`]
+//!   before writing (an unknown kind or malformed params returns
+//!   `Err(ProjectGraphError::InvalidAssertionSpec)` with no row inserted),
+//!   and persists it in the `assertion_kind` / `assertion_params` columns
+//!   added by `crates/nexum/migrations/0004_acceptance_assertions.sql`.
+//!   [`project_graph::traverse_project_graph`] projects both columns back
+//!   through [`project_graph::ProjectNode`].
 //! - [`runtime_signal::fetch_recent_runtime_signals`]: read projection over
 //!   `sharp.runtime_signals` (issue #709). Lets the gardening loop's
 //!   intent-to-spec inference step consume behavioral traces without depending
