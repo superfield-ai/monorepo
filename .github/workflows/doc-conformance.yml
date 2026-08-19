@@ -30,6 +30,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - run: scripts/check-doc-conformance.sh
+      - name: Doc conformance self-test (issue #906)
+        run: tests/doc-conformance-selftest.sh
       # Sharp doc set: semantic-first framing + no SQL in docs + link integrity (issue #726).
       - run: scripts/check-sharp-doc-framing.sh
       - name: Prettier check (Sharp docs)
