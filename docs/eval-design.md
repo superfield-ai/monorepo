@@ -111,9 +111,37 @@ expensive and stochastic, so it cannot run per-PR. **Plan of record
 (2026-07-02):** Tier 2 runs nightly against the shipped default model, pinned
 (`claude-haiku-4-5-20251001` — the `SF_LLM_MODEL` default in
 `docs/architecture.md`'s `LoopConfig` table),
-gated like the existing `SUPERFIELD_LIVE_AGENTS=1` live-smoke pattern. Today
-that nightly workflow does not exist: Tier 2 is run manually before a release
-(see [testing.md](./testing.md)).
+gated like the existing `SUPERFIELD_LIVE_AGENTS=1` live-smoke pattern.
+
+The nightly run is
+[`.github/workflows/eval-tier2-nightly.yml`](../.github/workflows/eval-tier2-nightly.yml)
+(issue #864): a `schedule:` cron plus a manually-dispatchable `budget`
+(`minimal` / `standard`) preset, `CI_CLASS: heavy` (no `pull_request` trigger —
+mirrors `eval-todo-app.yml`), driving the live pinned shipped default model
+under an enforced turn-count (`TURN_BUDGET`) **and** wall-clock
+(`SF_EVAL_DEADLINE_SECS`) budget cap. Every run uploads the corpus `result.json`
+and the per-scenario logs as retained artifacts under the `evals/results/**`
+prefix (30-day retention). `scripts/eval-tier2-nightly-gate.sh` reds the run
+out — never a silent skip, never a fake green — when any scenario is red, when
+zero scenarios executed, when the budget cap is breached, or when the
+`SF_LLM_API_KEY` live-model credential is missing; until an operator
+provisions that repo secret, every nightly run reds out on the missing-secret
+condition rather than silently reporting green.
+
+`scripts/eval-tier2-nightly-dispatch-smoke.sh` is the scripted check for that
+workflow's end-to-end shape: it asserts a run **reached the gate step** (the
+step executed — not `skipped`, not absent) and **retained both artifacts**
+(`eval-tier2-nightly-result-json-<run>` and
+`eval-tier2-nightly-scenario-logs-<run>`, at the configured 30-day retention).
+A red run still satisfies the smoke check — until `SF_LLM_API_KEY` is
+provisioned a red gate is the _expected_ outcome, and what the check pins is
+that the pipeline did not silently skip. GitHub only exposes a
+`workflow_dispatch` trigger for a workflow file already on the **default
+branch**, so the live dispatch can only run post-merge; the asserter's logic is
+therefore exercised in CI offline against recorded GitHub REST payloads
+(`tests/fixtures/eval-tier2-nightly-dispatch/`) via
+`tests/eval-tier2-nightly-gate-selftest.sh`, and the same `assert_run` code
+path runs against the live API post-merge.
 
 ### Tier 3 — Online eval on production traces
 

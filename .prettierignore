@@ -20,3 +20,8 @@ tests/fixtures/
 # issues. They are not canonical documentation and may have environment-specific
 # formatting, so prettier is intentionally skipped for them (issue #903).
 docs/scout/*.md
+
+# Deliberately-invalid JSON fixture for the Tier-2 nightly gate selftest
+# (issue #864): it exercises the gate script's malformed-input error path, so
+# prettier must not try to parse or reformat it.
+tests/fixtures/eval-tier2-nightly-gate/malformed.json
