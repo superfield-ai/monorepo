@@ -28,6 +28,12 @@ name: Doc Conformance
 #   Authoritative contexts after this change:
 #     - `Format` (build.yml)      -> TS/JSON/YAML/code formatting.
 #     - `Doc conformance`         -> markdown formatting + doc/framing assertions.
+#
+# CI_CLASS = doc-correctness: this workflow asserts doc/comment behaviour and
+#   MUST run on every PR shape (no paths filter) — it cannot exclude `**/*.md`
+#   because it is the executing markdown-formatting gate on doc-only PRs.
+env:
+  CI_CLASS: doc-correctness
 
 on:
   push:
