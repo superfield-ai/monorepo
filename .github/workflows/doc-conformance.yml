@@ -4,6 +4,36 @@ name: Doc Conformance
 # appliance accurately (issue #705). Runs on every PR — including doc-only
 # PRs, which the build/test workflows deliberately skip — so a reverted
 # correction is caught regardless of what else the PR touches.
+#
+# Markdown prettier coverage (issue #903)
+#   The Build workflow's `Format` job path-ignores `**/*.md`, so on a
+#   markdown-only PR the required `Format` context is bypass-posted as success
+#   without prettier ever seeing the changed files. Three fixes were possible:
+#     (a) Scope `format:check` to the same path set the bypass ignores. That
+#         would leave markdown with NO executing prettier check — the bypassed
+#         context would still be green — so it violates the loud-coverage
+#         invariants in docs/testing-invariants.md.
+#     (c) Drop `**/*.md` from the `Format` job's paths-ignore. That would force
+#         the whole Build workflow (typecheck, lint, format, coverage-truth) to
+#         run on every markdown-only PR, wasting compute and pulling docs-only
+#         diffs back into a workflow whose other jobs are not meaningful for
+#         them; it would also require widening the bypass for the other jobs.
+#     (b) Exclude `**/*.md` from the whole-tree `format:check` invocation and
+#         add a dedicated markdown prettier check inside this always-on,
+#         no-paths-filter workflow. This is the chosen direction because
+#         doc-conformance.yml already hosts prettier steps and already runs on
+#         every PR shape, so markdown gets a real, non-bypassed executing gate
+#         without disturbing the build.yml skip design or issue #788's bypass.
+#
+#   Authoritative contexts after this change:
+#     - `Format` (build.yml)      -> TS/JSON/YAML/code formatting.
+#     - `Doc conformance`         -> markdown formatting + doc/framing assertions.
+#
+# CI_CLASS = doc-correctness: this workflow asserts doc/comment behaviour and
+#   MUST run on every PR shape (no paths filter) — it cannot exclude `**/*.md`
+#   because it is the executing markdown-formatting gate on doc-only PRs.
+env:
+  CI_CLASS: doc-correctness
 
 on:
   push:
@@ -34,9 +64,16 @@ jobs:
         run: tests/doc-conformance-selftest.sh
       # Sharp doc set: semantic-first framing + no SQL in docs + link integrity (issue #726).
       - run: scripts/check-sharp-doc-framing.sh
-      - name: Prettier check (Sharp docs)
-        run: bunx prettier --check 'crates/sharp/docs/**/*.md'
-      # Executed-coverage testing invariants doc (issue #768) — formatting is
-      # CI-enforced alongside the doc-conformance grep assertions.
-      - name: Prettier check (testing invariants)
-        run: bunx prettier --check docs/testing-invariants.md
+      # Markdown prettier coverage (issue #903). This job has no paths filter,
+      # so it executes on markdown-only PRs and will fail loudly on an
+      # unformatted .md file instead of letting the `Format` bypass post a
+      # skipped success.
+      - name: Markdown prettier coverage
+        run: scripts/check-doc-prettier.sh
+      # Self-tests: prove the markdown prettier check is a real gate (not a
+      # silently-passing no-op) and that `format:check` cannot silently reopen
+      # the markdown bypass class.
+      - name: Self-test markdown prettier coverage
+        run: tests/doc-prettier-coverage-selftest.sh
+      - name: Self-test format:check / workflow paths-ignore agreement
+        run: tests/format-check-agreement-selftest.sh
