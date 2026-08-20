@@ -24,8 +24,13 @@
 //! [`corpus`] pins the Tier-2 **corpus-level** seams (issue #870): the
 //! multi-scenario aggregate `result.json` envelope and the scenario-directory
 //! discovery contract, layered on top of the single-scenario pieces above.
+//! [`corpus_runner`] is the corpus harness **driver** (issue #863): it
+//! enumerates the corpus, runs each scenario through the whole gardening loop
+//! sequentially, and aggregates one verdict per scenario — the logic behind
+//! the `sf-eval corpus` subcommand.
 
 pub mod corpus;
+pub mod corpus_runner;
 pub mod graders;
 pub mod result;
 pub mod runner;
@@ -33,6 +38,7 @@ pub mod runner;
 pub use corpus::{
     discover_scenarios, CorpusResult, DiscoveryError, ScenarioDescriptor, ScenarioVerdict,
 };
+pub use corpus_runner::{run_corpus, CorpusConfig, CorpusOutcome, CORPUS_RESULT_FILENAME};
 pub use graders::{compiling_candidate_pass, project_graph_pass};
 pub use result::{Acceptance, DeterministicRungs, RunResult};
 pub use runner::{count_turns, evaluate_run};

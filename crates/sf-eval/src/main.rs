@@ -1,16 +1,22 @@
-//! `sf-eval` — the Tier-2 live runner binary (issue #748).
+//! `sf-eval` — the Tier-2 live runner binary (issue #748) and the Tier-2
+//! **corpus** harness driver (issue #863).
 //!
 //! Usage:
 //!
 //! ```text
 //! sf-eval run --scenario <dir> [--turn-budget N] [--workspace-id <uuid>] \
 //!             [--poll-interval-secs S] [--results-root <dir>]
+//!
+//! sf-eval corpus --scenarios-root <dir> [--results-root <dir>] \
+//!                [--turn-budget N] [--poll-interval-secs S] \
+//!                [--endpoint-health-addr <host:port>] [--scenario-cmd <path>]
 //! ```
 //!
-//! Drives a scenario through the **real** appliance and a live model (the
-//! gardening loop the operator already booted via `superfield serve`), counting
-//! turns by polling `orchestrator.gardening_cursor`, grading each poll, and
-//! emitting `result.json` under `results/<scenario>/<workspace-id>/` (see
+//! `run` drives a single scenario through the **real** appliance and a live
+//! model (the gardening loop the operator already booted via `superfield
+//! serve`), counting turns by polling `orchestrator.gardening_cursor`, grading
+//! each poll, and emitting `result.json` under
+//! `results/<scenario>/<workspace-id>/` (see
 //! [`evals/runners/live.md`](../../../../evals/runners/live.md)).
 //!
 //! Seeding and serving are the operator's / workflow's responsibility — the
@@ -20,6 +26,13 @@
 //! (`superfield garden <scenario>/seed/*.md`), and boots `superfield serve`;
 //! this binary observes the running loop. It needs `DATABASE_URL` pointed at the
 //! appliance's Postgres.
+//!
+//! `corpus` drives the **whole scenario corpus** under `evals/scenarios/`
+//! sequentially against the whole gardening loop, aggregating one green/red
+//! verdict per scenario into `<results-root>/corpus-result.json`; see
+//! [`sf_eval::corpus_runner`] for the driver and
+//! [`evals/runners/live.md`](../../../../evals/runners/live.md) for the
+//! operator-facing description of the invocation.
 
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant};
@@ -27,8 +40,8 @@ use std::time::{Duration, Instant};
 use nexum::embed::Embedder;
 use nexum::{semantic_search, SemanticOptions};
 use sf_eval::{
-    compiling_candidate_pass, evaluate_run, project_graph_pass, Acceptance, DeterministicRungs,
-    RunResult,
+    compiling_candidate_pass, evaluate_run, project_graph_pass, run_corpus, Acceptance,
+    CorpusConfig, DeterministicRungs, RunResult,
 };
 use sf_loop::load_cursor;
 use uuid::Uuid;
@@ -63,14 +76,11 @@ fn usage() -> ! {
     std::process::exit(2);
 }
 
-fn parse_args() -> Args {
-    let raw: Vec<String> = std::env::args().skip(1).collect();
-    parse_args_from(raw)
-}
-
-/// The argument-parsing body, factored out of [`parse_args`] so it is
-/// unit-testable against a synthetic `argv` (excluding the binary name, but
-/// including the `run` subcommand) instead of the real process `argv`.
+/// The argument-parsing body for the `run` subcommand. Takes the raw `argv`
+/// (excluding the binary name, but including the `run` subcommand) so it is
+/// unit-testable against a synthetic argv instead of the real process argv;
+/// `main` collects `std::env::args()` once and dispatches on the subcommand
+/// before calling this (see [`parse_corpus_args_from`] for the `corpus` twin).
 fn parse_args_from(raw: Vec<String>) -> Args {
     if raw.first().map(String::as_str) != Some("run") {
         usage();
@@ -131,6 +141,80 @@ fn parse_args_from(raw: Vec<String>) -> Args {
         poll_interval: Duration::from_secs(poll_secs),
         results_root,
     }
+}
+
+fn corpus_usage() -> ! {
+    eprintln!(
+        "usage: sf-eval corpus --scenarios-root <dir> [--results-root <dir>] \
+         [--turn-budget N] [--poll-interval-secs S] \
+         [--endpoint-health-addr <host:port>] [--scenario-cmd <path>]"
+    );
+    std::process::exit(2);
+}
+
+/// Parse `sf-eval corpus ...` arguments (issue #863) into a [`CorpusConfig`].
+/// Factored out of the `corpus` dispatch in `main` the same way
+/// [`parse_args_from`] is, so it is unit-testable against a synthetic `argv`.
+fn parse_corpus_args_from(raw: Vec<String>) -> CorpusConfig {
+    if raw.first().map(String::as_str) != Some("corpus") {
+        corpus_usage();
+    }
+
+    let mut cfg = CorpusConfig::default();
+    let mut scenarios_root: Option<PathBuf> = None;
+
+    let mut i = 1usize;
+    while i < raw.len() {
+        match raw[i].as_str() {
+            "--scenarios-root" => {
+                i += 1;
+                scenarios_root = raw.get(i).map(PathBuf::from);
+            }
+            "--results-root" => {
+                i += 1;
+                if let Some(v) = raw.get(i) {
+                    cfg.results_root = PathBuf::from(v);
+                }
+            }
+            "--turn-budget" => {
+                i += 1;
+                if let Some(v) = raw.get(i).and_then(|s| s.parse().ok()) {
+                    cfg.turn_budget = v;
+                }
+            }
+            "--poll-interval-secs" => {
+                i += 1;
+                if let Some(v) = raw.get(i).and_then(|s| s.parse().ok()) {
+                    cfg.poll_interval_secs = v;
+                }
+            }
+            "--endpoint-health-addr" => {
+                i += 1;
+                cfg.endpoint_health_addr = raw.get(i).cloned();
+            }
+            "--scenario-cmd" => {
+                i += 1;
+                cfg.scenario_cmd = raw.get(i).map(PathBuf::from);
+            }
+            other => {
+                eprintln!("sf-eval corpus: unknown argument {other:?}");
+                corpus_usage();
+            }
+        }
+        i += 1;
+    }
+
+    cfg.scenarios_root = scenarios_root.unwrap_or_else(|| corpus_usage());
+    cfg
+}
+
+/// Run the `sf-eval corpus` subcommand: parse args, drive the corpus, print
+/// the aggregate envelope, and exit with the derived exit code.
+fn run_corpus_subcommand(raw: Vec<String>) -> ! {
+    let cfg = parse_corpus_args_from(raw);
+    let outcome = run_corpus(cfg);
+    println!("{}", outcome.result.to_json());
+    std::process::exit(outcome.exit_code);
 }
 
 /// Count `merge_result` rows in either Sharp episode model, so a compiling
@@ -325,7 +409,12 @@ async fn flush_result(
 
 #[tokio::main]
 async fn main() {
-    let args = parse_args();
+    let raw: Vec<String> = std::env::args().skip(1).collect();
+    if raw.first().map(String::as_str) == Some("corpus") {
+        run_corpus_subcommand(raw);
+    }
+
+    let args = parse_args_from(raw);
     let scenario = args
         .scenario_dir
         .file_name()
@@ -808,6 +897,55 @@ mod main {
             assert_eq!(args.workspace_id, workspace_id);
             assert_eq!(args.poll_interval, Duration::from_secs(3));
             assert_eq!(args.results_root, PathBuf::from("/tmp/sf-eval-results"));
+        }
+
+        // ── parse_corpus_args_from (issue #863) ─────────────────────────────
+
+        #[test]
+        fn parse_corpus_args_from_produces_expected_config() {
+            let raw: Vec<String> = vec![
+                "corpus",
+                "--scenarios-root",
+                "evals/scenarios",
+                "--results-root",
+                "/tmp/sf-eval-corpus-results",
+                "--turn-budget",
+                "12",
+                "--poll-interval-secs",
+                "4",
+                "--endpoint-health-addr",
+                "127.0.0.1:4096",
+                "--scenario-cmd",
+                "/tmp/fake-runner.sh",
+            ]
+            .into_iter()
+            .map(String::from)
+            .collect();
+
+            let cfg = parse_corpus_args_from(raw);
+            assert_eq!(cfg.scenarios_root, PathBuf::from("evals/scenarios"));
+            assert_eq!(
+                cfg.results_root,
+                PathBuf::from("/tmp/sf-eval-corpus-results")
+            );
+            assert_eq!(cfg.turn_budget, 12);
+            assert_eq!(cfg.poll_interval_secs, 4);
+            assert_eq!(cfg.endpoint_health_addr.as_deref(), Some("127.0.0.1:4096"));
+            assert_eq!(cfg.scenario_cmd, Some(PathBuf::from("/tmp/fake-runner.sh")));
+        }
+
+        #[test]
+        fn parse_corpus_args_from_defaults_when_optional_flags_omitted() {
+            let raw: Vec<String> = vec!["corpus", "--scenarios-root", "evals/scenarios"]
+                .into_iter()
+                .map(String::from)
+                .collect();
+
+            let cfg = parse_corpus_args_from(raw);
+            assert_eq!(cfg.scenarios_root, PathBuf::from("evals/scenarios"));
+            assert_eq!(cfg.results_root, PathBuf::from("evals/results"));
+            assert!(cfg.endpoint_health_addr.is_none());
+            assert!(cfg.scenario_cmd.is_none());
         }
     }
 }

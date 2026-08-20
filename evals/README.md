@@ -120,9 +120,10 @@ describe the To Do app once, not once per tier.
 
 ## Scenario-directory discovery contract (Tier-2 corpus)
 
-The planned Tier-2 corpus driver (docs/eval-design.md sequencing item 2, #863)
-runs **every** scenario under `evals/scenarios/`, not just `todo-app`. What
-counts as a discoverable scenario is a pinned contract, implemented as
+The Tier-2 corpus driver (docs/eval-design.md sequencing item 2, #863,
+`sf-eval corpus` — see below) runs **every** scenario under
+`evals/scenarios/`, not just `todo-app`. What counts as a discoverable
+scenario is a pinned contract, implemented as
 [`sf_eval::discover_scenarios`](../crates/sf-eval/src/corpus.rs) — a
 directory under `evals/scenarios/` qualifies iff it has:
 
@@ -152,6 +153,42 @@ green. See
 and
 [`result.mixed.json`](../crates/sf-eval/tests/fixtures/corpus/result.mixed.json)
 for example envelopes.
+
+## Invoking the corpus driver (`sf-eval corpus`)
+
+```
+cargo run -p sf-eval --bin sf-eval -- corpus \
+  --scenarios-root evals/scenarios \
+  --results-root evals/results \
+  --endpoint-health-addr 127.0.0.1:4096
+```
+
+Enumerates `--scenarios-root` (the discovery contract above), then — for each
+discovered scenario, **sequentially**, against the one already-booted
+appliance and live model endpoint — seeds the scenario's intent and observes
+it through [`sf-eval run`](runners/live.md) (the existing Tier-2 live runner:
+deterministic floor, poll-and-grade, emit). "Reset" between scenarios is
+implicit: each scenario gets a fresh workspace id, so there is no shared state
+to clear. One [`ScenarioVerdict`](../crates/sf-eval/src/corpus.rs) is recorded
+per scenario — green, or red naming the failing stage
+(`deterministic_floor`, `rungs`, `seed`, `process_error`) — aggregated into
+`<results-root>/corpus-result.json`. The process exits `0` iff every scenario
+is green; a discovery failure or an empty corpus also fails non-zero (never a
+vacuous green for zero scenarios executed).
+
+`--endpoint-health-addr <host:port>` runs a reachability precheck against the
+live model endpoint **before** any scenario executes — unreachable fails the
+whole corpus loud (every scenario recorded red, `endpoint_unreachable`, no
+skip). `--scenario-cmd <path>` overrides the per-scenario execution command
+(used by the hermetic tests in
+[`crates/sf-eval/tests/corpus_harness.rs`](../crates/sf-eval/tests/corpus_harness.rs)
+to exercise the aggregation/exit-code/failing-stage/enumeration/unreachable-
+endpoint behaviour without a live model or database — see
+[`crates/sf-eval/src/corpus_runner.rs`](../crates/sf-eval/src/corpus_runner.rs)
+for the driver).
+
+The nightly workflow that boots the appliance and schedules this invocation on
+a cron is a separate feature (docs/eval-design.md:111-116, #864).
 
 ## Glossary
 
