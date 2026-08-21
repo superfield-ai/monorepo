@@ -95,7 +95,7 @@ fn corpus_enumeration_discovers_committed_scenarios() {
     names.sort();
     assert_eq!(
         names,
-        vec!["todo-app"],
+        vec!["icp-fidelity", "todo-app"],
         "discovers exactly the scenario directories committed under evals/scenarios/"
     );
 }
