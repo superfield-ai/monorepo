@@ -1,0 +1,21 @@
+{
+  "episode_id": "550e8400-e29b-41d4-a716-446655440001",
+  "events": [
+    {
+      "type": "code_change_proposal",
+      "timestamp": "2026-01-15T10:25:00Z",
+      "payload": {
+        "candidate_id": "abc123",
+        "diff": "fn main() { println!(\"hello\"); }"
+      }
+    },
+    {
+      "type": "validation",
+      "timestamp": "2026-01-15T10:28:00Z",
+      "payload": {
+        "candidate_id": "abc123",
+        "result": "cargo_check_failed"
+      }
+    }
+  ]
+}
