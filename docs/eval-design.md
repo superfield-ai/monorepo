@@ -269,14 +269,17 @@ self-repair until the Tier-3 self-fix metric above records it (P-4).
 
 ## Component reference
 
-| Concept               | Where                                                               |
-| --------------------- | ------------------------------------------------------------------- |
-| Gardening loop        | `crates/sf-loop/src/lib.rs` (`GardeningLoop`)                       |
-| Agent executor seam   | `crates/sf-loop/src/agent.rs` (`LlmAgentExecutor` / `Fixture…`)     |
-| LLM provider wire     | `crates/sf-loop/src/provider.rs` (`LlmProvider`; `SF_LLM_PROVIDER`) |
-| Eval runner + graders | `crates/sf-eval` (`sf-eval run`, `evaluate_run`, graders)           |
-| Episode trace         | `sharp.episodes`, `sharp.episode_typed_artifacts`                   |
-| Merge gates           | `crates/sharp/src/{cargo_check,ast_equivalence,tier1}.rs`           |
-| Project graph / nodes | `nexum.project_nodes` (incl. unused `AcceptanceCriterion`)          |
-| Resume cursor         | `orchestrator.gardening_cursor`                                     |
-| User surface          | Studio `/studio/*`, `WS /studio/ws`                                 |
+| Concept               | Where                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Gardening loop        | `crates/sf-loop/src/lib.rs` (`GardeningLoop`)                                                                                         |
+| Agent executor seam   | `crates/sf-loop/src/agent.rs` (`LlmAgentExecutor` / `Fixture…`)                                                                       |
+| LLM provider wire     | `crates/sf-loop/src/provider.rs` (`LlmProvider`; `SF_LLM_PROVIDER`)                                                                   |
+| Eval runner + graders | `crates/sf-eval` (`sf-eval run`, `evaluate_run`, graders)                                                                             |
+| Episode trace         | `sharp.episodes`, `sharp.episode_typed_artifacts`                                                                                     |
+| Merge gates           | `crates/sharp/src/{cargo_check,ast_equivalence,tier1}.rs`                                                                             |
+| Project graph / nodes | `nexum.project_nodes` (incl. unused `AcceptanceCriterion`)                                                                            |
+| Resume cursor         | `orchestrator.gardening_cursor`                                                                                                       |
+| User surface          | Studio `/studio/*`, `WS /studio/ws`                                                                                                   |
+| Tier-2 scenarios      | `evals/scenarios/{todo-app,icp-fidelity}` (loop-plumbing fidelity vs. non-engineer-seed install-policy/approval fidelity, issue #865) |
+| Policy engine         | `crates/sf-db/src/policy.rs` (`Policy::evaluate`, `MergeDecision`, fail-closed when no policy is active)                              |
+| Change lifecycle      | `crates/sf-db/src/change.rs` (`ChangeState`, `awaiting-approval → merged`)                                                            |
