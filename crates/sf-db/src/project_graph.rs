@@ -80,6 +80,7 @@
 //! - `docs/milestone-1.md` §4.6.
 //! - Issue #493 scope; issue #677 (seam), #672 (downstream feature).
 
+use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
 use thiserror::Error;
@@ -779,6 +780,8 @@ pub async fn list_nodes(
                     assertion_params,
                     via_rel_type: None,
                     parent_block_id: None,
+                    verdict: None,
+                    verdict_timestamp: None,
                 }
             },
         )
@@ -820,6 +823,11 @@ pub struct ProjectNode {
     pub via_rel_type: Option<String>,
     /// The parent `block_id` in the traversal (`None` for roots).
     pub parent_block_id: Option<Uuid>,
+    /// Latest validation verdict for this AcceptanceCriterion node, if any.
+    /// Values: `"passed"`, `"failed"`, or `None` for never-run.
+    pub verdict: Option<String>,
+    /// RFC3339 timestamp of the latest verdict, if any.
+    pub verdict_timestamp: Option<DateTime<Utc>>,
 }
 
 /// Traverse the project graph starting from all `Issue` nodes and collect
@@ -828,6 +836,11 @@ pub struct ProjectNode {
 /// The traversal follows all `project:` prefixed edge types.  Nodes are
 /// returned in breadth-first order (issues first, then their features, then
 /// tests and criteria under each feature).
+///
+/// For each `AcceptanceCriterion` node, the latest verdict is fetched from
+/// `forge.validation_runs` (by `criterion_node_id`), ordered by `created_at`
+/// descending. The verdict is `"passed"` or `"failed"`; if no row exists,
+/// the criterion is considered `never-run`.
 ///
 /// # Errors
 ///
@@ -909,7 +922,7 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
     .fetch_all(pool)
     .await?;
 
-    let nodes = rows
+    let mut nodes: Vec<ProjectNode> = rows
         .into_iter()
         .map(
             |(
@@ -935,10 +948,66 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
                     assertion_params,
                     via_rel_type,
                     parent_block_id,
+                    verdict: None,
+                    verdict_timestamp: None,
                 }
             },
         )
         .collect();
+
+    // Fetch latest verdict for each AcceptanceCriterion node.
+    // We collect all criterion node IDs first, then batch-query verdicts.
+    let criterion_ids: Vec<Uuid> = nodes
+        .iter()
+        .filter(|n| n.node_type == "AcceptanceCriterion")
+        .map(|n| n.id)
+        .collect();
+
+    if !criterion_ids.is_empty() {
+        // Query latest verdict per criterion_node_id across all changes.
+        // DISTINCT ON (criterion_node_id) ORDER BY criterion_node_id, created_at DESC
+        let placeholders = criterion_ids
+            .iter()
+            .enumerate()
+            .map(|(i, _)| format!("${}", i + 1))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let query_str = format!(
+            r#"
+            SELECT DISTINCT ON (criterion_node_id)
+                criterion_node_id,
+                state,
+                created_at
+            FROM forge.validation_runs
+            WHERE criterion_node_id IN ({placeholders})
+            ORDER BY criterion_node_id, created_at DESC
+            "#
+        );
+
+        let mut query = sqlx::query_as::<_, (Uuid, String, DateTime<Utc>)>(&query_str);
+        for id in &criterion_ids {
+            query = query.bind(id);
+        }
+
+        let verdict_rows = query.fetch_all(pool).await?;
+
+        // Build a map for quick lookup.
+        let verdict_map: std::collections::HashMap<Uuid, (String, DateTime<Utc>)> = verdict_rows
+            .into_iter()
+            .map(|(criterion_node_id, state, created_at)| (criterion_node_id, (state, created_at)))
+            .collect();
+
+        // Attach verdicts to nodes.
+        for node in &mut nodes {
+            if node.node_type == "AcceptanceCriterion" {
+                if let Some((verdict, timestamp)) = verdict_map.get(&node.id) {
+                    node.verdict = Some(verdict.clone());
+                    node.verdict_timestamp = Some(*timestamp);
+                }
+            }
+        }
+    }
 
     Ok(nodes)
 }
@@ -953,13 +1022,19 @@ pub async fn traverse_project_graph(pool: &PgPool) -> Result<Vec<ProjectNode>, P
 ///
 /// ## Issue: <title> [<state>]
 ///
-/// ### Feature: <title> [<state>]
+/// ### Feature: <title> [<state>] [FAILING]
 ///
 /// #### Required test: <title> [<state>]
-/// #### Acceptance criterion: <title> [<state>]
+/// #### Acceptance criterion: <title> [<state>] — verdict: pass (2024-01-15T10:30:00Z)
+/// #### Acceptance criterion: <title> [<state>] — verdict: fail (2024-01-15T10:35:00Z)
+/// #### Acceptance criterion: <title> [<state>] — verdict: never-run
 ///
 /// ...
 /// ```
+///
+/// A Feature with any child AcceptanceCriterion whose latest verdict is
+/// `failed` is marked `[FAILING]` on its heading line. An AcceptanceCriterion
+/// with no recorded validation run renders as `never-run`.
 ///
 /// Returns `None` when there are no Issue nodes in the graph.
 ///
@@ -1022,9 +1097,52 @@ fn render_node(
         .map(|r| format!(" (ref: {})", r))
         .unwrap_or_default();
 
+    // Check if this Feature has any failing AcceptanceCriterion child.
+    let failing_marker = if node.node_type == "Feature" {
+        let has_failing = children_of
+            .get(&Some(node.block_id))
+            .map(|children| {
+                children.iter().any(|child| {
+                    child.node_type == "AcceptanceCriterion"
+                        && child.verdict.as_deref() == Some("failed")
+                })
+            })
+            .unwrap_or(false);
+        if has_failing {
+            " [FAILING]"
+        } else {
+            ""
+        }
+    } else {
+        ""
+    };
+
+    // Build verdict suffix for AcceptanceCriterion nodes.
+    let verdict_suffix = if node.node_type == "AcceptanceCriterion" {
+        match node.verdict.as_deref() {
+            Some("passed") => {
+                let ts = node
+                    .verdict_timestamp
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_else(|| "unknown-time".to_string());
+                format!(" — verdict: pass ({})", ts)
+            }
+            Some("failed") => {
+                let ts = node
+                    .verdict_timestamp
+                    .map(|dt| dt.to_rfc3339())
+                    .unwrap_or_else(|| "unknown-time".to_string());
+                format!(" — verdict: fail ({})", ts)
+            }
+            _ => " — verdict: never-run".to_string(),
+        }
+    } else {
+        String::new()
+    };
+
     lines.push(format!(
-        "{} {}: {} [{}]{}",
-        prefix, label, node.content, node.state, ext
+        "{} {}: {} [{}]{}{}{}",
+        prefix, label, node.content, node.state, ext, failing_marker, verdict_suffix
     ));
     lines.push(String::new());
 
@@ -1599,5 +1717,523 @@ mod tests {
                     .ok();
             }
         }
+    }
+
+    // ── Verdict rendering unit tests (no database) ─────────────────────────────
+
+    /// Build an in-memory project graph with one pass, one fail, and one
+    /// never-run AcceptanceCriterion, render it, and assert the output matches
+    /// the committed golden fixture (byte-identical).
+    ///
+    /// Acceptance criterion: verdict rendering golden fixture.
+    #[test]
+    fn project_graph_verdict_rendering_golden_fixture() {
+        use std::collections::HashMap;
+
+        let issue_block = Uuid::new_v4();
+        let feature_block = Uuid::new_v4();
+        let ac_pass_block = Uuid::new_v4();
+        let ac_fail_block = Uuid::new_v4();
+        let ac_never_block = Uuid::new_v4();
+
+        let issue = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: issue_block,
+            content: "Test issue".to_string(),
+            node_type: "Issue".to_string(),
+            state: "open".to_string(),
+            external_ref: None,
+            assertion_kind: None,
+            assertion_params: None,
+            via_rel_type: None,
+            parent_block_id: None,
+            verdict: None,
+            verdict_timestamp: None,
+        };
+
+        let feature = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: feature_block,
+            content: "Test feature".to_string(),
+            node_type: "Feature".to_string(),
+            state: "in_progress".to_string(),
+            external_ref: None,
+            assertion_kind: None,
+            assertion_params: None,
+            via_rel_type: Some("project:issue_has_feature".to_string()),
+            parent_block_id: Some(issue_block),
+            verdict: None,
+            verdict_timestamp: None,
+        };
+
+        let ac_pass = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: ac_pass_block,
+            content: "AC that passes".to_string(),
+            node_type: "AcceptanceCriterion".to_string(),
+            state: "validated".to_string(),
+            external_ref: None,
+            assertion_kind: Some("http-probe".to_string()),
+            assertion_params: None,
+            via_rel_type: Some("project:feature_has_acceptance_criterion".to_string()),
+            parent_block_id: Some(feature_block),
+            verdict: Some("passed".to_string()),
+            verdict_timestamp: Some(DateTime::parse_from_rfc3339("2024-01-15T10:30:00Z").unwrap().with_timezone(&Utc)),
+        };
+
+        let ac_fail = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: ac_fail_block,
+            content: "AC that fails".to_string(),
+            node_type: "AcceptanceCriterion".to_string(),
+            state: "validated".to_string(),
+            external_ref: None,
+            assertion_kind: Some("required-test".to_string()),
+            assertion_params: None,
+            via_rel_type: Some("project:feature_has_acceptance_criterion".to_string()),
+            parent_block_id: Some(feature_block),
+            verdict: Some("failed".to_string()),
+            verdict_timestamp: Some(DateTime::parse_from_rfc3339("2024-01-15T10:35:00Z").unwrap().with_timezone(&Utc)),
+        };
+
+        let ac_never = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: ac_never_block,
+            content: "AC never run".to_string(),
+            node_type: "AcceptanceCriterion".to_string(),
+            state: "open".to_string(),
+            external_ref: None,
+            assertion_kind: Some("playwright".to_string()),
+            assertion_params: None,
+            via_rel_type: Some("project:feature_has_acceptance_criterion".to_string()),
+            parent_block_id: Some(feature_block),
+            verdict: None,
+            verdict_timestamp: None,
+        };
+
+        let nodes = vec![issue, feature, ac_pass, ac_fail, ac_never];
+
+        let mut children_of: HashMap<Option<Uuid>, Vec<&ProjectNode>> = HashMap::new();
+        for node in &nodes {
+            children_of
+                .entry(node.parent_block_id)
+                .or_default()
+                .push(node);
+        }
+
+        let mut lines: Vec<String> = Vec::new();
+        lines.push("# Project Graph".to_string());
+        lines.push(String::new());
+
+        if let Some(issues) = children_of.get(&None) {
+            for issue in issues.iter() {
+                render_node(&mut lines, issue, &children_of, 2);
+            }
+        }
+
+        let output = lines.join("\n");
+
+        // Read the golden fixture.
+        let fixture_path = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("fixtures")
+            .join("project_graph_verdicts.golden.md");
+        let expected = std::fs::read_to_string(&fixture_path)
+            .unwrap_or_else(|_| panic!("golden fixture not found at {:?}", fixture_path));
+
+        // Normalize line endings for comparison.
+        let output_normalized = output.replace('\r', "");
+        let expected_normalized = expected.replace('\r', "");
+
+        assert_eq!(
+            output_normalized, expected_normalized,
+            "rendered output must match golden fixture byte-for-byte"
+        );
+    }
+
+    /// Unit test: every AcceptanceCriterion line carries exactly one of
+    /// pass|fail|never-run; pass/fail lines carry an RFC3339 timestamp.
+    ///
+    /// Acceptance criterion: verdict line format.
+    #[test]
+    fn project_graph_verdict_line_format() {
+        use std::collections::HashMap;
+
+        let feature_block = Uuid::new_v4();
+        let ac1_block = Uuid::new_v4();
+        let ac2_block = Uuid::new_v4();
+        let ac3_block = Uuid::new_v4();
+
+        let feature = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: feature_block,
+            content: "Feature with ACs".to_string(),
+            node_type: "Feature".to_string(),
+            state: "in_progress".to_string(),
+            external_ref: None,
+            assertion_kind: None,
+            assertion_params: None,
+            via_rel_type: Some("project:issue_has_feature".to_string()),
+            parent_block_id: None,
+            verdict: None,
+            verdict_timestamp: None,
+        };
+
+        let ac_pass = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: ac1_block,
+            content: "Passing AC".to_string(),
+            node_type: "AcceptanceCriterion".to_string(),
+            state: "validated".to_string(),
+            external_ref: None,
+            assertion_kind: Some("http-probe".to_string()),
+            assertion_params: None,
+            via_rel_type: Some("project:feature_has_acceptance_criterion".to_string()),
+            parent_block_id: Some(feature_block),
+            verdict: Some("passed".to_string()),
+            verdict_timestamp: Some(DateTime::parse_from_rfc3339("2024-01-15T10:30:00Z").unwrap().with_timezone(&Utc)),
+        };
+
+        let ac_fail = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: ac2_block,
+            content: "Failing AC".to_string(),
+            node_type: "AcceptanceCriterion".to_string(),
+            state: "validated".to_string(),
+            external_ref: None,
+            assertion_kind: Some("required-test".to_string()),
+            assertion_params: None,
+            via_rel_type: Some("project:feature_has_acceptance_criterion".to_string()),
+            parent_block_id: Some(feature_block),
+            verdict: Some("failed".to_string()),
+            verdict_timestamp: Some(DateTime::parse_from_rfc3339("2024-01-15T10:35:00Z").unwrap().with_timezone(&Utc)),
+        };
+
+        let ac_never = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: ac3_block,
+            content: "Never-run AC".to_string(),
+            node_type: "AcceptanceCriterion".to_string(),
+            state: "open".to_string(),
+            external_ref: None,
+            assertion_kind: Some("playwright".to_string()),
+            assertion_params: None,
+            via_rel_type: Some("project:feature_has_acceptance_criterion".to_string()),
+            parent_block_id: Some(feature_block),
+            verdict: None,
+            verdict_timestamp: None,
+        };
+
+        let nodes = vec![feature, ac_pass, ac_fail, ac_never];
+
+        let mut children_of: HashMap<Option<Uuid>, Vec<&ProjectNode>> = HashMap::new();
+        for node in &nodes {
+            children_of
+                .entry(node.parent_block_id)
+                .or_default()
+                .push(node);
+        }
+
+        let mut lines: Vec<String> = Vec::new();
+        if let Some(features) = children_of.get(&None) {
+            for feature in features.iter() {
+                render_node(&mut lines, feature, &children_of, 3);
+            }
+        }
+
+        let output = lines.join("\n");
+
+        // Each AC line must contain exactly one verdict indicator.
+        let ac_lines: Vec<&str> = output
+            .lines()
+            .filter(|l| l.contains("Acceptance criterion:"))
+            .collect();
+
+        assert_eq!(ac_lines.len(), 3, "expected 3 AC lines");
+
+        for line in &ac_lines {
+            // Must have exactly one of the verdict patterns.
+            let pass_count = line.matches("verdict: pass").count();
+            let fail_count = line.matches("verdict: fail").count();
+            let never_count = line.matches("verdict: never-run").count();
+            let total = pass_count + fail_count + never_count;
+            assert_eq!(total, 1, "each AC line must have exactly one verdict: {:?}", line);
+
+            // Pass/fail must have RFC3339 timestamp (contains T and Z or +/-).
+            if pass_count == 1 || fail_count == 1 {
+                assert!(
+                    line.contains('T') && (line.contains('Z') || line.contains('+')),
+                    "pass/fail verdict must have RFC3339 timestamp: {:?}",
+                    line
+                );
+            }
+        }
+
+        // Feature with failing AC must have FAILING marker.
+        let feature_line = output
+            .lines()
+            .find(|l| l.contains("Feature:"))
+            .expect("feature line must exist");
+        assert!(
+            feature_line.contains("[FAILING]"),
+            "feature with failing AC must be marked FAILING: {:?}",
+            feature_line
+        );
+    }
+
+    /// Unit test: Feature with no failing AC does NOT get FAILING marker.
+    #[test]
+    fn project_graph_feature_no_failing_marker_when_all_pass() {
+        use std::collections::HashMap;
+
+        let feature_block = Uuid::new_v4();
+        let ac1_block = Uuid::new_v4();
+        let ac2_block = Uuid::new_v4();
+
+        let feature = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: feature_block,
+            content: "All-pass Feature".to_string(),
+            node_type: "Feature".to_string(),
+            state: "in_progress".to_string(),
+            external_ref: None,
+            assertion_kind: None,
+            assertion_params: None,
+            via_rel_type: Some("project:issue_has_feature".to_string()),
+            parent_block_id: None,
+            verdict: None,
+            verdict_timestamp: None,
+        };
+
+        let ac_pass1 = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: ac1_block,
+            content: "Passing AC 1".to_string(),
+            node_type: "AcceptanceCriterion".to_string(),
+            state: "validated".to_string(),
+            external_ref: None,
+            assertion_kind: Some("http-probe".to_string()),
+            assertion_params: None,
+            via_rel_type: Some("project:feature_has_acceptance_criterion".to_string()),
+            parent_block_id: Some(feature_block),
+            verdict: Some("passed".to_string()),
+            verdict_timestamp: Some(DateTime::parse_from_rfc3339("2024-01-15T10:30:00Z").unwrap().with_timezone(&Utc)),
+        };
+
+        let ac_pass2 = ProjectNode {
+            id: Uuid::new_v4(),
+            block_id: ac2_block,
+            content: "Passing AC 2".to_string(),
+            node_type: "AcceptanceCriterion".to_string(),
+            state: "validated".to_string(),
+            external_ref: None,
+            assertion_kind: Some("required-test".to_string()),
+            assertion_params: None,
+            via_rel_type: Some("project:feature_has_acceptance_criterion".to_string()),
+            parent_block_id: Some(feature_block),
+            verdict: Some("passed".to_string()),
+            verdict_timestamp: Some(DateTime::parse_from_rfc3339("2024-01-15T10:35:00Z").unwrap().with_timezone(&Utc)),
+        };
+
+        let nodes = vec![feature, ac_pass1, ac_pass2];
+
+        let mut children_of: HashMap<Option<Uuid>, Vec<&ProjectNode>> = HashMap::new();
+        for node in &nodes {
+            children_of
+                .entry(node.parent_block_id)
+                .or_default()
+                .push(node);
+        }
+
+        let mut lines: Vec<String> = Vec::new();
+        if let Some(features) = children_of.get(&None) {
+            for feature in features.iter() {
+                render_node(&mut lines, feature, &children_of, 3);
+            }
+        }
+
+        let output = lines.join("\n");
+
+        let feature_line = output
+            .lines()
+            .find(|l| l.contains("Feature:"))
+            .expect("feature line must exist");
+        assert!(
+            !feature_line.contains("[FAILING]"),
+            "feature with all passing ACs must NOT be marked FAILING: {:?}",
+            feature_line
+        );
+    }
+
+    // ── Integration tests: verdict projection (require DATABASE_URL) ───────────
+
+    /// Integration test: seed Issue → Feature → AcceptanceCriterion nodes plus
+    /// forge.validation_runs rows with criterion_node_id; assert
+    /// fetch_project_page output contains each seeded verdict with the latest
+    /// run's timestamp.
+    ///
+    /// Acceptance criterion: project_graph_verdict_projection
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with nexum + sf-db migrations applied"]
+    async fn project_graph_verdict_projection() {
+        let cfg = crate::config::DbConfig::from_env()
+            .expect("DATABASE_URL must be set for integration tests");
+        let pool = crate::pool::connect(&cfg)
+            .await
+            .expect("pool creation failed");
+
+        // Need a workspace for forge.changes FK.
+        let workspace_id: Uuid = sqlx::query_scalar(
+            "INSERT INTO public.workspaces (slug, display_name) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(format!("sf-db-verdict-test-{}", Uuid::new_v4()))
+        .bind("sf-db verdict projection test workspace")
+        .fetch_one(&pool)
+        .await
+        .expect("workspace insert failed");
+
+        // Insert Issue → Feature → 3 AcceptanceCriteria.
+        let issue_id = insert_issue(&pool, "Issue for verdict projection test", None)
+            .await
+            .expect("insert issue failed");
+
+        let feature_id = insert_feature(&pool, issue_id, "Feature for verdict projection test")
+            .await
+            .expect("insert feature failed");
+
+        let ac_pass_id = insert_acceptance_criterion(
+            &pool,
+            feature_id,
+            "AC: should pass",
+            None,
+        )
+        .await
+        .expect("insert AC pass failed");
+
+        let ac_fail_id = insert_acceptance_criterion(
+            &pool,
+            feature_id,
+            "AC: should fail",
+            None,
+        )
+        .await
+        .expect("insert AC fail failed");
+
+        let ac_never_id = insert_acceptance_criterion(
+            &pool,
+            feature_id,
+            "AC: never run",
+            None,
+        )
+        .await
+        .expect("insert AC never failed");
+
+        // Create a change and record criterion verdicts for it.
+        let change_id = crate::change::insert_change(&pool, workspace_id, "Change for verdict test")
+            .await
+            .expect("insert change failed");
+
+        // Record verdicts: one passed, one failed, and a second passed for the
+        // same AC to test latest-run wins.
+        crate::change::record_criterion_validation_run(
+            &pool,
+            change_id,
+            ac_pass_id,
+            crate::change::ValidationRunState::Passed,
+        )
+        .await
+        .expect("record passing criterion failed");
+
+        crate::change::record_criterion_validation_run(
+            &pool,
+            change_id,
+            ac_fail_id,
+            crate::change::ValidationRunState::Failed,
+        )
+        .await
+        .expect("record failing criterion failed");
+
+        // Add a second (older) passed run for ac_pass to verify latest wins.
+        crate::change::record_criterion_validation_run(
+            &pool,
+            change_id,
+            ac_pass_id,
+            crate::change::ValidationRunState::Passed,
+        )
+        .await
+        .expect("record second passing criterion failed");
+
+        // Fetch the project page and verify verdicts are rendered.
+        let page = fetch_project_page(&pool)
+            .await
+            .expect("fetch_project_page failed")
+            .expect("expected Some page");
+
+        // Verify each AC's verdict appears with correct timestamp format.
+        // The latest run for ac_pass should be the second one (most recent).
+        // The run for ac_fail should show as failed.
+        // ac_never should show as never-run.
+
+        assert!(
+            page.contains("AC: should pass"),
+            "page must contain passing AC title"
+        );
+        assert!(
+            page.contains("AC: should fail"),
+            "page must contain failing AC title"
+        );
+        assert!(
+            page.contains("AC: never run"),
+            "page must contain never-run AC title"
+        );
+
+        // Verify verdict markers.
+        assert!(
+            page.contains("verdict: pass"),
+            "page must contain pass verdict"
+        );
+        assert!(
+            page.contains("verdict: fail"),
+            "page must contain fail verdict"
+        );
+        assert!(
+            page.contains("verdict: never-run"),
+            "page must contain never-run verdict"
+        );
+
+        // Feature should be marked FAILING because one AC failed.
+        assert!(
+            page.contains("[FAILING]"),
+            "feature with failing AC must be marked FAILING"
+        );
+
+        // Verify timestamps are RFC3339 (contain T and timezone).
+        for line in page.lines() {
+            if line.contains("verdict: pass") || line.contains("verdict: fail") {
+                assert!(
+                    line.contains('T') && (line.contains('Z') || line.contains('+')),
+                    "verdict line must have RFC3339 timestamp: {:?}",
+                    line
+                );
+            }
+        }
+
+        // Cleanup.
+        cleanup_test_nodes(&pool, &[issue_id, feature_id, ac_pass_id, ac_fail_id, ac_never_id]).await;
+        sqlx::query("DELETE FROM forge.validation_runs WHERE change_id = $1")
+            .bind(change_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM forge.changes WHERE id = $1")
+            .bind(change_id)
+            .execute(&pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM public.workspaces WHERE id = $1")
+            .bind(workspace_id)
+            .execute(&pool)
+            .await
+            .ok();
     }
 }

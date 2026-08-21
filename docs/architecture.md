@@ -799,6 +799,40 @@ The `superfield page <name>` command and the `GET /pages/{name}` route share the
 
 Source: `sf_db::KNOWN_PAGES` (`crates/sf-db/src/`) and `sf_db::fetch_project_page`.
 
+### CLI project page format (`superfield page project`)
+
+The `project` page renders the full project graph as a markdown document.
+The format is a recursive tree starting from all `Issue` nodes:
+
+```markdown
+# Project Graph
+
+## Issue: <title> [<state>]
+
+### Feature: <title> [<state>] [FAILING]
+
+#### Required test: <title> [<state>]
+#### Acceptance criterion: <title> [<state>] — verdict: pass (2024-01-15T10:30:00Z)
+#### Acceptance criterion: <title> [<state>] — verdict: fail (2024-01-15T10:35:00Z)
+#### Acceptance criterion: <title> [<state>] — verdict: never-run
+```
+
+- Each `Issue` is a level-2 heading (`##`).
+- Each `Feature` is a level-3 heading (`###`). If any child `AcceptanceCriterion`
+  has a latest verdict of `failed`, the feature heading is suffixed with
+  ` [FAILING]`.
+- Each `RequiredTest` and `AcceptanceCriterion` is a level-4 heading (`####`).
+- `AcceptanceCriterion` lines include a verdict suffix:
+  - ` — verdict: pass (<RFC3339 timestamp>)` for a latest `passed` run.
+  - ` — verdict: fail (<RFC3339 timestamp>)` for a latest `failed` run.
+  - ` — verdict: never-run` when no `forge.validation_runs` row exists with a
+    matching `criterion_node_id`.
+- Verdicts are sourced from `forge.validation_runs` via the `criterion_node_id`
+  column (added by sf-db migration 0006, issue #861). The latest run per
+  criterion is determined by `created_at DESC` — newer runs supersede older ones.
+
+The output is stable, parseable markdown suitable for downstream tooling.
+
 ---
 
 ## fastenv — Appliance Execution Environment
