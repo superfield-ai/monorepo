@@ -49,29 +49,38 @@
 //! and no change to [`record_validation_run`] / [`has_passing_validation`] /
 //! [`transition_change`] ships here; those stay exactly as they are today.
 //!
-//! **The additive migration shape (#861 owns the actual `ALTER TABLE`):**
-//! `forge.validation_runs` gains a nullable
-//! `criterion_node_id UUID REFERENCES nexum.project_nodes(id) ON DELETE CASCADE`
-//! column.
+//! **The additive migration shape** (implemented by #861 in
+//! `crates/sf-db/migrations/0006_criterion_verdicts.sql`): `forge.validation_runs`
+//! gains a nullable `criterion_node_id UUID` column.
 //!
-//! - `NULL` (every row today, and every row a caller that does not know about
-//!   criteria ever inserts) means "change-level aggregate run" — the exact
-//!   run this module already models. Existing rows and existing callers are
-//!   untouched by the addition.
+//! - `NULL` (every row before this migration, and every row a caller that
+//!   does not know about criteria ever inserts) means "change-level aggregate
+//!   run" — the exact run this module already models. Existing rows and
+//!   existing callers are untouched by the addition.
 //! - Non-`NULL` means "this row is the verdict for one `AcceptanceCriterion`
 //!   node (identified by its `nexum.project_nodes.id`) belonging to the
-//!   change", one row per criterion per execution (#861's
+//!   change", one row per criterion per execution — written by
+//!   [`record_criterion_validation_run`] (#861's
 //!   `per_criterion_verdicts_recorded` acceptance criterion).
+//!
+//! **No foreign key.** The dev-scout stub this replaces described the column
+//! as `REFERENCES nexum.project_nodes(id) ON DELETE CASCADE`, but the
+//! in-process migration runner (`crate::migrate`) applies component
+//! directories in a fixed order — `sf-db -> sf-auth -> nexum -> sharp ->
+//! orchestrator` — so this sf-db migration runs *before* the nexum component
+//! creates `nexum.project_nodes`. A forward FK would fail on first boot, so
+//! `criterion_node_id` is a bare UUID; referential integrity is enforced at
+//! the application layer (the sf-loop criterion executor only ever passes an
+//! id it resolved from an existing `AcceptanceCriterion` node).
 //!
 //! **How `has_passing_validation` composes with criterion rows (the
 //! resolved open question from #861/#862):** the run-state machine
 //! (`queued → running → passed | failed`) and the row shape are unchanged —
 //! a criterion-linked row is a [`ValidationRunState`] just like an aggregate
-//! row. What #861 must implement (not this stub) is the AND-aggregation
-//! [`has_passing_validation`] needs once criterion rows exist: a change with
-//! any criterion-linked rows passes the gate iff **every distinct
-//! `criterion_node_id` recorded for that change has its most recent row in
-//! state `passed`** (one failing or errored criterion fails the whole
+//! row. [`has_passing_validation`] AND-aggregates once criterion rows exist:
+//! a change with any criterion-linked rows passes the gate iff **every
+//! distinct `criterion_node_id` recorded for that change has its most recent
+//! row in state `passed`** (one failing or errored criterion fails the whole
 //! change, per #861's mixed-result acceptance criterion); a change with zero
 //! criterion-linked rows keeps today's behaviour unchanged (any `passed`
 //! aggregate row satisfies the gate, preserving pre-#861 callers and the "no
@@ -427,18 +436,117 @@ pub async fn record_validation_run(
     Ok(id)
 }
 
-/// Whether a change has at least one recorded `passed` validation run.
-pub async fn has_passing_validation(pool: &PgPool, change_id: Uuid) -> Result<bool, ChangeError> {
-    let count: i64 = sqlx::query_scalar(
-        "SELECT COUNT(*) FROM forge.validation_runs \
-         WHERE change_id = $1 AND state = 'passed'",
+/// Record a per-criterion validation-run verdict for `criterion_node_id` on
+/// `change_id` and return the new row's id.
+///
+/// This is the write side of the per-criterion verdict-row seam (see the
+/// module doc comment "Per-criterion verdict-row seam" above): the inserted
+/// row's `criterion_node_id` is non-`NULL`, so [`has_passing_validation`]
+/// AND-aggregates it with any sibling criterion rows for the same change
+/// instead of treating it as a change-level aggregate run.
+///
+/// `state` should be [`ValidationRunState::Passed`] or
+/// [`ValidationRunState::Failed`] — the acceptance-criteria executor
+/// (`sf-loop`'s `acceptance` module, issue #861) produces exactly one
+/// terminal verdict per criterion, fail-closed on any execution error (a
+/// probe that cannot be reached, a missing test runtime, an unprovisioned
+/// browser) records `Failed`, never a skip and never `Queued`/`Running`.
+///
+/// # Errors
+///
+/// - [`ChangeError::NotFound`] — no change exists with `change_id`.
+/// - [`ChangeError::TableMissing`] — migration 0004/0006 not applied.
+/// - [`ChangeError::Database`] — any other Postgres error.
+pub async fn record_criterion_validation_run(
+    pool: &PgPool,
+    change_id: Uuid,
+    criterion_node_id: Uuid,
+    state: ValidationRunState,
+) -> Result<Uuid, ChangeError> {
+    // Resolve the change's workspace so the run is tenant-scoped consistently
+    // (mirrors record_validation_run) and doubles as an existence check.
+    let workspace_id: Option<Uuid> =
+        sqlx::query_scalar("SELECT workspace_id FROM forge.changes WHERE id = $1")
+            .bind(change_id)
+            .fetch_optional(pool)
+            .await
+            .map_err(map_db_err)?;
+
+    let workspace_id = workspace_id.ok_or(ChangeError::NotFound(change_id))?;
+
+    let id: Uuid = sqlx::query_scalar(
+        "INSERT INTO forge.validation_runs (change_id, workspace_id, state, criterion_node_id) \
+         VALUES ($1, $2, $3, $4) RETURNING id",
     )
     .bind(change_id)
+    .bind(workspace_id)
+    .bind(state.as_str())
+    .bind(criterion_node_id)
     .fetch_one(pool)
     .await
     .map_err(map_db_err)?;
 
-    Ok(count > 0)
+    Ok(id)
+}
+
+/// Whether a change satisfies the validation gate.
+///
+/// # Aggregation rule (issue #861)
+///
+/// - If the change has **no criterion-linked rows** (`criterion_node_id IS
+///   NULL` for every row, including "no rows at all"), the pre-#861 behaviour
+///   is unchanged: passing iff at least one change-level aggregate run is
+///   recorded `passed`.
+/// - If the change **has** criterion-linked rows, the gate AND-aggregates:
+///   passing iff every distinct `criterion_node_id` recorded for the change
+///   has its most-recent row in state `passed`. One failing or errored
+///   criterion fails the whole change — this is what lets a mixed
+///   pass/fail result block the merge gate even though a passing
+///   change-level aggregate run might also exist.
+pub async fn has_passing_validation(pool: &PgPool, change_id: Uuid) -> Result<bool, ChangeError> {
+    let criterion_ids: Vec<Uuid> = sqlx::query_scalar(
+        "SELECT DISTINCT criterion_node_id FROM forge.validation_runs \
+         WHERE change_id = $1 AND criterion_node_id IS NOT NULL",
+    )
+    .bind(change_id)
+    .fetch_all(pool)
+    .await
+    .map_err(map_db_err)?;
+
+    if criterion_ids.is_empty() {
+        // No criteria linked to this change: preserve pre-#861 semantics.
+        let count: i64 = sqlx::query_scalar(
+            "SELECT COUNT(*) FROM forge.validation_runs \
+             WHERE change_id = $1 AND state = 'passed' AND criterion_node_id IS NULL",
+        )
+        .bind(change_id)
+        .fetch_one(pool)
+        .await
+        .map_err(map_db_err)?;
+
+        return Ok(count > 0);
+    }
+
+    // Criteria exist: every distinct criterion's most recent row must be
+    // 'passed'. One failing/erroring criterion fails the whole change.
+    for criterion_node_id in criterion_ids {
+        let latest_state: Option<String> = sqlx::query_scalar(
+            "SELECT state FROM forge.validation_runs \
+             WHERE change_id = $1 AND criterion_node_id = $2 \
+             ORDER BY created_at DESC LIMIT 1",
+        )
+        .bind(change_id)
+        .bind(criterion_node_id)
+        .fetch_optional(pool)
+        .await
+        .map_err(map_db_err)?;
+
+        if latest_state.as_deref() != Some("passed") {
+            return Ok(false);
+        }
+    }
+
+    Ok(true)
 }
 
 /// Transition a persisted change to `next`, enforcing the legal-transition
@@ -710,5 +818,197 @@ mod tests {
             .execute(&pool)
             .await
             .ok();
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Per-criterion verdict-row + validation-gate AND-aggregation tests
+// (issue #861). Named `validation` (not nested under `mod tests`) so the
+// full test path — `change::validation::<name>` — contains the literal
+// `validation::` substring the issue's acceptance criteria name as the
+// nextest selector.
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod validation {
+    use super::*;
+
+    /// Insert a fresh `public.workspaces` row and return its id.
+    ///
+    /// `forge.changes.workspace_id` carries a NOT-NULL FK to
+    /// `public.workspaces(id)` (migration 0004), so these tests need a real
+    /// tenant row. Seeding one per test — rather than reading a
+    /// `WORKSPACE_ID` env var — keeps them self-provisioning, so they execute
+    /// in any job that supplies only `DATABASE_URL` (the `rust-test-seam` job
+    /// does exactly that). Mirrors the nexum/sharp/sf-serve DB-test idiom.
+    async fn seed_workspace(pool: &sqlx::PgPool) -> Uuid {
+        sqlx::query_scalar(
+            "INSERT INTO public.workspaces (slug, display_name) VALUES ($1, $2) RETURNING id",
+        )
+        .bind(format!("sf-db-validation-{}", Uuid::new_v4()))
+        .bind("sf-db criterion-verdict test workspace")
+        .fetch_one(pool)
+        .await
+        .expect("workspace insert failed")
+    }
+
+    /// Delete the change, its validation runs, and the seeded workspace row.
+    async fn cleanup(pool: &sqlx::PgPool, change_id: Uuid, workspace_id: Uuid) {
+        sqlx::query("DELETE FROM forge.validation_runs WHERE change_id = $1")
+            .bind(change_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM forge.changes WHERE id = $1")
+            .bind(change_id)
+            .execute(pool)
+            .await
+            .ok();
+        sqlx::query("DELETE FROM public.workspaces WHERE id = $1")
+            .bind(workspace_id)
+            .execute(pool)
+            .await
+            .ok();
+    }
+
+    /// Integration test: per-criterion verdict rows round-trip through
+    /// [`record_criterion_validation_run`] — one row per criterion, each
+    /// carrying its own `criterion_node_id` and `state`, distinct from the
+    /// change-level aggregate rows [`record_validation_run`] writes.
+    ///
+    /// Requires `DATABASE_URL` with sf-db migrations 0004 and 0006 applied.
+    /// The tenant row is seeded by the test itself via [`seed_workspace`].
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with sf-db migration 0004+0006 applied"]
+    async fn criterion_validation_run_round_trips() {
+        let cfg = crate::config::DbConfig::from_env()
+            .expect("DATABASE_URL must be set for integration tests");
+        let pool = crate::pool::connect(&cfg)
+            .await
+            .expect("pool creation failed");
+        let workspace_id: Uuid = seed_workspace(&pool).await;
+
+        let change_id = insert_change(&pool, workspace_id, "Change for criterion round-trip test")
+            .await
+            .expect("insert_change failed");
+
+        let criterion_a = Uuid::new_v4();
+        let criterion_b = Uuid::new_v4();
+
+        record_criterion_validation_run(&pool, change_id, criterion_a, ValidationRunState::Passed)
+            .await
+            .expect("record_criterion_validation_run (a) failed");
+        record_criterion_validation_run(&pool, change_id, criterion_b, ValidationRunState::Failed)
+            .await
+            .expect("record_criterion_validation_run (b) failed");
+
+        let rows: Vec<(Uuid, String)> = sqlx::query_as(
+            "SELECT criterion_node_id, state FROM forge.validation_runs \
+             WHERE change_id = $1 AND criterion_node_id IS NOT NULL \
+             ORDER BY created_at ASC",
+        )
+        .bind(change_id)
+        .fetch_all(&pool)
+        .await
+        .expect("select criterion rows failed");
+
+        assert_eq!(rows.len(), 2, "expected exactly one row per criterion");
+        assert_eq!(rows[0], (criterion_a, "passed".to_string()));
+        assert_eq!(rows[1], (criterion_b, "failed".to_string()));
+
+        cleanup(&pool, change_id, workspace_id).await;
+    }
+
+    /// Acceptance criterion (#861): a mixed result — one passing and one
+    /// failing criterion — leaves the change's validation gate failed:
+    /// [`has_passing_validation`] returns `false` and
+    /// [`ChangeState::transition`] (via [`transition_change`]) rejects the
+    /// `awaiting-approval -> merged` edge with [`ChangeError::ValidationGate`],
+    /// even though a change-level `passed` aggregate row is NOT present and
+    /// even if one criterion did pass.
+    ///
+    /// Requires `DATABASE_URL` with sf-db migrations 0004 and 0006 applied.
+    /// The tenant row is seeded by the test itself via [`seed_workspace`].
+    #[tokio::test]
+    #[ignore = "integration: requires DATABASE_URL with sf-db migration 0004+0006 applied"]
+    async fn failing_criterion_blocks_merge_gate() {
+        let cfg = crate::config::DbConfig::from_env()
+            .expect("DATABASE_URL must be set for integration tests");
+        let pool = crate::pool::connect(&cfg)
+            .await
+            .expect("pool creation failed");
+        let workspace_id: Uuid = seed_workspace(&pool).await;
+
+        let change_id = insert_change(&pool, workspace_id, "Change for mixed-criteria gate test")
+            .await
+            .expect("insert_change failed");
+
+        // Walk to awaiting-approval (mirrors change_merge_requires_passing_validation_run).
+        transition_change(&pool, change_id, ChangeState::Validating)
+            .await
+            .expect("draft → validating failed");
+        transition_change(&pool, change_id, ChangeState::AwaitingApproval)
+            .await
+            .expect("validating → awaiting-approval failed");
+
+        // One passing, one failing criterion.
+        let passing_criterion = Uuid::new_v4();
+        let failing_criterion = Uuid::new_v4();
+        record_criterion_validation_run(
+            &pool,
+            change_id,
+            passing_criterion,
+            ValidationRunState::Passed,
+        )
+        .await
+        .expect("record passing criterion failed");
+        record_criterion_validation_run(
+            &pool,
+            change_id,
+            failing_criterion,
+            ValidationRunState::Failed,
+        )
+        .await
+        .expect("record failing criterion failed");
+
+        let passing = has_passing_validation(&pool, change_id)
+            .await
+            .expect("has_passing_validation failed");
+        assert!(
+            !passing,
+            "one failing criterion must fail the whole change's validation gate"
+        );
+
+        let blocked = transition_change(&pool, change_id, ChangeState::Merged).await;
+        assert!(
+            matches!(blocked, Err(ChangeError::ValidationGate)),
+            "merge must be blocked while any criterion is failing, got {blocked:?}"
+        );
+
+        // Now make the failing criterion pass (a later re-run superseding the
+        // failed one) — the gate must open once every distinct criterion's
+        // most recent row is 'passed'.
+        record_criterion_validation_run(
+            &pool,
+            change_id,
+            failing_criterion,
+            ValidationRunState::Passed,
+        )
+        .await
+        .expect("record corrected criterion failed");
+
+        let now_passing = has_passing_validation(&pool, change_id)
+            .await
+            .expect("has_passing_validation failed");
+        assert!(
+            now_passing,
+            "gate must open once every distinct criterion's latest row is passed"
+        );
+        let merged = transition_change(&pool, change_id, ChangeState::Merged)
+            .await
+            .expect("merge must succeed once every criterion passes");
+        assert_eq!(merged, ChangeState::Merged);
+
+        cleanup(&pool, change_id, workspace_id).await;
     }
 }

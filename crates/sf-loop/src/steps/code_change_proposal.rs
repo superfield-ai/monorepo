@@ -160,7 +160,7 @@ fn build_request(node_title: &str) -> AgentRequest {
 /// the cost the executor reported (issue #712).
 pub(super) async fn run(
     pool: &sqlx::PgPool,
-    _workspace_id: Uuid,
+    workspace_id: Uuid,
     executor: &dyn AgentExecutor,
 ) -> Result<StepOutcome, StepError> {
     // Step 1: select an open Issue/Feature node.
@@ -211,7 +211,33 @@ pub(super) async fn run(
     };
 
     match run_merge_flow(pool, req).await {
-        Ok(_merge_outcome) => Ok(outcome),
+        Ok(_merge_outcome) => {
+            // Issue #861 loop wiring: once a code-change proposal for a
+            // Feature node compiles and merges, execute that Feature's
+            // attached acceptance criteria and record one verdict per
+            // criterion. See `crate::acceptance::resolve_attached_criteria`'s
+            // doc comment for why this currently no-ops (the assertion-schema
+            // migration is sibling issue #860's, not yet shipped) — this call
+            // site is the forward-compatible seam for once it lands.
+            if node.node_type == "Feature" {
+                let change_title = format!("loop: code change for {}", node.content);
+                if let Err(e) = crate::acceptance::execute_criteria_for_feature_change(
+                    pool,
+                    workspace_id,
+                    &node,
+                    &change_title,
+                )
+                .await
+                {
+                    tracing::warn!(
+                        feature = %node.content,
+                        error = %e,
+                        "code_change_proposal: acceptance-criteria execution failed for feature"
+                    );
+                }
+            }
+            Ok(outcome)
+        }
         // A non-compiling proposal is refused, not stored — advance the cursor.
         Err(SharpError::MergeRefused { diagnostics }) => {
             tracing::info!(

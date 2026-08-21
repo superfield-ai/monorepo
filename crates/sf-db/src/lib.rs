@@ -31,10 +31,15 @@
 //!   enforces the validation gate (a change cannot reach `merged` without a
 //!   recorded passing `forge.validation_runs` row). Backed by
 //!   `crates/sf-db/migrations/0004_change_lifecycle.sql` (`forge` schema).
-//!   [`change::CriterionVerdictKey`] is a dev-scout stub (issue #869) pinning
-//!   the additive per-criterion verdict-row seam #861 (writer) and #862
-//!   (reader) build against — documentation and a compile-time key only, no
-//!   migration or behavior change yet.
+//!   [`change::CriterionVerdictKey`] pins the per-criterion verdict-row seam
+//!   #861 (writer) and #862 (reader) build against.
+//!   [`change::record_criterion_validation_run`] is the #861 write path: it
+//!   records one verdict row per `AcceptanceCriterion` node against
+//!   `forge.validation_runs.criterion_node_id` (added by
+//!   `crates/sf-db/migrations/0006_criterion_verdicts.sql`), and
+//!   [`change::has_passing_validation`] AND-aggregates those rows once any
+//!   exist for a change — see the "Per-criterion verdict-row seam" section
+//!   of `crate::change`'s module doc comment.
 //! - [`policy`]: the policy engine for autonomous-versus-approval governance
 //!   (issue #716). [`policy::PolicyState`] models the PRD §6 policy lifecycle
 //!   (`drafted → active → revised → retired`) with a pure legal-transition
@@ -90,8 +95,9 @@ pub use backup::{
     NoopSubstrateBackup, PgBackup, SubstrateBackup,
 };
 pub use change::{
-    fetch_change, has_passing_validation, insert_change, record_validation_run, transition_change,
-    Change, ChangeError, ChangeState, CriterionVerdictKey, ValidationRunState,
+    fetch_change, has_passing_validation, insert_change, record_criterion_validation_run,
+    record_validation_run, transition_change, Change, ChangeError, ChangeState,
+    CriterionVerdictKey, ValidationRunState,
 };
 pub use config::DbConfig;
 pub use migrate::{
